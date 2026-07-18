@@ -370,6 +370,17 @@ fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     request
 }
 
+fn self_addressed_remote_send_request(home_dir: &Path, host: &str) -> SendRequest {
+    let mut request = self_addressed_send_request(home_dir);
+    request.remote_host = super::parse_send_target(
+        &format!("{TEST_SENDER}@{TEST_TEAM}"),
+        Some(host),
+    )
+    .expect("self remote target")
+    .remote_host;
+    request
+}
+
 fn send_runtime_with_missing_claude_member() -> TestRuntime {
     let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     runtime.claude_roster_members.clear();
@@ -885,6 +896,69 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
             .lock()
             .expect("non-claude deliveries lock")
             .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_remote_send_is_allowed_for_peer_transport() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_remote_send_request(tempdir.path(), "127.0.0.1");
+    request.task_id = None;
+    request.summary_override = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("remote self-send should use peer transport path");
+
+    assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        1
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_inbound_remote_send_is_allowed_for_peer_transport() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.source_remote_host = Some("127.0.0.1".to_string());
+    request.task_id = None;
+    request.summary_override = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("inbound remote self-send should persist to mailbox");
+
+    assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        1
     );
 }
 

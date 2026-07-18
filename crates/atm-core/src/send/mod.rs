@@ -41,7 +41,7 @@ pub use remote_receipt::RemoteDeliveryReceiptStatus;
 pub use remote_receipt::{
     finalize_remote_delivery_receipt_with_runtime, persist_remote_delivery_receipt_with_runtime,
 };
-pub use target::{PeerLoopbackHost, qualified_sender_identity};
+pub use target::{PeerLoopbackHost, qualified_sender_identity, qualified_sender_origin};
 pub(crate) use target::{
     ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
 };

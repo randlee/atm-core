@@ -97,6 +97,7 @@ mod tests {
             sender_team: TEST_TEAM.parse().expect("team"),
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),
+            remote_host: None,
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,

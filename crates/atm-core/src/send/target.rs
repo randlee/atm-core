@@ -119,6 +119,18 @@ pub fn qualified_sender_identity(sender: &AgentName, sender_team: Option<&TeamNa
         .unwrap_or_else(|| sender.to_string())
 }
 
+pub fn qualified_sender_origin(
+    sender: &AgentName,
+    sender_team: Option<&TeamName>,
+    remote_host: Option<&str>,
+) -> String {
+    let identity = qualified_sender_identity(sender, sender_team);
+    match remote_host.filter(|host| !host.trim().is_empty()) {
+        Some(host) => format!("{identity}.{host}"),
+        None => identity,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};

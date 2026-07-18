@@ -41,7 +41,7 @@ pub(super) fn prepare_send_context<
     };
     let canonical_sender = request.caller_identity.clone();
     let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
-    if request.remote_host.is_none() {
+    if request.remote_host.is_none() && request.source_remote_host.is_none() {
         validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;

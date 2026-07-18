@@ -118,6 +118,8 @@ pub struct PostSendHookEvent {
     pub sender_team: TeamName,
     pub recipient: AgentName,
     pub recipient_team: TeamName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_host: Option<String>,
     pub message_id: AtmMessageId,
     pub description: String,
     pub requires_ack: bool,
