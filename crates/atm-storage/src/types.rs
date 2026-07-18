@@ -288,7 +288,11 @@ mod tests {
         assert_eq!(compound.as_str(), "worker-2@test-team");
 
         let error = serde_json::from_str::<AgentId>("\"bad/name\"").expect_err("invalid id");
-        assert!(error.to_string().contains("path separators"));
+        assert!(
+            error
+                .to_string()
+                .contains("must use only ASCII letters, digits, '-' or '_'")
+        );
     }
 
     #[test]

@@ -359,7 +359,7 @@ mod tests {
         assert!(
             error
                 .message
-                .contains("hook recipient name must not contain path separators")
+                .contains("hook recipient name must use only ASCII letters, digits, '-' or '_'")
         );
     }
 
