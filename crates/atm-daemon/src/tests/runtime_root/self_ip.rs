@@ -270,6 +270,17 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
         ack_message.envelope.acknowledges_message_id,
         Some(source_message_id)
     );
+    let expected_remote_host = self_ip.to_string();
+    assert_eq!(
+        ack_message
+            .envelope
+            .extra
+            .get("atm")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some(expected_remote_host.as_str())
+    );
 
     peer_transport
         .shutdown()

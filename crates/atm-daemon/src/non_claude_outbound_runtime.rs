@@ -86,6 +86,7 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
                     DirectDeliveryRequest {
                         team: request.team.clone(),
                         agent: request.agent.clone(),
+                        remote_host: Some(remote_host.as_str().to_string()),
                         messages: request.messages.clone(),
                     },
                     remote_host,
@@ -331,6 +332,7 @@ mod tests {
         assert_eq!(captured[0].0, "10.10.100.98");
         assert_eq!(captured[0].1.team, request.team);
         assert_eq!(captured[0].1.agent, request.agent);
+        assert_eq!(captured[0].1.remote_host, request.remote_host);
         assert_eq!(captured[0].1.messages, request.messages);
     }
 }

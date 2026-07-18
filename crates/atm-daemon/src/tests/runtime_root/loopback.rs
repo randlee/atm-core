@@ -456,6 +456,16 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
         ack_message.envelope.acknowledges_message_id,
         Some(source_message_id)
     );
+    assert_eq!(
+        ack_message
+            .envelope
+            .extra
+            .get("atm")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1")
+    );
 
     peer_transport
         .shutdown()

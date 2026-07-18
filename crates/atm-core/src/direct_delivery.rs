@@ -3,6 +3,7 @@ use crate::delivery_plan::logical_messages_from_persistence;
 use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::AtmError;
 use crate::protocol::{DirectDeliveryOutcome, DirectDeliveryRequest};
+use crate::schema::set_remote_host;
 use crate::send::{ResolvedRecipient, hook, persist_message};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 
@@ -35,8 +36,12 @@ pub fn deliver_direct_messages_with_runtime_and_post_send_emitter(
     let mut logical_messages = Vec::new();
 
     for message in &request.messages {
+        let mut message = message.clone();
+        if let Some(remote_host) = request.remote_host.as_deref() {
+            set_remote_host(&mut message, remote_host);
+        }
         let persistence =
-            persist_message(runtime, home_dir, &snapshot, &inbox_path, message, false)?;
+            persist_message(runtime, home_dir, &snapshot, &inbox_path, &message, false)?;
         warnings.extend(persistence.warnings.clone());
         logical_messages.extend(
             logical_messages_from_persistence(

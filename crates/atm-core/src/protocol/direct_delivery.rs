@@ -7,6 +7,7 @@ use crate::types::{AgentName, TeamName};
 pub struct DirectDeliveryRequest {
     pub team: TeamName,
     pub agent: AgentName,
+    pub remote_host: Option<String>,
     pub messages: Vec<InboxMessage>,
 }
 

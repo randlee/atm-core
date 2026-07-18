@@ -819,7 +819,8 @@ fn is_self_ack_reply_target(
     team: &TeamName,
     reply_target: &ReplyTarget,
 ) -> bool {
-    actor
+    reply_target.remote_host.is_none()
+        && actor
         .as_str()
         .eq_ignore_ascii_case(reply_target.agent.as_str())
         && team
@@ -2101,5 +2102,18 @@ mod tests {
                 .expect("non-claude deliveries")
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn remote_self_ack_reply_target_is_not_suppressed() {
+        let actor = AgentName::from_validated(TEST_SENDER);
+        let team = TeamName::from_validated(TEST_TEAM);
+        let reply_target = ReplyTarget::new(
+            AgentName::from_validated(TEST_SENDER),
+            TeamName::from_validated(TEST_TEAM),
+            Some("127.0.0.1".to_string()),
+        );
+
+        assert!(!super::is_self_ack_reply_target(&actor, &team, &reply_target));
     }
 }
