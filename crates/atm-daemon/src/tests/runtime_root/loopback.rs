@@ -68,7 +68,9 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
         .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))
         .expect("dispatch loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -185,7 +187,9 @@ fn dispatcher_loopback_send_rejects_unauthorized_host_before_mailbox_mutation() 
         .remote_host;
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))
         .expect_err("unauthorized localhost send must fail closed");
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
 
@@ -265,7 +269,9 @@ fn dispatcher_loopback_without_listener_fails_closed_without_mailbox_mutation() 
         .remote_host;
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))
         .expect_err("localhost send without listener must fail closed");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
 
@@ -362,7 +368,9 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
         .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))
         .expect("dispatch secure loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -517,7 +525,9 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
         .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))
         .expect("dispatch secure loopback send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");

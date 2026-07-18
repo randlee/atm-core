@@ -271,7 +271,9 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",

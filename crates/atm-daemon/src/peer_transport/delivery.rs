@@ -230,7 +230,9 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                         replay_request.caller_team.clone(),
                         replay_request.caller_identity.clone(),
                         boundary::MessageKey::from(deferred_receipt_message_id),
-                        RequestEnvelope::Send(SendRequestEnvelope::Compose(replay_request.clone())),
+                        RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+                            replay_request.clone(),
+                        ))),
                         Some(replay_request.caller_team.clone()),
                         Some(replay_request.caller_identity.clone()),
                         Some(deferred_receipt_message_id),
@@ -246,7 +248,7 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                 .peer_transport_runtime
                 .send_to_endpoint_immediate_wait(
                     endpoint,
-                    RequestEnvelope::Send(SendRequestEnvelope::Compose(request)),
+                    RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
                 )
                 .map(Box::new)
                 .map(SendOutcome::Delivered)
@@ -262,9 +264,9 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                                 replay_request.caller_team.clone(),
                                 replay_request.caller_identity.clone(),
                                 boundary::MessageKey::from(deferred_receipt_message_id),
-                                RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
                                     replay_request.clone(),
-                                )),
+                                ))),
                                 Some(replay_request.caller_team.clone()),
                                 Some(replay_request.caller_identity.clone()),
                                 Some(deferred_receipt_message_id),

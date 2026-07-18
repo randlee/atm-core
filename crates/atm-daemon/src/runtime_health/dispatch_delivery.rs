@@ -28,7 +28,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                self.dispatch_compose_send(request, &post_send_emitter)
+                self.dispatch_compose_send(*request, &post_send_emitter)
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(

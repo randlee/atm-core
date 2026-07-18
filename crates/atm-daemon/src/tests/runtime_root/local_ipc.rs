@@ -82,7 +82,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(
+    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
         SendRequest::new(
             atm_home.clone(),
             workspace_dir.clone(),
@@ -96,7 +96,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
             false,
         )
         .expect("send request"),
-    ));
+    )));
     let request_id = next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
     atm_core::protocol::write_frame(&mut stream, &frame, "write send frame").expect("write");
@@ -219,7 +219,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         false,
     )
     .expect("send request");
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(request));
+    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request)));
     let envelope = atm_daemon_client::RpcEnvelope::encode_body(
         atm_daemon_client::RpcHeader::new(
             atm_daemon_client::RequestId::new(next_request_id().into_inner()).expect("request id"),
@@ -412,7 +412,7 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
     send_request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
-    let send_request = RequestEnvelope::Send(SendRequestEnvelope::Compose(send_request));
+    let send_request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(send_request)));
     let send_request_id = next_request_id();
     let send_response = dispatch_once(
         send_request_id,
