@@ -372,12 +372,10 @@ fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
 
 fn self_addressed_remote_send_request(home_dir: &Path, host: &str) -> SendRequest {
     let mut request = self_addressed_send_request(home_dir);
-    request.remote_host = super::parse_send_target(
-        &format!("{TEST_SENDER}@{TEST_TEAM}"),
-        Some(host),
-    )
-    .expect("self remote target")
-    .remote_host;
+    request.remote_host =
+        super::parse_send_target(&format!("{TEST_SENDER}@{TEST_TEAM}"), Some(host))
+            .expect("self remote target")
+            .remote_host;
     request
 }
 
@@ -933,8 +931,7 @@ fn self_addressed_remote_send_is_allowed_for_peer_transport() {
         .lock()
         .expect("non-claude deliveries lock");
     assert_eq!(
-        deliveries[0]
-            .messages[0]
+        deliveries[0].messages[0]
             .extra
             .get("metadata")
             .and_then(serde_json::Value::as_object)

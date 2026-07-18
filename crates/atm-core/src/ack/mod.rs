@@ -825,8 +825,8 @@ fn is_self_ack_reply_target(
 ) -> bool {
     reply_target.remote_host.is_none()
         && actor
-        .as_str()
-        .eq_ignore_ascii_case(reply_target.agent.as_str())
+            .as_str()
+            .eq_ignore_ascii_case(reply_target.agent.as_str())
         && team
             .as_str()
             .eq_ignore_ascii_case(reply_target.team.as_str())
@@ -2118,6 +2118,10 @@ mod tests {
             Some("127.0.0.1".to_string()),
         );
 
-        assert!(!super::is_self_ack_reply_target(&actor, &team, &reply_target));
+        assert!(!super::is_self_ack_reply_target(
+            &actor,
+            &team,
+            &reply_target
+        ));
     }
 }

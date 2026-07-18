@@ -63,10 +63,7 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
         ("team", event.recipient_team.to_string()),
         ("message_id", event.message_id.to_string()),
         ("description", event.description.clone()),
-        (
-            "remote_host",
-            event.remote_host.clone().unwrap_or_default(),
-        ),
+        ("remote_host", event.remote_host.clone().unwrap_or_default()),
         (
             "task_id",
             event
