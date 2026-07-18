@@ -68,9 +68,18 @@ pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmEr
         )));
     }
 
+    if value.contains('.') {
+        return Err(
+            AtmError::address_parse(format!("{kind} name must not contain '.'")).with_recovery(
+                "'.' is reserved for the team/host delimiter in cross-host addressing \
+             (`<agent>@<team>.<host>`); use '-' or '_' instead.",
+            ),
+        );
+    }
+
     if !value
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
     {
         return Err(AtmError::address_parse(format!(
             "{kind} name contains invalid characters"
@@ -127,13 +136,22 @@ mod tests {
 
     #[test]
     fn accepts_valid_segment_characters() {
-        let parsed = AgentAddress::from_str("valid-team_name.1").expect("address");
-        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name.1"));
+        let parsed = AgentAddress::from_str("valid-team_name-1").expect("address");
+        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name-1"));
         assert_eq!(parsed.team, None);
 
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
         assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
         assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
+    }
+
+    #[test]
+    fn rejects_dotted_segment_characters() {
+        let error = AgentAddress::from_str("dev.win@team").expect_err("dotted agent");
+        assert!(error.to_string().contains("must not contain '.'"));
+
+        let error = AgentAddress::from_str("dev@dev.qa").expect_err("dotted team");
+        assert!(error.to_string().contains("must not contain '.'"));
     }
 
     #[test]

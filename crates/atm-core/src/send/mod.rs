@@ -184,16 +184,7 @@ fn parse_send_target_impl(
 }
 
 fn validate_send_target_segment(value: &str, kind: &str) -> Result<(), AtmError> {
-    crate::address::validate_path_segment(value, kind)?;
-    if value.contains('.') {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not contain `.`"
-        ))
-        .with_recovery(
-            "Use `-` or `_` in team/member names, and reserve `.` for the remote-host separator in `<agent>@<team>.<host>`.",
-        ));
-    }
-    Ok(())
+    crate::address::validate_path_segment(value, kind)
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
