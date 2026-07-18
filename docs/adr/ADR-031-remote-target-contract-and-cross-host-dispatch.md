@@ -81,8 +81,17 @@ pub enum CrossHostDeliveryInfraError {
 
 Parser and normalization rules:
 
-- agent/member names must not contain `.`
-- team names must not contain `.`
+- agent/member names and team names are path-segment-like identifiers rather
+  than free-form labels
+- the only allowed characters in agent/member names and team names are ASCII
+  letters, ASCII digits, `-`, and `_`
+- agent/member names and team names must reject:
+  - path delimiters: `/` and `\`
+  - traversal forms: `.` and `..`
+  - reserved address delimiters: `.` and `:`
+  - whitespace
+  - wildcard or pattern characters that could be interpreted by current or
+    future parsers, including at minimum `*`, `?`, `[` and `]`
 - inline parsing splits on the final `.` after `@`
 - the suffix after that final `.` is the remote host
 - the prefix before that final `.` is the team name
@@ -91,8 +100,10 @@ Parser and normalization rules:
 - each parser rejection maps to one stable error code / variant:
   - missing team => `MissingTeam`
   - missing host => `MissingHost`
-  - dot in agent/member name => `InvalidAgentNameDot`
-  - dot in team name => `InvalidTeamNameDot`
+  - reserved or unsupported agent/member charset => stable typed validation
+    failure on the agent segment
+  - reserved or unsupported team charset => stable typed validation failure on
+    the team segment
   - mixed inline-host plus `--host` => `MixedInlineAndExplicitHost`
   - malformed final-dot split / otherwise invalid inline form =>
     `MalformedInlineRemoteTarget`
