@@ -96,6 +96,12 @@ Phase-AG planning note:
   `feature/pAG-s11-remote-target-contract`
 - transport security / encryption remains a later AG sprint concern and must
   not be implied by earlier functional cross-host closure
+- standalone follow-up fix work also exists off `develop` for identifier
+  hardening: `fix/agent-team-name-charset-validation`, tracked by
+  [`docs/plans/sprint-agent-team-charset-hardening.md`](./plans/sprint-agent-team-charset-hardening.md).
+  Its scope is to tighten the repo-wide `<agent>` / `<team>` charset contract
+  to path-segment-safe, delimiter-safe identifiers and to inject the matching
+  centralized validation change through the normal develop-based path.
 
 Phase-AD planning note:
 - `Phase AD` is the active release-blocking correction line for caller

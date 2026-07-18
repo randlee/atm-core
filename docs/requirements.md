@@ -467,16 +467,17 @@ Product requirement IDs:
 
 Required behavior:
 - valid team/agent path-segment characters are limited to:
-  - alphanumeric
+  - ASCII letters
+  - ASCII digits
   - hyphen
   - underscore
-  - period
 - team/agent segments must reject:
   - empty strings
   - path separators
-  - `..` sequences
-  - consecutive periods
-  - leading periods
+  - reserved address delimiters including `.` and `:`
+  - traversal forms including `.` and `..`
+  - whitespace
+  - wildcard or pattern characters including at minimum `*`, `?`, `[` and `]`
   - platform-specific path escapes that could break out of the intended ATM
     home subtree
 - validation must happen before any path construction in address parsing or
@@ -3562,7 +3563,17 @@ mail correctness.
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - agent/member names and team names must not contain `.`
+  - agent/member names and team names are path-segment-like identifiers, not
+    free-form labels
+  - the only allowed characters in agent/member names and team names are ASCII
+    letters, ASCII digits, `-`, and `_`
+  - agent/member names and team names must reject:
+    - path delimiters: `/` and `\`
+    - traversal forms: `.` and `..`
+    - reserved address delimiters: `.` and `:`
+    - whitespace
+    - wildcard or pattern characters that could be interpreted by current or
+      future parsers, including at minimum `*`, `?`, `[` and `]`
   - the supported remote-send CLI forms are exactly:
     - `atm send <agent>@<team>.<host> ...`
     - `atm send <agent>@<team> --host <host> ...`

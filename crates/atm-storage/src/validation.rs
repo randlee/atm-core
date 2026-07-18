@@ -1,36 +1,18 @@
 use crate::error::AtmError;
 
-pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
+pub fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
     if value.is_empty() {
         return Err(AtmError::address_parse(format!(
             "{kind} name must not be empty"
         )));
     }
 
-    if value.starts_with('.') {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not start with '.'"
-        )));
-    }
-
-    if value.contains("..") {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not contain '..'"
-        )));
-    }
-
-    if value.contains(['/', '\\']) {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not contain path separators"
-        )));
-    }
-
     if !value
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
     {
         return Err(AtmError::address_parse(format!(
-            "{kind} name contains invalid characters"
+            "{kind} name must use only ASCII letters, digits, '-' or '_'"
         )));
     }
 
@@ -47,31 +29,32 @@ mod tests {
     }
 
     #[test]
-    fn validate_path_segment_rejects_dot_prefixed_values() {
-        let error = validate_path_segment(".agent", "agent").expect_err("dot prefix");
-        assert!(error.to_string().contains("must not start with '.'"));
-    }
+    fn validate_path_segment_accepts_safe_set_and_rejects_reserved_characters() {
+        for valid in ["team-lead", "arch_ctm", "atm123", "A_B-9"] {
+            validate_path_segment(valid, "agent").expect("valid");
+        }
 
-    #[test]
-    fn validate_path_segment_rejects_double_dot_values() {
-        let error = validate_path_segment("agent..name", "agent").expect_err("double dot");
-        assert!(error.to_string().contains("must not contain '..'"));
-    }
-
-    #[test]
-    fn validate_path_segment_rejects_path_separators() {
-        let slash = validate_path_segment("bad/name", "agent").expect_err("slash");
-        let backslash = validate_path_segment("bad\\name", "agent").expect_err("backslash");
-
-        assert!(slash.to_string().contains("path separators"));
-        assert!(backslash.to_string().contains("path separators"));
-    }
-
-    #[test]
-    fn validate_path_segment_rejects_invalid_characters_and_accepts_valid_names() {
-        let error = validate_path_segment("bad name", "agent").expect_err("space");
-        assert!(error.to_string().contains("invalid characters"));
-
-        validate_path_segment("valid_name-1.2", "agent").expect("valid");
+        for invalid in [
+            ".agent",
+            "agent..name",
+            "bad/name",
+            "bad\\name",
+            "bad name",
+            "bad\tname",
+            "bad:name",
+            "bad.name",
+            "bad*name",
+            "bad?name",
+            "bad[name",
+            "bad]name",
+        ] {
+            let error = validate_path_segment(invalid, "agent").expect_err("invalid");
+            assert!(
+                error
+                    .to_string()
+                    .contains("must use only ASCII letters, digits, '-' or '_'"),
+                "{invalid}: {error}"
+            );
+        }
     }
 }
