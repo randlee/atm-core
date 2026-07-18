@@ -928,6 +928,22 @@ fn self_addressed_remote_send_is_allowed_for_peer_transport() {
             .len(),
         1
     );
+    let deliveries = runtime
+        .non_claude_deliveries
+        .lock()
+        .expect("non-claude deliveries lock");
+    assert_eq!(
+        deliveries[0]
+            .messages[0]
+            .extra
+            .get("metadata")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1")
+    );
 }
 
 #[test]

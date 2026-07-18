@@ -15,6 +15,7 @@ use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome
 use crate::read::state;
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, remote_host as message_remote_host,
+    set_remote_host,
 };
 use crate::send::{ResolvedRecipient, input, persist_message, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -498,7 +499,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     ack_intent: AckIntentFields,
 ) -> Result<PersistedAckReply, AtmError> {
     let reply_message_id = AtmMessageId::new();
-    let reply_message = InboxMessage {
+    let mut reply_message = InboxMessage {
         from: context.actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
@@ -516,6 +517,9 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: None,
         extra: Map::new(),
     };
+    if let Some(remote_host) = persisted_source.reply_target.remote_host.as_deref() {
+        set_remote_host(&mut reply_message, remote_host);
+    }
     let reply_inbox_path = runtime.inbox_path(
         home_dir(context.request),
         &persisted_source.reply_target.team,

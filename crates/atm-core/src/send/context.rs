@@ -14,6 +14,13 @@ pub(super) struct SendExecutionContext {
     pub(super) warnings: Vec<WarningEntry>,
 }
 
+fn effective_remote_host(request: &SendRequest) -> Option<&str> {
+    request
+        .source_remote_host
+        .as_deref()
+        .or(request.remote_host.as_ref().map(RemoteTargetHost::as_str))
+}
+
 pub(super) fn prepare_send_context<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -99,7 +106,7 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
             task_id: task_id.clone(),
             extra: Map::new(),
         };
-        if let Some(remote_host) = request.source_remote_host.as_deref() {
+        if let Some(remote_host) = effective_remote_host(request) {
             set_remote_host(&mut envelope, remote_host);
         }
         return Ok(DeliveryPersistenceResult::persisted(envelope));
@@ -122,7 +129,7 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
         task_id: task_id.clone(),
         extra: Map::new(),
     };
-    if let Some(remote_host) = request.source_remote_host.as_deref() {
+    if let Some(remote_host) = effective_remote_host(request) {
         set_remote_host(&mut envelope, remote_host);
     }
     persist_message(
