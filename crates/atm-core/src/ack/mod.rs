@@ -247,7 +247,7 @@ enum PersistedAckReply {
         reply_text: String,
         task_id: Option<TaskId>,
     },
-    Sent(SentAckReply),
+    Sent(Box<SentAckReply>),
 }
 
 struct SentAckReply {
@@ -537,7 +537,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         false,
     )?;
 
-    Ok(PersistedAckReply::Sent(SentAckReply {
+    Ok(PersistedAckReply::Sent(Box::new(SentAckReply {
         reply_target: persisted_source.reply_target,
         reply_snapshot,
         reply_message_id,
@@ -545,7 +545,7 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: persisted_source.task_id,
         reply_inbox_path,
         persistence: Box::new(persistence),
-    }))
+    })))
 }
 
 fn home_dir(request: &AckRequest) -> &std::path::Path {
@@ -1362,7 +1362,7 @@ mod tests {
             graft_post_send: true,
             roster_backed: true,
         };
-        let persisted = PersistedAckReply::Sent(SentAckReply {
+        let persisted = PersistedAckReply::Sent(Box::new(SentAckReply {
             reply_target: ReplyTarget::new(
                 AgentName::from_validated(ROLE_TEAM_LEAD),
                 team.clone(),
@@ -1374,7 +1374,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: PathBuf::from("reply.jsonl"),
             persistence: Box::new(persistence),
-        });
+        }));
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1487,7 +1487,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone(), None);
-        let persisted = PersistedAckReply::Sent(SentAckReply {
+        let persisted = PersistedAckReply::Sent(Box::new(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1495,7 +1495,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: PathBuf::from("reply.jsonl"),
             persistence: Box::new(persistence),
-        });
+        }));
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1608,7 +1608,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent.clone(), team.clone(), None);
-        let persisted = PersistedAckReply::Sent(SentAckReply {
+        let persisted = PersistedAckReply::Sent(Box::new(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1616,7 +1616,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: tempdir.path().join("reply.jsonl"),
             persistence: Box::new(persistence),
-        });
+        }));
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
@@ -1703,7 +1703,7 @@ mod tests {
             roster_backed: true,
         };
         let reply_target = ReplyTarget::new(agent, team.clone(), None);
-        let persisted = PersistedAckReply::Sent(SentAckReply {
+        let persisted = PersistedAckReply::Sent(Box::new(SentAckReply {
             reply_target: reply_target.clone(),
             reply_snapshot,
             reply_message_id,
@@ -1711,7 +1711,7 @@ mod tests {
             task_id: None,
             reply_inbox_path: tempdir.path().join("reply.jsonl"),
             persistence: Box::new(persistence),
-        });
+        }));
         let runtime = AckRuntime {
             outbound_deliveries: Mutex::new(Vec::new()),
         };
