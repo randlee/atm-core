@@ -112,7 +112,7 @@ fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<Te
                     format!("invalid default team in {}: {}", path.display(), error.message),
                 )
                 .with_recovery(
-                    "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
+                    "Use a valid ATM team name in [atm].default_team or default_team using only ASCII letters, digits, '-' or '_'.",
                 )
             })
         })
@@ -476,7 +476,7 @@ fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamNa
                     format!("invalid [atm].team_members entry in {}: {error}", path.display()),
                 )
                 .with_recovery(
-                    "Use valid ATM team-member names in [atm].team_members without path separators or surrounding whitespace.",
+                    "Use valid ATM team-member names in [atm].team_members using only ASCII letters, digits, '-' or '_'.",
                 )
             })
         })

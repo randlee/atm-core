@@ -524,7 +524,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("agent name must not contain `.`")
+                .contains("agent name must use only ASCII letters, digits, '-' or '_'")
         );
     }
 
