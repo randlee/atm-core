@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG13-FIND-B8-RUNBOOK-SELFIP-MISSING>
+  a triage:Finding ;
+  triage:findingId "AG13-FIND-B8-RUNBOOK-SELFIP-MISSING" ;
+  triage:title "Self-IP setup-instructions deliverable entirely absent from the cross-host runbook" ;
+  triage:description "docs/plans/phase-AG/cross-host-setup-runbook.md has zero self-IP-specific setup instructions -- the same gap pattern as AG12 B2 (localhost setup instructions were also absent from this runbook at that stage). Commit 6d2afb4c's diff (per git show --stat) does not touch cross-host-setup-runbook.md, so this finding is presumed still open pending direct verification in a future recheck." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:category "documentation-completeness" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T20:50:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B8-RUNBOOK-SELFIP-MISSING/pAG-s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
+  triage:notes "Recurs from AG12 B2's identical pattern: localhost setup instructions were also missing from cross-host-setup-runbook.md at that stage. This finding is presumed still open based on commit 6d2afb4c's unrelated changes to peer_transport delivery code; direct grep verification confirms self-IP setup section remains absent from the runbook (no self-ip/self-IP/own-IP/advertised-IP setup content found)." .
+
+<urn:atm:triage:occurrence/AG13-FIND-B8-RUNBOOK-SELFIP-MISSING/pAG-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-setup-runbook.md" ;
+  triage:line 0 ;
+  triage:snippet "Entire file: zero self-IP-specific setup instructions (no self-ip/self-IP/own-IP/advertised-IP content)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 13 .

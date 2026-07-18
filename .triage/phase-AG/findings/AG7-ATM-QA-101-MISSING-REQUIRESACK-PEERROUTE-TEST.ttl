@@ -7,21 +7,20 @@
   triage:title "Missing peer-listener-routed --requires-ack round-trip test" ;
   triage:description "req-qa found in AG7-QA-2 recheck: sprint-AG7.md requires an authorized-host --requires-ack round-trip test exercised over the peer-listener path. Test exercises Send→Read→Ack sequence (local_peer_listener_harness_exercises_send_read_and_ack_request_path). Zero matches found in AG.4-7 branches. Test present in AG.9-10 branches (added during AG.9 feature development). Distinct from AG7-RETRY-RECOVERY-NO-TEST (different acceptance bullet about retry/recovery, not ack round-trip)." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/peer_transport/" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-16T14:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG4/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG5/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG6/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG7/1> ;
-  triage:openOn <urn:atm:triage:worktree/AG7/7221d01b> ;
-  triage:fixedOn <urn:atm:triage:worktree/AG9/c59dd323> ;
-  triage:promoteTo <urn:atm:triage:worktree/AG7/7221d01b> .
+  triage:fixedOn <urn:atm:triage:worktree/AG7/10cd8ac2> ;
+  triage:fixedOn <urn:atm:triage:worktree/AG9/c59dd323> .
 
 <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG4/1>
   a triage:Occurrence ;
@@ -53,11 +52,11 @@
 <urn:atm:triage:occurrence/AG7-ATM-QA-101/AG7/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/tests.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
-  triage:snippet "Missing: local_peer_listener_harness_exercises_send_read_and_ack_request_path()" ;
-  triage:occursIn <urn:atm:triage:worktree/AG7/7221d01b> .
+  triage:snippet "Fixed: local_peer_listener_harness_exercises_send_read_and_ack_request_path() @ line 349, commit 10cd8ac2" ;
+  triage:occursIn <urn:atm:triage:worktree/AG7/10cd8ac2> .
 
 <urn:atm:triage:worktree/AG4/91c2f1c7>
   a triage:WorktreeSnapshot ;
@@ -83,13 +82,13 @@
   triage:orderIndex 6 ;
   triage:status "absent" .
 
-<urn:atm:triage:worktree/AG7/7221d01b>
+<urn:atm:triage:worktree/AG7/10cd8ac2>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
-  triage:headSha "7221d01b" ;
+  triage:headSha "10cd8ac2" ;
   triage:orderIndex 7 ;
-  triage:status "open" .
+  triage:status "fixed" .
 
 <urn:atm:triage:worktree/AG9/c59dd323>
   a triage:WorktreeSnapshot ;

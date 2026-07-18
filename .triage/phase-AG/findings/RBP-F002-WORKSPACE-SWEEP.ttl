@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002-WORKSPACE-SWEEP>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-WORKSPACE-SWEEP" ;
+  triage:title "Hand-rolled agent@team identity-string formatting outside AG.10 sprint scope" ;
+  triage:description "AG10-REFACTOR-QA-2's required workspace-wide grep for RBP-F002 (format!(\"{}@{}\", ...) instead of AgentAddress) surfaced 6 additional production sites outside AG.10's own scope: team_admin/member_mutation.rs:248, team_admin/projection.rs:102, team_admin/projection.rs:141, atm-graft/src/lib.rs:499, atm-graft/examples/smoke_same_host.rs:173, atm-storage-rusqlite/src/lib.rs:1015. Not dispatched as part of AG10-REFACTOR-FIX-2 (out of that sprint's file scope); recorded here so it is not silently dropped from the outstanding-findings ledger. Candidate for a dedicated phase-end or cross-cutting RBP sweep." ;
+  triage:category "code-quality" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:triageMode "initial_pass" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-17T03:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-graft/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-graft/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-storage-rusqlite/1> ;
+  triage:notes "Deferred -- not blocking AG.10 merge; queue for future cross-cutting RBP sweep, e.g. phase-AG closeout or a dedicated RBP-sweep sprint." .
+
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/1>
+  a triage:Occurrence ; triage:file "crates/atm-core/src/team_admin/member_mutation.rs" ; triage:line 248 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/2>
+  a triage:Occurrence ; triage:file "crates/atm-core/src/team_admin/projection.rs" ; triage:line 102 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/team-admin/3>
+  a triage:Occurrence ; triage:file "crates/atm-core/src/team_admin/projection.rs" ; triage:line 141 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-graft/1>
+  a triage:Occurrence ; triage:file "crates/atm-graft/src/lib.rs" ; triage:line 499 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-graft/2>
+  a triage:Occurrence ; triage:file "crates/atm-graft/examples/smoke_same_host.rs" ; triage:line 173 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .
+<urn:atm:triage:occurrence/RBP-F002-WORKSPACE-SWEEP/atm-storage-rusqlite/1>
+  a triage:Occurrence ; triage:file "crates/atm-storage-rusqlite/src/lib.rs" ; triage:line 1015 ;
+  triage:status "open" ; triage:closed false ; triage:branch "integrate/phase-AG" .

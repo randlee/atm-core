@@ -12,32 +12,29 @@
   triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-15T22:11:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-16T06:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s4/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s5/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s6/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s10/1> ;
-  triage:openOn <urn:atm:triage:worktree/s4/c425c803> ;
-  triage:openOn <urn:atm:triage:worktree/s5/6ed274cc> ;
-  triage:openOn <urn:atm:triage:worktree/s6/32f9f07b> ;
-  triage:openOn <urn:atm:triage:worktree/s7/530ee77c> ;
-  triage:openOn <urn:atm:triage:worktree/s9/c47dbae5> ;
-  triage:openOn <urn:atm:triage:worktree/s10/fa5ca78e> ;
-  triage:promoteTo <urn:atm:triage:worktree/s10/fa5ca78e> .
+  triage:fixedOn <urn:atm:triage:worktree/s10/dcd8848c> ;
+  triage:verificationReference "PR #560 AG10-FIX-3-QA recheck (https://github.com/randlee/atm-core/pull/560#issuecomment-4988814216)" ;
+  triage:verificationCommit "dcd8848c" .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s4/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s4-durable-interface-config" ;
   triage:headSha "c425c803" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s4/c425c803> .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s5/1>
@@ -45,10 +42,11 @@
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s5-host-allowlist" ;
   triage:headSha "6ed274cc" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s5/6ed274cc> .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s6/1>
@@ -56,10 +54,11 @@
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s6-doctor-visibility" ;
   triage:headSha "32f9f07b" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s6/32f9f07b> .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s7/1>
@@ -67,10 +66,11 @@
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s7-live-revalidation" ;
   triage:headSha "530ee77c" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s7/530ee77c> .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s9/1>
@@ -78,10 +78,11 @@
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s9-release-verdict" ;
   triage:headSha "c47dbae5" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s9/c47dbae5> .
 
 <urn:atm:triage:occurrence/AG8-UNQUALIFIED-FUNCTIONAL-CLAIM/s10/1>
@@ -89,10 +90,11 @@
   triage:file "docs/plans/phase-AG/sprint-AG8.md" ;
   triage:line 26 ;
   triage:snippet "statement honest about the current line: functional cross-host code paths exist," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s10-secured-transport" ;
   triage:headSha "fa5ca78e" ;
+  triage:fixedInCommit "dcd8848c" ;
   triage:occursIn <urn:atm:triage:worktree/s10/fa5ca78e> .
 
 <urn:atm:triage:worktree/s4/c425c803>
@@ -136,3 +138,11 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
   triage:headSha "fa5ca78e" ;
   triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/s10/dcd8848c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s10-secured-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
+  triage:headSha "dcd8848c" ;
+  triage:orderIndex 10 ;
+  triage:status "verified_fixed" .

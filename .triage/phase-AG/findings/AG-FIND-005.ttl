@@ -23,6 +23,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-005/pAG-s8/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-005/pAG-s10/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-005/pAG-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG-FIND-005/pAG-s13/1> ;
   triage:openOn <urn:atm:triage:worktree/cross-host-communication/8841e870> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s4/fdfc20c5> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s5/90dac63e> ;
@@ -31,6 +32,7 @@
   triage:openOn <urn:atm:triage:worktree/pAG-s8/283bd53b> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s10/16c5ba03> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
   triage:promoteTo <urn:atm:triage:worktree/pAG-s9/462b3ee3> ;
   triage:notes "USER MANDATE: Any eventual fix must be fully isolated behind a trait or small set of traits for remote-send routing, must NOT spread through daemon code generally, and must NOT touch crates it doesn't belong in. This finding is explicitly deferred to a dedicated future sprint and must NOT be dispatched in this batch regardless of dispatch_ready computation. Fix dispatch is blocked pending user authorization for a dedicated future fix sprint." .
 
@@ -122,6 +124,17 @@
   triage:headSha "462b3ee3" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s9/462b3ee3> .
 
+<urn:atm:triage:occurrence/AG-FIND-005/pAG-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 73 ;
+  triage:snippet "send_mail_with_runtime_and_post_send_emitter(request, ...) [ordinary Send dispatch never routes through peer_transport_runtime]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
+
 <urn:atm:triage:worktree/cross-host-communication/8841e870>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/cross-host-communication" ;
@@ -177,3 +190,10 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
   triage:headSha "462b3ee3" ;
   triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/pAG-s13/6d2afb4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s13-selfip-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
+  triage:headSha "6d2afb4c" ;
+  triage:orderIndex 11 .
