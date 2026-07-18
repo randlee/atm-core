@@ -1330,7 +1330,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_reply_target_preserves_remote_host_metadata() {
+    fn message_remote_host_reads_persisted_remote_host_metadata() {
         let mut message = message_with_from(ROLE_TEAM_LEAD);
         set_remote_host(&mut message, "10.10.100.98");
         assert_eq!(super::message_remote_host(&message), Some("10.10.100.98"));
