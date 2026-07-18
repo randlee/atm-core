@@ -26,6 +26,7 @@ pub mod input;
 pub mod nudge_template;
 mod outcome;
 mod persistence;
+mod remote_receipt;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
@@ -35,6 +36,11 @@ use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
+pub use remote_receipt::RemoteDeliveryReceiptStatus;
+#[doc(hidden)]
+pub use remote_receipt::{
+    finalize_remote_delivery_receipt_with_runtime, persist_remote_delivery_receipt_with_runtime,
+};
 pub use target::{PeerLoopbackHost, qualified_sender_identity};
 pub(crate) use target::{
     ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
@@ -204,6 +210,8 @@ pub struct SendRequest {
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<RemoteTargetHost>,
     pub dry_run: bool,
 }
@@ -235,6 +243,7 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            source_remote_host: None,
             remote_host: None,
             dry_run,
         })
@@ -250,6 +259,8 @@ pub struct SendOutcome {
     pub sender: AgentName,
     pub outcome: SendCommandOutcome,
     pub message_id: AtmMessageId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_message_id: Option<AtmMessageId>,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -267,6 +278,7 @@ pub struct SendOutcome {
 #[serde(rename_all = "snake_case")]
 pub enum SendCommandOutcome {
     Sent,
+    Deferred,
     DryRun,
 }
 
@@ -274,6 +286,7 @@ impl SendCommandOutcome {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Sent => "sent",
+            Self::Deferred => "deferred",
             Self::DryRun => "dry_run",
         }
     }
@@ -369,6 +382,37 @@ fn send_mail_with_runtime_impl<
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+#[cfg(test)]
+mod remote_target_parse_tests {
+    use super::parse_send_target;
+
+    #[test]
+    fn remote_target_syntaxes_normalize_to_the_same_contract() {
+        let inline = parse_send_target("qa-a@test-team.localhost", None).expect("inline target");
+        let explicit =
+            parse_send_target("qa-a@test-team", Some("localhost")).expect("explicit target");
+
+        assert_eq!(inline.to, explicit.to);
+        assert_eq!(inline.remote_host, explicit.remote_host);
+        assert_eq!(inline.to.to_string(), "qa-a@test-team");
+        assert_eq!(
+            inline.remote_host.as_ref().expect("remote host").as_str(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn remote_target_rejects_combined_inline_and_explicit_host_forms() {
+        let error = parse_send_target("qa-a@test-team.localhost", Some("127.0.0.1"))
+            .expect_err("combined host forms must fail");
+        assert!(
+            error
+                .message
+                .contains("cannot combine inline remote host syntax")
+        );
+    }
 }
 
 #[cfg(test)]

@@ -51,6 +51,7 @@ impl DeliveryHarnessPath {
 pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
+    pub(crate) remote_host: Option<String>,
     pub(crate) harness: DeliveryHarnessPath,
     pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) local_tmux_post_send: bool,
@@ -73,6 +74,7 @@ impl DeliveryRecipientSnapshot {
         Self {
             agent: member.agent_name,
             team: member.team_name,
+            remote_host: None,
             harness: DeliveryHarnessPath::from_roster_harness(member.harness),
             recipient_pane_id: member.recipient_pane_id,
             local_tmux_post_send,

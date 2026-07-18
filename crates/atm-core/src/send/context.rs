@@ -1,7 +1,7 @@
 use serde_json::Map;
 
 use super::*;
-use crate::schema::{AckIntentFields, InboxMessage};
+use crate::schema::{AckIntentFields, InboxMessage, set_remote_host};
 
 pub(super) struct SendExecutionContext {
     pub(super) command_config: Option<config::AtmConfig>,
@@ -81,7 +81,7 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
+        let mut envelope = InboxMessage {
             from: context.canonical_sender.clone(),
             text: body.to_string(),
             timestamp,
@@ -98,9 +98,13 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
             expires_at: request.expires_at,
             task_id: task_id.clone(),
             extra: Map::new(),
-        }));
+        };
+        if let Some(remote_host) = request.source_remote_host.as_deref() {
+            set_remote_host(&mut envelope, remote_host);
+        }
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
-    let envelope = InboxMessage {
+    let mut envelope = InboxMessage {
         from: context.canonical_sender.clone(),
         text: body.to_string(),
         timestamp,
@@ -118,6 +122,9 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
         task_id: task_id.clone(),
         extra: Map::new(),
     };
+    if let Some(remote_host) = request.source_remote_host.as_deref() {
+        set_remote_host(&mut envelope, remote_host);
+    }
     persist_message(
         runtime,
         &request.home_dir,

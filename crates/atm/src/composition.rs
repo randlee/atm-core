@@ -276,7 +276,11 @@ impl<'a> CliComposition<'a> {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
                     action: action_name("send"),
-                    outcome: outcome_label(if outcome.dry_run { "dry_run" } else { "sent" }),
+                    outcome: outcome_label(match outcome.outcome {
+                        atm_core::send::SendCommandOutcome::Sent => "sent",
+                        atm_core::send::SendCommandOutcome::Deferred => "deferred",
+                        atm_core::send::SendCommandOutcome::DryRun => "dry_run",
+                    }),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.sender.clone(),

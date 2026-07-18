@@ -7,14 +7,14 @@ use atm_core::protocol::{
     SendResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{RemoteTargetHost, SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
 use atm_storage::{PeerSecurityMode, SetPeerSecurityModeCommand, UpsertTrustedPeerCommand};
 use std::io::Write;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -27,6 +27,7 @@ use crate::test_support::{
 mod dispatch;
 mod local_ipc;
 mod loopback;
+mod self_ip;
 
 pub(super) fn add_member_via_retained_admin(
     db_path: &std::path::Path,
@@ -90,4 +91,20 @@ pub(super) fn configure_secure_loopback(db_path: &std::path::Path, host: &str) {
             .expect("trusted peer command"),
         )
         .expect("upsert trusted peer");
+}
+
+pub(super) fn discover_non_loopback_ipv4_for_test() -> Ipv4Addr {
+    let socket = UdpSocket::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        .expect("bind udp socket for self-ip discovery");
+    socket
+        .connect(SocketAddr::from(([198, 51, 100, 1], 9)))
+        .expect("connect udp socket for self-ip discovery");
+    match socket
+        .local_addr()
+        .expect("local addr for self-ip discovery")
+        .ip()
+    {
+        std::net::IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_unspecified() => ip,
+        other => panic!("expected non-loopback local IPv4 for self-ip fixture, got {other}"),
+    }
 }

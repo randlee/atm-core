@@ -326,6 +326,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .deliver_payloads(crate::boundary::NonClaudeOutboundDeliveryRequest {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
+                remote_host: recipient.remote_host.clone(),
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             })
@@ -404,6 +405,7 @@ mod tests {
             crate::boundary::NonClaudeOutboundDeliveryRequest {
                 team: TeamName::from_validated("test-team"),
                 agent: AgentName::from_validated("recipient"),
+                remote_host: None,
                 recipient_pane_id: None,
                 messages: vec![InboxMessage {
                     text: oversized_body,

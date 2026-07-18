@@ -608,6 +608,7 @@ mod tests {
                         sender: AgentName::from_validated(TEST_LEAD),
                         outcome: SendCommandOutcome::Sent,
                         message_id: atm_core::schema::AtmMessageId::new(),
+                        receipt_message_id: None,
                         requires_ack: false,
                         task_id: None,
                         summary: None,

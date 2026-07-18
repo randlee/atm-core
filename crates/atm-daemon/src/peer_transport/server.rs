@@ -25,6 +25,18 @@ use super::{
 #[path = "server_reload.rs"]
 mod server_reload;
 
+fn annotate_peer_origin_host(
+    mut request: RequestEnvelope,
+    peer_addr: SocketAddr,
+) -> RequestEnvelope {
+    if let RequestEnvelope::Send(atm_core::protocol::SendRequestEnvelope::Compose(send_request)) =
+        &mut request
+    {
+        send_request.source_remote_host = Some(peer_addr.ip().to_string());
+    }
+    request
+}
+
 #[derive(Debug)]
 struct PeerServerHandle {
     terminate: Arc<AtomicBool>,
@@ -663,6 +675,7 @@ fn handle_authorized_or_rejected_request(
 ) -> Result<(), AtmError> {
     let request_id = frame.request_id;
     let (_, request) = codec.request_from_frame(frame)?;
+    let request = annotate_peer_origin_host(request, peer_addr);
     if let Err(error) = authorization_policy.authorize(peer_addr) {
         tracing::warn!(
             subsystem = "peer_transport",

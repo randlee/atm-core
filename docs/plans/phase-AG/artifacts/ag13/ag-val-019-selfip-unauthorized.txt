@@ -1,19 +1,20 @@
-$ cargo test -p atm-daemon local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender -- --nocapture
-running 1 test
-test peer_transport::tests::harness::local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender ... ok
+$ self-ip fixture discovered for AG.13 Group 4
+192.0.0.2
 
 $ cargo test -p atm-daemon self_ip -- --nocapture
-running 3 tests
+running 4 tests
 test peer_transport::delivery::tests::resolve_remote_port_prefers_matching_interface_row_for_literal_self_ip ... ok
-test tests::runtime_root::loopback::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state ... ok
-test tests::runtime_root::loopback::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation ... ok
+test tests::runtime_root::self_ip::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation ... ok
+test tests::runtime_root::self_ip::dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation ... ok
+test tests::runtime_root::self_ip::dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state ... ok
 
-Observed proof after the fix:
-- self-IP host-qualified routing no longer fails closed when another enabled cross-host port exists; the literal self IP selects the matching interface row port.
-- unauthorized self-IP traffic is still rejected before mailbox mutation.
-- the sender now receives the exact remote allowlist validation message and actionable recovery instead of the generic "remote daemon rejected the cross-host request protocol" fallback.
+Observed proof on Friday, July 17, 2026:
+- the self-IP fixture uses the host's non-loopback IPv4 address `192.0.0.2`, not `127.0.0.1` or `localhost`
+- unauthorized remote-target sends addressed to `qa-a@test-team.192.0.0.2` are rejected before mailbox mutation
+- the sender still receives the exact remote allowlist validation message and actionable recovery
 
 Named proof points:
 - implementation regression: `crates/atm-daemon/src/peer_transport/delivery.rs::resolve_remote_port_prefers_matching_interface_row_for_literal_self_ip`
+- unauthorized self-IP proof: `crates/atm-daemon/src/tests/runtime_root/self_ip.rs::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation`
+- no-listener fail-closed proof: `crates/atm-daemon/src/tests/runtime_root/self_ip.rs::dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation`
 - integration regression: `crates/atm-daemon/src/peer_transport/tests/harness.rs::local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender`
-- mailbox-mutation proof: `crates/atm-daemon/src/tests/runtime_root/loopback.rs::dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation`

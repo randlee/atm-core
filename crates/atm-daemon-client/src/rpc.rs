@@ -237,6 +237,7 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            source_remote_host: None,
             remote_host: None,
             dry_run: false,
         }));
@@ -277,6 +278,7 @@ mod tests {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            source_remote_host: None,
             remote_host: None,
             dry_run: false,
         }));
@@ -315,6 +317,7 @@ mod tests {
             sender: ROLE_TEAM_LEAD.parse().expect("sender"),
             outcome: SendCommandOutcome::Sent,
             message_id: AtmMessageId::new(),
+            receipt_message_id: None,
             requires_ack: false,
             task_id: None,
             summary: Some("body".to_string()),

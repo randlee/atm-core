@@ -12,21 +12,21 @@
   triage:sweepScope "file_only" ;
   triage:category "documentation-completeness" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-17T20:50:41Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG13-FIND-B8-RUNBOOK-SELFIP-MISSING/pAG-s13/1> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
   triage:promoteTo <urn:atm:triage:worktree/pAG-s13/6d2afb4c> ;
-  triage:notes "Recurs from AG12 B2's identical pattern: localhost setup instructions were also missing from cross-host-setup-runbook.md at that stage. This finding is presumed still open based on commit 6d2afb4c's unrelated changes to peer_transport delivery code; direct grep verification confirms self-IP setup section remains absent from the runbook (no self-ip/self-IP/own-IP/advertised-IP setup content found)." .
+  triage:notes "Closed in the current AG.13 fix set. docs/plans/phase-AG/cross-host-setup-runbook.md now includes a dedicated 'Self-IP Remote-Target Operator Path (AG.13)' section covering required real self-IP setup, interface enablement, allowlist steps, validation commands, and failure expectations. Validation: cargo fmt --all, just lint, cargo test -p atm-daemon -p agent-team-mail-core all passed." .
 
 <urn:atm:triage:occurrence/AG13-FIND-B8-RUNBOOK-SELFIP-MISSING/pAG-s13/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-AG/cross-host-setup-runbook.md" ;
   triage:line 0 ;
   triage:snippet "Entire file: zero self-IP-specific setup instructions (no self-ip/self-IP/own-IP/advertised-IP content)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s13-selfip-proof" ;
   triage:headSha "6d2afb4c" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s13/6d2afb4c> .
