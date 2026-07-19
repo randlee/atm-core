@@ -1,80 +1,188 @@
-@prefix qa:   <urn:atm:qa#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-qa:AG18-QA-003
-    a qa:Finding ;
-    qa:findingId "AG18-QA-003" ;
-    qa:phase "phase-AG" ;
-    qa:title "Daemon dispatch still forks send-vs-ack before routing" ;
-    qa:severity "blocking" ;
-    qa:pattern "unresolved-dispatch-fork" ;
-    qa:repeatable true ;
-    qa:sourceReviewers "ruthless-boundary-qa (RBQA-F001)", "arch-qa (ARCH-004)", "req-qa (ATM-QA-003)", "AG.19 QA (ATM-QA-AG19-003)", "AG.20 QA (AG20-IMP-001)" ;
-    qa:description """Original finding: dispatch_send in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:63-72 branched on `request.acknowledges_message_id.is_some()` into a separate ack path (ack_mail_with_runtime_and_post_send_emitter) before any single canonical routing decision, violating the AG.18 acceptance criterion (one canonical routing decision, not a send-vs-ack fork). AG.19's own QA (ATM-QA-AG19-003) and AG.20's own QA (AG20-IMP-001) each independently re-confirmed the identical fork, byte-for-byte unchanged, on their respective branches -- making this the single most-repeated cross-sprint finding in the AG ladder to date.
+<urn:atm:triage:finding/AG18-QA-003>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-003" ;
+  triage:title "Daemon dispatch still forks send-vs-ack before routing" ;
+  triage:description "Daemon dispatch fork on acknowledges_message_id: AG.18 original finding (dispatch_delivery.rs:63), confirmed across AG.19-20 unchanged. AG.21 relocated fork to send/mod.rs:371-383 (dispatch_delivery.rs fork removed). AG.22-25 fork persists in send/mod.rs at varying line numbers (412-418). Pattern: boolean check on request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() branches unconditionally to ack_mail_with_runtime_and_post_send_emitter vs send_mail_with_runtime_and_post_send_emitter BEFORE any canonical routing decision. This is the core architectural violation: ack-vs-send decision made by runtime boolean flag inside shared function, not at request construction/type level." ;
+  triage:category "ATM-QA-003" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/758732cd> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/c245c2ea> .
 
-AG.21 (feature/pAG-s21-collapse-dispatch-routing, commit 56fdcdef, dev in progress -- this sprint's stated job is to delete this exact fork) was checked directly for this pass. dispatch_send in dispatch_delivery.rs (lines 56-102) no longer contains the acknowledges_message_id check; it now routes purely on route_send_request()'s Local/Remote (a legitimate, necessary host-routing decision, not the illegitimate send/ack fork), and calls a single function, execute_outbound_send_with_runtime_and_post_send_emitter, for all sends. However, that function itself (crates/atm-core/src/send/mod.rs:365-383) contains, verbatim:
+# --- AG.18: Fork in dispatch_delivery.rs ---
+<urn:atm:triage:occurrence/AG18-QA-003/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
 
-    if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-        return ack_mail_with_runtime_and_post_send_emitter(...).map(SendResponseEnvelope::Acknowledged);
-    }
-    send_mail_with_runtime_and_post_send_emitter(request, ...).map(SendResponseEnvelope::Sent)
+# --- AG.19: Fork unchanged in dispatch_delivery.rs ---
+<urn:atm:triage:occurrence/AG18-QA-003/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
 
-This is the identical fork, relocated one layer down from crates/atm-daemon into crates/atm-core, still executed before any canonical routing/send decision is made. AG.21 has moved the defect, not collapsed it -- the daemon-level symptom is gone but the underlying architectural violation (two divergent execution paths selected by a boolean flag check rather than a single canonical decision) persists and has simply migrated across the crate boundary into atm-core's send module.
+# --- AG.20: Fork unchanged in dispatch_delivery.rs ---
+<urn:atm:triage:occurrence/AG18-QA-003/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
 
-Context note: the current integrate/phase-AG tip (commit 2cf19779, on an independent, more-advanced line not yet reachable from the AG.18-21 ladder) has resolved the equivalent decision structurally: RequestEnvelope::Send is itself typed as SendRequestEnvelope::Compose vs SendRequestEnvelope::Acknowledge, decided at parse/construction time rather than via a runtime boolean check inside a shared function, and dispatch() matches on that type directly. This is offered as an existing, in-repo exemplar of what a genuine architectural fix looks like, though it lives on a divergent line and does not itself close this finding for the AG.18-21 ladder.""" ;
-    qa:sweepScope "repeatable-pattern sweep across AG.18-AG.21 worktrees for the acknowledges_message_id-based fork in dispatch_send (and its relocated successor)" .
+# --- AG.21: Fork relocated to send/mod.rs (dispatch_delivery.rs version gone) ---
+<urn:atm:triage:occurrence/AG18-QA-003/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 418 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(ack_request_from_send_request(request)?, ...); } send_mail_with_runtime_and_post_send_emitter(request, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
 
-# --- Per-worktree sweep results ---
+# --- AG.22: Fork persists in send/mod.rs ---
+<urn:atm:triage:occurrence/AG18-QA-003/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 418 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
 
-qa:AG18-QA-003-sweep-s18
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
-    qa:status "open" ;
-    qa:note "Fork present verbatim in dispatch_send at dispatch_delivery.rs:63 (if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none()) before calling ack_mail_with_runtime_and_post_send_emitter." .
+# --- AG.23: Fork persists in send/mod.rs (line 412) ---
+<urn:atm:triage:occurrence/AG18-QA-003/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 412 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
 
-qa:AG18-QA-003-sweep-s19
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
-    qa:status "open" ;
-    qa:note "Fork unchanged from s18 despite sprint title implying remote-ack-path deletion; re-confirmed independently by that sprint's own QA as ATM-QA-AG19-003." .
+# --- AG.24: Fork persists in send/mod.rs (line 416) ---
+<urn:atm:triage:occurrence/AG18-QA-003/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 416 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
 
-qa:AG18-QA-003-sweep-s20
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
-    qa:status "open" ;
-    qa:note "Fork unchanged from s19; sprint scope (deferred policy relocation out of transport) did not touch dispatch_send. Re-confirmed independently by that sprint's own QA as AG20-IMP-001." .
+# --- AG.25: Fork persists in send/mod.rs (line 416) - highest open branch ---
+<urn:atm:triage:occurrence/AG18-QA-003/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 416 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
 
-qa:AG18-QA-003-sweep-s21
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
-    qa:status "open-relocated" ;
-    qa:note "Dev in progress. The daemon-layer fork at dispatch_delivery.rs is gone (dispatch_send now routes purely on Local/Remote via route_send_request and calls one function unconditionally), but the same acknowledges_message_id.is_some() && source_remote_host.is_none() check now lives inside crates/atm-core/src/send/mod.rs:371 (execute_outbound_send_with_runtime_and_post_send_emitter), branching to ack_mail_with_runtime_and_post_send_emitter vs send_mail_with_runtime_and_post_send_emitter before any single canonical decision. Sprint's stated job (collapse dispatch routing / delete this fork) is not complete -- the defect was moved across the atm-daemon/atm-core boundary, not eliminated." .
+# --- WorktreeSnapshots ---
 
-qa:AG18-QA-003-sweep-s22-25
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:branch "feature/pAG-s22..s25" ;
-    qa:commitSha "03c873fc" ;
-    qa:status "not-yet-applicable" ;
-    qa:note "Sprints not started (all at common base commit); no real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
 
-# --- Promotion determination ---
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
 
-qa:AG18-QA-003-promotion
-    a qa:PromotionDecision ;
-    qa:finding qa:AG18-QA-003 ;
-    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:rationale """All four worktrees with real commits (AG.18-AG.21) exhibit the same underlying defect: a boolean acknowledges_message_id check forks execution into a separate ack path before any single canonical send/route decision is made. AG.18 through AG.20 carry the fork verbatim and unchanged in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs, independently re-confirmed by each sprint's own QA (ATM-QA-AG19-003, AG20-IMP-001) in addition to the original three reviewers (RBQA-F001, ARCH-004, ATM-QA-003). AG.21 -- the sprint explicitly tasked with collapsing this fork -- removed it from the daemon layer but relocated the identical check into crates/atm-core/src/send/mod.rs, one layer down; the architectural violation is unresolved, only moved. Per repeatable-pattern policy, the fix is dispatched once to the highest (latest) branch with real commits -- feature/pAG-s21-collapse-dispatch-routing -- since it is both the most-evolved state of the defect and the branch whose own mandate is to close it; AG.18-AG.20 close via merge-forward once AG.21 lands a genuine single-decision fix (e.g. deciding ack-vs-send once at request construction/parse time, mirroring the SendRequestEnvelope::Compose/Acknowledge type-level split already present on the independent, more-advanced integrate/phase-AG tip at commit 2cf19779 -- offered here as an in-repo exemplar, not as a mergeable fix for this ladder). AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s21/758732cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

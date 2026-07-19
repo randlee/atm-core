@@ -5,25 +5,27 @@
   a triage:Finding ;
   triage:findingId "AG19-RBQA-F003" ;
   triage:title "Divergent outcome-classification for Deferred/OutcomeUnknown between ack-reply and daemon dispatch paths" ;
-  triage:description "atm-daemon's dispatch_send (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:75-94) treats RemoteSendDeliveryOutcome::Deferred/OutcomeUnknown as non-error Sent(Deferred) outcomes: Ok(send_sent_response(build_remote_deferred_outcome(...))), preserving receipt_message_id for graceful deferred handling. atm-core's execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs:686-687) treats the identical variants as hard Err(error), discarding receipt_message_id and failing the ack-reply operation. Confirmed functionally unchanged at bf96dc86 despite arch-ctm's claim of fix. Regression introduced AG.19 (commit 59225e0f), carried forward unchanged through AG.20 and AG.21. Fix prescription: restore Ok-with-warnings semantics for Deferred/OutcomeUnknown in ack/mod.rs, matching dispatch_delivery.rs behavior (or route through shared helper). Severity upgraded to CRITICAL per rust-service-hardening-agent assessment (QA-2 recheck). Note: RSH-001 consolidated into this record (same defect, different reviewer pathway)." ;
+  triage:description "atm-daemon's dispatch_send (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:75-94) treats RemoteSendDeliveryOutcome::Deferred/OutcomeUnknown as non-error Sent(Deferred) outcomes: Ok(send_sent_response(build_remote_deferred_outcome(...))), preserving receipt_message_id for graceful deferred handling. atm-core's execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs:686-687) treats the identical variants as hard Err(error), discarding receipt_message_id and failing the ack-reply operation. Confirmed open at AG.19, AG.20, AG.21 (bf96dc86 per AG21-QA-2 recheck); found FIXED on AG.22 and later branches (feature/pAG-s22-host-resolution-boundary c9aedbcc and beyond). Severity: CRITICAL per rust-service-hardening-agent assessment (QA-2 recheck). Note: RSH-001 consolidated into this record (same defect, different reviewer pathway)." ;
   triage:phaseId "phase-AG" ;
   triage:triageMode "followup_pass" ;
   triage:repeatable true ;
-  triage:sweepScope "repeatable sweep AG.19-AG.21 for any other divergent Deferred/OutcomeUnknown handling between daemon dispatch and ack/mod.rs -- sweep of feature/pAG-s21-collapse-dispatch-routing found no additional divergent RemoteSendDeliveryOutcome match sites beyond the one described here (dispatch_delivery.rs, ack/mod.rs execute_ack_reply_plan, and non_claude_outbound_runtime.rs construction site all reviewed; only ack/mod.rs diverges)" ;
+  triage:sweepScope "workspace" ;
   triage:category "correctness" ;
   triage:severity "critical" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady false ;
-  triage:triagedAt "2026-07-19T12:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-19T14:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s20/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s21/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
   triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
   triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
-  triage:crossReference "RSH-001 consolidated into this record (followup_pass QA-2 recheck confirms same defect: unfixed despite arch-ctm claim). AG20-BLOCK-002 (transport-owned deferred/outcome-unknown policy on feature/pAG-s20-move-deferred-policy-out-of-transport) is the same class of defect -- same repeatable pattern (divergent-outcome-classification): outcome-classification logic re-implemented instead of shared. Both findings should be resolved together on AG.21 since it is the branch actively collapsing dispatch routing." ;
-  triage:notes "FOLLOWUP_PASS RECHECK (QA-2 @ bf96dc86): Defect still present and functionally unchanged. Commit bf96dc86 titled 'AG.21 collapse remote outcome policy and fail closed ack' did NOT fix the divergence: still has hard Err(error) for Deferred/OutcomeUnknown in ack/mod.rs:686-687, divergent from dispatch_delivery.rs:75-94 which treats them as Ok(Sent(Deferred)). arch-ctm's claimed fix was not committed. Consolidated RSH-001 (rust-service-hardening-agent finding of same defect) into this record. Severity upgraded from 'blocking' to 'critical' per RSH-001's rust-service-hardening-agent rating. dispatch_ready = false because defect is unfixed and unresolved at highest-open branch (bf96dc86). highest_open_branch = feature/pAG-s21-collapse-dispatch-routing (bf96dc86). promote_to_branch = same." .
+  triage:crossReference "RSH-001 consolidated into this record (followup_pass QA-2 recheck confirms same defect: unfixed on AG.21 as of bf96dc86, but fixed on AG.22 c9aedbcc). AG20-BLOCK-002 (transport-owned deferred/outcome-unknown policy on feature/pAG-s20-move-deferred-policy-out-of-transport) is the same class of defect -- same repeatable pattern (divergent-outcome-classification). Follow-up: verify AG20-BLOCK-002 is also fixed on AG.22+." ;
+  triage:notes "FOLLOWUP_PASS RECHECK (QA-2 @ bf96dc86): Defect confirmed STILL OPEN on AG.21 (bf96dc86). execute_ack_reply_plan still has hard Err(error) for Deferred/OutcomeUnknown at lines 686-687, divergent from dispatch_delivery.rs:75-94 which treats them as Ok(Sent(Deferred)). SWEEP AG.22-25: FIX CONFIRMED PRESENT on AG.22 (c9aedbcc) and carried forward on AG.23-25. execute_ack_reply_plan now treats Deferred and OutcomeUnknown as Ok(delivered_without_commit(...)) with warnings, achieving parity with dispatch_delivery.rs behavior. Severity: CRITICAL per rust-service-hardening-agent assessment. Status: fixed_partial (open on AG.21, fixed on AG.22+). Highest open branch: AG.21 (bf96dc86). Highest fixed branch: AG.22 (c9aedbcc). dispatch_ready=false because fix must be backported to AG.21 before promotion. Current promote_to_branch remains AG.21 to preserve merge-forward flow." .
 
 <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s19/1>
   a triage:Occurrence ;
@@ -33,8 +35,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "59225e0f" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
 
 <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s20/1>
   a triage:Occurrence ;
@@ -50,19 +52,26 @@
 <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s21/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/ack/mod.rs" ;
-  triage:line 686 ;
-  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } => Err(error), / crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => Err(error) / vs dispatch_delivery.rs:75-94 Ok(send_sent_response(build_remote_deferred_outcome(...)))" ;
+  triage:line 687 ;
+  triage:snippet "RemoteSendDeliveryClassification::Deferred { receipt_message_id, error, } => Err(error) [STILL PRESENT AT bf96dc86] vs dispatch_delivery.rs:75-94 Ok(send_sent_response(build_remote_deferred_outcome(...)))" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
   triage:headSha "bf96dc86" ;
   triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
 
-<urn:atm:triage:worktree/pAG-s19/59225e0f>
+<urn:atm:triage:worktree/pAG-s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "59225e0f" ;
+  triage:headSha "5d20ca5a" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAG-s20/50572166>
@@ -78,3 +87,31 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
   triage:headSha "bf96dc86" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

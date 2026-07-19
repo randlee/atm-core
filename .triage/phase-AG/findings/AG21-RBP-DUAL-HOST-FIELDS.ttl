@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG21-RBP-DUAL-HOST-FIELDS>
+  a triage:Finding ;
+  triage:findingId "AG21-RBP-DUAL-HOST-FIELDS" ;
+  triage:title "dual-typed host fields (rust-best-practices, AG21-QA-2)" ;
+  triage:description "NEW finding first raised in AG21-QA-2 (PR #580, commit bf96dc86) by rust-best-practices-agent. Dual-typed host fields: host identity represented as both raw String and typed newtype in parallel across struct/module boundary. A rust-best-practices style and maintainability concern." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG21-RBP-DUAL-HOST-FIELDS/AG21> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:notes "Qualitative RBP finding, no repeatable pattern sweep configured. First appearance AG21 (commit bf96dc86). CRITICAL: distinct id AG21-RBP-DUAL-HOST-FIELDS to avoid collision with existing unrelated RBP-F001.ttl." .
+
+<urn:atm:triage:occurrence/AG21-RBP-DUAL-HOST-FIELDS/AG21>
+  a triage:Occurrence ;
+  triage:findingId "AG21-RBP-DUAL-HOST-FIELDS" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:firstRaisedInQaPass "AG21-QA-2" ;
+  triage:raisedByAgent "rust-best-practices-agent" ;
+  triage:originalPullRequest "PR #580" ;
+  triage:descriptionSnippet "Dual representation of host identity (raw String + typed newtype in parallel)" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AG22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AG23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AG25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

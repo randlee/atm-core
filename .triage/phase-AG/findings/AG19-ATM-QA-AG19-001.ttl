@@ -1,70 +1,179 @@
-@prefix qa:   <urn:atm:qa#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-qa:ATM-QA-AG19-001
-    a qa:Finding ;
-    qa:findingId "ATM-QA-AG19-001" ;
-    qa:phase "phase-AG" ;
-    qa:title "execute_remote_ack_reply_plan deleted by name only, logic inlined" ;
-    qa:severity "blocking" ;
-    qa:pattern "rename-not-remove" ;
-    qa:repeatable true ;
-    qa:sourceReviewers "req-qa (ARCH-AG19-001)", "arch-qa (ARCH-AG19-001)", "ruthless-boundary-qa (RBQA-F001)" ;
-    qa:description """execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs) still contains a dedicated remote-ack execution branch: `if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { ... deliver_remote_send_request(...) ... }`. Only the standalone function name execute_remote_ack_reply_plan was deleted in AG.19; its logic was inlined verbatim under the new call site rather than being routed through the canonical outbound send executor (execute_delivery_plan / send_mail_with_runtime_and_post_send_emitter) that ordinary sends use. Sprint AG19's own required validation command -- `rg -n \"execute_remote_ack_reply_plan|commit_source_ack_state|route_send_request\\\\(&reply.reply_request\\\\)|AckReplyStateMachine|build_reply_delivery_plan|reply_post_send_messages\" crates/atm-core/src/ack/mod.rs` (docs/plans/phase-AG/sprint-AG19.md:242) -- run verbatim, still matches `route_send_request(&reply.reply_request)` in this file, proving the sprint's own closure gate was never satisfied. Fix: delete the dedicated remote-ack branch entirely; route the ack reply's SendRequest through the same canonical outbound send executor ordinary send uses.""" ;
-    qa:sweepScope "repeatable sweep across AG.19-AG.21 for any remaining dedicated remote-ack branching outside the canonical send path" ;
-    qa:entangledWith "AG18-QA-002", "AG18-QA-003 (SendResponseEnvelope / dispatch-fork defect family)" .
+<urn:atm:triage:finding/AG19-ATM-QA-AG19-001>
+  a triage:Finding ;
+  triage:findingId "AG19-ATM-QA-AG19-001" ;
+  triage:title "ack path bypasses canonical outbound function" ;
+  triage:description "execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs:680-719) contains a dedicated remote-ack execution branch: `if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }`. This path executes independently outside the canonical outbound send executor (execute_delivery_plan / send_mail_with_runtime_and_post_send_emitter) that ordinary sends use, bypassing unified dispatch routing logic." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/AG22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/c245c2ea> ;
+  triage:highestOpenBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:promoteToBranch "feature/pAG-s25-live-two-daemon-proof" .
 
-# --- Per-worktree sweep results ---
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 698 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
 
-qa:ATM-QA-AG19-001-sweep-s18
-    a qa:SweepResult ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
-    qa:status "not-applicable" ;
-    qa:note "Pre-defect state: execute_remote_ack_reply_plan still exists as a named function (ack/mod.rs:693-700), called from execute_ack_reply_plan. Defect (name-only deletion) has not yet occurred here; AG.18 itself is FAIL/entangled on the separate SendResponseEnvelope split (AG18-QA-002/QA-003)." .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 677 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
 
-qa:ATM-QA-AG19-001-sweep-s19
-    a qa:SweepResult ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
-    qa:status "open" ;
-    qa:note "Origin of the defect. ack/mod.rs:669-695: execute_remote_ack_reply_plan function name removed but its body (SendRequestRoute::Remote match -> deliver_remote_send_request -> outcome match) inlined verbatim inside execute_ack_reply_plan at lines 677-691. Sprint AG19's own required rg validation command, run verbatim against this file, still matches route_send_request(&reply.reply_request)." .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 677 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
 
-qa:ATM-QA-AG19-001-sweep-s20
-    a qa:SweepResult ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
-    qa:status "open" ;
-    qa:note "Pattern unchanged from s19 at identical line range (ack/mod.rs:669-695); sprint scope (deferred policy relocation) did not touch this branch." .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
 
-qa:ATM-QA-AG19-001-sweep-s21
-    a qa:SweepResult ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
-    qa:status "open" ;
-    qa:note "Dev in progress. Pattern unchanged from s20 at identical line range (ack/mod.rs:669-695). AG.21's stated job is collapsing dispatch routing -- directly overlaps this defect's fix surface -- but as of this commit the dedicated remote-ack branch in execute_ack_reply_plan has not yet been removed." .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
 
-qa:ATM-QA-AG19-001-sweep-s22-25
-    a qa:SweepResult ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:branch "feature/pAG-s22..s25" ;
-    qa:commitSha "03c873fc" ;
-    qa:status "not-yet-applicable" ;
-    qa:note "Sprints not started (all at common base commit predating AG.19; base still carries the pre-defect named execute_remote_ack_reply_plan function). No real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
 
-# --- Promotion determination ---
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
 
-qa:ATM-QA-AG19-001-promotion
-    a qa:PromotionDecision ;
-    qa:finding qa:ATM-QA-AG19-001 ;
-    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:rationale """The defect originates at AG.19 and is carried forward unchanged through AG.20 and AG.21 (all three at identical ack/mod.rs:669-695 line range). AG.18 predates the defect entirely (still has the named function) and is separately FAIL/entangled on AG18-QA-002/QA-003 (SendResponseEnvelope split). Per repeatable-pattern policy and strict earliest-to-latest branch order, the fix is dispatched once to the highest (latest) branch carrying the defect with real commits -- feature/pAG-s21-collapse-dispatch-routing -- and closed on AG.19/AG.20 via merge-forward, not via separate per-branch fix dispatch. AG.21 is dev-in-progress and its own stated scope (collapsing dispatch routing) directly overlaps this fix surface, reinforcing dispatch to that branch rather than an earlier one. This finding is entangled with AG18-QA-002/QA-003's SendResponseEnvelope/dispatch-fork defect family per the same routing-collapse work in AG.21; per project policy (batched QA, no per-sprint fix dispatch until the full sprint batch is triaged), do not dispatch in isolation -- aggregate with the AG18 findings before assigning to arch-ctm. AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 25 .

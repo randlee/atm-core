@@ -1,54 +1,564 @@
-@prefix qa:   <urn:atm:qa#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-qa:AG20-BLOCK-005
-    a qa:Finding ;
-    qa:findingId "AG20-BLOCK-005" ;
-    qa:phaseId "phase-AG" ;
-    qa:title "Named Exact Targets in atm-core untouched with no staged-removal marker" ;
-    qa:description """crates/atm-core/src/send/delivery_persistence.rs (DeliveryPersistenceDisposition, DeliveryPersistenceResult) and crates/atm-core/src/delivery_plan.rs (DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan) are named exact removal/deprecation targets in docs/plans/phase-AG/sprint-AG20.md 'Supporting types and staged removal'. Verified against feature/pAG-s20-move-deferred-policy-out-of-transport at 50572166: delivery_persistence.rs is byte-for-byte unchanged vs develop (no diff). delivery_plan.rs was edited (DeliveryPlanDisposition enum + delivery_plan_disposition() fn removed, DeliveryPlan.disposition retyped to DeliveryPersistenceDisposition) but none of the five still-present named symbols (DeliveryPersistenceDisposition, DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan) carry a #[deprecated] marker or any staged-removal annotation, even though the sprint doc's own fallback clause (line 156-160) requires: 'if removal must be staged, deprecate in AG.20 and delete no later than the sprint that lands the shared outbound policy layer.' Confirmed by req-qa (ATM-QA-AG20-005), arch-qa (ARCH-007), ruthless-boundary-qa (RBQA-F003). Followup pass at feature/pAG-s21-collapse-dispatch-routing @ bf96dc86 confirms finding remains OPEN: all five named symbols are still present and carry ZERO #[deprecated] markers.""" ;
-    qa:severity "blocking" ;
-    qa:pattern "named-target-untouched" ;
-    qa:repeatable false ;
-    qa:sweepScope "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:sourceReviewers ( "req-qa:ATM-QA-AG20-005" "arch-qa:ARCH-007" "ruthless-boundary-qa:RBQA-F003" ) ;
-    qa:evidence [
-        a qa:Evidence ;
-        qa:evidenceNote "git diff develop -- crates/atm-core/src/send/delivery_persistence.rs is empty (0 lines changed) in feature/pAG-s20-move-deferred-policy-out-of-transport@50572166" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "git diff develop -- crates/atm-core/src/delivery_plan.rs shows edits, but zero #[deprecated] attributes added to DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan, or DeliveryPersistenceDisposition in AG.20" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "docs/plans/phase-AG/sprint-AG20.md lines 125-160: 'Supporting types and staged removal' section names all five symbols explicitly and provides an explicit staged-removal/deprecation fallback clause that was not applied" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "Followup pass AG-QA-2: crates/atm-core/src/send/delivery_persistence.rs line 6 enum DeliveryPersistenceDisposition — NO #[deprecated]" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "Followup pass AG-QA-2: crates/atm-core/src/delivery_plan.rs line 11 enum DeliveryPlanKind — NO #[deprecated]" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "Followup pass AG-QA-2: crates/atm-core/src/delivery_plan.rs line 17 struct LogicalMessage — NO #[deprecated]" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "Followup pass AG-QA-2: crates/atm-core/src/delivery_plan.rs line 87 enum DeliveryTarget — NO #[deprecated]" ;
-    ], [
-        a qa:Evidence ;
-        qa:evidenceNote "Followup pass AG-QA-2: crates/atm-core/src/delivery_plan.rs line 102 struct DeliveryPlan — NO #[deprecated]" ;
-    ] ;
-    qa:orderedWorktrees (
-        [ qa:sprintTag "AG.18" ; qa:branch "feature/pAG-s18-unify-envelope-handler" ; qa:sha "70cce097" ; qa:state "closed" ]
-        [ qa:sprintTag "AG.19" ; qa:branch "feature/pAG-s19-delete-remote-ack-path" ; qa:sha "59225e0f" ; qa:state "closed" ]
-        [ qa:sprintTag "AG.20" ; qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ; qa:sha "50572166" ; qa:state "origin" ]
-        [ qa:sprintTag "AG.21" ; qa:branch "feature/pAG-s21-collapse-dispatch-routing" ; qa:sha "bf96dc86" ; qa:state "dev-in-progress" ]
-        [ qa:sprintTag "AG.22" ; qa:branch "feature/pAG-s22-host-resolution-boundary" ; qa:sha "03c873fc" ; qa:state "not-started" ]
-        [ qa:sprintTag "AG.23" ; qa:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ; qa:sha "03c873fc" ; qa:state "not-started" ]
-        [ qa:sprintTag "AG.24" ; qa:branch "feature/pAG-s24-preserve-request-shape" ; qa:sha "03c873fc" ; qa:state "not-started" ]
-        [ qa:sprintTag "AG.25" ; qa:branch "feature/pAG-s25-live-two-daemon-proof" ; qa:sha "03c873fc" ; qa:state "not-started" ]
-    ) ;
-    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:promotionRationale """AG.20 is the origin sprint of the finding (the named removal targets belong to its own sprint doc). AG.21 is the highest branch with dev currently in progress (open); AG.22-25 are not-started (03c873fc, no divergent work to carry the fix). Per repo triage convention (promote to highest_open_branch, merge-forward closes lower occurrences), the fix is dispatched once to feature/pAG-s21-collapse-dispatch-routing and merge-forward from AG.20 closes the occurrence there; AG.22-25 will inherit the fix on merge-forward once they start.""" ;
-    qa:triageMode "followup_pass" ;
-    qa:integrationBranch "integrate/phase-AG" .
+<urn:atm:triage:finding/AG20-BLOCK-005>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-005" ;
+  triage:title "missing deprecation on DeliveryPersistenceDisposition/DeliveryPlanKind etc." ;
+  triage:description """Five named types in the delivery-policy layer remain untouched with zero #[deprecated] markers across the entire phase-AG sprint chain through AG.25. Named symbols: DeliveryPersistenceDisposition (send/delivery_persistence.rs line 6), DeliveryPlanKind (delivery_plan.rs line 11), LogicalMessage (delivery_plan.rs line 17), DeliveryTarget (delivery_plan.rs line 87), DeliveryPlan (delivery_plan.rs line 102). Sprint AG.20's own plan doc (lines 125-160) lists these as 'Supporting types and staged removal' and provides a fallback staged-deprecation clause (lines 156-160): 'if removal must be staged, deprecate in AG.20 and delete no later than the sprint that lands the shared outbound policy layer.' This requirement was not fulfilled. Followup pass at AG.21 (PR #580, bf96dc86) confirmed the finding remains OPEN. Current sweep through AG.25 (c245c2ea) confirms the deprecation markers are still absent on all five symbols in all eight sprint branches.""" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPlan> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPersistenceDisposition> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPlanKind> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/LogicalMessage> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryTarget> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPlan> ;
+  triage:openOn <urn:atm:triage:worktree/AG18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/AG22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG25/c245c2ea> ;
+  triage:integrationBranch "integrate/phase-AG" ;
+  triage:integrationWorktreePath "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG18/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG19/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG20/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG21/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG22/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG23/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG24/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPersistenceDisposition>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/delivery_persistence.rs" ;
+  triage:line 6 ;
+  triage:snippet "pub(crate) enum DeliveryPersistenceDisposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPlanKind>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub(crate) enum DeliveryPlanKind" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/LogicalMessage>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 17 ;
+  triage:snippet "pub(crate) struct LogicalMessage" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryTarget>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 87 ;
+  triage:snippet "pub(crate) enum DeliveryTarget" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-005/AG25/DeliveryPlan>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_plan.rs" ;
+  triage:line 102 ;
+  triage:snippet "pub(crate) struct DeliveryPlan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AG22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AG23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AG25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

@@ -1,73 +1,192 @@
-@prefix qa:   <urn:atm:qa#> .
-@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-qa:AG18-QA-002
-    a qa:Finding ;
-    qa:findingId "AG18-QA-002" ;
-    qa:phase "phase-AG" ;
-    qa:title "SendResponseEnvelope::{Sent,Acknowledged} never deleted/deprecated" ;
-    qa:severity "blocking" ;
-    qa:pattern "rename-not-remove" ;
-    qa:repeatable true ;
-    qa:sourceReviewers "req-qa (ATM-QA-002)", "arch-qa (ARCH-001)", "ruthless-boundary-qa (RBQA-F002)" ;
-    qa:description """crates/atm-core/src/protocol.rs:42-45 defines `pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }` with no #[deprecated] attribute. docs/plans/phase-AG/sprint-AG18.md explicitly names this type for deletion in AG.18 (lines ~121, ~148, ~158), or, if removal must be staged, for deprecation in AG.18 with deletion no later than the immediate follow-on sprint that collapses the last caller. Neither happened: the enum remains fully defined and undeprecated through AG.18, AG.19, AG.20, and the in-progress AG.21, and is actively constructed/matched at 15+ call sites per worktree, including crates/atm/src/composition.rs, crates/atm-graft/src/lib.rs, crates/atm-daemon-client/src/rpc.rs, crates/atm-core/src/protocol.rs (definition site), crates/atm-core/src/ack/mod.rs, crates/atm-core/src/send/mod.rs (AG.21 only), crates/atm-daemon/src/non_claude_outbound_runtime.rs, crates/atm-daemon/src/runtime_health/dispatch_delivery.rs, and multiple test modules (tests_post_send_graft_warning.rs, tests/runtime_root/*.rs, peer_transport/tests/harness.rs).""" ;
-    qa:sweepScope "repeatable-pattern sweep across all worktrees with real commits (AG.18-AG.21) for any remaining SendResponseEnvelope::Sent/Acknowledged construction or match sites" .
+<urn:atm:triage:finding/AG18-QA-002>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-002" ;
+  triage:title "SendResponseEnvelope/SendRequestEnvelope never marked deprecated" ;
+  triage:description "SendResponseEnvelope::{Sent,Acknowledged} was never deprecated in AG.18-AG.23 despite plan requirements. Enum definition at crates/atm-core/src/protocol.rs lines 42-45 lacks #[deprecated] attribute. 40+ construction/match sites across 4 crates in S18-S23. FIXED in AG.24: enum completely removed and all construction sites eliminated. S25 inherits fix." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "BREAKING_CHANGE" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded true ;
+  triage:regressed false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:highestFixedBranch "feature/pAG-s24-preserve-request-shape" ;
+  triage:promoteToBranch "feature/pAG-s24-preserve-request-shape" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s23/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/c245c2ea> .
 
-# --- Per-worktree sweep results (all confirmed present, pattern never closed) ---
+# Occurrence in S18
+<urn:atm:triage:occurrence/AG18-QA-002/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
 
-qa:AG18-QA-002-sweep-s18
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
-    qa:status "open" ;
-    qa:constructMatchSiteCount 27 ;
-    qa:note "SendResponseEnvelope::Sent/Acknowledged construction and match sites present across composition.rs, atm-graft/lib.rs, rpc.rs, ack/mod.rs, non_claude_outbound_runtime.rs, runtime_health/dispatch_delivery.rs, and test modules; enum definition at protocol.rs:42-45 has no #[deprecated] attribute." .
+# Occurrence in S19
+<urn:atm:triage:occurrence/AG18-QA-002/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
 
-qa:AG18-QA-002-sweep-s19
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
-    qa:status "open" ;
-    qa:constructMatchSiteCount 27 ;
-    qa:note "Pattern unchanged from s18 despite sprint title implying remote-ack-path deletion; same construct/match sites remain across the same file set." .
+# Occurrence in S20
+<urn:atm:triage:occurrence/AG18-QA-002/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
 
-qa:AG18-QA-002-sweep-s20
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
-    qa:status "open" ;
-    qa:constructMatchSiteCount 27 ;
-    qa:note "Pattern unchanged from s19; sprint scope (deferred policy relocation) did not touch SendResponseEnvelope surface." .
+# Occurrence in S21
+<urn:atm:triage:occurrence/AG18-QA-002/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occurrenceCount 14 ;
+  triage:note "New construction site introduced at crates/atm-core/src/send/mod.rs during this sprint despite enum scheduled for removal." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/bf96dc86> .
 
-qa:AG18-QA-002-sweep-s21
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
-    qa:status "open" ;
-    qa:constructMatchSiteCount 22 ;
-    qa:note "Dev in progress. New construction site introduced at crates/atm-core/src/send/mod.rs:378,382 (.map(SendResponseEnvelope::Acknowledged) / .map(SendResponseEnvelope::Sent)) -- despite 'collapse dispatch routing' scope, the enum is still actively fed rather than removed; other call sites (composition.rs, atm-graft/lib.rs, rpc.rs, ack/mod.rs, non_claude_outbound_runtime.rs, dispatch_delivery.rs, tests) unchanged and still present. Enum definition still undeprecated." .
+# Occurrence in S22
+<urn:atm:triage:occurrence/AG18-QA-002/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occurrenceCount 14 ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
 
-qa:AG18-QA-002-sweep-s22-25
-    a qa:SweepResult ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:branch "feature/pAG-s22..s25" ;
-    qa:commitSha "03c873fc" ;
-    qa:status "not-yet-applicable" ;
-    qa:note "Sprints not started (all at common base commit); no real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+# Occurrence in S23
+<urn:atm:triage:occurrence/AG18-QA-002/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occurrenceCount 14 ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
 
-# --- Promotion determination ---
+# WorktreeSnapshot for S18
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
 
-qa:AG18-QA-002-promotion
-    a qa:PromotionDecision ;
-    qa:finding qa:AG18-QA-002 ;
-    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
-    qa:rationale """All four worktrees with real commits (AG.18-AG.21) exhibit the identical open defect: SendResponseEnvelope::{Sent,Acknowledged} remains fully defined, undeprecated, and actively constructed/matched. Per repeatable-pattern policy, the fix is dispatched once to the highest (latest) branch with real commits -- feature/pAG-s21-collapse-dispatch-routing -- and closed on lower branches via merge-forward, not via separate per-branch fix dispatch. AG.21 is dev-in-progress; a new construction site was introduced there during this pass (send/mod.rs:378,382), confirming the pattern is still actively propagating and reinforcing the need to fix at the tip rather than an earlier branch. AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .
+# WorktreeSnapshot for S19
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S20
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S21
+<urn:atm:triage:worktree/s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S22
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S23
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S24 (FIXED)
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 ;
+  triage:branchState "fixed" ;
+  triage:fixMethod "removal" ;
+  triage:fixDescription "Enum SendResponseEnvelope completely removed from protocol.rs; all construction/match sites refactored or removed." .
+
+# WorktreeSnapshot for S25 (FIXED)
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 ;
+  triage:branchState "fixed" ;
+  triage:fixMethod "inherited" ;
+  triage:fixDescription "Inherits fix from S24; enum removed, no construction sites present." .

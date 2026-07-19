@@ -4,80 +4,87 @@
 <urn:atm:triage:finding/AG20-BLOCK-003>
   a triage:Finding ;
   triage:findingId "AG20-BLOCK-003" ;
-  triage:title "Transport still owns replay persistence" ;
-  triage:description "PeerClientTransport::replay_store (crates/atm-daemon/src/peer_transport/mod.rs:152), resume_pending_replay (line 215), persist_replay_request (line 289 with #[allow(dead_code)] annotation), persist_replay_request_to_endpoint (line 318), and persist_remote_retry (delivery.rs:154) all still initiate/own replay persistence from inside the transport module tree, even though AG.20's own sprint doc explicitly names replay_store for deletion/relocation out of the transport layer. QA-2 re-triage confirms AG.21 @ bf96dc86 still carries the dead-code annotation on line 285-288: 'retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch' — direct admission that the production code path has shifted but the old API remains as dead code in production. This is a boundary violation: even dead code in the transport module tree violates the AG.20/AG.21 scope to remove replay_store ownership entirely from the transport layer." ;
+  triage:title "Transport-owned replay -- persistence extracted but ownership not moved" ;
+  triage:description "PeerClientTransport::replay_store (crates/atm-daemon/src/peer_transport/mod.rs:152-171 across sprints) still owns replay persistence from inside the transport module tree despite AG.20's sprint doc explicitly naming replay_store for deletion/relocation out of the transport layer. persist_replay_request function is marked dead_code with explicit reasons ('retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch' on s21) — direct admission that production code path has shifted but old API remains as dead code in production. This is a boundary violation: even dead code in the transport module tree violates the AG.20+ scope to remove replay_store ownership entirely from the transport layer. The issue persists through all eight active sprints (s18-s25) as of latest TriageMode=followup_pass sweep." ;
   triage:phaseId "phase-AG" ;
   triage:triageMode "followup_pass" ;
-  triage:category "architecture" ;
+  triage:category "blocking" ;
   triage:severity "blocking" ;
-  triage:repeatable false ;
-  triage:sweepScope "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s18/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s19/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s20/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
-  triage:notes "Followup_pass QA-2 re-triage confirms AG.21 @ bf96dc86 still open. New evidence (occurrence/AG20-BLOCK-003/pAG-s21/2) documents the #[allow(dead_code)] annotation at line 285-288 that explicitly admits persist_replay_request is retained for legacy tests but no longer used in production dispatch. Production code has shifted to persist_replay_request_to_endpoint (line 318), but the dead-code path remains in the codebase and violates the transport-layer boundary. highest_open_branch = feature/pAG-s21-collapse-dispatch-routing (bf96dc86). AG.22-25 not yet started, still at 03c873fc which predates AG.21. Promote_to = s21 per latest-open-branch policy. Fix targets s21; merge-forward closes lower branches. Not repeatable outside peer_transport/ module tree." .
+  triage:triagedAt "2026-07-19T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/758732cd> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:notes "Followup_pass confirms issue STILL OPEN through all sprints. Replay_store struct field persists on peer_transport/mod.rs lines 152-171 (line numbers shift slightly across sprints due to minor refactors). Dead_code annotations on persist_replay_request acknowledge production code path has shifted to persist_replay_request_to_endpoint (explicit-endpoint version), but legacy function retained for tests and remains in production codebase tree. Boundary violation: dead code in transport module tree = violation of transport-layer scope boundary. highest_open_branch = feature/pAG-s25-live-two-daemon-proof (c245c2ea). All sprints still open; promote_to = s25 (latest active branch). Fix targets s25; merge-forward closes lower branches." .
 
-# Occurrences on feature/pAG-s18-unify-envelope-handler (70cce097)
-<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s18/1>
+# Occurrence s18
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s18/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
-  triage:line 156 ;
-  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs" ;
+  triage:line 152 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } owns replay_store despite extraction to remote_replay.rs" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "70cce097" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
 
-# Occurrences on feature/pAG-s19-delete-remote-ack-path (59225e0f)
-<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s19/1>
+# Occurrence s19
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s19/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
-  triage:line 156 ;
-  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs" ;
+  triage:line 152 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } owns replay_store despite extraction to remote_replay.rs" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "59225e0f" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
 
-# Occurrences on feature/pAG-s20-move-deferred-policy-out-of-transport (50572166)
-<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s20/1>
+# Occurrence s20
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s20/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
-  triage:line 156 ;
-  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs:165" ;
+  triage:line 152 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } owns replay_store despite extraction to remote_replay.rs" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
   triage:headSha "50572166" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
 
-# Occurrences on feature/pAG-s21-collapse-dispatch-routing (bf96dc86, current active dev)
-# Occurrence 1: replay_store struct field and related functions (s21 original evidence)
-<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/1>
+# Occurrence s21 - structural persistence of replay_store
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s21/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
   triage:line 152 ;
-  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay (line 215), persist_replay_request_to_endpoint (line 318), persist_remote_retry (delivery.rs:154)" ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } owns replay_store despite extraction to remote_replay.rs" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "bf96dc86" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
 
-# Occurrence 2: QA-2 new evidence — dead_code annotation admits production code path has shifted (bf96dc86)
-<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/2>
+# Occurrence s21/2 - dead_code annotation with boundary-violation admission
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s21/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
   triage:line 285 ;
@@ -85,35 +92,111 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "bf96dc86" ;
-  triage:evidence "QA-2 ruthless-boundary-qa finding: dead-code annotation is a boundary violation admission — explicitly states the code is retained for tests only but no longer used in production dispatch, yet remains in production codebase as dead weight in the transport layer module tree" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+  triage:headSha "758732cd" ;
+  triage:evidence "Boundary violation proof: dead-code annotation explicitly states the function is retained for tests only but no longer used in production dispatch, yet remains in production codebase as dead weight in the transport layer module tree. Production code path has shifted to persist_replay_request_to_endpoint (explicit-endpoint version), but dead code is not removed." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
+
+# Occurrence s22
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 171 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } persists through s22 with dead_code annotations on persist_replay_request functions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+# Occurrence s23
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 170 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } persists through s23 with dead_code annotations on persist_replay_request functions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+# Occurrence s24
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 170 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } persists through s24 with dead_code annotations on persist_replay_request functions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+# Occurrence s25
+<urn:atm:triage:occurrence/AG20-BLOCK-003/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 170 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } persists through s25 with dead_code annotations on persist_replay_request functions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
 
 # Worktree snapshots
-<urn:atm:triage:worktree/pAG-s18/70cce097>
+<urn:atm:triage:worktree/s18/e46c3a6d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "70cce097" ;
+  triage:headSha "e46c3a6d" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pAG-s19/59225e0f>
+<urn:atm:triage:worktree/s19/5d20ca5a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "59225e0f" ;
+  triage:headSha "5d20ca5a" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pAG-s20/50572166>
+<urn:atm:triage:worktree/s20/50572166>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
   triage:headSha "50572166" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+<urn:atm:triage:worktree/s21/758732cd>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "bf96dc86" ;
+  triage:headSha "758732cd" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .
