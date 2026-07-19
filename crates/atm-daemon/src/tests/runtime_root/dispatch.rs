@@ -26,22 +26,20 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path.clone());
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(
-                SendRequest::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    "qa-a@test-team",
-                    TEST_TEAM.parse().expect("team"),
-                    SendMessageSource::Inline("hello add-member roster".to_string()),
-                    None,
-                    false,
-                    None,
-                    false,
-                )
-                .expect("send request"),
-            ),
+        .dispatch(RequestEnvelope::Send(Box::new(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello add-member roster".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
         )))
         .expect("dispatch send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = &response else {
@@ -81,22 +79,20 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     );
     let handle = std::thread::spawn(move || {
         let response = dispatcher
-            .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-                Box::new(
-                    SendRequest::new(
-                        atm_home.clone(),
-                        workspace_dir.clone(),
-                        ROLE_TEAM_LEAD.parse().expect("caller"),
-                        "qa-a@test-team",
-                        TEST_TEAM.parse().expect("team"),
-                        SendMessageSource::Inline("hello threaded dispatch".to_string()),
-                        None,
-                        false,
-                        None,
-                        false,
-                    )
-                    .expect("send request"),
-                ),
+            .dispatch(RequestEnvelope::Send(Box::new(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "qa-a@test-team",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello threaded dispatch".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
             )))
             .expect("dispatch send");
         JsonAtmProtocolCodec
@@ -134,22 +130,20 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
     );
     let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(
-                SendRequest::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    &self_address,
-                    TEST_TEAM.parse().expect("team"),
-                    SendMessageSource::Inline("hello self".to_string()),
-                    None,
-                    false,
-                    None,
-                    false,
-                )
-                .expect("send request"),
-            ),
+        .dispatch(RequestEnvelope::Send(Box::new(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                &self_address,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello self".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
         )))
         .expect_err("self-addressed daemon send must fail");
 

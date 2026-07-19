@@ -21,10 +21,3 @@ pub(super) fn remote_retry_budget_expiry_error(
         )
         .with_source(source)
 }
-
-pub(super) fn remote_replay_persistence_failed_error(source: AtmError) -> AtmError {
-    AtmError::remote_delivery_outcome_unknown(
-        "remote peer delivery outcome is unknown and replay persistence failed",
-    )
-    .with_source(source)
-}

@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
+    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
     boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
-    protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
+    protocol::{CompatibilityVerdict, ReleaseVersion, SendResponseEnvelope},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
@@ -25,19 +25,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                self.dispatch_compose_send(*request, &post_send_emitter)
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
-                        request,
-                        self.observability.as_ref(),
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )))
-            }
+            RequestEnvelope::Send(request) => self.dispatch_send(*request, &post_send_emitter),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
@@ -67,11 +55,21 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
-    fn dispatch_compose_send(
+    fn dispatch_send(
         &self,
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
+        if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
+            return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                ack_mail_with_runtime_and_post_send_emitter(
+                    ack_request_from_send_request(request)?,
+                    self.observability.as_ref(),
+                    &self.service_runtime,
+                    post_send_emitter,
+                )?,
+            )));
+        }
         match route_send_request(&request) {
             SendRequestRoute::Local => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(

@@ -4,12 +4,14 @@ use std::sync::Arc;
 
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
 
 use super::PeerTransportRuntime;
+
+const DEFAULT_REMOTE_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RemoteDeliveryDecision {
@@ -169,13 +171,12 @@ impl DaemonCrossHostDelivery {
     ) -> Result<(), CrossHostDeliveryInfraError> {
         self.peer_transport_runtime
             .persist_remote_request_for_retry(
+                DEFAULT_REMOTE_RETRY_BUDGET,
                 endpoint,
                 replay_request.caller_team.clone(),
                 replay_request.caller_identity.clone(),
                 boundary::MessageKey::from(deferred_receipt_message_id),
-                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                    replay_request.clone(),
-                ))),
+                RequestEnvelope::Send(Box::new(replay_request.clone())),
                 Some(replay_request.caller_team.clone()),
                 Some(replay_request.caller_identity.clone()),
                 Some(deferred_receipt_message_id),
@@ -205,10 +206,10 @@ impl DaemonCrossHostDelivery {
         deferred_receipt_message_id: AtmMessageId,
         remote_host: &RemoteTargetHost,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-        match self.peer_transport_runtime.send_to_endpoint_immediate_wait(
-            endpoint,
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
-        ) {
+        match self
+            .peer_transport_runtime
+            .send_to_endpoint_immediate_wait(endpoint, RequestEnvelope::Send(Box::new(request)))
+        {
             Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
             Err(error) => self.handle_immediate_wait_error(
                 endpoint,
