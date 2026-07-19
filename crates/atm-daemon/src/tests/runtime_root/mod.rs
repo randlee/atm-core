@@ -50,14 +50,8 @@ pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome {
         .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
 }
 
-pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> &SendOutcome {
-    if let ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) =
-        response
-    {
-        outcome
-    } else {
-        panic!("expected send response, got {response:?}");
-    }
+pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> SendOutcome {
+    expect_sent_response(response.clone())
 }
 
 pub(super) fn expect_ack_response(response: ResponseEnvelope) -> AckOutcome {

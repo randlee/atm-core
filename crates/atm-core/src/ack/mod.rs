@@ -1051,8 +1051,8 @@ mod tests {
                 });
             }
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
-                Box::new(crate::ResponseEnvelope::Send(
-                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
+                Box::new(crate::ResponseEnvelope::Send(Box::new(
+                    crate::protocol::send_sent_envelope(crate::send::SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated("recipient"),
@@ -1064,10 +1064,12 @@ mod tests {
                         task_id: None,
                         summary: None,
                         message: None,
+                        acknowledged_message_id: None,
+                        reply_target: None,
                         warnings: Vec::new(),
                         dry_run: false,
                     }),
-                )),
+                ))),
             ))
         }
 
@@ -1155,8 +1157,8 @@ mod tests {
                 .expect("remote send requests")
                 .push(request);
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
-                Box::new(crate::ResponseEnvelope::Send(
-                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
+                Box::new(crate::ResponseEnvelope::Send(Box::new(
+                    crate::protocol::send_sent_envelope(crate::send::SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated("recipient"),
@@ -1168,10 +1170,12 @@ mod tests {
                         task_id: None,
                         summary: None,
                         message: None,
+                        acknowledged_message_id: None,
+                        reply_target: None,
                         warnings: Vec::new(),
                         dry_run: false,
                     }),
-                )),
+                ))),
             ))
         }
 

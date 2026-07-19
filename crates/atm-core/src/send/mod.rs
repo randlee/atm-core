@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::ack::ReplyTarget;
 use crate::ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request};
 use crate::address::AgentAddress;
 use crate::boundary;
@@ -14,7 +15,6 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
-use crate::protocol::SendResponseEnvelope;
 use crate::protocol::{ResponseEnvelope, send_acknowledged_envelope, send_sent_envelope};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -293,6 +293,10 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acknowledged_message_id: Option<AtmMessageId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<ReplyTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -408,7 +412,7 @@ pub fn execute_outbound_send_with_runtime_and_post_send_emitter(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<SendResponseEnvelope, AtmError> {
+) -> Result<SendOutcome, AtmError> {
     if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
         return ack_mail_with_runtime_and_post_send_emitter(
             ack_request_from_send_request(request)?,

@@ -65,7 +65,7 @@ impl DaemonRequestDispatcher {
                 &self.service_runtime,
                 post_send_emitter,
             )
-            .map(ResponseEnvelope::Send),
+            .map(|outcome| ResponseEnvelope::Send(Box::new(outcome))),
             SendRequestRoute::Remote(remote_host) => {
                 match classify_remote_send_delivery_outcome(
                     self.service_runtime
@@ -140,6 +140,8 @@ fn build_remote_deferred_outcome(
             remote_host.as_str()
         )),
         message: Some(receipt_body.to_string()),
+        acknowledged_message_id: None,
+        reply_target: None,
         warnings: Vec::new(),
         dry_run: false,
     })

@@ -607,6 +607,8 @@ mod tests {
                         task_id: None,
                         summary: None,
                         message: None,
+                        acknowledged_message_id: None,
+                        reply_target: None,
                         warnings: Vec::new(),
                         dry_run: false,
                     }))

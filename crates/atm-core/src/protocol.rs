@@ -37,13 +37,6 @@ pub use runtime_status::{
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
-/// Shared protocol send-shaped response envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendResponseEnvelope {
-    Sent(SendOutcome),
-    Acknowledged(AckOutcome),
-}
-
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
@@ -60,7 +53,7 @@ pub enum RequestEnvelope {
 /// Shared protocol response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
-    Send(SendResponseEnvelope),
+    Send(Box<SendOutcome>),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
@@ -71,32 +64,72 @@ pub enum ResponseEnvelope {
     Error(ProtocolErrorEnvelope),
 }
 
-pub fn send_sent_envelope(outcome: SendOutcome) -> SendResponseEnvelope {
-    SendResponseEnvelope::Sent(outcome)
+pub fn send_sent_envelope(outcome: SendOutcome) -> SendOutcome {
+    outcome
 }
 
-pub fn send_acknowledged_envelope(outcome: AckOutcome) -> SendResponseEnvelope {
-    SendResponseEnvelope::Acknowledged(outcome)
+pub fn send_acknowledged_envelope(outcome: AckOutcome) -> SendOutcome {
+    SendOutcome {
+        action: outcome.action,
+        team: outcome.team,
+        agent: outcome.agent.clone(),
+        sender: outcome.agent,
+        outcome: crate::send::SendCommandOutcome::Sent,
+        message_id: outcome.reply_message_id,
+        receipt_message_id: None,
+        requires_ack: false,
+        task_id: outcome.task_id,
+        summary: None,
+        message: Some(outcome.reply_text),
+        acknowledged_message_id: Some(outcome.message_id),
+        reply_target: Some(outcome.reply_target),
+        warnings: outcome.warnings,
+        dry_run: false,
+    }
 }
 
 pub fn send_sent_response(outcome: SendOutcome) -> ResponseEnvelope {
-    ResponseEnvelope::Send(send_sent_envelope(outcome))
+    ResponseEnvelope::Send(Box::new(send_sent_envelope(outcome)))
 }
 
 pub fn send_acknowledged_response(outcome: AckOutcome) -> ResponseEnvelope {
-    ResponseEnvelope::Send(send_acknowledged_envelope(outcome))
+    ResponseEnvelope::Send(Box::new(send_acknowledged_envelope(outcome)))
 }
 
 pub fn into_send_outcome(response: ResponseEnvelope) -> Result<SendOutcome, Box<ResponseEnvelope>> {
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+        ResponseEnvelope::Send(outcome) if outcome.acknowledged_message_id.is_none() => {
+            Ok(*outcome)
+        }
         other => Err(Box::new(other)),
     }
 }
 
 pub fn into_ack_outcome(response: ResponseEnvelope) -> Result<AckOutcome, Box<ResponseEnvelope>> {
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+        ResponseEnvelope::Send(outcome)
+            if outcome.acknowledged_message_id.is_some()
+                && outcome.reply_target.is_some()
+                && outcome.message.is_some() =>
+        {
+            Ok(AckOutcome {
+                action: outcome.action,
+                team: outcome.team,
+                agent: outcome.agent,
+                message_id: outcome
+                    .acknowledged_message_id
+                    .expect("ack response must include acknowledged message id"),
+                task_id: outcome.task_id,
+                reply_message_id: outcome.message_id,
+                reply_target: outcome
+                    .reply_target
+                    .expect("ack response must include reply target"),
+                reply_text: outcome
+                    .message
+                    .expect("ack response must include reply text"),
+                warnings: outcome.warnings,
+            })
+        }
         other => Err(Box::new(other)),
     }
 }

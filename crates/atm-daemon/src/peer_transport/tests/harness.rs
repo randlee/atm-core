@@ -108,7 +108,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         )))
         .expect("authorized send should succeed");
     match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.requires_ack);
         }
@@ -159,7 +159,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         ))
         .expect("authorized ack should succeed");
     match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.warnings.is_empty());
             assert!(!outcome.requires_ack);
@@ -284,7 +284,7 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
         )))
         .expect("send should still succeed");
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert_eq!(outcome.warnings.len(), 1);
             assert_eq!(
@@ -407,7 +407,7 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
         )))
         .expect("send should succeed after listener startup");
     match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.warnings.is_empty());
         }
@@ -527,7 +527,7 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("remote-target send should still succeed");
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert_eq!(outcome.warnings.len(), 1);
             assert_eq!(
@@ -689,7 +689,7 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("initial remote-target send should defer");
     match deferred {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");
             assert_eq!(outcome.receipt_message_id, Some(outcome.message_id));
             assert!(
