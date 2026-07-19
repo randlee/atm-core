@@ -89,25 +89,29 @@ impl DaemonRequestDispatcher {
             deferred_receipt_message_id,
         ) {
             Ok(RemoteSendOutcome::Delivered(response)) => Ok(*response),
-            Ok(RemoteSendOutcome::Deferred { receipt_message_id }) => Ok(ResponseEnvelope::Send(
-                SendResponseEnvelope::Sent(build_remote_deferred_outcome(
+            Ok(RemoteSendOutcome::Deferred {
+                receipt_message_id, ..
+            }) => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                build_remote_deferred_outcome(
                     &self.service_runtime,
                     &request,
                     &remote_host,
                     receipt_message_id,
                     "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
-                )?),
-            )),
+                )?,
+            ))),
             Ok(RemoteSendOutcome::RejectedTerminal(error)) => Err(error),
-            Ok(RemoteSendOutcome::OutcomeUnknown { receipt_message_id }) => Ok(
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(build_remote_deferred_outcome(
+            Ok(RemoteSendOutcome::OutcomeUnknown {
+                receipt_message_id, ..
+            }) => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                build_remote_deferred_outcome(
                     &self.service_runtime,
                     &request,
                     &remote_host,
                     receipt_message_id,
                     "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
-                )?)),
-            ),
+                )?,
+            ))),
             Err(error) => Err(error.into_atm_error()),
         }
     }

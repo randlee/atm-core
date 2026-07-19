@@ -20,9 +20,15 @@ pub(crate) enum RemoteDeliveryDecision {
 #[derive(Debug)]
 pub(crate) enum SendOutcome {
     Delivered(Box<ResponseEnvelope>),
-    Deferred { receipt_message_id: AtmMessageId },
+    Deferred {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
     RejectedTerminal(AtmError),
-    OutcomeUnknown { receipt_message_id: AtmMessageId },
+    OutcomeUnknown {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
 }
 
 #[derive(Debug)]
@@ -154,10 +160,104 @@ impl DaemonCrossHostDelivery {
         resolve_remote_port_for_host(interface_rows, bound_addr, remote_host)
     }
 
+    fn persist_remote_retry(
+        &self,
+        endpoint: SocketAddr,
+        replay_request: &SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<(), CrossHostDeliveryInfraError> {
+        self.peer_transport_runtime
+            .persist_remote_request_for_retry(
+                endpoint,
+                replay_request.caller_team.clone(),
+                replay_request.caller_identity.clone(),
+                boundary::MessageKey::from(deferred_receipt_message_id),
+                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+                    replay_request.clone(),
+                ))),
+                Some(replay_request.caller_team.clone()),
+                Some(replay_request.caller_identity.clone()),
+                Some(deferred_receipt_message_id),
+                Some(replay_request.to.to_string()),
+                Some(remote_host.as_str().to_string()),
+            )
+            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)
+    }
+
+    fn deferred_listener_unavailable(deferred_receipt_message_id: AtmMessageId) -> SendOutcome {
+        SendOutcome::Deferred {
+            receipt_message_id: deferred_receipt_message_id,
+            error: AtmError::daemon_unavailable(
+                "remote delivery is deferred because no healthy peer listener is currently bound",
+            )
+            .with_recovery(
+                "Restore the cross-host listener health and retry; the daemon queued the send for bounded background replay.",
+            ),
+        }
+    }
+
+    fn deliver_immediate_wait(
+        &self,
+        endpoint: SocketAddr,
+        request: SendRequest,
+        replay_request: SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+        match self.peer_transport_runtime.send_to_endpoint_immediate_wait(
+            endpoint,
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
+        ) {
+            Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
+            Err(error) => self.handle_immediate_wait_error(
+                endpoint,
+                replay_request,
+                deferred_receipt_message_id,
+                remote_host,
+                error,
+            ),
+        }
+    }
+
+    fn handle_immediate_wait_error(
+        &self,
+        endpoint: SocketAddr,
+        replay_request: SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+        error: AtmError,
+    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+        let outcome = Self::classify_error(&error);
+        if matches!(
+            outcome,
+            SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
+        ) {
+            self.persist_remote_retry(
+                endpoint,
+                &replay_request,
+                deferred_receipt_message_id,
+                remote_host,
+            )?;
+        }
+        Ok(match outcome {
+            SendOutcome::Deferred { error, .. } => SendOutcome::Deferred {
+                receipt_message_id: deferred_receipt_message_id,
+                error,
+            },
+            SendOutcome::OutcomeUnknown { error, .. } => SendOutcome::OutcomeUnknown {
+                receipt_message_id: deferred_receipt_message_id,
+                error,
+            },
+            other => other,
+        })
+    }
+
     fn classify_error(error: &AtmError) -> SendOutcome {
         if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown {
             return SendOutcome::OutcomeUnknown {
                 receipt_message_id: AtmMessageId::new(),
+                error: preserve_error_shape(error),
             };
         }
         if error.code == AtmErrorCode::ClientDaemonVersionIncompatible {
@@ -179,12 +279,22 @@ impl DaemonCrossHostDelivery {
         if error.code == AtmErrorCode::DaemonUnavailable || error.is_timeout() {
             return SendOutcome::Deferred {
                 receipt_message_id: AtmMessageId::new(),
+                error: preserve_error_shape(error),
             };
         }
         SendOutcome::Deferred {
             receipt_message_id: AtmMessageId::new(),
+            error: preserve_error_shape(error),
         }
     }
+}
+
+fn preserve_error_shape(error: &AtmError) -> AtmError {
+    let mut preserved = AtmError::new_with_code(error.code, error.kind, error.message.clone());
+    for recovery in &error.recovery {
+        preserved = preserved.with_recovery(recovery.clone());
+    }
+    preserved
 }
 
 fn select_resolved_remote_endpoint(
@@ -215,67 +325,23 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         let replay_request = request.clone();
         match decision {
             RemoteDeliveryDecision::DeferredRetry => {
-                self.peer_transport_runtime
-                    .persist_remote_request_for_retry(
-                        endpoint,
-                        replay_request.caller_team.clone(),
-                        replay_request.caller_identity.clone(),
-                        boundary::MessageKey::from(deferred_receipt_message_id),
-                        RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                            replay_request.clone(),
-                        ))),
-                        Some(replay_request.caller_team.clone()),
-                        Some(replay_request.caller_identity.clone()),
-                        Some(deferred_receipt_message_id),
-                        Some(replay_request.to.to_string()),
-                        Some(remote_host.as_str().to_string()),
-                    )
-                    .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-                Ok(SendOutcome::Deferred {
-                    receipt_message_id: deferred_receipt_message_id,
-                })
-            }
-            RemoteDeliveryDecision::HealthyImmediateWait => self
-                .peer_transport_runtime
-                .send_to_endpoint_immediate_wait(
+                self.persist_remote_retry(
                     endpoint,
-                    RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
-                )
-                .map(Box::new)
-                .map(SendOutcome::Delivered)
-                .or_else(|error| {
-                    let outcome = Self::classify_error(&error);
-                    if matches!(
-                        outcome,
-                        SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
-                    ) {
-                        self.peer_transport_runtime
-                            .persist_remote_request_for_retry(
-                                endpoint,
-                                replay_request.caller_team.clone(),
-                                replay_request.caller_identity.clone(),
-                                boundary::MessageKey::from(deferred_receipt_message_id),
-                                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                                    replay_request.clone(),
-                                ))),
-                                Some(replay_request.caller_team.clone()),
-                                Some(replay_request.caller_identity.clone()),
-                                Some(deferred_receipt_message_id),
-                                Some(replay_request.to.to_string()),
-                                Some(remote_host.as_str().to_string()),
-                            )
-                            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-                    }
-                    Ok(match outcome {
-                        SendOutcome::Deferred { .. } => SendOutcome::Deferred {
-                            receipt_message_id: deferred_receipt_message_id,
-                        },
-                        SendOutcome::OutcomeUnknown { .. } => SendOutcome::OutcomeUnknown {
-                            receipt_message_id: deferred_receipt_message_id,
-                        },
-                        other => other,
-                    })
-                }),
+                    &replay_request,
+                    deferred_receipt_message_id,
+                    &remote_host,
+                )?;
+                Ok(Self::deferred_listener_unavailable(
+                    deferred_receipt_message_id,
+                ))
+            }
+            RemoteDeliveryDecision::HealthyImmediateWait => self.deliver_immediate_wait(
+                endpoint,
+                request,
+                replay_request,
+                deferred_receipt_message_id,
+                &remote_host,
+            ),
         }
     }
 }

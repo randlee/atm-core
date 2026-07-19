@@ -24,6 +24,7 @@ use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 
+mod cross_host;
 mod dispatch;
 mod local_ipc;
 mod loopback;

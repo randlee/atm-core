@@ -12,6 +12,7 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
 use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, InboxMessage};
+use crate::send::SendRequest;
 use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
@@ -251,6 +252,17 @@ pub trait NonClaudeOutbound: sealed::Sealed {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError>;
+}
+
+/// BOUNDARY-RemoteSendRouter — daemon-owned seam for confirmed remote-target
+/// send execution. This stays separate from the non-Claude payload sink so
+/// remote-target routing happens in one place.
+pub trait RemoteSendRouter: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when confirmed remote-target delivery cannot be
+    /// completed through the canonical daemon-owned cross-host transport.
+    fn deliver_remote_send(&self, request: SendRequest) -> Result<(), AtmError>;
 }
 
 #[cfg(test)]
