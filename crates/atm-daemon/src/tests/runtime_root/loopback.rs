@@ -50,19 +50,15 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
         .start(dispatcher.clone())
         .expect("start peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello loopback".to_string()),
-        None,
+        TEST_TEAM,
+        "hello loopback",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
@@ -167,19 +163,15 @@ fn dispatcher_loopback_send_rejects_unauthorized_host_before_mailbox_mutation() 
         .start(dispatcher.clone())
         .expect("start peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("unauthorized localhost".to_string()),
-        None,
+        TEST_TEAM,
+        "unauthorized localhost",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
@@ -247,19 +239,15 @@ fn dispatcher_loopback_without_listener_fails_closed_without_mailbox_mutation() 
         RuntimeStatusCache::new(),
         db_path.clone(),
     );
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("localhost without listener".to_string()),
-        None,
+        TEST_TEAM,
+        "localhost without listener",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
@@ -344,19 +332,15 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
         .start(dispatcher.clone())
         .expect("start secure peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello secure ack loopback".to_string()),
-        None,
+        TEST_TEAM,
+        "hello secure ack loopback",
         true,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
@@ -466,113 +450,6 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
             .and_then(|atm| atm.get("remoteHost"))
             .and_then(serde_json::Value::as_str),
         Some("127.0.0.1")
-    );
-
-    peer_transport
-        .shutdown()
-        .expect("shutdown secure peer listener");
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_inbox() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
-    configure_secure_loopback(&db_path, "127.0.0.1");
-    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
-
-    let status_cache = RuntimeStatusCache::new();
-    let peer_transport = crate::PeerTransportRuntime::new_with_observability(
-        None,
-        Some(assembly.allowed_host_store_arc()),
-        Some(assembly.peer_security_store_arc()),
-        crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
-            peer_listen_addr: Some(SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))),
-        },
-        crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
-        status_cache.clone(),
-    );
-    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test_with_peer_transport(
-        atm_home.clone(),
-        status_cache,
-        db_path.clone(),
-        peer_transport.clone(),
-    ));
-    peer_transport
-        .start(dispatcher.clone())
-        .expect("start secure peer listener");
-
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
-        "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello secure loopback".to_string()),
-        None,
-        false,
-        None,
-        false,
-    )
-    .expect("send request");
-    request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
-        .expect("parse target")
-        .remote_host;
-
-    let response = dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(request)))
-        .expect("dispatch secure loopback send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
-        panic!("expected send response");
-    };
-    assert_eq!(outcome.agent.as_str(), "qa-a");
-
-    let read = dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home,
-                workspace_dir,
-                "qa-a".parse().expect("caller"),
-                None,
-                TEST_TEAM.parse().expect("team"),
-                ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
-        .expect("read self inbox");
-    let ResponseEnvelope::Receive(report) = read else {
-        panic!("expected receive response");
-    };
-    assert!(
-        report
-            .message
-            .as_ref()
-            .is_some_and(|message| message.envelope.text == "hello secure loopback"),
-        "secure loopback-delivered message missing from inbox"
     );
 
     peer_transport

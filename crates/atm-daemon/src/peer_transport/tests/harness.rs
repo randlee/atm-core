@@ -3,8 +3,8 @@ use super::*;
 fn canonical_ack_request(
     home_dir: &std::path::Path,
     current_dir: &std::path::Path,
-    caller: &str,
     recipient: &str,
+    caller_identity: &str,
     caller_team: &str,
     message_id: atm_core::schema::AtmMessageId,
     body: &str,
@@ -12,7 +12,7 @@ fn canonical_ack_request(
     let mut request = SendRequest::new(
         home_dir.to_path_buf(),
         current_dir.to_path_buf(),
-        caller.parse().expect("caller identity"),
+        caller_identity.parse().expect("caller identity"),
         recipient,
         caller_team.parse().expect("caller team"),
         SendMessageSource::Inline(body.to_string()),
@@ -24,6 +24,32 @@ fn canonical_ack_request(
     .expect("ack send request");
     request.acknowledges_message_id = Some(message_id);
     RequestEnvelope::Send(Box::new(request))
+}
+
+fn canonical_send_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    recipient: &str,
+    caller_team: &str,
+    body: &str,
+    requires_ack: bool,
+) -> RequestEnvelope {
+    RequestEnvelope::Send(Box::new(
+        SendRequest::new(
+            home_dir.to_path_buf(),
+            current_dir.to_path_buf(),
+            caller_identity.parse().expect("caller identity"),
+            recipient,
+            caller_team.parse().expect("caller team"),
+            SendMessageSource::Inline(body.to_string()),
+            None,
+            requires_ack,
+            None,
+            false,
+        )
+        .expect("send request"),
+    ))
 }
 
 #[test]
@@ -90,21 +116,15 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     );
     let send_response = client_transport
         .client_transport()
-        .send(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                test_team_name(),
-                SendMessageSource::Inline("peer-listener hello".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .send(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            test_team_name().as_str(),
+            "peer-listener hello",
+            true,
+        ))
         .expect("authorized send should succeed");
     match send_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
@@ -266,21 +286,15 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
     );
     let response = client_transport
         .client_transport()
-        .send(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                test_team_name(),
-                SendMessageSource::Inline("hello degraded nudge".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .send(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            test_team_name().as_str(),
+            "hello degraded nudge",
+            false,
+        ))
         .expect("send should still succeed");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
@@ -336,21 +350,15 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
     );
     let transient_error = client_transport
         .client_transport()
-        .send(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                test_team_name(),
-                SendMessageSource::Inline("retry after listener starts".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .send(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            test_team_name().as_str(),
+            "retry after listener starts",
+            true,
+        ))
         .expect_err("initial send should fail before the listener starts");
     assert!(matches!(
         transient_error.code,
@@ -386,24 +394,21 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
     listener_transport
         .start(dispatcher)
         .expect("start peer listener");
+    crate::lifecycle_control::LifecycleControlSourceAdapter::install()
+        .expect("install lifecycle")
+        .set_terminate_for_test(false);
 
     let send_response = client_transport
         .client_transport()
-        .send(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                test_team_name(),
-                SendMessageSource::Inline("retry after listener starts".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .send(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            test_team_name().as_str(),
+            "retry after listener starts",
+            true,
+        ))
         .expect("send should succeed after listener startup");
     match send_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
@@ -505,25 +510,23 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
         .start(dispatcher.clone())
         .expect("start peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let RequestEnvelope::Send(mut request) = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        test_team_name(),
-        SendMessageSource::Inline("hello degraded localhost remote target".to_string()),
-        None,
+        test_team_name().as_str(),
+        "hello degraded localhost remote target",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    ) else {
+        panic!("canonical send request must yield send envelope");
+    };
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(request)))
+        .dispatch(RequestEnvelope::Send(request))
         .expect("remote-target send should still succeed");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
@@ -662,25 +665,23 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         sender_transport.clone(),
     );
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let RequestEnvelope::Send(mut request) = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        test_team_name(),
-        SendMessageSource::Inline("retry after remote-target listener starts".to_string()),
-        None,
+        test_team_name().as_str(),
+        "retry after remote-target listener starts",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    ) else {
+        panic!("canonical send request must yield send envelope");
+    };
     request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
 
     let deferred = sender_dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(request)))
+        .dispatch(RequestEnvelope::Send(request))
         .expect("initial remote-target send should defer");
     let receipt_message_id = match deferred {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
@@ -886,21 +887,15 @@ fn local_peer_listener_harness_surfaces_exact_remote_allowlist_error_to_sender()
     );
     let error = client_transport
         .client_transport()
-        .send(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                test_team_name(),
-                SendMessageSource::Inline("unauthorized peer-listener hello".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .send(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            test_team_name().as_str(),
+            "unauthorized peer-listener hello",
+            true,
+        ))
         .expect_err("unauthorized send should surface the remote allowlist error");
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
     assert!(

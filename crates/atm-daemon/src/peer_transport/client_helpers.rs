@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(not(test))]
+use std::sync::OnceLock;
 
 pub(super) fn peer_read_deadline_error(source: std::io::Error) -> Box<AttemptFailure> {
     Box::new(AttemptFailure {
@@ -88,6 +90,12 @@ pub(super) fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Dur
     }
 }
 
+#[cfg(test)]
+pub(super) fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
+    Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag())
+}
+
+#[cfg(not(test))]
 pub(super) fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
     static DAEMON_TERMINATE_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 

@@ -1,4 +1,5 @@
 use super::*;
+use atm_core::ack::{AckRequest, prepare_ack_send_request};
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
@@ -17,31 +18,6 @@ use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
-
-pub(super) fn canonical_ack_request(
-    home_dir: &std::path::Path,
-    current_dir: &std::path::Path,
-    caller_identity: &str,
-    caller_team: &str,
-    message_id: atm_core::schema::AtmMessageId,
-    body: &str,
-) -> RequestEnvelope {
-    let mut request = SendRequest::new(
-        home_dir.to_path_buf(),
-        current_dir.to_path_buf(),
-        caller_identity.parse().expect("caller identity"),
-        &format!("{caller_identity}@{caller_team}"),
-        caller_team.parse().expect("caller team"),
-        SendMessageSource::Inline(body.to_string()),
-        None,
-        false,
-        None,
-        false,
-    )
-    .expect("ack send request");
-    request.acknowledges_message_id = Some(message_id);
-    RequestEnvelope::Send(Box::new(request))
-}
 use tempfile::TempDir;
 
 use crate::test_support::{
@@ -53,6 +29,53 @@ mod dispatch;
 mod local_ipc;
 mod loopback;
 mod self_ip;
+
+pub(super) fn canonical_ack_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    message_id: atm_core::schema::AtmMessageId,
+    body: &str,
+) -> RequestEnvelope {
+    RequestEnvelope::Send(Box::new(
+        prepare_ack_send_request(
+            AckRequest {
+                home_dir: home_dir.to_path_buf(),
+                current_dir: current_dir.to_path_buf(),
+                caller_identity: caller_identity.parse().expect("caller identity"),
+                caller_team: caller_team.parse().expect("caller team"),
+                message_id,
+                reply_body: body.to_string(),
+            },
+        )
+        .expect("ack send request"),
+    ))
+}
+
+pub(super) fn canonical_send_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    recipient: &str,
+    caller_team: &str,
+    body: &str,
+    requires_ack: bool,
+) -> SendRequest {
+    SendRequest::new(
+        home_dir.to_path_buf(),
+        current_dir.to_path_buf(),
+        caller_identity.parse().expect("caller identity"),
+        recipient,
+        caller_team.parse().expect("caller team"),
+        SendMessageSource::Inline(body.to_string()),
+        None,
+        requires_ack,
+        None,
+        false,
+    )
+    .expect("send request")
+}
 
 pub(super) fn add_member_via_retained_admin(
     db_path: &std::path::Path,
