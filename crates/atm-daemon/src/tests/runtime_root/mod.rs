@@ -1,13 +1,14 @@
 use super::*;
+use atm_core::ack::AckOutcome;
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope, next_request_id,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome,
+    next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
@@ -18,6 +19,51 @@ use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
+
+pub(super) fn canonical_ack_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    message_id: atm_core::schema::AtmMessageId,
+    body: &str,
+) -> RequestEnvelope {
+    let mut request = SendRequest::new(
+        home_dir.to_path_buf(),
+        current_dir.to_path_buf(),
+        caller_identity.parse().expect("caller identity"),
+        &format!("{caller_identity}@{caller_team}"),
+        caller_team.parse().expect("caller team"),
+        SendMessageSource::Inline(body.to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("ack send request");
+    request.acknowledges_message_id = Some(message_id);
+    RequestEnvelope::Send(Box::new(request))
+}
+
+pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome {
+    into_send_outcome(response)
+        .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
+}
+
+pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> &SendOutcome {
+    if let ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) =
+        response
+    {
+        outcome
+    } else {
+        panic!("expected send response, got {response:?}");
+    }
+}
+
+pub(super) fn expect_ack_response(response: ResponseEnvelope) -> AckOutcome {
+    into_ack_outcome(response)
+        .unwrap_or_else(|other| panic!("expected ack response, got {other:?}"))
+}
 use tempfile::TempDir;
 
 use crate::test_support::{

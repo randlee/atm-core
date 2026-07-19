@@ -31,7 +31,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 
 ## Hard Dependencies
 
-- AG.20 merged
+- AG.20 merged forward into this branch
 
 ## Exact Targets
 
@@ -74,7 +74,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 - elimination of duplicate compose-vs-ack branching above the shared outbound
   delivery layer
 - retain the explicit canonical outbound symbol introduced in AG.18:
-  `execute_outbound_send(dispatcher, request, post_send_emitter)`
+  `execute_outbound_send_with_runtime_and_post_send_emitter(...)`
 
 ## Required Work
 

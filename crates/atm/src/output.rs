@@ -185,15 +185,14 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
 }
 
 fn render_ack_result_line(outcome: &AckOutcome) -> String {
-    match &outcome.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id,
-            reply_target,
-        } => format!(
-            "Acknowledged {} for {}@{} and sent reply {} to {}",
-            outcome.message_id, outcome.agent, outcome.team, reply_message_id, reply_target
-        ),
-    }
+    format!(
+        "Acknowledged {} for {}@{} and sent reply {} to {}",
+        outcome.message_id,
+        outcome.agent,
+        outcome.team,
+        outcome.reply_message_id,
+        outcome.reply_target
+    )
 }
 
 /// Print one clear result in human-readable or JSON form.
@@ -960,33 +959,23 @@ mod tests {
     }
 
     #[test]
-    fn ack_output_json_shape_preserves_sent_reply_disposition() {
+    fn ack_output_json_shape_preserves_sent_reply_metadata() {
         let outcome: AckOutcome = serde_json::from_value(json!({
             "action": "ack",
             "team": "test-team",
             "agent": "sender-a",
             "message_id": "01KX5TEST00000000000000002",
             "task_id": null,
-            "reply_disposition": {
-                "kind": "sent",
-                "reply_target": "team-lead@test-team",
-                "reply_message_id": "01KX5TEST00000000000000003"
-            },
+            "reply_target": "team-lead@test-team",
+            "reply_message_id": "01KX5TEST00000000000000003",
             "reply_text": "received",
             "warnings": []
         }))
         .expect("ack outcome");
 
         let rendered = serde_json::to_value(&outcome).expect("json outcome");
-        assert_eq!(rendered["reply_disposition"]["kind"], "sent");
-        assert_eq!(
-            rendered["reply_disposition"]["reply_target"],
-            "team-lead@test-team"
-        );
-        assert_eq!(
-            rendered["reply_disposition"]["reply_message_id"],
-            "01KX5TEST00000000000000003"
-        );
+        assert_eq!(rendered["reply_target"], "team-lead@test-team");
+        assert_eq!(rendered["reply_message_id"], "01KX5TEST00000000000000003");
     }
 
     #[test]
