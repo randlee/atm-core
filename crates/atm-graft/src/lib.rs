@@ -595,8 +595,8 @@ mod tests {
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
-        let transport = Arc::new(FakeClientTransport::new(Box::new(
-            |request| {
+        let transport =
+            Arc::new(FakeClientTransport::new(Box::new(|request| {
                 match request {
                 CoreRequestEnvelope::Send(request)
                     if request.acknowledges_message_id.is_none() => Ok(
@@ -663,11 +663,8 @@ mod tests {
                             "agent": TEST_LEAD,
                             "message_id": atm_core::schema::AtmMessageId::new().to_string(),
                             "task_id": null,
-                            "reply_disposition": {
-                                "kind": "sent",
-                                "reply_target": format!("{TEST_LEAD}@{TEST_TEAM}"),
-                                "reply_message_id": atm_core::schema::AtmMessageId::new().to_string()
-                            },
+                            "reply_target": format!("{TEST_LEAD}@{TEST_TEAM}"),
+                            "reply_message_id": atm_core::schema::AtmMessageId::new().to_string(),
                             "reply_text": "ack",
                             "warnings": [],
                         }))
@@ -676,8 +673,7 @@ mod tests {
                 ),
                 other => panic!("unexpected request: {other:?}"),
                 }
-            },
-        )));
+            })));
         let client = GraftClient::from_transport(transport);
 
         let send_request = SendRequest::new(

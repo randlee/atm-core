@@ -242,10 +242,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
         panic!("expected ack response");
     };
-    assert!(matches!(
-        outcome.reply_disposition,
-        atm_core::ack::AckReplyDisposition::Sent { .. }
-    ));
+    assert!(!outcome.reply_message_id.to_string().is_empty());
 
     let sender_read = dispatcher
         .dispatch(RequestEnvelope::Receive(
