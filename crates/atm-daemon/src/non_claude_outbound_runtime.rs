@@ -10,6 +10,7 @@ use atm_core::error::AtmError;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::SendRequest;
 
+use crate::outbound_delivery_policy::into_remote_send_delivery_outcome;
 use crate::peer_transport::delivery::CrossHostDelivery;
 
 type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
@@ -106,32 +107,11 @@ impl boundary::RemoteSendRouter for DaemonRemoteSendRouter {
         request: SendRequest,
         remote_host: atm_core::send::RemoteTargetHost,
     ) -> Result<boundary::RemoteSendDeliveryOutcome, AtmError> {
-        let outcome = self
+        let disposition = self
             .cross_host_delivery
             .deliver_remote(request, remote_host, AtmMessageId::new())
             .map_err(|error| error.into_atm_error())?;
-        Ok(match outcome {
-            crate::peer_transport::delivery::SendOutcome::Delivered(response) => {
-                boundary::RemoteSendDeliveryOutcome::Delivered(response)
-            }
-            crate::peer_transport::delivery::SendOutcome::Deferred {
-                receipt_message_id,
-                error,
-            } => boundary::RemoteSendDeliveryOutcome::Deferred {
-                receipt_message_id,
-                error,
-            },
-            crate::peer_transport::delivery::SendOutcome::OutcomeUnknown {
-                receipt_message_id,
-                error,
-            } => boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
-                receipt_message_id,
-                error,
-            },
-            crate::peer_transport::delivery::SendOutcome::RejectedTerminal(error) => {
-                boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error)
-            }
-        })
+        Ok(into_remote_send_delivery_outcome(disposition))
     }
 }
 
@@ -200,9 +180,8 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
 #[cfg(test)]
 mod tests {
     use super::{DaemonNonClaudeOutbound, DaemonRemoteSendRouter};
-    use crate::peer_transport::delivery::{
-        CrossHostDelivery, CrossHostDeliveryInfraError, SendOutcome,
-    };
+    use crate::outbound_delivery_policy::OutboundDeliveryDisposition;
+    use crate::peer_transport::delivery::{CrossHostDelivery, CrossHostDeliveryInfraError};
     use atm_core::boundary::{
         NonClaudeOutbound, NonClaudeOutboundDeliveryRequest, RemoteSendRouter,
     };
@@ -228,29 +207,27 @@ mod tests {
             request: SendRequest,
             remote_host: RemoteTargetHost,
             _deferred_receipt_message_id: AtmMessageId,
-        ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+        ) -> Result<OutboundDeliveryDisposition, CrossHostDeliveryInfraError> {
             self.requests
                 .lock()
                 .expect("requests")
                 .push((remote_host.as_str().to_string(), request));
-            let response = atm_core::ResponseEnvelope::Send(
-                atm_core::protocol::SendResponseEnvelope::Sent(atm_core::send::SendOutcome {
-                    action: atm_core::types::CommandAction::Send,
-                    team: atm_core::types::TeamName::from_validated(TEST_TEAM),
-                    agent: atm_core::types::AgentName::from_validated("recipient"),
-                    sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
-                    outcome: atm_core::send::SendCommandOutcome::Sent,
-                    message_id: AtmMessageId::new(),
-                    receipt_message_id: None,
-                    requires_ack: false,
-                    task_id: None,
-                    summary: None,
-                    message: None,
-                    warnings: Vec::new(),
-                    dry_run: false,
-                }),
-            );
-            Ok(SendOutcome::Delivered(Box::new(response)))
+            let response = atm_core::protocol::send_sent_response(atm_core::send::SendOutcome {
+                action: atm_core::types::CommandAction::Send,
+                team: atm_core::types::TeamName::from_validated(TEST_TEAM),
+                agent: atm_core::types::AgentName::from_validated("recipient"),
+                sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
+                outcome: atm_core::send::SendCommandOutcome::Sent,
+                message_id: AtmMessageId::new(),
+                receipt_message_id: None,
+                requires_ack: false,
+                task_id: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            });
+            Ok(OutboundDeliveryDisposition::Delivered(Box::new(response)))
         }
     }
 

@@ -16,7 +16,7 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -223,10 +223,8 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
-            other => Err(unexpected_response("send", other)),
-        }
+        into_send_outcome(self.send_request(RequestEnvelope::Send(Box::new(request)))?)
+            .map_err(|other| unexpected_response("send", *other))
     }
 
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
@@ -237,12 +235,10 @@ impl AtmGraftClient for GraftClient {
     }
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
-            request,
-        )?)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
-            other => Err(unexpected_response("ack", other)),
-        }
+        into_ack_outcome(self.send_request(RequestEnvelope::Send(Box::new(
+            prepare_ack_send_request(request)?,
+        )))?)
+        .map_err(|other| unexpected_response("ack", *other))
     }
 }
 
@@ -528,6 +524,7 @@ mod tests {
 
     use atm_core::protocol::{
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
+        send_acknowledged_response, send_sent_response,
     };
     use atm_core::read::{BucketCounts, ReadOutcome};
     use atm_core::send::SendCommandOutcome;
@@ -595,12 +592,10 @@ mod tests {
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
-        let transport =
-            Arc::new(FakeClientTransport::new(Box::new(|request| {
-                match request {
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_none() => Ok(
-                    CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+        let transport = Arc::new(FakeClientTransport::new(Box::new(
+            |request| match request {
+                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => {
+                    Ok(send_sent_response(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated(TEST_LEAD),
@@ -614,8 +609,8 @@ mod tests {
                         message: None,
                         warnings: Vec::new(),
                         dry_run: false,
-                    })),
-                ),
+                    }))
+                }
                 CoreRequestEnvelope::Peek(_) => {
                     Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
                         action: CommandAction::Peek,
@@ -654,9 +649,8 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_some() => Ok(
-                    CoreResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_some() => {
+                    Ok(send_acknowledged_response(
                         serde_json::from_value(json!({
                             "action": "ack",
                             "team": TEST_TEAM,
@@ -669,11 +663,11 @@ mod tests {
                             "warnings": [],
                         }))
                         .expect("ack outcome"),
-                    )),
-                ),
-                other => panic!("unexpected request: {other:?}"),
+                    ))
                 }
-            })));
+                other => panic!("unexpected request: {other:?}"),
+            },
+        )));
         let client = GraftClient::from_transport(transport);
 
         let send_request = SendRequest::new(

@@ -3,13 +3,16 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 use atm_core::boundary;
-use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+use atm_core::error::AtmError;
+use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
 
 use super::PeerTransportRuntime;
+use crate::outbound_delivery_policy::{
+    OutboundDeliveryDisposition, TransportAttemptResult, requires_replay, shared_outcome_policy,
+};
 
 const DEFAULT_REMOTE_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 
@@ -17,20 +20,6 @@ const DEFAULT_REMOTE_RETRY_BUDGET: std::time::Duration = std::time::Duration::fr
 pub(crate) enum RemoteDeliveryDecision {
     HealthyImmediateWait,
     DeferredRetry,
-}
-
-#[derive(Debug)]
-pub(crate) enum SendOutcome {
-    Delivered(Box<ResponseEnvelope>),
-    Deferred {
-        receipt_message_id: AtmMessageId,
-        error: AtmError,
-    },
-    RejectedTerminal(AtmError),
-    OutcomeUnknown {
-        receipt_message_id: AtmMessageId,
-        error: AtmError,
-    },
 }
 
 #[derive(Debug)]
@@ -56,7 +45,7 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
         request: SendRequest,
         remote_host: RemoteTargetHost,
         deferred_receipt_message_id: AtmMessageId,
-    ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
+    ) -> Result<OutboundDeliveryDisposition, CrossHostDeliveryInfraError>;
 }
 
 #[derive(Clone)]
@@ -186,18 +175,6 @@ impl DaemonCrossHostDelivery {
             .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)
     }
 
-    fn deferred_listener_unavailable(deferred_receipt_message_id: AtmMessageId) -> SendOutcome {
-        SendOutcome::Deferred {
-            receipt_message_id: deferred_receipt_message_id,
-            error: AtmError::daemon_unavailable(
-                "remote delivery is deferred because no healthy peer listener is currently bound",
-            )
-            .with_recovery(
-                "Restore the cross-host listener health and retry; the daemon queued the send for bounded background replay.",
-            ),
-        }
-    }
-
     fn deliver_immediate_wait(
         &self,
         endpoint: SocketAddr,
@@ -205,35 +182,21 @@ impl DaemonCrossHostDelivery {
         replay_request: SendRequest,
         deferred_receipt_message_id: AtmMessageId,
         remote_host: &RemoteTargetHost,
-    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-        match self
+    ) -> Result<OutboundDeliveryDisposition, CrossHostDeliveryInfraError> {
+        let disposition = match self
             .peer_transport_runtime
             .send_to_endpoint_immediate_wait(endpoint, RequestEnvelope::Send(Box::new(request)))
         {
-            Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
-            Err(error) => self.handle_immediate_wait_error(
-                endpoint,
-                replay_request,
+            Ok(response) => shared_outcome_policy(
+                TransportAttemptResult::ImmediateResponse(Box::new(response)),
                 deferred_receipt_message_id,
-                remote_host,
-                error,
             ),
-        }
-    }
-
-    fn handle_immediate_wait_error(
-        &self,
-        endpoint: SocketAddr,
-        replay_request: SendRequest,
-        deferred_receipt_message_id: AtmMessageId,
-        remote_host: &RemoteTargetHost,
-        error: AtmError,
-    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-        let outcome = Self::classify_error(&error);
-        if matches!(
-            outcome,
-            SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
-        ) {
+            Err(error) => shared_outcome_policy(
+                TransportAttemptResult::ImmediateError(error),
+                deferred_receipt_message_id,
+            ),
+        };
+        if requires_replay(&disposition) {
             self.persist_remote_retry(
                 endpoint,
                 &replay_request,
@@ -241,61 +204,8 @@ impl DaemonCrossHostDelivery {
                 remote_host,
             )?;
         }
-        Ok(match outcome {
-            SendOutcome::Deferred { error, .. } => SendOutcome::Deferred {
-                receipt_message_id: deferred_receipt_message_id,
-                error,
-            },
-            SendOutcome::OutcomeUnknown { error, .. } => SendOutcome::OutcomeUnknown {
-                receipt_message_id: deferred_receipt_message_id,
-                error,
-            },
-            other => other,
-        })
+        Ok(disposition)
     }
-
-    fn classify_error(error: &AtmError) -> SendOutcome {
-        if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown {
-            return SendOutcome::OutcomeUnknown {
-                receipt_message_id: AtmMessageId::new(),
-                error: preserve_error_shape(error),
-            };
-        }
-        if error.code == AtmErrorCode::ClientDaemonVersionIncompatible {
-            return SendOutcome::RejectedTerminal(
-                AtmError::validation("remote daemon rejected the cross-host request protocol")
-                    .with_recovery(
-                        "Align the sender and receiver daemon protocol versions before retrying.",
-                    ),
-            );
-        }
-        if error.code == AtmErrorCode::AddressParseFailed || error.is_validation() {
-            let mut terminal =
-                AtmError::new_with_code(error.code, error.kind, error.message.clone());
-            for recovery in &error.recovery {
-                terminal = terminal.with_recovery(recovery.clone());
-            }
-            return SendOutcome::RejectedTerminal(terminal);
-        }
-        if error.code == AtmErrorCode::DaemonUnavailable || error.is_timeout() {
-            return SendOutcome::Deferred {
-                receipt_message_id: AtmMessageId::new(),
-                error: preserve_error_shape(error),
-            };
-        }
-        SendOutcome::Deferred {
-            receipt_message_id: AtmMessageId::new(),
-            error: preserve_error_shape(error),
-        }
-    }
-}
-
-fn preserve_error_shape(error: &AtmError) -> AtmError {
-    let mut preserved = AtmError::new_with_code(error.code, error.kind, error.message.clone());
-    for recovery in &error.recovery {
-        preserved = preserved.with_recovery(recovery.clone());
-    }
-    preserved
 }
 
 fn select_resolved_remote_endpoint(
@@ -320,7 +230,7 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         mut request: SendRequest,
         remote_host: RemoteTargetHost,
         deferred_receipt_message_id: AtmMessageId,
-    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+    ) -> Result<OutboundDeliveryDisposition, CrossHostDeliveryInfraError> {
         let (decision, endpoint) = self.decide_remote_delivery(&remote_host)?;
         request.remote_host = None;
         let replay_request = request.clone();
@@ -332,7 +242,15 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                     deferred_receipt_message_id,
                     &remote_host,
                 )?;
-                Ok(Self::deferred_listener_unavailable(
+                Ok(shared_outcome_policy(
+                    TransportAttemptResult::ListenerUnavailable(
+                        AtmError::daemon_unavailable(
+                            "remote delivery is deferred because no healthy peer listener is currently bound",
+                        )
+                        .with_recovery(
+                            "Restore the cross-host listener health and retry; the daemon queued the send for bounded background replay.",
+                        ),
+                    ),
                     deferred_receipt_message_id,
                 ))
             }

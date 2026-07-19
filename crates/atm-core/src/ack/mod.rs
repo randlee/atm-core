@@ -683,10 +683,8 @@ fn execute_ack_reply_plan<
                     warnings: Vec::new(),
                 })
             }
-            crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. }
-            | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => {
-                Err(error)
-            }
+            crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } => Err(error),
+            crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => Err(error),
             crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
         };
     }
@@ -2397,7 +2395,7 @@ mod tests {
     }
 
     #[test]
-    fn finalize_ack_outcome_deferred_commits_source_state_with_warning() {
+    fn finalize_ack_outcome_deferred_does_not_commit_source_state() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2479,11 +2477,14 @@ mod tests {
         .expect_err("deferred remote ack should fail closed");
 
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        assert_eq!(runtime.persisted_states().len(), 0);
+        assert!(
+            runtime.persisted_states().is_empty(),
+            "source ack state must remain pending when remote delivery is deferred"
+        );
     }
 
     #[test]
-    fn finalize_ack_outcome_outcome_unknown_commits_source_state_with_warning() {
+    fn finalize_ack_outcome_outcome_unknown_does_not_commit_source_state() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2565,6 +2566,9 @@ mod tests {
         .expect_err("outcome-unknown remote ack should fail closed");
 
         assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
-        assert_eq!(runtime.persisted_states().len(), 0);
+        assert!(
+            runtime.persisted_states().is_empty(),
+            "source ack state must remain pending when remote delivery is not confirmed"
+        );
     }
 }

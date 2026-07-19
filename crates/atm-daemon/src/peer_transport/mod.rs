@@ -22,7 +22,6 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 mod client_helpers;
 mod config_helpers;
 pub(crate) mod delivery;
-mod replay_persistence;
 mod replay_resume_worker;
 mod security;
 mod server;
@@ -30,19 +29,16 @@ mod server;
 mod tests;
 mod types;
 
+use crate::remote_replay::{
+    complete_replay_record, expire_replay_record, fail_replay_record_terminal,
+    replay_error_is_terminal, retain_replay_record,
+};
 use client_helpers::{
     daemon_terminate_flag, peer_closed_before_response_error, peer_flush_error,
     peer_read_deadline_error, peer_response_decode_error, peer_response_id_mismatch_error,
     peer_write_deadline_error,
 };
-use config_helpers::{
-    remote_peer_endpoint_not_configured_error, remote_replay_store_not_configured_error,
-    remote_retry_budget_expiry_error,
-};
-use replay_persistence::{
-    complete_replay_record, expire_replay_record, fail_replay_record_terminal,
-    replay_error_is_terminal, retain_replay_record,
-};
+use config_helpers::remote_peer_endpoint_not_configured_error;
 use security::load_peer_security_mode;
 use server::PeerServerTransport;
 use types::ReplayResumeSummary;
@@ -333,7 +329,7 @@ impl PeerClientTransport {
         receipt_target: Option<String>,
         receipt_remote_host: Option<String>,
     ) -> Result<(), AtmError> {
-        replay_persistence::persist_replay_request(
+        crate::remote_replay::persist_replay_request(
             retry_budget,
             self.replay_store.as_ref(),
             endpoint,

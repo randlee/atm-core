@@ -27,7 +27,7 @@ retry, replay, and semantic-outcome policy from `peer_transport/delivery.rs`.
 
 ## Hard Dependencies
 
-- AG.19 merged
+- AG.19 merged forward into this branch
 
 ## Exact Targets
 

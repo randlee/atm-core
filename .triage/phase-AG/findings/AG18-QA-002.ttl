@@ -1,0 +1,73 @@
+@prefix qa:   <urn:atm:qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+qa:AG18-QA-002
+    a qa:Finding ;
+    qa:findingId "AG18-QA-002" ;
+    qa:phase "phase-AG" ;
+    qa:title "SendResponseEnvelope::{Sent,Acknowledged} never deleted/deprecated" ;
+    qa:severity "blocking" ;
+    qa:pattern "rename-not-remove" ;
+    qa:repeatable true ;
+    qa:sourceReviewers "req-qa (ATM-QA-002)", "arch-qa (ARCH-001)", "ruthless-boundary-qa (RBQA-F002)" ;
+    qa:description """crates/atm-core/src/protocol.rs:42-45 defines `pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }` with no #[deprecated] attribute. docs/plans/phase-AG/sprint-AG18.md explicitly names this type for deletion in AG.18 (lines ~121, ~148, ~158), or, if removal must be staged, for deprecation in AG.18 with deletion no later than the immediate follow-on sprint that collapses the last caller. Neither happened: the enum remains fully defined and undeprecated through AG.18, AG.19, AG.20, and the in-progress AG.21, and is actively constructed/matched at 15+ call sites per worktree, including crates/atm/src/composition.rs, crates/atm-graft/src/lib.rs, crates/atm-daemon-client/src/rpc.rs, crates/atm-core/src/protocol.rs (definition site), crates/atm-core/src/ack/mod.rs, crates/atm-core/src/send/mod.rs (AG.21 only), crates/atm-daemon/src/non_claude_outbound_runtime.rs, crates/atm-daemon/src/runtime_health/dispatch_delivery.rs, and multiple test modules (tests_post_send_graft_warning.rs, tests/runtime_root/*.rs, peer_transport/tests/harness.rs).""" ;
+    qa:sweepScope "repeatable-pattern sweep across all worktrees with real commits (AG.18-AG.21) for any remaining SendResponseEnvelope::Sent/Acknowledged construction or match sites" .
+
+# --- Per-worktree sweep results (all confirmed present, pattern never closed) ---
+
+qa:AG18-QA-002-sweep-s18
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
+    qa:status "open" ;
+    qa:constructMatchSiteCount 27 ;
+    qa:note "SendResponseEnvelope::Sent/Acknowledged construction and match sites present across composition.rs, atm-graft/lib.rs, rpc.rs, ack/mod.rs, non_claude_outbound_runtime.rs, runtime_health/dispatch_delivery.rs, and test modules; enum definition at protocol.rs:42-45 has no #[deprecated] attribute." .
+
+qa:AG18-QA-002-sweep-s19
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
+    qa:status "open" ;
+    qa:constructMatchSiteCount 27 ;
+    qa:note "Pattern unchanged from s18 despite sprint title implying remote-ack-path deletion; same construct/match sites remain across the same file set." .
+
+qa:AG18-QA-002-sweep-s20
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
+    qa:status "open" ;
+    qa:constructMatchSiteCount 27 ;
+    qa:note "Pattern unchanged from s19; sprint scope (deferred policy relocation) did not touch SendResponseEnvelope surface." .
+
+qa:AG18-QA-002-sweep-s21
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
+    qa:status "open" ;
+    qa:constructMatchSiteCount 22 ;
+    qa:note "Dev in progress. New construction site introduced at crates/atm-core/src/send/mod.rs:378,382 (.map(SendResponseEnvelope::Acknowledged) / .map(SendResponseEnvelope::Sent)) -- despite 'collapse dispatch routing' scope, the enum is still actively fed rather than removed; other call sites (composition.rs, atm-graft/lib.rs, rpc.rs, ack/mod.rs, non_claude_outbound_runtime.rs, dispatch_delivery.rs, tests) unchanged and still present. Enum definition still undeprecated." .
+
+qa:AG18-QA-002-sweep-s22-25
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:branch "feature/pAG-s22..s25" ;
+    qa:commitSha "03c873fc" ;
+    qa:status "not-yet-applicable" ;
+    qa:note "Sprints not started (all at common base commit); no real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+
+# --- Promotion determination ---
+
+qa:AG18-QA-002-promotion
+    a qa:PromotionDecision ;
+    qa:finding qa:AG18-QA-002 ;
+    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:rationale """All four worktrees with real commits (AG.18-AG.21) exhibit the identical open defect: SendResponseEnvelope::{Sent,Acknowledged} remains fully defined, undeprecated, and actively constructed/matched. Per repeatable-pattern policy, the fix is dispatched once to the highest (latest) branch with real commits -- feature/pAG-s21-collapse-dispatch-routing -- and closed on lower branches via merge-forward, not via separate per-branch fix dispatch. AG.21 is dev-in-progress; a new construction site was introduced there during this pass (send/mod.rs:378,382), confirming the pattern is still actively propagating and reinforcing the need to fix at the tip rather than an earlier branch. AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .

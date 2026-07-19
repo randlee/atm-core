@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_response_envelopes() {
-        let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+        let response = atm_core::protocol::send_sent_response(SendOutcome {
             action: atm_core::types::CommandAction::Send,
             team: RPC_TEST_TEAM.parse().expect("team"),
             agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
@@ -328,7 +328,7 @@ mod tests {
             message: Some("body".to_string()),
             warnings: Vec::new(),
             dry_run: false,
-        }));
+        });
 
         let request_id = next_request_id();
         let envelope = RpcEnvelope::encode_response(request_id, response.clone()).expect("encode");

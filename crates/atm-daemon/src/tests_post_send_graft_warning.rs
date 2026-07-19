@@ -4,7 +4,7 @@ use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -45,6 +45,16 @@ fn canonical_ack_request(
 
 fn replay_source_static(label: &'static str) -> ReplaySource {
     ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
+fn expect_sent_response(response: ResponseEnvelope) -> atm_core::send::SendOutcome {
+    into_send_outcome(response)
+        .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
+}
+
+fn expect_ack_response(response: ResponseEnvelope) -> atm_core::ack::AckOutcome {
+    into_ack_outcome(response)
+        .unwrap_or_else(|other| panic!("expected ack response, got {other:?}"))
 }
 
 fn install_test_roster_with_harness(
@@ -158,11 +168,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
             .expect("send request"),
         )))
         .expect("send response");
-
-    let outcome = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("expected send response, got {other:?}"),
-    };
+    let outcome = expect_sent_response(response);
     assert_eq!(outcome.warnings.len(), 1);
     assert_eq!(
         outcome.warnings[0].code,
@@ -193,10 +199,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
             .expect("source send request"),
         )))
         .expect("source send response");
-    let source_message_id = match source_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
-        other => panic!("expected send response, got {other:?}"),
-    };
+    let source_message_id = expect_sent_response(source_response).message_id;
 
     let ack_response = dispatcher
         .dispatch(canonical_ack_request(
@@ -208,11 +211,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
             "ack reply",
         ))
         .expect("ack response");
-
-    let ack_outcome = match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("expected ack response, got {other:?}"),
-    };
+    let ack_outcome = expect_ack_response(ack_response);
     assert_eq!(ack_outcome.warnings.len(), 1);
     assert_eq!(
         ack_outcome.warnings[0].code,
@@ -287,10 +286,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
             .expect("send request"),
         )))
         .expect("send response");
-    let response = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("expected send response, got {other:?}"),
-    };
+    let response = expect_sent_response(response);
 
     assert!(response.warnings.is_empty());
     let nudge = event_rx

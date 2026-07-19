@@ -1,12 +1,14 @@
 use super::*;
+use atm_core::ack::AckOutcome;
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome,
+    next_request_id,
 };
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
@@ -41,6 +43,26 @@ pub(super) fn canonical_ack_request(
     .expect("ack send request");
     request.acknowledges_message_id = Some(message_id);
     RequestEnvelope::Send(Box::new(request))
+}
+
+pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome {
+    into_send_outcome(response)
+        .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
+}
+
+pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> &SendOutcome {
+    if let ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) =
+        response
+    {
+        outcome
+    } else {
+        panic!("expected send response, got {response:?}");
+    }
+}
+
+pub(super) fn expect_ack_response(response: ResponseEnvelope) -> AckOutcome {
+    into_ack_outcome(response)
+        .unwrap_or_else(|other| panic!("expected ack response, got {other:?}"))
 }
 use tempfile::TempDir;
 

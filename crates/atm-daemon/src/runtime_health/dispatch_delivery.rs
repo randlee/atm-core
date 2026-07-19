@@ -1,19 +1,17 @@
 use std::sync::Arc;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
-    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
-    boundary,
+    RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
-    protocol::{CompatibilityVerdict, ReleaseVersion, SendResponseEnvelope},
+    protocol::{CompatibilityVerdict, ReleaseVersion, send_sent_response},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
         SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
+        execute_outbound_send_with_runtime_and_post_send_emitter,
         persist_remote_delivery_receipt_with_runtime, route_send_request,
-        send_mail_with_runtime_and_post_send_emitter,
     },
 };
 
@@ -60,26 +58,14 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-            return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                ack_mail_with_runtime_and_post_send_emitter(
-                    ack_request_from_send_request(request)?,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?,
-            )));
-        }
         match route_send_request(&request) {
-            SendRequestRoute::Local => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
+            SendRequestRoute::Local => execute_outbound_send_with_runtime_and_post_send_emitter(
+                request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                post_send_emitter,
+            )
+            .map(ResponseEnvelope::Send),
             SendRequestRoute::Remote(remote_host) => {
                 match self
                     .service_runtime
@@ -88,28 +74,24 @@ impl DaemonRequestDispatcher {
                     boundary::RemoteSendDeliveryOutcome::Delivered(response) => Ok(*response),
                     boundary::RemoteSendDeliveryOutcome::Deferred {
                         receipt_message_id, ..
-                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                        build_remote_deferred_outcome(
-                            &self.service_runtime,
-                            &request,
-                            &remote_host,
-                            receipt_message_id,
-                            "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
-                        )?,
-                    ))),
+                    } => Ok(send_sent_response(build_remote_deferred_outcome(
+                        &self.service_runtime,
+                        &request,
+                        &remote_host,
+                        receipt_message_id,
+                        "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
+                    )?)),
                     boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
                     boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
                         receipt_message_id,
                         ..
-                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                        build_remote_deferred_outcome(
-                            &self.service_runtime,
-                            &request,
-                            &remote_host,
-                            receipt_message_id,
-                            "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
-                        )?,
-                    ))),
+                    } => Ok(send_sent_response(build_remote_deferred_outcome(
+                        &self.service_runtime,
+                        &request,
+                        &remote_host,
+                        receipt_message_id,
+                        "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
+                    )?)),
                 }
             }
         }

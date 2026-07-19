@@ -1,6 +1,6 @@
 use super::*;
 use atm_core::boundary::RequestDispatcher;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -613,14 +613,11 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
     request.remote_host = atm_core::send::parse_send_target(spec.to, spec.remote_host)
         .expect("parse send target")
         .remote_host;
-    match caller
+    let response = caller
         .dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
-        .expect("send request should succeed")
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("unexpected send response: {other:?}"),
-    }
+        .expect("send request should succeed");
+    expect_sent_response(response)
 }
 
 fn read_message_over_local_ipc(
@@ -669,20 +666,18 @@ fn send_ack_over_local_ipc(
     message_id: AtmMessageId,
     body: &str,
 ) -> atm_core::ack::AckOutcome {
-    match dispatch_ack_over_local_ipc(
-        socket_path,
-        home,
-        current_dir,
-        caller_identity,
-        caller_team,
-        message_id,
-        body,
+    expect_ack_response(
+        dispatch_ack_over_local_ipc(
+            socket_path,
+            home,
+            current_dir,
+            caller_identity,
+            caller_team,
+            message_id,
+            body,
+        )
+        .expect("ack over local ipc"),
     )
-    .expect("ack over local ipc")
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("unexpected local ipc ack response: {other:?}"),
-    }
 }
 
 fn dispatch_ack_over_local_ipc(
