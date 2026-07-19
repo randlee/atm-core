@@ -915,7 +915,7 @@ Outputs:
 
 Entry gate:
 
-- AG.15 other-Mac smoke is complete
+- AG.15 other-Mac smoke evidence is current on the retained AG.18-AG.24 architecture
 
 Execution owner:
 
@@ -947,7 +947,7 @@ Outputs:
 
 Entry gate:
 
-- AG.16 Windows/macOS smoke is complete enough to justify copied-state rerun
+- AG.16 Windows/macOS smoke evidence is current on the retained AG.18-AG.24 architecture
 - AG.10 security status is known before the final verdict is issued
 - AG.9 is treated as historical reviewed verdict scope only; AG.17 is the
   authoritative final verdict for the corrective line
@@ -1100,8 +1100,8 @@ Phase `AG` is complete only when all of the following are true:
 - the AG.12 localhost same-host proof lane is complete
 - the AG.13 self-IP same-host proof lane is complete
 - the AG.14 automated integration suite locks in the corrective path
-- the AG.15 other-Mac smoke lane is complete
-- the AG.16 Windows/macOS smoke lane is complete
+- AG.15 other-Mac proof rows are re-run on the retained AG.18-AG.24 architecture with current evidence
+- AG.16 Windows/macOS proof rows are re-run on the retained AG.18-AG.24 architecture with current evidence
 - the AG.17 copied-state and final corrective verdict are complete
 - the AG.18 envelope/handler collapse is complete
 - the AG.19 remote-ack path deletion is complete
