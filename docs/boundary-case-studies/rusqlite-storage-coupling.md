@@ -16,6 +16,11 @@ fixed and the exact lines have since moved/been deleted. Where noted,
 "approximate" means the citation is inferred from commit diffs rather
 than an exact line-numbered snippet.
 
+**Evidence legend**: **verified** = directly re-read from commit/blob
+content in this review pass; **triage-sourced** = quoted from TTL
+occurrence entries without independent re-read; **approximate** = inferred
+from commit diff/history rather than an exact citation.
+
 ## (a) What storage boundary existed
 
 `atm-storage` defines the storage-neutral schema/contract layer (rows,

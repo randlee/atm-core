@@ -3,9 +3,15 @@
 Precise, checklist-form criteria for distinguishing a genuine trait/module
 boundary leak from a legitimate cross-boundary need, and for reviewing
 trait-surface and pub-item design. This document is the basis for the
-ruthless-boundary-qa review checklist. It is deliberately non-narrative —
-see `docs/boundary-case-studies/*.md` for worked examples that apply these
-criteria to real findings.
+ruthless-boundary-qa review checklist. It is deliberately non-narrative.
+Worked examples may exist elsewhere, but this checklist is complete without
+them.
+
+**Evidence legend** (used across this doc set): **verified** = directly
+re-read from commit/blob content in this review pass; **triage-sourced** =
+quoted from TTL occurrence entries without independent re-read;
+**approximate** = inferred from commit diff/history rather than an exact
+citation.
 
 ## 1. Boundary leak vs. legitimate cross-boundary need: the test
 
@@ -152,6 +158,9 @@ outputs currently agree.
   matches what the code actually does — a stale declaration is itself a
   leak, because it means the mechanical enforcement checking that
   declaration is no longer checking the real boundary.
-- A "thin wrapper" crate whose public surface has grown large enough that
-  most of its dependency's original API shape is now reachable through it —
-  the wrapper has stopped being a boundary and become a pass-through.
+- (review heuristic, not grep-first) A "thin wrapper" crate whose public
+  surface has grown large enough that most of its dependency's original API
+  shape is now reachable through it — the wrapper has stopped being a
+  boundary and become a pass-through. Judging "large enough" requires
+  reading the wrapper's surface against its dependency's surface; it is not
+  a single grep pattern like the other items in this list.

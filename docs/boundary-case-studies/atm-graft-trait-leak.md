@@ -17,6 +17,11 @@ directly from the historical commit (`git show 609bcc0d:...`) since the file
 no longer exists at HEAD — verified against that specific commit blob, not
 approximate.
 
+**Evidence legend**: **verified** = directly re-read from commit/blob
+content in this review pass; **triage-sourced** = quoted from TTL
+occurrence entries without independent re-read; **approximate** = inferred
+from commit diff/history rather than an exact citation.
+
 ## (a) What boundary was supposed to exist
 
 atm-graft's own design intent (per the later, corrected commit message) is
@@ -50,11 +55,21 @@ atm-daemon, graft module from atm-core, and the atm-graft crate entirely.
 The graft feature was incorrectly integrated into daemon internals; this
 reverts the integration so the daemon has no graft-specific protocol
 knowledge."* The replacement, `4ba0e002` ("feat: land U.9 client-owned graft
-runtime"), rebuilt the same capability with the graft runtime living in the
-**client-owned** `atm-graft` crate instead of `atm-daemon`, with `atm-core`
-exposing only a narrow port
-(`crates/atm-core/src/boundary/mod.rs`, +20 lines in the U.9 commit) for the
-daemon side to call into.
+runtime"), rebuilt the capability with a **client-owned primary runtime**
+in the `atm-graft` crate plus a new `atm-core::boundary` port
+(`crates/atm-core/src/boundary/mod.rs`, +20 lines in the U.9 commit) — but
+verified against `git show --stat 4ba0e002` directly, U.9 itself *also*
+re-added `crates/atm-daemon/src/graft_runtime.rs` (+510 lines) and modified
+`crates/atm-daemon/src/runtime_health.rs` (213 lines changed). Reading that
+U.9-vintage `graft_runtime.rs` blob shows it still held a session/queue
+state machine (`GraftRuntimeState`, `RegisteredGraftSession` with a
+`VecDeque<NudgeEvent>` and `dropped_count`) inside `atm-daemon` — a narrow
+daemon-side adapter/port, not the thin pass-through the "client-owned"
+framing implies on its own. The daemon-side `graft_runtime.rs` was removed
+entirely only later, in `3730257c` ("feat: land U.10 generic advisory
+notification surface"). So at U.9 (`4ba0e002`), the design was "client-owned
+primary runtime with a daemon-side narrow adapter/port still present," not
+yet a fully daemon-code-free client-owned runtime.
 
 ### A concrete symptom of the leak while it existed: bypassing the observability port
 
@@ -106,7 +121,8 @@ meant no signal reached the request boundary either.
 | `crates/atm-daemon/src/graft_runtime.rs` @ `609bcc0d` | 174-222 | `enqueue_nudge_for_recipient` — daemon-internal session/queue state machine (verified) |
 | `crates/atm-daemon/src/graft_runtime.rs` @ `609bcc0d` | ~197-205 | direct `tracing::debug!` call bypassing `DaemonRuntimeObservability` (verified; triage record cites `tracing::warn!` at line 198 against a later revision, not independently re-verified) |
 | commit `4eb30a25` | full commit | revert of `GraftRuntime` from `atm-daemon`, `graft` module from `atm-core`, and the `atm-graft` crate — explicit rationale in commit message (verified) |
-| commit `4ba0e002` | full commit, notably `crates/atm-core/src/boundary/mod.rs` (+20), `crates/atm-graft/src/lib.rs` (+1702/-...) | U.9 redesign moving the runtime to be client-owned behind a narrow `atm-core::boundary` port (verified via `git show --stat`) |
+| commit `4ba0e002` | full commit, notably `crates/atm-core/src/boundary/mod.rs` (+20), `crates/atm-graft/src/lib.rs` (+1702/-...), `crates/atm-daemon/src/graft_runtime.rs` (+510), `crates/atm-daemon/src/runtime_health.rs` (213 changed) | U.9 redesign: primary runtime moved client-owned into `atm-graft`, but a daemon-side `graft_runtime.rs` adapter/port was re-added, not eliminated, at this commit (verified via `git show --stat` and reading the blob directly) |
+| commit `3730257c` | full commit | "feat: land U.10 generic advisory notification surface" — the commit that actually removes `crates/atm-daemon/src/graft_runtime.rs` entirely; graft becomes fully daemon-code-free only here, one commit after U.9 (verified — file absent at current HEAD) |
 
 ## (d) Why this is a boundary leak and not a legitimate cross-boundary need
 
@@ -130,13 +146,17 @@ revert and re-architecture (T.6-T.8 → U.9), with the revert commit message
 explicitly stating the daemon should have "no graft-specific protocol
 knowledge" at all.
 
-## (e) Recommended fix direction (the pattern U.9 actually landed)
+## (e) Recommended fix direction (the pattern U.9 started and U.10 completed)
 
-1. **Client-owned runtime, narrow daemon-side port.** Move the
-   session/queue/nudge state machine into the `atm-graft` crate (the
-   client), not `atm-daemon`. The daemon should only depend on a small
-   trait/port under `atm-core::boundary` (e.g. a post-send/notification
-   port) that it calls without knowing graft's internal vocabulary.
+1. **Client-owned primary runtime with a daemon-side narrow adapter/port,
+   trending toward zero daemon-side state.** Move the session/queue/nudge
+   state machine into the `atm-graft` crate (the client), not `atm-daemon`.
+   U.9 (`4ba0e002`) took the first step — client-owned primary runtime plus
+   a new `atm-core::boundary` port — while still leaving a daemon-side
+   `graft_runtime.rs` adapter in place; U.10 (`3730257c`) finished the job by
+   removing that daemon-side file entirely in favor of a generic advisory
+   notification surface the daemon calls without knowing graft's internal
+   vocabulary.
 2. **Route every structured event through the existing observability
    boundary.** Any component with access to `RuntimeHealth`/the daemon
    runtime should receive (or be composed with) the
