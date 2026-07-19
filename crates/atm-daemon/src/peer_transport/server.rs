@@ -29,9 +29,7 @@ fn annotate_peer_origin_host(
     mut request: RequestEnvelope,
     peer_addr: SocketAddr,
 ) -> RequestEnvelope {
-    if let RequestEnvelope::Send(atm_core::protocol::SendRequestEnvelope::Compose(send_request)) =
-        &mut request
-    {
+    if let RequestEnvelope::Send(send_request) = &mut request {
         send_request.source_remote_host = Some(peer_addr.ip().to_string());
     }
     request

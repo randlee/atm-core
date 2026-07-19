@@ -70,9 +70,7 @@ fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
             .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch self-ip send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -182,9 +180,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
             .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
         panic!("expected send response");
@@ -234,24 +230,19 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     let source_message_id = message.envelope.message_id.expect("message id");
 
     let ack = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: atm_home.clone(),
-                current_dir: workspace_dir.clone(),
-                caller_identity: "qa-a".parse().expect("caller"),
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: source_message_id,
-                reply_body: "ack from secure self ip".to_string(),
-            },
-        )))
+        .dispatch(canonical_ack_request(
+            &atm_home,
+            &workspace_dir,
+            "qa-a",
+            TEST_TEAM,
+            source_message_id,
+            "ack from secure self ip",
+        ))
         .expect("ack over secure self ip");
     let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
         panic!("expected ack response");
     };
-    assert!(matches!(
-        outcome.reply_disposition,
-        atm_core::ack::AckReplyDisposition::Sent { .. }
-    ));
+    assert!(!outcome.reply_message_id.to_string().is_empty());
 
     let sender_read = dispatcher
         .dispatch(RequestEnvelope::Receive(
@@ -367,9 +358,7 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
             .remote_host;
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) = response else {
         panic!("expected send response");
@@ -407,16 +396,14 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
         .expect("shutdown secure peer listener before ack");
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: atm_home.clone(),
-                current_dir: workspace_dir.clone(),
-                caller_identity: "qa-a".parse().expect("caller"),
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: source_message_id,
-                reply_body: "ack should fail while peer listener is down".to_string(),
-            },
-        )))
+        .dispatch(canonical_ack_request(
+            &atm_home,
+            &workspace_dir,
+            "qa-a",
+            TEST_TEAM,
+            source_message_id,
+            "ack should fail while peer listener is down",
+        ))
         .expect_err("ack must fail when secure self-ip peer listener is down");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
 
@@ -497,9 +484,7 @@ fn dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation() {
             .remote_host;
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect_err("self-ip send without listener must fail closed");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
 
@@ -612,9 +597,7 @@ fn dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation() {
             .remote_host;
 
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect_err("self-ip send must fail closed");
     assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
 

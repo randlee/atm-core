@@ -10,7 +10,6 @@ use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::test_support::DoctorOnlyDispatcher;
 use crate::test_support::LifecycleFlagResetGuard;
 use crate::{DaemonSubsystem, SubsystemObservability};
-use atm_core::ack::AckRequest;
 use atm_core::boundary::{
     AtmProtocol, ClientTransport, MessageKey, ReplaySource, RequestDispatcher, RosterHarness,
 };
@@ -18,8 +17,8 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmErrorCode;
 use atm_core::protocol::{
     HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-    RuntimeMemberState, RuntimeReadinessState, SendRequestEnvelope, SendResponseEnvelope,
-    TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+    RuntimeMemberState, RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+    TeamMemberHeartbeatResponse,
 };
 use atm_core::read::ReadQuery;
 use atm_core::schema::AgentMember;

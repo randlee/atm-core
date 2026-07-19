@@ -57,7 +57,7 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 
 #[cfg(test)]
 pub(crate) use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope, next_request_id,
+    RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
     request_from_frame_payload, request_to_frame_payload, response_from_frame_payload,
     response_to_frame_payload,
 };

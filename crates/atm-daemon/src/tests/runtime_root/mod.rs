@@ -3,8 +3,7 @@ use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope, next_request_id,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
@@ -18,6 +17,31 @@ use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
+
+pub(super) fn canonical_ack_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    message_id: atm_core::schema::AtmMessageId,
+    body: &str,
+) -> RequestEnvelope {
+    let mut request = SendRequest::new(
+        home_dir.to_path_buf(),
+        current_dir.to_path_buf(),
+        caller_identity.parse().expect("caller identity"),
+        &format!("{caller_identity}@{caller_team}"),
+        caller_team.parse().expect("caller team"),
+        SendMessageSource::Inline(body.to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("ack send request");
+    request.acknowledges_message_id = Some(message_id);
+    RequestEnvelope::Send(Box::new(request))
+}
 use tempfile::TempDir;
 
 use crate::test_support::{
