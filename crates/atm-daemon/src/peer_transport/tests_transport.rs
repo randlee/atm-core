@@ -92,7 +92,6 @@ fn peer_transport_aborts_before_connect_when_terminate_is_requested() {
     let transport = PeerTransportRuntime::new_for_test(
         endpoint,
         PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(1),
             peer_listen_addr: None,
         },
         tempdir.path().join("replay.db"),
@@ -145,7 +144,6 @@ fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race() {
     let transport = PeerTransportRuntime::new_for_test(
         endpoint,
         PeerTransportConfig {
-            remote_retry_budget: Duration::from_millis(600),
             peer_listen_addr: None,
         },
         tempdir.path().join("mail.db"),
@@ -304,7 +302,7 @@ fn replay_resume_replays_and_deletes_delivered_rows() {
 
 #[test]
 #[serial_test::serial(env)]
-fn outcome_unknown_persists_replay_request_for_restart_resume() {
+fn outcome_unknown_does_not_persist_replay_inside_transport_send_path() {
     let _reset = install_shared_lifecycle_reset_guard();
     let tempdir = TempDir::new().expect("tempdir");
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
@@ -339,9 +337,7 @@ fn outcome_unknown_persists_replay_request_for_restart_resume() {
     let pending = transport
         .load_pending_replay_records()
         .expect("load pending");
-    assert_eq!(pending.len(), 1);
-    assert_eq!(pending[0].team, team);
-    assert_eq!(pending[0].agent, member);
+    assert!(pending.is_empty());
 }
 
 #[test]

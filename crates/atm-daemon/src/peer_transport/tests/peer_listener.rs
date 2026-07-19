@@ -18,7 +18,6 @@ fn peer_listener_round_trips_one_doctor_request() {
     let client_transport = PeerTransportRuntime::new_for_test(
         endpoint,
         PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(1),
             peer_listen_addr: None,
         },
         tempdir.path().join("replay.db"),

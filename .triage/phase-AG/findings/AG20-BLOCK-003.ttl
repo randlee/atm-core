@@ -1,0 +1,119 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-003>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-003" ;
+  triage:title "Transport still owns replay persistence" ;
+  triage:description "PeerClientTransport::replay_store (crates/atm-daemon/src/peer_transport/mod.rs:152), resume_pending_replay (line 215), persist_replay_request (line 289 with #[allow(dead_code)] annotation), persist_replay_request_to_endpoint (line 318), and persist_remote_retry (delivery.rs:154) all still initiate/own replay persistence from inside the transport module tree, even though AG.20's own sprint doc explicitly names replay_store for deletion/relocation out of the transport layer. QA-2 re-triage confirms AG.21 @ bf96dc86 still carries the dead-code annotation on line 285-288: 'retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch' — direct admission that the production code path has shifted but the old API remains as dead code in production. This is a boundary violation: even dead code in the transport module tree violates the AG.20/AG.21 scope to remove replay_store ownership entirely from the transport layer." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:notes "Followup_pass QA-2 re-triage confirms AG.21 @ bf96dc86 still open. New evidence (occurrence/AG20-BLOCK-003/pAG-s21/2) documents the #[allow(dead_code)] annotation at line 285-288 that explicitly admits persist_replay_request is retained for legacy tests but no longer used in production dispatch. Production code has shifted to persist_replay_request_to_endpoint (line 318), but the dead-code path remains in the codebase and violates the transport-layer boundary. highest_open_branch = feature/pAG-s21-collapse-dispatch-routing (bf96dc86). AG.22-25 not yet started, still at 03c873fc which predates AG.21. Promote_to = s21 per latest-open-branch policy. Fix targets s21; merge-forward closes lower branches. Not repeatable outside peer_transport/ module tree." .
+
+# Occurrences on feature/pAG-s18-unify-envelope-handler (70cce097)
+<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 156 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+# Occurrences on feature/pAG-s19-delete-remote-ack-path (59225e0f)
+<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 156 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+# Occurrences on feature/pAG-s20-move-deferred-policy-out-of-transport (50572166)
+<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 156 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay/persist_replay_request_to_endpoint on client and wrapper; persist_remote_retry in delivery.rs:165" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+# Occurrences on feature/pAG-s21-collapse-dispatch-routing (bf96dc86, current active dev)
+# Occurrence 1: replay_store struct field and related functions (s21 original evidence)
+<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 152 ;
+  triage:snippet "struct PeerClientTransport { ... replay_store: Option<Arc<dyn RemoteReplayStore>>, ... } plus resume_pending_replay (line 215), persist_replay_request_to_endpoint (line 318), persist_remote_retry (delivery.rs:154)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+# Occurrence 2: QA-2 new evidence — dead_code annotation admits production code path has shifted (bf96dc86)
+<urn:atm:triage:occurrence/AG20-BLOCK-003/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 285 ;
+  triage:snippet "#[allow(dead_code, reason = \"retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch\")] fn persist_replay_request(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:evidence "QA-2 ruthless-boundary-qa finding: dead-code annotation is a boundary violation admission — explicitly states the code is retained for tests only but no longer used in production dispatch, yet remains in production codebase as dead weight in the transport layer module tree" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .

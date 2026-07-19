@@ -1,8 +1,6 @@
 use super::*;
 use atm_core::boundary::RequestDispatcher;
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -153,12 +151,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         recipient_message_id,
         "cross-host ack success",
     );
-    match ack.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id: _,
-            ..
-        } => {}
-    }
+    assert!(!ack.reply_message_id.to_string().is_empty());
 
     let ack_reply_message =
         wait_for_ack_reply(&arch_ctx, source_message_id, "cross-host ack success");
@@ -214,7 +207,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         .shutdown()
         .expect("shutdown source peer listener");
 
-    let ack_outcome = send_ack_over_local_ipc(
+    let ack_response = dispatch_ack_over_local_ipc(
         &child_state.local_ipc_socket_path,
         &cm5_home,
         &cm5_workspace,
@@ -222,6 +215,12 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         CM5_TEAM,
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
+    )
+    .expect("remote ack should return a deferred warning while source peer listener is down");
+    let ack_outcome = expect_ack_response(ack_response);
+    assert_eq!(
+        ack_outcome.reply_target.to_string(),
+        "team-lead@test-team.192.0.0.2"
     );
     assert_eq!(ack_outcome.warnings.len(), 1);
     assert_eq!(
@@ -231,9 +230,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     assert!(
         ack_outcome.warnings[0]
             .message
-            .contains("ATM deferred remote ack delivery"),
-        "{:#?}",
-        ack_outcome.warnings
+            .contains("ack reply deferred for bounded remote retry")
     );
 
     let still_pending = read_message_over_local_ipc(
@@ -252,8 +249,8 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         still_pending_message.envelope.message_id,
         Some(second_recipient_message_id)
     );
-    assert!(still_pending_message.envelope.pending_ack_at.is_none());
-    assert!(still_pending_message.envelope.acknowledged_at.is_some());
+    assert!(still_pending_message.envelope.pending_ack_at.is_some());
+    assert!(still_pending_message.envelope.acknowledged_at.is_none());
 
     stop_cross_host_child(&child_state, &mut cm5_process);
 }
@@ -515,7 +512,6 @@ fn start_cross_host_dispatcher(
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((bind_ip, bind_port))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
@@ -628,16 +624,11 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
     request.remote_host = atm_core::send::parse_send_target(spec.to, spec.remote_host)
         .expect("parse send target")
         .remote_host;
-    match caller
+    let response = caller
         .dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
-        .expect("send request should succeed")
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("unexpected send response: {other:?}"),
-    }
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
+        .expect("send request should succeed");
+    expect_sent_response(response)
 }
 
 fn read_message_over_local_ipc(
@@ -686,20 +677,18 @@ fn send_ack_over_local_ipc(
     message_id: AtmMessageId,
     body: &str,
 ) -> atm_core::ack::AckOutcome {
-    match dispatch_ack_over_local_ipc(
-        socket_path,
-        home,
-        current_dir,
-        caller_identity,
-        caller_team,
-        message_id,
-        body,
+    expect_ack_response(
+        dispatch_ack_over_local_ipc(
+            socket_path,
+            home,
+            current_dir,
+            caller_identity,
+            caller_team,
+            message_id,
+            body,
+        )
+        .expect("ack over local ipc"),
     )
-    .expect("ack over local ipc")
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("unexpected local ipc ack response: {other:?}"),
-    }
 }
 
 fn dispatch_ack_over_local_ipc(
@@ -711,18 +700,14 @@ fn dispatch_ack_over_local_ipc(
     message_id: AtmMessageId,
     body: &str,
 ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-        atm_core::ack::AckRequest {
-            home_dir: home.to_path_buf(),
-            current_dir: current_dir.to_path_buf(),
-            caller_identity: caller_identity
-                .parse::<AgentName>()
-                .expect("caller identity"),
-            caller_team: caller_team.parse::<TeamName>().expect("caller team"),
-            message_id,
-            reply_body: body.to_string(),
-        },
-    ));
+    let request = canonical_ack_request(
+        home,
+        current_dir,
+        caller_identity,
+        caller_team,
+        message_id,
+        body,
+    );
     dispatch_over_local_ipc(socket_path, request)
 }
 

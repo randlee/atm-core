@@ -100,7 +100,7 @@ let reply_request = SendRequest {
     ..shared_send_shape
 };
 
-let delivery = execute_outbound_send(dispatcher, reply_request, post_send_emitter)?;
+let delivery = execute_outbound_send_with_runtime_and_post_send_emitter(...)?
 if delivery.is_confirmed_delivered() {
     commit_source_ack_state(...)?;
 }

@@ -82,7 +82,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+    let request = RequestEnvelope::Send(Box::new(
         SendRequest::new(
             atm_home.clone(),
             workspace_dir.clone(),
@@ -96,7 +96,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
             false,
         )
         .expect("send request"),
-    )));
+    ));
     let request_id = next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
     atm_core::protocol::write_frame(&mut stream, &frame, "write send frame").expect("write");
@@ -108,12 +108,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
     let (response_id, response) =
         atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
     assert_eq!(response_id, request_id);
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    assert_eq!(expect_sent_response(response).outcome.as_str(), "sent");
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -219,11 +214,11 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         false,
     )
     .expect("send request");
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request)));
+    let request = RequestEnvelope::Send(Box::new(request));
     let envelope = atm_daemon_client::RpcEnvelope::encode_body(
         atm_daemon_client::RpcHeader::new(
             atm_daemon_client::RequestId::new(next_request_id().into_inner()).expect("request id"),
-            atm_daemon_client::MessageKind::SendComposeRequest,
+            atm_daemon_client::MessageKind::SendRequest,
         ),
         &request,
     )
@@ -242,13 +237,9 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         .dispatch_write(&endpoint, envelope, Duration::from_secs(3))
         .expect("dispatch write");
     let response: ResponseEnvelope = response.decode_body().expect("decode response");
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-            assert!(outcome.requires_ack);
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    let outcome = expect_sent_response(response);
+    assert_eq!(outcome.outcome.as_str(), "sent");
+    assert!(outcome.requires_ack);
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -297,7 +288,6 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         Some(assembly.allowed_host_store_arc()),
         None,
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
@@ -412,7 +402,7 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
     send_request.remote_host = atm_core::send::parse_send_target("qa-a@test-team.localhost", None)
         .expect("parse target")
         .remote_host;
-    let send_request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(send_request)));
+    let send_request = RequestEnvelope::Send(Box::new(send_request));
     let send_request_id = next_request_id();
     let send_response = dispatch_once(
         send_request_id,
@@ -420,13 +410,9 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "write send frame",
         "read send frame",
     );
-    match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-            assert!(outcome.requires_ack);
-        }
-        other => panic!("unexpected send response: {other:?}"),
-    }
+    let outcome = expect_sent_response(send_response);
+    assert_eq!(outcome.outcome.as_str(), "sent");
+    assert!(outcome.requires_ack);
 
     let read_request_id = next_request_id();
     let read_request = RequestEnvelope::Receive(
@@ -464,31 +450,26 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
     };
 
     let ack_request_id = next_request_id();
-    let ack_request = RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-        atm_core::ack::AckRequest {
-            home_dir: atm_home.clone(),
-            current_dir: workspace_dir.clone(),
-            caller_identity: "qa-a".parse().expect("caller"),
-            caller_team: TEST_TEAM.parse().expect("team"),
-            message_id: source_message_id,
-            reply_body: "ack from remote-target local ipc".to_string(),
-        },
-    ));
+    let ack_request = canonical_ack_request(
+        &atm_home,
+        &workspace_dir,
+        "qa-a",
+        TEST_TEAM,
+        source_message_id,
+        "ack from remote-target local ipc",
+    );
     let ack_response = dispatch_once(
         ack_request_id,
         ack_request,
         "write ack frame",
         "read ack frame",
     );
-    match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-            assert!(matches!(
-                outcome.reply_disposition,
-                atm_core::ack::AckReplyDisposition::Sent { .. }
-            ));
-        }
-        other => panic!("unexpected ack response: {other:?}"),
-    }
+    assert!(
+        !expect_ack_response(ack_response)
+            .reply_message_id
+            .to_string()
+            .is_empty()
+    );
 
     let sender_read_request_id = next_request_id();
     let sender_read_request = RequestEnvelope::Receive(

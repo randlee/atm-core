@@ -4,7 +4,10 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::ack::ReplyTarget;
+use crate::ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request};
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_policy::{
@@ -12,6 +15,7 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
+use crate::protocol::{ResponseEnvelope, send_acknowledged_envelope, send_sent_envelope};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -27,7 +31,6 @@ pub mod input;
 pub mod nudge_template;
 mod outcome;
 mod persistence;
-mod remote_receipt;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
@@ -38,11 +41,6 @@ pub(crate) use context::{persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
-pub use remote_receipt::RemoteDeliveryReceiptStatus;
-#[doc(hidden)]
-pub use remote_receipt::{
-    finalize_remote_delivery_receipt_with_runtime, persist_remote_delivery_receipt_with_runtime,
-};
 pub use target::{PeerLoopbackHost, qualified_sender_identity, qualified_sender_origin};
 pub(crate) use target::{
     ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,
@@ -295,6 +293,10 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acknowledged_message_id: Option<AtmMessageId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_target: Option<ReplyTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -316,6 +318,51 @@ impl SendCommandOutcome {
             Self::Deferred => "deferred",
             Self::DryRun => "dry_run",
         }
+    }
+}
+
+#[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "the delivered response is consumed by atm-daemon while atm-core only needs non-terminal classification semantics"
+)]
+pub enum RemoteSendDeliveryClassification {
+    Delivered(Box<ResponseEnvelope>),
+    Deferred {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+    RejectedTerminal(AtmError),
+    OutcomeUnknown {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+}
+
+pub fn classify_remote_send_delivery_outcome(
+    outcome: boundary::RemoteSendDeliveryOutcome,
+) -> RemoteSendDeliveryClassification {
+    match outcome {
+        boundary::RemoteSendDeliveryOutcome::Delivered(response) => {
+            RemoteSendDeliveryClassification::Delivered(response)
+        }
+        boundary::RemoteSendDeliveryOutcome::Deferred {
+            receipt_message_id,
+            error,
+        } => RemoteSendDeliveryClassification::Deferred {
+            receipt_message_id,
+            error,
+        },
+        boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => {
+            RemoteSendDeliveryClassification::RejectedTerminal(error)
+        }
+        boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
+            receipt_message_id,
+            error,
+        } => RemoteSendDeliveryClassification::OutcomeUnknown {
+            receipt_message_id,
+            error,
+        },
     }
 }
 
@@ -358,6 +405,26 @@ pub fn send_mail_with_runtime_and_post_send_emitter(
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendOutcome, AtmError> {
     send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+}
+
+pub fn execute_outbound_send_with_runtime_and_post_send_emitter(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<SendOutcome, AtmError> {
+    if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
+        return ack_mail_with_runtime_and_post_send_emitter(
+            ack_request_from_send_request(request)?,
+            observability,
+            runtime,
+            post_send_emitter,
+        )
+        .map(send_acknowledged_envelope);
+    }
+
+    send_mail_with_runtime_and_post_send_emitter(request, observability, runtime, post_send_emitter)
+        .map(send_sent_envelope)
 }
 
 fn send_mail_with_runtime_impl<

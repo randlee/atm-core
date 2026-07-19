@@ -266,7 +266,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 ## Explicit Code Samples
 
 ```rust
-fn execute_outbound_send(
+fn execute_outbound_send_with_runtime_and_post_send_emitter(
     dispatcher: &impl boundary::OutboundSendDispatcher,
     request: SendRequest,
     post_send_emitter: &dyn boundary::PostSendEmitter,

@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-ATM-QA-004" ;
+  triage:title "transport/testing.rs stale Exact Target citation in sprint doc" ;
+  triage:description "Sprint AG21 doc cites crates/atm-core/src/transport/testing.rs:69-80 and 74-78 as lines to delete. File has 71 lines total and contains no split compose/ack branch. Citation is stale." ;
+  triage:category "ATM-QA-004" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-ATM-QA-004/AG21/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/191c198b> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG21/191c198b> .
+
+<urn:atm:triage:occurrence/ARCH-002-ATM-QA-004/AG21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 39 ;
+  triage:snippet "- `crates/atm-core/src/transport/testing.rs:69-80`" ;
+  triage:status "stale" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/191c198b> .
+
+<urn:atm:triage:occurrence/ARCH-002-ATM-QA-004/AG21/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 51 ;
+  triage:snippet "- `crates/atm-core/src/transport/testing.rs:74-78`" ;
+  triage:status "stale" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/191c198b> .
+
+<urn:atm:triage:occurrence/ARCH-002-ATM-QA-004/AG21/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 102 ;
+  triage:snippet "- `crates/atm-core/src/transport/testing.rs:69-80`" ;
+  triage:status "stale" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/191c198b> .
+
+<urn:atm:triage:occurrence/ARCH-002-ATM-QA-004/AG21/4>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 142 ;
+  triage:snippet "- `crates/atm-core/src/transport/testing.rs:69-80`" ;
+  triage:status "stale" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/191c198b> .
+
+<urn:atm:triage:worktree/AG21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .

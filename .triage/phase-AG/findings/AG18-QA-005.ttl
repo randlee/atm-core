@@ -1,0 +1,58 @@
+@prefix qa:   <urn:atm:qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+qa:AG18-QA-005
+    a qa:Finding ;
+    qa:findingId "AG18-QA-005" ;
+    qa:phase "phase-AG" ;
+    qa:title "Stale wire-contract ICD" ;
+    qa:severity "blocking" ;
+    qa:pattern "stale-docs" ;
+    qa:repeatable false ;
+    qa:sourceReviewers "req-qa (ATM-QA-004)" ;
+    qa:description """docs/atm-daemon/protocol-icd.md:329-411 (Section 7.1 packet-kind table and Section 7.2 envelope mapping) still documents `send_compose_request` / `send_acknowledge_request` / `send_sent_response` / `send_acknowledged_response` packet kinds mapped to `RequestEnvelope::Send(SendRequestEnvelope::Compose(...))` and `RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(...))`. The `SendRequestEnvelope` type (with its `Compose`/`Acknowledge` variants) was deleted by AG.18's own commit 70cce097 ('AG.18 unify canonical send envelope'), which collapsed the request side to `RequestEnvelope::Send(Box<SendRequest>)` (crates/atm-core/src/protocol.rs:49-50) with a single `MessageKind::SendRequest = 0x0001` wire kind (protocol.rs:325) -- the compose/acknowledge distinction is no longer expressed via a request-side sub-envelope. (The response side, `SendResponseEnvelope::{Sent,Acknowledged}`, is unaffected and still documented accurately -- see separate finding AG18-QA-002 for that enum's own deletion/deprecation gap.) docs/requirements.md designates the ICD as the sole owner of this wire detail; it was never updated in the same commit and is now factually wrong. Confirmed by req-qa (ATM-QA-004)." """ ;
+    qa:sweepScope "feature/pAG-s18-unify-envelope-handler docs only" .
+
+# --- Root-cause / sweep result ---
+
+qa:AG18-QA-005-sweep-s18
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-005 ;
+    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
+    qa:status "open" ;
+    qa:note "Confirmed: 70cce097 is the exact commit that deleted SendRequestEnvelope::Compose/Acknowledge (protocol.rs diff in this commit), and the same commit left docs/atm-daemon/protocol-icd.md:329-411 untouched (not in the commit's changed-file list). Stale text present verbatim on this branch." .
+
+qa:AG18-QA-005-check-s19
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-005 ;
+    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
+    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
+    qa:status "not-applicable" ;
+    qa:note "git log develop..HEAD -- docs/atm-daemon/protocol-icd.md is empty on this branch; the doc file is untouched since AG.18. No later branch owns or has re-touched these lines." .
+
+qa:AG18-QA-005-check-s20
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-005 ;
+    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
+    qa:status "not-applicable" ;
+    qa:note "git log develop..HEAD -- docs/atm-daemon/protocol-icd.md is empty on this branch; doc file untouched since AG.18." .
+
+qa:AG18-QA-005-check-s21
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-005 ;
+    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
+    qa:status "not-applicable" ;
+    qa:note "git log develop..HEAD -- docs/atm-daemon/protocol-icd.md is empty on this branch; doc file untouched since AG.18." .
+
+# --- Promotion determination ---
+
+qa:AG18-QA-005-promotion
+    a qa:PromotionDecision ;
+    qa:finding qa:AG18-QA-005 ;
+    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promoteToBranch "feature/pAG-s18-unify-envelope-handler" ;
+    qa:rationale """Not a repeatable cross-branch pattern -- this is a single-owner doc-drift defect. Root cause is fully localized to AG.18's own commit 70cce097, which deleted SendRequestEnvelope::Compose/Acknowledge from crates/atm-core/src/protocol.rs without updating the paired ICD table/mapping it invalidated. Verified no later branch (AG.19, AG.20, AG.21) has touched docs/atm-daemon/protocol-icd.md at all since AG.18 (empty `git log develop..HEAD` for the file on each), so the stale text is unmodified drift, not a re-introduced or evolving pattern. Per sweep_scope ('feature/pAG-s18-unify-envelope-handler docs only') and the general rule that a docs-only fix stays on the branch that caused the divergence unless a later branch already touched the same lines, promote_to_branch is feature/pAG-s18-unify-envelope-handler, not the overall AG-ladder highest_open_branch (AG.21). Fix must merge-forward through AG.19/AG.20/AG.21 once applied.""" .

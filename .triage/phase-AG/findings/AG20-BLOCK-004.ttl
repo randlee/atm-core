@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-004" ;
+  triage:title "Transport tests still assert policy/replay outcomes directly" ;
+  triage:description "crates/atm-daemon/src/peer_transport/tests/transport_client.rs still asserts resume_pending_replay, persist_replay_request, and AtmErrorCode::RemoteDeliveryOutcomeUnknown outcomes at the transport-test layer -- no test-surface rewrite occurred, violating sprint AG.20's own acceptance criterion (move deferred policy out of transport). Confirmed by req-qa (ATM-QA-AG20-004). On feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166, the file contains 18 direct references across these three identifiers (resume_pending_replay at lines 534, 675, 682; persist_replay_request at lines 179, 189, 207, 223, 512, 651, 717, 725; RemoteDeliveryOutcomeUnknown at lines 125, 446, 573, 610). This is downstream of and blocked on AG20-BLOCK-001/002/003 landing the real policy/persistence relocation first -- the test-surface rewrite cannot be done correctly until the production code it asserts against has actually moved. Same branch, same fix unit as AG20-BLOCK-001/002/003." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s20-move-deferred-policy-out-of-transport tests only" ;
+  triage:category "stale-test-surface" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/pAG-s20/1> ;
+  triage:blockedOn <urn:atm:triage:finding/AG20-BLOCK-001> ;
+  triage:blockedOn <urn:atm:triage:finding/AG20-BLOCK-002> ;
+  triage:blockedOn <urn:atm:triage:finding/AG20-BLOCK-003> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:notes "Origin sprint feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166: crates/atm-daemon/src/peer_transport/tests/transport_client.rs asserts resume_pending_replay(), persist_replay_request(), and AtmErrorCode::RemoteDeliveryOutcomeUnknown directly at the transport-test layer -- 18 matches. Downstream presence checked across the ordered ladder: s21 (feature/pAG-s21-collapse-dispatch-routing @ bf96dc86, dev in progress, merge-forward of s20 only, no new dev commits yet) carries 15 matches -- defect inherited unchanged, not yet remediated. s22-s25 (feature/pAG-s22-host-resolution-boundary, feature/pAG-s23-remove-synthetic-deferred-receipts, feature/pAG-s24-preserve-request-shape, feature/pAG-s25-live-two-daemon-proof) are all still pinned at baseline 03c873fc (not started, have not branched forward past AG.18-AG.21), so the defect is present there only via the same shared baseline file, not yet as an inherited-and-untouched sprint occurrence -- re-check when those sprints branch forward. Per team fix-dispatch policy (fix dispatch targets latest sprint branch, never integrate; merge-forward closes lower occurrences), promote_to_branch is set to the highest currently-open branch with real commits, feature/pAG-s21-collapse-dispatch-routing @ bf96dc86 -- same branch as AG20-BLOCK-001/002/003. dispatchReady is false: per pattern note this finding is blocked on AG20-BLOCK-001/002/003 landing the real policy/persistence relocation first; the test-surface rewrite is meaningless (and risks masking the underlying defect) until the production code it should assert against has actually moved out of the transport layer. Dispatch AG20-BLOCK-004 as one fix unit together with AG20-BLOCK-001/002/003, not standalone, then merge-forward to close all occurrences. Re-verify by re-grepping transport_client.rs for resume_pending_replay/persist_replay_request/RemoteDeliveryOutcomeUnknown after the fix lands -- do not mark closed on the presence of any rewritten test file alone; confirm the assertions target the new policy-owning surface, not the transport layer." .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 534 ;
+  triage:snippet "resume_pending_replay/persist_replay_request/RemoteDeliveryOutcomeUnknown asserted directly at transport-test layer (18 references) -- no test-surface rewrite per AG.20 acceptance criterion" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 21 .

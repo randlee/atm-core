@@ -105,6 +105,8 @@ fn build_send_outcome(
         task_id,
         summary: Some(summary.to_string()),
         message: Some(body.to_string()),
+        acknowledged_message_id: None,
+        reply_target: None,
         warnings: context
             .warnings
             .iter()

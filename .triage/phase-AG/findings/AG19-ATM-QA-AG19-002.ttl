@@ -1,0 +1,63 @@
+@prefix qa:   <urn:atm:qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+qa:ATM-QA-AG19-002
+    a qa:Finding ;
+    qa:findingId "ATM-QA-AG19-002" ;
+    qa:phase "phase-AG" ;
+    qa:title "Reply-only finalize/plan-build stack survives, duplicating canonical send path" ;
+    qa:severity "blocking" ;
+    qa:pattern "duplicated-finalize-stack", "entangled-with-AG18-QA-002" ;
+    qa:repeatable false ;
+    qa:repeatableNote "Specific to this stack (ack/mod.rs finalize/reply-plan functions), but structurally the same rename-not-remove/duplicate-path shape documented at the phase level." ;
+    qa:sourceReviewers "req-qa (ARCH-AG19-002)", "arch-qa (ARCH-AG19-002)", "ruthless-boundary-qa (RBQA-F002)" ;
+    qa:description """crates/atm-core/src/ack/mod.rs still defines the full reply-only finalize/plan-build stack -- FinalizeAckContext (struct, ~line 300), finalize_sent_ack_outcome (~line 598), build_reply_delivery_plan (~line 697), and reply_post_send_messages (~line 722) -- unchanged from AG.18 through AG.19, AG.20, and the in-progress AG.21. This duplicates the canonical plan-build/execute path already established in crates/atm-core/src/send/outcome.rs (build_send_delivery_plan at ~line 118, execute_delivery_plan re-exported at ~line 5, used together at outcome.rs:55-56). docs/plans/phase-AG/sprint-AG19.md names this reply-only stack for deletion; instead it survives in full, including its own delivery-plan-building and post-send-message logic that duplicates send/outcome.rs's canonical functions. Fix: collapse ack/mod.rs's finalize_sent_ack_outcome / build_reply_delivery_plan / reply_post_send_messages into direct reuse of send/outcome.rs's build_send_delivery_plan and execute_delivery_plan, removing the parallel reply-only stack.""" ;
+    qa:entanglement qa:AG18-QA-002 ;
+    qa:entanglementNote """This finding cannot be judged closed independent of AG18-QA-002 (SendResponseEnvelope::{Sent,Acknowledged} never deleted/deprecated, also blocking, also open through AG.21). The finalize stack here round-trips through SendResponseEnvelope via crate::boundary::RemoteSendDeliveryOutcome::Delivered(Box<crate::protocol::ResponseEnvelope>) wrapping SendResponseEnvelope::Sent(...)/Acknowledged(...) at ack/mod.rs lines ~681, ~1026-1028, ~1130-1132. Deleting/collapsing the finalize/plan-build stack without also collapsing the Sent/Acknowledged split leaves a dangling or awkwardly-adapted envelope shape; collapsing the envelope split without also removing the reply-only finalize stack leaves the duplicate plan-build path intact under a renamed envelope. These two findings must be fixed together, on the same branch, in the same fix pass.""" ;
+    qa:sweepScope "feature/pAG-s19-delete-remote-ack-path and dependents (AG.20, AG.21); re-sweep AG.22-25 once real commits land" .
+
+# --- Per-worktree sweep results ---
+
+qa:ATM-QA-AG19-002-sweep-s19
+    a qa:SweepResult ;
+    qa:finding qa:ATM-QA-AG19-002 ;
+    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
+    qa:status "open" ;
+    qa:note "FinalizeAckContext, finalize_sent_ack_outcome, build_reply_delivery_plan, reply_post_send_messages all present and in active use (ack/mod.rs lines ~229-722, plus 10+ test-module call sites); send/outcome.rs's build_send_delivery_plan/execute_delivery_plan exist as a separate, uncollapsed path. Sprint title implies remote-ack-path deletion but the reply-only finalize stack is untouched." .
+
+qa:ATM-QA-AG19-002-sweep-s20
+    a qa:SweepResult ;
+    qa:finding qa:ATM-QA-AG19-002 ;
+    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
+    qa:status "open" ;
+    qa:note "Pattern unchanged from s19; sprint scope (deferred policy relocation) did not touch the ack/mod.rs finalize/reply-plan stack." .
+
+qa:ATM-QA-AG19-002-sweep-s21
+    a qa:SweepResult ;
+    qa:finding qa:ATM-QA-AG19-002 ;
+    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
+    qa:status "open" ;
+    qa:note "Dev in progress. FinalizeAckContext/finalize_sent_ack_outcome/build_reply_delivery_plan/reply_post_send_messages unchanged from s20 despite sprint title implying dispatch-routing collapse; send/outcome.rs's canonical build_send_delivery_plan/execute_delivery_plan remain a separate, uncollapsed path. Confirms the pattern is still actively propagating forward rather than closing." .
+
+qa:ATM-QA-AG19-002-sweep-s22-25
+    a qa:SweepResult ;
+    qa:finding qa:ATM-QA-AG19-002 ;
+    qa:branch "feature/pAG-s22..s25" ;
+    qa:commitSha "03c873fc" ;
+    qa:status "not-yet-applicable" ;
+    qa:note "Sprints not started (all at common base commit); no real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+
+# --- Promotion determination ---
+
+qa:ATM-QA-AG19-002-promotion
+    a qa:PromotionDecision ;
+    qa:finding qa:ATM-QA-AG19-002 ;
+    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:rationale """All three worktrees in the named sweep scope (AG.19, AG.20, AG.21) exhibit the identical open defect: the reply-only finalize/plan-build stack in ack/mod.rs survives in full, duplicating send/outcome.rs's canonical plan-build/execute path. Per repeatable-pattern / strict-earliest-to-latest fix-dispatch policy, the fix is dispatched once to the highest (latest) branch with real commits -- feature/pAG-s21-collapse-dispatch-routing -- and closed on lower branches (AG.19, AG.20) via merge-forward, not via separate per-branch fix dispatch. AG.21 is dev-in-progress, matching AG18-QA-002's promotion target; because this finding is entangled with AG18-QA-002 (both round-trip through the same SendResponseEnvelope/RemoteSendDeliveryOutcome::Delivered wiring in ack/mod.rs), both findings must be dispatched together in the same fix assignment on feature/pAG-s21-collapse-dispatch-routing. AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .
