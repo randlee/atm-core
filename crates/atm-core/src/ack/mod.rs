@@ -161,6 +161,57 @@ pub fn ack_mail_with_runtime_and_post_send_emitter(
     ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
+pub fn prepare_ack_send_request(request: AckRequest) -> Result<SendRequest, AtmError> {
+    let actor = request.caller_identity.clone();
+    let team = request.caller_team.clone();
+    let reply_text = input::validate_message_text(request.reply_body)?;
+    let reply_summary = summary::build_summary(&reply_text, None);
+    SendRequest::new(
+        request.home_dir,
+        request.current_dir,
+        actor.clone(),
+        &format!("{actor}@{team}"),
+        team,
+        SendMessageSource::Inline(reply_text),
+        Some(reply_summary),
+        false,
+        None,
+        false,
+    )
+    .map(|mut send_request| {
+        send_request.acknowledges_message_id = Some(request.message_id);
+        send_request
+    })
+}
+
+pub fn ack_request_from_send_request(request: SendRequest) -> Result<AckRequest, AtmError> {
+    let message_id = request.acknowledges_message_id.ok_or_else(|| {
+        AtmError::validation(
+            "canonical send request is missing acknowledges_message_id for ack handling"
+                .to_string(),
+        )
+        .with_recovery("Construct ack replies through the canonical ack preparation helper.")
+    })?;
+    let reply_body = match request.message_source {
+        SendMessageSource::Inline(message) => message,
+        SendMessageSource::File { message: Some(message), .. } => message,
+        SendMessageSource::File { message: None, .. } => {
+            return Err(AtmError::validation(
+                "canonical ack send request must carry the reply body inline".to_string(),
+            )
+            .with_recovery("Materialize the ack reply body before dispatching the canonical send request."));
+        }
+    };
+    Ok(AckRequest {
+        home_dir: request.home_dir,
+        current_dir: request.current_dir,
+        caller_identity: request.caller_identity,
+        caller_team: request.caller_team,
+        message_id,
+        reply_body,
+    })
+}
+
 fn ack_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(

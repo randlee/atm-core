@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use serde::{Deserialize, Serialize};
 
-use crate::ack::{AckOutcome, AckRequest};
+use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
@@ -37,13 +37,6 @@ pub use runtime_status::{
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
-/// Shared protocol send-shaped request envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendRequestEnvelope {
-    Compose(Box<SendRequest>),
-    Acknowledge(AckRequest),
-}
-
 /// Shared protocol send-shaped response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendResponseEnvelope {
@@ -54,7 +47,7 @@ pub enum SendResponseEnvelope {
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
-    Send(SendRequestEnvelope),
+    Send(Box<SendRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     List(ListQuery),
@@ -329,8 +322,7 @@ impl fmt::Display for RequestId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 pub enum MessageKind {
-    SendComposeRequest = 0x0001,
-    SendAcknowledgeRequest = 0x0002,
+    SendRequest = 0x0001,
     HeartbeatRequest = 0x0003,
     CompatibilityPreflightRequest = 0x0009,
     ListRequest = 0x0004,
@@ -338,8 +330,7 @@ pub enum MessageKind {
     ReceiveRequest = 0x0006,
     ClearRequest = 0x0007,
     DoctorRequest = 0x0008,
-    SendSentResponse = 0x1001,
-    SendAcknowledgedResponse = 0x1002,
+    SendResponse = 0x1001,
     HeartbeatResponse = 0x1003,
     CompatibilityVerdictResponse = 0x1009,
     ListResponse = 0x1004,
@@ -358,9 +349,7 @@ impl MessageKind {
     pub const fn is_request(self) -> bool {
         matches!(
             self,
-            Self::SendComposeRequest
-                | Self::SendAcknowledgeRequest
-                | Self::HeartbeatRequest
+            Self::SendRequest | Self::HeartbeatRequest
                 | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
                 | Self::PeekRequest
@@ -380,8 +369,7 @@ impl TryFrom<u16> for MessageKind {
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         let kind = match value {
-            0x0001 => Self::SendComposeRequest,
-            0x0002 => Self::SendAcknowledgeRequest,
+            0x0001 => Self::SendRequest,
             0x0003 => Self::HeartbeatRequest,
             0x0009 => Self::CompatibilityPreflightRequest,
             0x0004 => Self::ListRequest,
@@ -389,8 +377,7 @@ impl TryFrom<u16> for MessageKind {
             0x0006 => Self::ReceiveRequest,
             0x0007 => Self::ClearRequest,
             0x0008 => Self::DoctorRequest,
-            0x1001 => Self::SendSentResponse,
-            0x1002 => Self::SendAcknowledgedResponse,
+            0x1001 => Self::SendResponse,
             0x1003 => Self::HeartbeatResponse,
             0x1009 => Self::CompatibilityVerdictResponse,
             0x1004 => Self::ListResponse,
@@ -483,8 +470,7 @@ pub fn request_from_frame_payload(
         ));
     }
     let request = match frame.message_kind {
-        MessageKind::SendComposeRequest
-        | MessageKind::SendAcknowledgeRequest
+        MessageKind::SendRequest
         | MessageKind::ListRequest
         | MessageKind::PeekRequest
         | MessageKind::ReceiveRequest
@@ -519,10 +505,7 @@ fn caller_context_payload_object(
     envelope: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<&serde_json::Map<String, serde_json::Value>, AtmError> {
     match message_kind {
-        MessageKind::SendComposeRequest => nested_payload_object(envelope, &["Send", "Compose"]),
-        MessageKind::SendAcknowledgeRequest => {
-            nested_payload_object(envelope, &["Send", "Acknowledge"])
-        }
+        MessageKind::SendRequest => nested_payload_object(envelope, &["Send"]),
         MessageKind::ListRequest => nested_payload_object(envelope, &["List"]),
         MessageKind::PeekRequest => nested_payload_object(envelope, &["Peek"]),
         MessageKind::ReceiveRequest => nested_payload_object(envelope, &["Receive"]),
@@ -758,10 +741,7 @@ pub fn read_frame_header(
 
 fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
     match request {
-        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => MessageKind::SendComposeRequest,
-        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
-            MessageKind::SendAcknowledgeRequest
-        }
+        RequestEnvelope::Send(_) => MessageKind::SendRequest,
         RequestEnvelope::CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
         RequestEnvelope::List(_) => MessageKind::ListRequest,
@@ -774,10 +754,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
 
 fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => MessageKind::SendSentResponse,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
-            MessageKind::SendAcknowledgedResponse
-        }
+        ResponseEnvelope::Send(_) => MessageKind::SendResponse,
         ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
         ResponseEnvelope::List(_) => MessageKind::ListResponse,
@@ -1090,7 +1067,7 @@ mod tests {
 
     #[test]
     fn request_from_frame_payload_accepts_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(
+        let request = RequestEnvelope::Send(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -1104,14 +1081,14 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        )));
+        ));
 
         let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
         let (_request_id, decoded) =
             request_from_frame_payload(frame).expect("decode nested send request");
 
         match decoded {
-            RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request)) => {
+            RequestEnvelope::Send(request) => {
                 let request = *request;
                 assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
                 assert_eq!(request.caller_team.as_str(), TEST_TEAM);

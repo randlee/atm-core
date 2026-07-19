@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use atm_core::boundary::{MessageKey, RemoteReplayStateRecord, RemoteReplayStore};
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{RequestEnvelope, SendRequestEnvelope};
+use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteDeliveryReceiptStatus, finalize_remote_delivery_receipt_with_runtime};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
@@ -118,7 +118,7 @@ pub(super) fn finalize_replay_receipt(
     else {
         return Ok(false);
     };
-    let RequestEnvelope::Send(SendRequestEnvelope::Compose(send_request)) = &record.request else {
+    let RequestEnvelope::Send(send_request) = &record.request else {
         return Ok(false);
     };
     let target = target.parse()?;

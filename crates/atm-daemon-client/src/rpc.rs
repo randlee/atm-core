@@ -150,8 +150,8 @@ impl RpcEnvelope {
 mod tests {
     use super::{MessageKind, RpcEnvelope, RpcHeader};
     use crate::wire::{
-        RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-        next_request_id, request_from_frame_payload,
+        RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
+        request_from_frame_payload,
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_canonical_message_body() {
-        let header = RpcHeader::new(next_request_id(), MessageKind::SendComposeRequest);
+        let header = RpcHeader::new(next_request_id(), MessageKind::SendRequest);
         let message = Message {
             team: RPC_TEST_TEAM.parse().expect("team"),
             agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
@@ -224,7 +224,7 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let home_dir = temp.path().join("home");
         let current_dir = temp.path().join("cwd");
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(SendRequest {
+        let request = RequestEnvelope::Send(Box::new(SendRequest {
             home_dir: home_dir.clone(),
             current_dir: current_dir.clone(),
             caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
@@ -241,13 +241,13 @@ mod tests {
             source_remote_host: None,
             remote_host: None,
             dry_run: false,
-        })));
+        }));
 
         let envelope = RpcEnvelope::encode_request(request.clone()).expect("encode request");
         let (_, decoded) = envelope.decode_request().expect("decode request");
 
         match decoded {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(decoded)) => {
+            RequestEnvelope::Send(decoded) => {
                 let decoded = *decoded;
                 assert_eq!(decoded.home_dir, home_dir);
                 assert_eq!(decoded.current_dir, current_dir);
@@ -267,7 +267,7 @@ mod tests {
         }
 
         let temp = tempdir().expect("tempdir");
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(SendRequest {
+        let request = RequestEnvelope::Send(Box::new(SendRequest {
             home_dir: temp.path().join("home"),
             current_dir: temp.path().join("cwd"),
             caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
@@ -284,7 +284,7 @@ mod tests {
             source_remote_host: None,
             remote_host: None,
             dry_run: false,
-        })));
+        }));
 
         let envelope = RpcEnvelope::encode_request(request).expect("encode request");
         let frame = envelope.into_frame_payload();
@@ -296,7 +296,7 @@ mod tests {
 
         let (_, decoded) = request_from_frame_payload(frame).expect("decode request");
         match decoded {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(decoded)) => {
+            RequestEnvelope::Send(decoded) => {
                 let decoded = *decoded;
                 assert_wire_surface(&decoded.message_source);
                 match decoded.message_source {
