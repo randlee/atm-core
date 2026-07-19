@@ -606,6 +606,8 @@ fn write_team_config_for(home_dir: &std::path::Path, team: &str, members: &[&str
     .expect("write team config");
 }
 
+// AG.18 migration: decode the canonical unified send outcome, then delete legacy response matching.
+#[allow(deprecated)]
 fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
     let mut request = SendRequest::new(
         caller.home.to_path_buf(),
@@ -673,6 +675,8 @@ fn read_message_over_local_ipc(
     }
 }
 
+// AG.18 migration: derive the receive-side ack outcome from the canonical unified send outcome.
+#[allow(deprecated)]
 fn send_ack_over_local_ipc(
     socket_path: &std::path::Path,
     home: &std::path::Path,

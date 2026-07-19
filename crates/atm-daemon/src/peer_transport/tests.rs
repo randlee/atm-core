@@ -17,9 +17,13 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmErrorCode;
 use atm_core::protocol::{
     HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-    RuntimeMemberState, RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+    RuntimeMemberState, RuntimeReadinessState, TeamMemberHeartbeatRequest,
     TeamMemberHeartbeatResponse,
 };
+// AG.18 migration: test submodules must use canonical unified send outcomes before this legacy
+// fixture import is deleted.
+#[allow(deprecated)]
+use atm_core::protocol::SendResponseEnvelope;
 use atm_core::read::ReadQuery;
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendRequest};

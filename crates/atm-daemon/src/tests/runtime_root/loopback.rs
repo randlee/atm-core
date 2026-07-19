@@ -2,6 +2,8 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -289,6 +291,8 @@ fn dispatcher_loopback_without_listener_fails_closed_without_mailbox_mutation() 
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: derive the ack result receive-side from the canonical unified send outcome.
+#[allow(deprecated)]
 fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");

@@ -2,6 +2,8 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -125,6 +127,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -260,6 +264,8 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: derive the ack result receive-side from the canonical unified send outcome.
+#[allow(deprecated)]
 fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production_dispatch() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");

@@ -149,7 +149,9 @@ impl RpcEnvelope {
 #[cfg(test)]
 mod tests {
     use super::{MessageKind, RpcEnvelope, RpcHeader};
-    use crate::wire::{RequestEnvelope, ResponseEnvelope, next_request_id, request_from_frame_payload};
+    use crate::wire::{
+        RequestEnvelope, ResponseEnvelope, next_request_id, request_from_frame_payload,
+    };
     // AG.18 migration: this test-only import remains until the response fixture uses the
     // canonical unified send outcome instead of `SendResponseEnvelope`.
     #[allow(deprecated)]

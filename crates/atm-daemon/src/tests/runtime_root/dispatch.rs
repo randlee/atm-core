@@ -2,6 +2,8 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
