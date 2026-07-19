@@ -17,7 +17,9 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::peer_transport::delivery::{CrossHostDelivery, DaemonCrossHostDelivery};
+use crate::peer_transport::delivery::{
+    CrossHostDelivery, DaemonCrossHostDelivery, DaemonRemoteEndpointResolver,
+};
 mod cross_host_doctor;
 mod dispatch_delivery;
 mod graft_post_send;
@@ -324,11 +326,13 @@ impl DaemonRequestDispatcher {
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let peer_interface_config_store = runtime_assembly.peer_interface_config_store.clone();
         let roster_store = runtime_assembly.shared_roster_store_arc();
-        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> =
-            Arc::new(DaemonCrossHostDelivery::new(
-                peer_interface_config_store.clone(),
-                peer_transport_runtime.clone(),
-            ));
+        let endpoint_resolver = Arc::new(DaemonRemoteEndpointResolver::new(
+            peer_interface_config_store.clone(),
+            None,
+        ));
+        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> = Arc::new(
+            DaemonCrossHostDelivery::new(endpoint_resolver, peer_transport_runtime.clone()),
+        );
         runtime_assembly.service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             runtime_assembly.message_store_arc(),
             roster_store.clone(),
@@ -568,11 +572,13 @@ impl DaemonRequestDispatcher {
             observability.clone();
         let mut runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
-        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> =
-            Arc::new(DaemonCrossHostDelivery::new(
-                runtime_assembly.peer_interface_config_store.clone(),
-                peer_transport_runtime.clone(),
-            ));
+        let endpoint_resolver = Arc::new(DaemonRemoteEndpointResolver::new(
+            runtime_assembly.peer_interface_config_store.clone(),
+            None,
+        ));
+        let cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync> = Arc::new(
+            DaemonCrossHostDelivery::new(endpoint_resolver, peer_transport_runtime.clone()),
+        );
         runtime_assembly.service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             runtime_assembly.message_store_arc(),
             runtime_assembly.shared_roster_store_arc(),

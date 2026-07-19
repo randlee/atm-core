@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F006>
+  a triage:Finding ;
+  triage:findingId "RBQA-F006" ;
+  triage:title "atm-graft independently re-implements compose-vs-ack branch in a third crate" ;
+  triage:description "crates/atm-graft/src/lib.rs lines 601-602 and 657-658 contain the FakeClientTransport test double's request handler, which independently re-implements the compose-vs-ack branch pattern using is_none/is_some guard conditions on request.acknowledges_message_id. This replicates the duplication pattern already identified in AG18-QA-004 (occurring in send_message()/acknowledge_message() at lines 224/227) but in a different location within the same crate — specifically in the test-double mock transport, spreading the pattern into test infrastructure. The guard-condition approach duplicates the compose/ack distinction logic that should be centralized and is being refactored in later sprints (s22+) to use SendRequestEnvelope enum discriminants instead. Correlates with AG18-QA-004 but is a distinct occurrence at different line numbers and in test-mock code rather than production caller code." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F006/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F006/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F006/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F006/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:notes "This is a DISTINCT OCCURRENCE from AG18-QA-004. AG18-QA-004 tracks the compose-vs-ack duplication in send_message()/acknowledge_message() caller functions at lines 224/227. RBQA-F006 tracks the same pattern in the FakeClientTransport test double's internal request handler closure at lines 601-602/657-658 — different function scope, different line range, same underlying pattern. Both are instances of the broader compose-vs-ack duplication pattern but in different parts of atm-graft/src/lib.rs. Pattern is byte-identical across s18-s21 (no changes to this code section in any of these sprints). s22+ (and integrate/phase-AG at HEAD e087980a) have refactored away the guard-condition pattern entirely in favor of discriminant matching on SendRequestEnvelope::Compose/Acknowledge enums (lines 605, 660), indicating this was addressed in AG22+ work. Since s22-s25 are not yet dev-started and remain at integrate/phase-AG's HEAD (03c873fc prior to triage commit), the fix has already landed upstream in the integrate branch. Highest open branch is s21 (191c198b, post-merge from integrate/phase-AG). Fix dispatch should target s21 per strict latest-branch policy." .
+
+<urn:atm:triage:occurrence/RBQA-F006/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 601 ;
+  triage:snippet "CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => Ok(CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(...))) [compose path]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/RBQA-F006/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 601 ;
+  triage:snippet "CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => Ok(CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(...))) [compose path]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/RBQA-F006/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 601 ;
+  triage:snippet "CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => Ok(CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(...))) [compose path]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/RBQA-F006/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 601 ;
+  triage:snippet "CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => Ok(CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(...))) [compose path]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .

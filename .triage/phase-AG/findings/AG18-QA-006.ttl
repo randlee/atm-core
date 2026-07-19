@@ -1,0 +1,83 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-006>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-006" ;
+  triage:title "Missing named canonical symbol execute_outbound_send" ;
+  triage:description "Sprint doc docs/plans/phase-AG/sprint-AG18.md's Explicit Code Sample (line 269) names a trait-dispatcher-based symbol fn execute_outbound_send(dispatcher: &impl boundary::OutboundSendDispatcher, request: SendRequest, post_send_emitter: &dyn boundary::PostSendEmitter) -> Result<ResponseEnvelope, AtmError>. This symbol was never implemented on the AG.18 branch (feature/pAG-s18-unify-envelope-handler), nor on AG.19 or AG.20, which never touch this call site. AG.21's sprint doc (docs/plans/phase-AG/sprint-AG21.md, line 77) explicitly states a hard dependency: 'retain the explicit canonical outbound symbol introduced in AG.18: execute_outbound_send(dispatcher, request, post_send_emitter)'. Confirmed by req-qa (ATM-QA-005)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s18-unify-envelope-handler and feature/pAG-s21-collapse-dispatch-routing (dependency consumer)" ;
+  triage:category "documentation-code-mismatch" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "AG.21's in-progress dev work (feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef) has already introduced a functionally-equivalent symbol -- execute_outbound_send_with_runtime_and_post_send_emitter -- in crates/atm-core/src/send/mod.rs:365, and AG.21's own dispatch_delivery.rs (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs) calls it for the SendRequestRoute::Local branch. This resolves the *functional* dependency AG.21's sprint doc describes, but NOT via the symbol AG.18's doc promised: the implemented function has a different name and a different signature. AG.18's doc specified a trait-dispatcher design (dispatcher: &impl boundary::OutboundSendDispatcher), whereas AG.21's actual implementation takes (request, observability, service_runtime, post_send_emitter) directly -- no OutboundSendDispatcher trait exists anywhere in the codebase (grep confirmed). The verbose _with_runtime_and_post_send_emitter naming is consistent with sibling functions already in the codebase (send_mail_with_runtime_and_post_send_emitter, ack_mail_with_runtime_and_post_send_emitter), so the AG.21 implementation is the better fit for the codebase's existing conventions -- the sprint docs are what drifted, not the code. AG.18/AG.19/AG.20 branches contain zero implementation of any version of this symbol; only their copies of the sprint docs cite the never-built name, so there is nothing to fix in their source trees. Highest open branch is feature/pAG-s21-collapse-dispatch-routing (dev in progress) and it is also where the real implementation lives, so promote there per strict latest-branch dispatch policy. Required reconciliation on s21: (1) do not rename the working execute_outbound_send_with_runtime_and_post_send_emitter implementation or introduce a speculative OutboundSendDispatcher trait solely to match stale doc prose; (2) update the Explicit Code Sample in docs/plans/phase-AG/sprint-AG18.md (~line 269), the call-site sample in docs/plans/phase-AG/sprint-AG19.md (~line 103), and the hard-dependency citation in docs/plans/phase-AG/sprint-AG21.md (~line 77) to name the actual implemented symbol and signature. This is a doc-only fix landing on code-bearing branch s21 because that is where the divergence must be reconciled before AG.21 merges forward and the mismatch propagates phase-wide." .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "Explicit Code Sample: fn execute_outbound_send(dispatcher: &impl boundary::OutboundSendDispatcher, request: SendRequest, post_send_emitter: &dyn boundary::PostSendEmitter) -> Result<ResponseEnvelope, AtmError>; -- never implemented on this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG19.md" ;
+  triage:line 103 ;
+  triage:snippet "let delivery = execute_outbound_send(dispatcher, reply_request, post_send_emitter)?; -- symbol does not exist anywhere in this branch's source tree" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "same stale Explicit Code Sample carried forward unchanged from AG.18's doc; still no implementation on this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 77 ;
+  triage:snippet "Deliverables: 'retain the explicit canonical outbound symbol introduced in AG.18: execute_outbound_send(dispatcher, request, post_send_emitter)' -- hard dependency on a symbol that was never introduced under this name" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 365 ;
+  triage:snippet "pub fn execute_outbound_send_with_runtime_and_post_send_emitter(...) -- the actual implemented symbol AG.21 built and calls from dispatch_delivery.rs; different name/signature than sprint docs promise but functionally serves the same canonical-outbound-send role" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .

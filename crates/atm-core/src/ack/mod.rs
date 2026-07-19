@@ -17,7 +17,8 @@ use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, remote_host as message_remote_host,
 };
 use crate::send::{
-    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, SendRequestRoute, input,
+    RemoteSendDeliveryClassification, RemoteTargetHost, ResolvedRecipient, SendMessageSource,
+    SendRequest, SendRequestRoute, classify_remote_send_delivery_outcome, input,
     persist_send_message, prepare_send_context, route_send_request, summary,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -36,15 +37,6 @@ pub struct AckRequest {
     pub reply_body: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AckReplyDisposition {
-    Sent {
-        reply_message_id: AtmMessageId,
-        reply_target: ReplyTarget,
-    },
-}
-
 /// Summary of one successful acknowledgement and reply handling.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AckOutcome {
@@ -54,7 +46,8 @@ pub struct AckOutcome {
     pub message_id: AtmMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
-    pub reply_disposition: AckReplyDisposition,
+    pub reply_message_id: AtmMessageId,
+    pub reply_target: ReplyTarget,
     pub reply_text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<crate::send::WarningEntry>,
@@ -161,6 +154,62 @@ pub fn ack_mail_with_runtime_and_post_send_emitter(
     ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
+pub fn prepare_ack_send_request(request: AckRequest) -> Result<SendRequest, AtmError> {
+    let actor = request.caller_identity.clone();
+    let team = request.caller_team.clone();
+    let reply_text = input::validate_message_text(request.reply_body)?;
+    let reply_summary = summary::build_summary(&reply_text, None);
+    SendRequest::new(
+        request.home_dir,
+        request.current_dir,
+        actor.clone(),
+        &format!("{actor}@{team}"),
+        team,
+        SendMessageSource::Inline(reply_text),
+        Some(reply_summary),
+        false,
+        None,
+        false,
+    )
+    .map(|mut send_request| {
+        send_request.acknowledges_message_id = Some(request.message_id);
+        send_request
+    })
+}
+
+pub fn ack_request_from_send_request(request: SendRequest) -> Result<AckRequest, AtmError> {
+    let message_id = request.acknowledges_message_id.ok_or_else(|| {
+        AtmError::validation(
+            "canonical send request is missing acknowledges_message_id for ack handling"
+                .to_string(),
+        )
+        .with_recovery("Construct ack replies through the canonical ack preparation helper.")
+    })?;
+    let reply_body = match request.message_source {
+        SendMessageSource::Inline(message) => message,
+        SendMessageSource::File {
+            message: Some(message),
+            ..
+        } => message,
+        SendMessageSource::File { message: None, .. } => {
+            return Err(AtmError::validation(
+                "canonical ack send request must carry the reply body inline".to_string(),
+            )
+            .with_recovery(
+                "Materialize the ack reply body before dispatching the canonical send request.",
+            ));
+        }
+    };
+    Ok(AckRequest {
+        home_dir: request.home_dir,
+        current_dir: request.current_dir,
+        caller_identity: request.caller_identity,
+        caller_team: request.caller_team,
+        message_id,
+        reply_body,
+    })
+}
+
 fn ack_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -178,7 +227,7 @@ fn ack_mail_with_runtime_impl<
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
     ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team).and_then(|context| {
-        finalize_ack_outcome(runtime, observability, post_send_emitter, context)
+        finalize_sent_ack_outcome(runtime, observability, post_send_emitter, &context)
     })
 }
 
@@ -547,17 +596,6 @@ fn home_dir(request: &AckRequest) -> &std::path::Path {
     request.home_dir.as_path()
 }
 
-fn finalize_ack_outcome<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    observability: &dyn ObservabilityPort,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-    context: FinalizeAckContext,
-) -> Result<AckOutcome, AtmError> {
-    finalize_sent_ack_outcome(runtime, observability, post_send_emitter, &context)
-}
-
 fn finalize_sent_ack_outcome<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -581,10 +619,8 @@ fn finalize_sent_ack_outcome<
         agent: context.actor.clone(),
         message_id: context.request_message_id,
         task_id: reply.task_id.clone(),
-        reply_disposition: AckReplyDisposition::Sent {
-            reply_message_id: reply.reply_message_id,
-            reply_target: reply.reply_target.clone(),
-        },
+        reply_message_id: reply.reply_message_id,
+        reply_target: reply.reply_target.clone(),
         reply_text: reply.reply_text.clone(),
         warnings: context.warnings.clone(),
     };
@@ -615,12 +651,14 @@ fn finalize_sent_ack_outcome<
         &reply.reply_snapshot,
         &post_send_messages,
     );
-    commit_source_ack_state(
-        runtime,
-        &context.actor,
-        &context.team,
-        &reply.persisted_source,
-    )?;
+    if execution.commit_source_state {
+        commit_source_ack_state(
+            runtime,
+            &context.actor,
+            &context.team,
+            &reply.persisted_source,
+        )?;
+    }
     record_ack_telemetry(
         observability,
         &context.actor,
@@ -640,45 +678,47 @@ fn execute_ack_reply_plan<
     plan: &DeliveryPlan,
 ) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
     if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) {
-        return execute_remote_ack_reply_plan(runtime, reply, remote_host);
+        return match classify_remote_send_delivery_outcome(
+            runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)?,
+        ) {
+            RemoteSendDeliveryClassification::Delivered(_) => {
+                Ok(crate::delivery_execution::DeliveryExecutionResult::delivered())
+            }
+            RemoteSendDeliveryClassification::Deferred {
+                receipt_message_id,
+                error,
+            } => Ok(
+                crate::delivery_execution::DeliveryExecutionResult::delivered_without_commit(vec![
+                    crate::send::WarningEntry::with_code(
+                        error.code,
+                        format!(
+                            "ack reply deferred for bounded remote retry; reply receipt {} remains pending final confirmation",
+                            receipt_message_id
+                        ),
+                        error.recovery.first().cloned(),
+                    ),
+                ]),
+            ),
+            RemoteSendDeliveryClassification::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            } => Ok(
+                crate::delivery_execution::DeliveryExecutionResult::delivered_without_commit(vec![
+                    crate::send::WarningEntry::with_code(
+                        error.code,
+                        format!(
+                            "ack reply outcome is unknown; reply receipt {} remains pending final confirmation",
+                            receipt_message_id
+                        ),
+                        error.recovery.first().cloned(),
+                    ),
+                ]),
+            ),
+            RemoteSendDeliveryClassification::RejectedTerminal(error) => Err(error),
+        };
     }
 
     execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), plan)
-}
-
-fn execute_remote_ack_reply_plan<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    reply: &SentAckReply,
-    remote_host: RemoteTargetHost,
-) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
-    match runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)? {
-        crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
-            Ok(crate::delivery_execution::DeliveryExecutionResult {
-                warnings: Vec::new(),
-            })
-        }
-        crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } => {
-            Ok(crate::delivery_execution::DeliveryExecutionResult {
-                warnings: vec![crate::send::WarningEntry::with_code(
-                    error.code,
-                    "warning: ATM deferred remote ack delivery because the cross-host path is not currently healthy. The daemon will retry this remote ack in the background.",
-                    error.primary_recovery().map(str::to_owned),
-                )],
-            })
-        }
-        crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => {
-            Ok(crate::delivery_execution::DeliveryExecutionResult {
-                warnings: vec![crate::send::WarningEntry::with_code(
-                    error.code,
-                    "warning: ATM could not confirm the remote ack delivery outcome. The daemon retained the remote ack for bounded replay and will report the final result through the sender inbox.",
-                    error.primary_recovery().map(str::to_owned),
-                )],
-            })
-        }
-        crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
-    }
 }
 
 fn build_reply_delivery_plan(
@@ -768,8 +808,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::{
-        AckReplyDisposition, FinalizeAckContext, PersistedSourceAck, ReplyTarget, SentAckReply,
-        build_reply_delivery_plan, canonical_sender_identity, finalize_ack_outcome,
+        FinalizeAckContext, PersistedSourceAck, ReplyTarget, SentAckReply,
+        build_reply_delivery_plan, canonical_sender_identity, finalize_sent_ack_outcome,
         resolve_reply_target,
     };
     use crate::boundary::{
@@ -1518,12 +1558,9 @@ mod tests {
             warnings: Vec::new(),
         };
 
-        let outcome =
-            finalize_ack_outcome(&runtime, &NullObservability, None, owned).expect("ack outcome");
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent { .. }
-        ));
+        let outcome = finalize_sent_ack_outcome(&runtime, &NullObservability, None, &owned)
+            .expect("ack outcome");
+        assert!(!outcome.reply_message_id.to_string().is_empty());
         let outbound = runtime.remote_send_requests();
         assert_eq!(outbound.len(), 1);
         assert_eq!(
@@ -1641,11 +1678,11 @@ mod tests {
             remote_send_outcome: None,
         };
 
-        let outcome = finalize_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team: team.clone(),
                 request_message_id,
@@ -1659,13 +1696,7 @@ mod tests {
         let outbound_messages = runtime.outbound_messages();
         assert_eq!(outbound_messages.len(), 1);
         assert_eq!(outbound_messages[0], reply_message);
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent {
-                reply_message_id: sent_id,
-                ..
-            } if sent_id == reply_message_id
-        ));
+        assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.reply_text, reply_text);
     }
 
@@ -1739,11 +1770,11 @@ mod tests {
             ("ATM_LOG_DIR", None),
         ]);
 
-        let outcome = finalize_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             Some(&post_send_emitter),
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
                 request_message_id,
@@ -1754,13 +1785,7 @@ mod tests {
         )
         .expect("finalize ack outcome");
 
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent {
-                reply_message_id: sent_id,
-                ..
-            } if sent_id == reply_message_id
-        ));
+        assert_eq!(outcome.reply_message_id, reply_message_id);
         assert!(outcome.warnings.is_empty());
         let emitted = post_send_emitter
             .emitted
@@ -1845,11 +1870,11 @@ mod tests {
             ("ATM_LOG_DIR", None),
         ]);
 
-        let outcome = finalize_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             Some(&post_send_emitter),
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
                 request_message_id,
@@ -1860,13 +1885,7 @@ mod tests {
         )
         .expect("finalize ack outcome");
 
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent {
-                reply_message_id: sent_id,
-                ..
-            } if sent_id == reply_message_id
-        ));
+        assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.warnings.len(), 1);
         assert!(
             outcome.warnings[0]
@@ -2023,10 +2042,7 @@ mod tests {
         assert_eq!(outcome.team, team);
         assert_eq!(outcome.agent, actor);
         assert_eq!(outcome.message_id, source_message_id);
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent { .. }
-        ));
+        assert!(!outcome.reply_message_id.to_string().is_empty());
         assert_eq!(
             runtime
                 .outbound_deliveries
@@ -2212,10 +2228,10 @@ mod tests {
         )
         .expect("cross-host ack should not require receiver-local sender roster membership");
 
-        assert!(matches!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent { .. }
-        ));
+        assert_eq!(
+            outcome.reply_target.remote_host.as_deref(),
+            Some("192.168.128.29")
+        );
         let outbound = runtime
             .remote_send_requests
             .lock()
@@ -2385,11 +2401,11 @@ mod tests {
             )),
         };
 
-        let error = finalize_ack_outcome(
+        let error = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
                 request_message_id,
@@ -2408,7 +2424,7 @@ mod tests {
     }
 
     #[test]
-    fn finalize_ack_outcome_deferred_commits_source_state_with_warning() {
+    fn finalize_ack_outcome_deferred_does_not_commit_source_state() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2474,11 +2490,11 @@ mod tests {
             )),
         };
 
-        let outcome = finalize_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
                 request_message_id,
@@ -2487,32 +2503,27 @@ mod tests {
                 warnings: Vec::new(),
             },
         )
-        .expect("deferred remote ack should degrade to warning");
+        .expect("deferred remote ack should preserve the reply receipt");
 
-        assert_eq!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent {
-                reply_message_id,
-                reply_target
-            }
-        );
+        assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.warnings.len(), 1);
-        assert!(
-            outcome.warnings[0]
-                .message
-                .contains("ATM deferred remote ack delivery"),
-            "{:#?}",
-            outcome.warnings
-        );
         assert_eq!(
             outcome.warnings[0].code,
             Some(AtmErrorCode::DaemonUnavailable)
         );
-        assert_eq!(runtime.persisted_states().len(), 1);
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ack reply deferred for bounded remote retry")
+        );
+        assert!(
+            runtime.persisted_states().is_empty(),
+            "source ack state must remain pending when remote delivery is deferred"
+        );
     }
 
     #[test]
-    fn finalize_ack_outcome_outcome_unknown_commits_source_state_with_warning() {
+    fn finalize_ack_outcome_outcome_unknown_does_not_commit_source_state() {
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2578,11 +2589,11 @@ mod tests {
             )),
         };
 
-        let outcome = finalize_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
-            FinalizeAckContext {
+            &FinalizeAckContext {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
                 request_message_id,
@@ -2591,27 +2602,22 @@ mod tests {
                 warnings: Vec::new(),
             },
         )
-        .expect("outcome-unknown remote ack should degrade to warning");
+        .expect("outcome-unknown remote ack should preserve the reply receipt");
 
-        assert_eq!(
-            outcome.reply_disposition,
-            AckReplyDisposition::Sent {
-                reply_message_id,
-                reply_target
-            }
-        );
+        assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.warnings.len(), 1);
-        assert!(
-            outcome.warnings[0]
-                .message
-                .contains("could not confirm the remote ack delivery outcome"),
-            "{:#?}",
-            outcome.warnings
-        );
         assert_eq!(
             outcome.warnings[0].code,
             Some(AtmErrorCode::RemoteDeliveryOutcomeUnknown)
         );
-        assert_eq!(runtime.persisted_states().len(), 1);
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ack reply outcome is unknown")
+        );
+        assert!(
+            runtime.persisted_states().is_empty(),
+            "source ack state must remain pending when remote delivery is not confirmed"
+        );
     }
 }

@@ -1,0 +1,80 @@
+@prefix qa:   <urn:atm:qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+qa:AG18-QA-003
+    a qa:Finding ;
+    qa:findingId "AG18-QA-003" ;
+    qa:phase "phase-AG" ;
+    qa:title "Daemon dispatch still forks send-vs-ack before routing" ;
+    qa:severity "blocking" ;
+    qa:pattern "unresolved-dispatch-fork" ;
+    qa:repeatable true ;
+    qa:sourceReviewers "ruthless-boundary-qa (RBQA-F001)", "arch-qa (ARCH-004)", "req-qa (ATM-QA-003)", "AG.19 QA (ATM-QA-AG19-003)", "AG.20 QA (AG20-IMP-001)" ;
+    qa:description """Original finding: dispatch_send in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:63-72 branched on `request.acknowledges_message_id.is_some()` into a separate ack path (ack_mail_with_runtime_and_post_send_emitter) before any single canonical routing decision, violating the AG.18 acceptance criterion (one canonical routing decision, not a send-vs-ack fork). AG.19's own QA (ATM-QA-AG19-003) and AG.20's own QA (AG20-IMP-001) each independently re-confirmed the identical fork, byte-for-byte unchanged, on their respective branches -- making this the single most-repeated cross-sprint finding in the AG ladder to date.
+
+AG.21 (feature/pAG-s21-collapse-dispatch-routing, commit 56fdcdef, dev in progress -- this sprint's stated job is to delete this exact fork) was checked directly for this pass. dispatch_send in dispatch_delivery.rs (lines 56-102) no longer contains the acknowledges_message_id check; it now routes purely on route_send_request()'s Local/Remote (a legitimate, necessary host-routing decision, not the illegitimate send/ack fork), and calls a single function, execute_outbound_send_with_runtime_and_post_send_emitter, for all sends. However, that function itself (crates/atm-core/src/send/mod.rs:365-383) contains, verbatim:
+
+    if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
+        return ack_mail_with_runtime_and_post_send_emitter(...).map(SendResponseEnvelope::Acknowledged);
+    }
+    send_mail_with_runtime_and_post_send_emitter(request, ...).map(SendResponseEnvelope::Sent)
+
+This is the identical fork, relocated one layer down from crates/atm-daemon into crates/atm-core, still executed before any canonical routing/send decision is made. AG.21 has moved the defect, not collapsed it -- the daemon-level symptom is gone but the underlying architectural violation (two divergent execution paths selected by a boolean flag check rather than a single canonical decision) persists and has simply migrated across the crate boundary into atm-core's send module.
+
+Context note: the current integrate/phase-AG tip (commit 2cf19779, on an independent, more-advanced line not yet reachable from the AG.18-21 ladder) has resolved the equivalent decision structurally: RequestEnvelope::Send is itself typed as SendRequestEnvelope::Compose vs SendRequestEnvelope::Acknowledge, decided at parse/construction time rather than via a runtime boolean check inside a shared function, and dispatch() matches on that type directly. This is offered as an existing, in-repo exemplar of what a genuine architectural fix looks like, though it lives on a divergent line and does not itself close this finding for the AG.18-21 ladder.""" ;
+    qa:sweepScope "repeatable-pattern sweep across AG.18-AG.21 worktrees for the acknowledges_message_id-based fork in dispatch_send (and its relocated successor)" .
+
+# --- Per-worktree sweep results ---
+
+qa:AG18-QA-003-sweep-s18
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:branch "feature/pAG-s18-unify-envelope-handler" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+    qa:commitSha "70cce09715406773fe7376fa4708a979dd61e2cd" ;
+    qa:status "open" ;
+    qa:note "Fork present verbatim in dispatch_send at dispatch_delivery.rs:63 (if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none()) before calling ack_mail_with_runtime_and_post_send_emitter." .
+
+qa:AG18-QA-003-sweep-s19
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:branch "feature/pAG-s19-delete-remote-ack-path" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+    qa:commitSha "59225e0ff54d6f418f9e8c6b9e1c26a7d63dd08f" ;
+    qa:status "open" ;
+    qa:note "Fork unchanged from s18 despite sprint title implying remote-ack-path deletion; re-confirmed independently by that sprint's own QA as ATM-QA-AG19-003." .
+
+qa:AG18-QA-003-sweep-s20
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:commitSha "50572166a6a8cce117253e8603f7eaa7ef0dcc1f" ;
+    qa:status "open" ;
+    qa:note "Fork unchanged from s19; sprint scope (deferred policy relocation out of transport) did not touch dispatch_send. Re-confirmed independently by that sprint's own QA as AG20-IMP-001." .
+
+qa:AG18-QA-003-sweep-s21
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:worktree "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:commitSha "56fdcdef8ac3f86d9f23b2eccdc1f879f20c1f79" ;
+    qa:status "open-relocated" ;
+    qa:note "Dev in progress. The daemon-layer fork at dispatch_delivery.rs is gone (dispatch_send now routes purely on Local/Remote via route_send_request and calls one function unconditionally), but the same acknowledges_message_id.is_some() && source_remote_host.is_none() check now lives inside crates/atm-core/src/send/mod.rs:371 (execute_outbound_send_with_runtime_and_post_send_emitter), branching to ack_mail_with_runtime_and_post_send_emitter vs send_mail_with_runtime_and_post_send_emitter before any single canonical decision. Sprint's stated job (collapse dispatch routing / delete this fork) is not complete -- the defect was moved across the atm-daemon/atm-core boundary, not eliminated." .
+
+qa:AG18-QA-003-sweep-s22-25
+    a qa:SweepResult ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:branch "feature/pAG-s22..s25" ;
+    qa:commitSha "03c873fc" ;
+    qa:status "not-yet-applicable" ;
+    qa:note "Sprints not started (all at common base commit); no real-code sweep performed per triage_mode=initial_pass scope. Flag for re-sweep once these sprints have real commits." .
+
+# --- Promotion determination ---
+
+qa:AG18-QA-003-promotion
+    a qa:PromotionDecision ;
+    qa:finding qa:AG18-QA-003 ;
+    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:rationale """All four worktrees with real commits (AG.18-AG.21) exhibit the same underlying defect: a boolean acknowledges_message_id check forks execution into a separate ack path before any single canonical send/route decision is made. AG.18 through AG.20 carry the fork verbatim and unchanged in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs, independently re-confirmed by each sprint's own QA (ATM-QA-AG19-003, AG20-IMP-001) in addition to the original three reviewers (RBQA-F001, ARCH-004, ATM-QA-003). AG.21 -- the sprint explicitly tasked with collapsing this fork -- removed it from the daemon layer but relocated the identical check into crates/atm-core/src/send/mod.rs, one layer down; the architectural violation is unresolved, only moved. Per repeatable-pattern policy, the fix is dispatched once to the highest (latest) branch with real commits -- feature/pAG-s21-collapse-dispatch-routing -- since it is both the most-evolved state of the defect and the branch whose own mandate is to close it; AG.18-AG.20 close via merge-forward once AG.21 lands a genuine single-decision fix (e.g. deciding ack-vs-send once at request construction/parse time, mirroring the SendRequestEnvelope::Compose/Acknowledge type-level split already present on the independent, more-advanced integrate/phase-AG tip at commit 2cf19779 -- offered here as an in-repo exemplar, not as a mergeable fix for this ladder). AG.22-AG.25 are not yet started and are excluded from this sweep; re-sweep required once they carry real commits.""" .

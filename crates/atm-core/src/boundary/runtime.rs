@@ -1,9 +1,8 @@
 use crate::error::{AtmError, AtmErrorCode};
 use crate::protocol::RequestEnvelope;
-use crate::schema::AtmMessageId;
+use crate::send::RemoteTargetHost;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 use super::{MessageKey, sealed};
 
@@ -12,7 +11,7 @@ pub struct RemoteReplayStateRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub message_key: MessageKey,
-    pub peer_addr: SocketAddr,
+    pub remote_host: RemoteTargetHost,
     pub request: RequestEnvelope,
     pub recorded_at: IsoTimestamp,
     pub expires_at: IsoTimestamp,
@@ -22,16 +21,6 @@ pub struct RemoteReplayStateRecord {
     pub last_attempt_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error: Option<AtmErrorCode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receipt_sender_team: Option<TeamName>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receipt_sender_agent: Option<AgentName>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receipt_message_id: Option<AtmMessageId>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receipt_target: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receipt_remote_host: Option<String>,
 }
 
 /// BOUNDARY-RemoteReplayStore — see docs/atm-core/boundaries.md.

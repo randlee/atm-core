@@ -7,7 +7,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
-use atm_core::ack::{AckOutcome, AckRequest};
+use atm_core::ack::{AckOutcome, AckRequest, prepare_ack_send_request};
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
@@ -18,8 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope,
+    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, into_ack_outcome,
+    into_send_outcome,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -271,10 +271,8 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        match into_send_outcome(self.send_request(RequestEnvelope::Send(Box::new(request)))?) {
+            Ok(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
                     action: action_name("send"),
@@ -295,15 +293,15 @@ impl<'a> CliComposition<'a> {
                 });
                 Ok(outcome)
             }
-            other => Err(unexpected_response("send", other)),
+            Err(other) => Err(unexpected_response("send", *other)),
         }
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            request,
-        )))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+        match into_ack_outcome(self.send_request(RequestEnvelope::Send(Box::new(
+            prepare_ack_send_request(request)?,
+        )))?) {
+            Ok(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),
@@ -320,7 +318,7 @@ impl<'a> CliComposition<'a> {
                 });
                 Ok(outcome)
             }
-            other => Err(unexpected_response("ack", other)),
+            Err(other) => Err(unexpected_response("ack", *other)),
         }
     }
 

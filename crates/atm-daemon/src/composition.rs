@@ -11,7 +11,7 @@ use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 use crate::worker_support::retain_join_helper;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    peer_transport::PeerTransportConfig,
+    peer_transport::{PeerTransportConfig, delivery::DaemonRemoteEndpointResolver},
 };
 use atm_core::boundary::{RemoteReplayStore, RequestDispatcher};
 use atm_core::error::AtmError;
@@ -131,6 +131,7 @@ impl RuntimeComposition {
         let server_transport = build_server_transport(&observability);
         let peer_transport_runtime = build_peer_transport_runtime(
             runtime_assembly.remote_replay_store.clone(),
+            runtime_assembly.peer_interface_config_store.clone(),
             runtime_assembly.allowed_host_store.clone(),
             runtime_assembly.peer_security_store.clone(),
             PeerTransportConfig::default(),
@@ -463,14 +464,20 @@ fn build_host_ownership_adapter(
 
 fn build_peer_transport_runtime(
     replay_store: Arc<dyn RemoteReplayStore>,
+    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
     allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
     peer_security_store: Arc<dyn atm_storage::PeerSecurityStore + Send + Sync>,
     peer_transport_config: PeerTransportConfig,
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
 ) -> PeerTransportRuntime {
-    PeerTransportRuntime::new_with_observability(
+    let endpoint_resolver = Arc::new(DaemonRemoteEndpointResolver::new(
+        peer_interface_config_store,
+        peer_transport_config.peer_listen_addr,
+    ));
+    PeerTransportRuntime::new_with_endpoint_resolver(
         Some(replay_store),
+        Some(endpoint_resolver),
         Some(allowed_host_store),
         Some(peer_security_store),
         peer_transport_config,
