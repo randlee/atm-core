@@ -61,6 +61,7 @@ git rev-parse --verify "$BASE" >/dev/null 2>&1 || fail "missing base ref: $BASE"
 git rev-parse --verify "$HEAD_REF" >/dev/null 2>&1 || fail "missing head ref: $HEAD_REF"
 
 info "running delete-list denylist gate"
+ATM_ARCH_ACTIVE_SPRINT="$SPRINT" \
 cargo test -p atm-architecture --test boundary_enforcement \
   ag_delete_lists_must_have_no_forbidden_symbols_or_workaround_paths
 

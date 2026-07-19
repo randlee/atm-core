@@ -121,7 +121,8 @@ fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
 
 #[test]
 fn ag_delete_lists_must_have_no_forbidden_symbols_or_workaround_paths() {
-    let violations = sprint_delete_manifests()
+    let manifests = active_sprint_delete_manifests(sprint_delete_manifests());
+    let violations = manifests
         .into_iter()
         .flat_map(|manifest| scan_delete_manifest(&manifest))
         .collect::<Vec<_>>();
@@ -131,6 +132,32 @@ fn ag_delete_lists_must_have_no_forbidden_symbols_or_workaround_paths() {
         "AG delete-list enforcement failed:\n{}",
         violations.join("\n")
     );
+}
+
+fn active_sprint_delete_manifests(
+    manifests: Vec<SprintDeleteManifest>,
+) -> Vec<SprintDeleteManifest> {
+    let sprint = env::var_os(ACTIVE_SPRINT_ENV);
+    select_delete_manifests(manifests, sprint.as_deref())
+}
+
+fn select_delete_manifests(
+    manifests: Vec<SprintDeleteManifest>,
+    active_sprint: Option<&std::ffi::OsStr>,
+) -> Vec<SprintDeleteManifest> {
+    let Some(sprint) = active_sprint else {
+        return manifests;
+    };
+    let sprint = sprint.to_string_lossy();
+    let matching = manifests
+        .into_iter()
+        .filter(|manifest| manifest.sprint == sprint)
+        .collect::<Vec<_>>();
+    assert!(
+        !matching.is_empty(),
+        "{ACTIVE_SPRINT_ENV} is set to {sprint}, but no delete-list manifest exists"
+    );
+    matching
 }
 
 #[test]
@@ -510,6 +537,34 @@ struct GitNumstatRow {
     additions: usize,
     deletions: usize,
     path: String,
+}
+
+#[test]
+fn delete_list_gate_scopes_to_the_active_sprint() {
+    let manifests = vec![
+        SprintDeleteManifest {
+            sprint: "AG.18".to_string(),
+            description: "fixture".to_string(),
+            scan_files: Vec::new(),
+            allowed_changed_files: Vec::new(),
+            min_net_crates_loc: -1,
+            forbidden_literals: Vec::new(),
+            forbidden_regexes: Vec::new(),
+        },
+        SprintDeleteManifest {
+            sprint: "AG.19".to_string(),
+            description: "fixture".to_string(),
+            scan_files: Vec::new(),
+            allowed_changed_files: Vec::new(),
+            min_net_crates_loc: -1,
+            forbidden_literals: Vec::new(),
+            forbidden_regexes: Vec::new(),
+        },
+    ];
+
+    let active = select_delete_manifests(manifests, Some(std::ffi::OsStr::new("AG.19")));
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].sprint, "AG.19");
 }
 
 #[test]
