@@ -1,0 +1,29 @@
+---
+name: ruthless-boundary-qa-assignment
+version: 1.0.0
+description: Render a fenced-JSON assignment for ruthless-boundary-qa.
+format: json
+required_variables:
+  - review_mode
+  - worktree_path
+  - review_targets
+optional_variables:
+  - reference_docs
+  - changed_files
+  - triage_records
+  - notes
+defaults:
+  reference_docs: []
+  changed_files: []
+  triage_records: []
+  notes: ""
+---
+{
+  "review_mode": "{% if review_mode == "plan" %}doc_review{% elif review_mode == "phase_end" %}phase_end{% else %}sprint_review{% endif %}",
+  "worktree_path": "{{ worktree_path }}",
+  "review_targets": [{% for target in review_targets %}"{{ target }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "reference_docs": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "changed_files": [{% for file in changed_files %}"{{ file }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "triage_records": [{% for record in triage_records %}"{{ record }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "notes": "{{ notes }}"
+}

@@ -104,6 +104,7 @@ TODO-specific rule:
 6. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
+   - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2` for QA-1, docs-only plan review, and phase-ending review only
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
@@ -133,6 +134,7 @@ TODO-specific rule:
 For implementation QA-1 in this Rust repo:
 - always run `req-qa`
 - always run `arch-qa`
+- always run `ruthless-boundary-qa`
 - always run `rust-qa-agent`
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
@@ -143,6 +145,7 @@ For QA-2 and later rechecks of implementation work:
 - always run `req-qa`
 - always run `arch-qa`
 - always run `rust-qa-agent`
+- do not run `ruthless-boundary-qa`
 - do not run `rust-best-practices-agent`
 - do not run `rust-service-hardening-agent`
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
@@ -151,6 +154,7 @@ For QA-2 and later rechecks of implementation work:
 For phase-ending QA:
 - always run `req-qa`
 - always run `arch-qa`
+- always run `ruthless-boundary-qa`
 - always run `rust-qa-agent`
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
@@ -159,6 +163,7 @@ For phase-ending QA:
 For docs-only plan review (`review_mode: plan`):
 - run `req-qa`
 - run `arch-qa`
+- run `ruthless-boundary-qa`
 - always run `rust-best-practices-agent`
 - always run `rust-service-hardening-agent`
 - do not run `rust-qa-agent` for docs-only review
@@ -189,10 +194,10 @@ For PR updates:
 Use concise ATM summaries to team-lead.
 
 PASS format:
-`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-qa PASS, arch-qa PASS, rust-qa PASS; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
+`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-qa PASS, arch-qa PASS, ruthless-boundary-qa PASS|SKIPPED, rust-qa PASS|SKIPPED; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
 
 FAIL format:
-`Sprint <id> QA: FAIL — deliverables <complete>/<total> (<percent>%); blockers: <ids>; req-qa=<status>; arch-qa=<status>; rust-qa=<status>; rust-best-practices=<status>; rust-service-hardening=<status>; flaky-test-qa=<status>; PR #<n>; worktree <path>`
+`Sprint <id> QA: FAIL — deliverables <complete>/<total> (<percent>%); blockers: <ids>; req-qa=<status>; arch-qa=<status>; ruthless-boundary-qa=<status>; rust-qa=<status>; rust-best-practices=<status>; rust-service-hardening=<status>; flaky-test-qa=<status>; PR #<n>; worktree <path>`
 
 After a FAIL verdict, include a short flat list of blocking findings with:
 - finding id
