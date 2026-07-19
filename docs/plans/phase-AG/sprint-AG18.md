@@ -25,6 +25,10 @@ estimated_scope: medium
 Delete the duplicate message-semantic abstraction split so send and ack both
 travel as one canonical request envelope through one handler family.
 
+All line citations in this sprint are pre-ladder baseline references and must
+be re-resolved against the actual branch tip immediately before execution; run
+the existing `rg -n ...` validation first as the anti-staleness check.
+
 ## Hard Dependencies
 
 - none; this sprint lands first and is the required base for AG.19-AG.25
@@ -66,9 +70,9 @@ travel as one canonical request envelope through one handler family.
 - `crates/atm-daemon-client/src/rpc.rs:223-305`
   - delete compose-specific request encode/decode tests and replace them with
     one canonical send-shaped request path
-- `crates/atm-daemon/src/peer_transport/server.rs:28-37`
-  - remove compose-only peer-origin annotation logic; inbound annotation must
-    apply to the single retained send-shaped request
+- `crates/atm-daemon/src/peer_transport.rs`
+  - remove any compose-only peer transport annotation or request-shape logic;
+    inbound handling must apply to the single retained send-shaped request
 - test surfaces to rewrite after deletion:
   - `crates/atm-daemon/src/tests/runtime_root.rs:76-76,129-129,180-180`
   - `crates/atm-daemon/src/tests/runtime_root.rs:255-255,333-335,378-378,472-476`
@@ -182,8 +186,9 @@ travel as one canonical request envelope through one handler family.
   - one send-shaped inbound annotation path that sets `source_remote_host`
     without caring about old compose/ack envelope families
 - delete:
-  - `crates/atm-daemon/src/peer_transport/server.rs:32-36`
-    - compose-only match guard used for source-host annotation
+  - `crates/atm-daemon/src/peer_transport.rs`
+    - compose-only peer transport match/annotation logic used for source-host
+      handling
 
 ### Daemon-client / RPC layer
 
@@ -203,14 +208,15 @@ travel as one canonical request envelope through one handler family.
 
 ### Derived helper code to revisit after primary deletions
 
-- `crates/atm-daemon/src/peer_transport/replay_persistence.rs:121-123`
-  - currently assumes persisted requests are compose-shaped; once AG.18 removes
-    the split, this helper must either use the single retained request type or
-    be queued for deletion by the later replay-policy sprint
-- `crates/atm-daemon/src/peer_transport/delivery.rs:176,210`
-  - currently wraps replay/immediate sends in compose-shaped requests; once the
-    split is removed this must be rewritten to the single retained request
-    representation
+- `crates/atm-daemon/src/peer_transport.rs:288-338`
+  - replay persistence helpers currently assume the old compose-shaped request
+    family; once AG.18 removes the split, they must either use the retained
+    single request type or be queued for deletion by the later replay-policy
+    sprint
+- `crates/atm-daemon/src/peer_transport.rs:733-741`
+  - remote send currently persists outcome-unknown requests through the same
+    flat peer transport file; once the split is removed this path must use the
+    retained single request representation only
 
 ### Test / harness contract layer
 
@@ -225,10 +231,10 @@ travel as one canonical request envelope through one handler family.
     - `crates/atm-daemon/src/tests/runtime_root.rs:255-255,333-335,378-378,472-476`
     - `crates/atm-graft/src/lib.rs:605-661`
     - `crates/atm-daemon/src/tests_post_send_graft_warning.rs:123,160,184,258`
-    - `crates/atm-daemon/src/peer_transport/tests/harness.rs:67,126,248,320,375,511,670,878`
-    - `crates/atm-daemon/src/peer_transport/replay_persistence.rs:121-123`
-      because replay finalization still assumes the old compose-only request
-      family
+    - `crates/atm-daemon/src/peer_transport.rs:1117-1468`
+    - `crates/atm-daemon/src/peer_transport.rs:1380-1468`
+      because the flat peer transport test/replay surfaces still encode the
+      old compose-only request family assumptions
 
 ## Logic / Branches / State That Do Not Belong
 
