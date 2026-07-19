@@ -59,11 +59,31 @@ pub(super) fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
 
 impl boundary::sealed::Sealed for PeerClientTransport {}
 
+#[cfg(test)]
+use atm_core::boundary::ClientTransport;
+
+#[cfg(test)]
 impl ClientTransport for PeerClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let endpoint = self
-            .endpoint
-            .ok_or_else(remote_peer_endpoint_not_configured_error)?;
+        let endpoint =
+            self.test_connection_target.or_else(|| {
+                self.endpoint_resolver.as_ref().and_then(|resolver| {
+                    resolver
+                        .resolve_endpoint(
+                            &RemoteTargetHost::parse("127.0.0.1")
+                                .expect("static loopback host parses"),
+                            None,
+                        )
+                        .ok()
+                })
+            }).ok_or_else(|| {
+                AtmError::daemon_unavailable(
+                    "peer transport test client has no direct endpoint target configured",
+                )
+                .with_recovery(
+                    "Construct the test peer transport with an explicit target endpoint before issuing direct client sends.",
+                )
+            })?;
         self.send_to_endpoint(endpoint, request)
     }
 }

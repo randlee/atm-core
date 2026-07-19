@@ -1,9 +1,9 @@
 use crate::error::{AtmError, AtmErrorCode};
 use crate::protocol::RequestEnvelope;
 use crate::schema::AtmMessageId;
+use crate::send::RemoteTargetHost;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 use super::{MessageKey, sealed};
 
@@ -12,7 +12,7 @@ pub struct RemoteReplayStateRecord {
     pub team: TeamName,
     pub agent: AgentName,
     pub message_key: MessageKey,
-    pub peer_addr: SocketAddr,
+    pub remote_host: RemoteTargetHost,
     pub request: RequestEnvelope,
     pub recorded_at: IsoTimestamp,
     pub expires_at: IsoTimestamp,

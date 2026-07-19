@@ -1,11 +1,12 @@
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use atm_core::boundary::{MessageKey, RemoteReplayStateRecord, RemoteReplayStore};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{RemoteDeliveryReceiptStatus, finalize_remote_delivery_receipt_with_runtime};
+use atm_core::send::{
+    RemoteDeliveryReceiptStatus, RemoteTargetHost, finalize_remote_delivery_receipt_with_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::with_default_local_service_runtime;
 
@@ -18,7 +19,7 @@ use crate::SubsystemObservability;
 pub(crate) fn persist_replay_request(
     retry_budget: std::time::Duration,
     replay_store: Option<&Arc<dyn RemoteReplayStore>>,
-    endpoint: SocketAddr,
+    remote_host: RemoteTargetHost,
     team: TeamName,
     agent: AgentName,
     message_key: MessageKey,
@@ -41,7 +42,7 @@ pub(crate) fn persist_replay_request(
         team,
         agent,
         message_key,
-        peer_addr: endpoint,
+        remote_host,
         request,
         recorded_at,
         expires_at,
@@ -89,7 +90,7 @@ pub(crate) fn complete_replay_record(
     replay_store.delete(&record.team, &record.agent, &record.message_key)?;
     tracing::info!(
         message_key = %record.message_key,
-        peer_addr = %record.peer_addr,
+        remote_host = %record.remote_host.as_str(),
         replay_attempt_count = record.attempt_count,
         "daemon remote replay delivered successfully"
     );
@@ -131,7 +132,7 @@ pub(crate) fn retain_replay_record(
         action = "resume_replay",
         outcome = "skipped",
         message_key = %record.message_key,
-        peer_addr = %record.peer_addr,
+        remote_host = %record.remote_host.as_str(),
         replay_attempt_count = record.attempt_count,
         error_code = %error.code,
         error_message = %error.message,

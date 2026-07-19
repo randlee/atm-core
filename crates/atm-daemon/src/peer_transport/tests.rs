@@ -1,6 +1,5 @@
 use super::{
     PEER_REQUEST_DEADLINE, PeerClientTransport, PeerTransportConfig, PeerTransportRuntime,
-    remote_peer_endpoint_not_configured_error,
 };
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::runtime_health::DaemonRequestDispatcher;

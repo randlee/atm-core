@@ -1,4 +1,5 @@
 use super::*;
+use crate::peer_transport::delivery::DaemonRemoteEndpointResolver;
 
 fn canonical_ack_request(
     home_dir: &std::path::Path,
@@ -644,8 +645,13 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         .expect("enable interface");
 
     let sender_status_cache = RuntimeStatusCache::new();
-    let sender_transport = PeerTransportRuntime::new_with_observability(
+    let sender_endpoint_resolver = Arc::new(DaemonRemoteEndpointResolver::new(
+        assembly.peer_interface_config_store.clone(),
+        None,
+    ));
+    let sender_transport = PeerTransportRuntime::new_with_endpoint_resolver(
         Some(assembly.remote_replay_store.clone()),
+        Some(sender_endpoint_resolver),
         Some(assembly.allowed_host_store_arc()),
         None,
         PeerTransportConfig::default(),

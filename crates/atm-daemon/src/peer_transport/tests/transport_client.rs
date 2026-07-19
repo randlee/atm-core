@@ -182,11 +182,13 @@ fn persist_replay_request_requires_configured_replay_store_with_recovery() {
     let client = PeerClientTransport::new_with_observability(
         None,
         None,
-        PeerTransportConfig::default(),
+        None,
         SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
     );
     let error = client
-        .persist_replay_request(
+        .persist_replay_request_to_endpoint(
+            Duration::from_secs(60),
+            atm_core::send::RemoteTargetHost::parse("127.0.0.1").expect("remote host"),
             team.clone(),
             agent.clone(),
             MessageKey::new("atm:test-remote-replay-store-missing").expect("message key"),
@@ -197,6 +199,11 @@ fn persist_replay_request_requires_configured_replay_store_with_recovery() {
                 observed_at: IsoTimestamp::now(),
                 activity: HeartbeatActivity::Idle,
             }),
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .expect_err("missing replay store should fail closed");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
@@ -206,36 +213,28 @@ fn persist_replay_request_requires_configured_replay_store_with_recovery() {
 #[test]
 fn persist_replay_request_missing_endpoint_matches_send_surface_contract() {
     let tempdir = TempDir::new().expect("tempdir");
-    let team = test_team_name();
-    let agent = test_sender_name();
     let replay_store =
         atm_runtime::sqlite_remote_replay_store_for_test(tempdir.path().join("mail.db"))
             .expect("replay store");
     let client = PeerClientTransport {
-        endpoint: None,
-        config: PeerTransportConfig::default(),
         replay_store: Some(replay_store),
+        endpoint_resolver: None,
         peer_security_store: None,
+        test_connection_target: None,
         codec: atm_core::protocol::JsonAtmProtocolCodec,
         observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
     };
     let persist_error = client
-        .persist_replay_request(
-            team.clone(),
-            agent.clone(),
-            MessageKey::new("atm:test-remote-peer-endpoint-missing").expect("message key"),
-            RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-                team,
-                member: agent,
-                pid: 43,
-                observed_at: IsoTimestamp::now(),
-                activity: HeartbeatActivity::Idle,
-            }),
+        .resolve_replay_endpoint(
+            &atm_core::send::RemoteTargetHost::parse("127.0.0.1").expect("remote host"),
         )
-        .expect_err("missing endpoint should fail closed");
-    let send_error = remote_peer_endpoint_not_configured_error();
-    assert_eq!(persist_error.code, send_error.code);
-    assert_eq!(persist_error.recovery, send_error.recovery);
+        .expect_err("missing resolver should fail closed");
+    assert_eq!(persist_error.code, AtmErrorCode::DaemonUnavailable);
+    assert!(
+        persist_error
+            .message
+            .contains("remote endpoint resolution is unavailable")
+    );
 }
 
 #[test]

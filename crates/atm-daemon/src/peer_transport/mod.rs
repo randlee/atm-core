@@ -6,13 +6,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 #[cfg(test)]
+use atm_core::boundary::ClientTransport;
+#[cfg(test)]
 use atm_core::boundary::RemoteReplayStateRecord;
-use atm_core::boundary::{
-    self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStore, RequestDispatcher,
-};
+use atm_core::boundary::{self, AtmProtocol, MessageKey, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::AtmMessageId;
+use atm_core::send::RemoteTargetHost;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecurityStore};
 
@@ -38,7 +39,7 @@ use client_helpers::{
     peer_read_deadline_error, peer_response_decode_error, peer_response_id_mismatch_error,
     peer_write_deadline_error,
 };
-use config_helpers::remote_peer_endpoint_not_configured_error;
+use delivery::RemoteEndpointResolver;
 use security::load_peer_security_mode;
 use server::PeerServerTransport;
 use types::ReplayResumeSummary;
@@ -61,6 +62,26 @@ const PEER_LISTENER_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 const PEER_ACCEPT_ERROR_RETRY_BACKOFF: Duration = Duration::from_millis(200);
 const MAX_CONCURRENT_PEER_CONNECTIONS: usize = 64;
 const MAX_TRACKED_PEER_DISPATCH_HANDLES: usize = 256;
+
+#[cfg(test)]
+#[derive(Debug)]
+struct StaticRemoteEndpointResolver {
+    endpoint: SocketAddr,
+}
+
+#[cfg(test)]
+impl boundary::sealed::Sealed for StaticRemoteEndpointResolver {}
+
+#[cfg(test)]
+impl RemoteEndpointResolver for StaticRemoteEndpointResolver {
+    fn resolve_endpoint(
+        &self,
+        _remote_host: &RemoteTargetHost,
+        _bound_addr_hint: Option<SocketAddr>,
+    ) -> Result<SocketAddr, delivery::CrossHostDeliveryInfraError> {
+        Ok(self.endpoint)
+    }
+}
 
 trait PeerAuthorizationPolicy: Send + Sync {
     fn authorize(&self, peer_addr: SocketAddr) -> Result<(), AtmError>;
@@ -147,10 +168,11 @@ pub(crate) struct PeerTransportConfig {
 
 #[derive(Clone)]
 struct PeerClientTransport {
-    endpoint: Option<SocketAddr>,
-    config: PeerTransportConfig,
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
+    endpoint_resolver: Option<Arc<dyn RemoteEndpointResolver + Send + Sync>>,
     peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
+    #[cfg(test)]
+    test_connection_target: Option<SocketAddr>,
     codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
 }
@@ -158,11 +180,16 @@ struct PeerClientTransport {
 impl std::fmt::Debug for PeerClientTransport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PeerClientTransport")
-            .field("endpoint", &self.endpoint)
-            .field("config", &self.config)
             .field(
                 "replay_store",
                 &self.replay_store.as_ref().map(|_| "dyn RemoteReplayStore"),
+            )
+            .field(
+                "endpoint_resolver",
+                &self
+                    .endpoint_resolver
+                    .as_ref()
+                    .map(|_| "dyn RemoteEndpointResolver"),
             )
             .field(
                 "peer_security_store",
@@ -171,6 +198,7 @@ impl std::fmt::Debug for PeerClientTransport {
                     .as_ref()
                     .map(|_| "dyn PeerSecurityStore"),
             )
+            .field("test_connection_target", &"<cfg(test)>")
             .field("codec", &"JsonAtmProtocolCodec")
             .field("observability", &self.observability)
             .finish()
@@ -180,15 +208,16 @@ impl std::fmt::Debug for PeerClientTransport {
 impl PeerClientTransport {
     fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        endpoint_resolver: Option<Arc<dyn RemoteEndpointResolver + Send + Sync>>,
         peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
-        config: PeerTransportConfig,
         observability: SubsystemObservability,
     ) -> Self {
         Self {
-            endpoint: None,
-            config,
             replay_store,
+            endpoint_resolver,
             peer_security_store,
+            #[cfg(test)]
+            test_connection_target: None,
             codec: JsonAtmProtocolCodec,
             observability,
         }
@@ -196,17 +225,16 @@ impl PeerClientTransport {
 
     #[cfg(test)]
     fn new_for_test(
-        endpoint: SocketAddr,
-        config: PeerTransportConfig,
         replay_db_path: PathBuf,
+        endpoint_resolver: Option<Arc<dyn RemoteEndpointResolver + Send + Sync>>,
     ) -> Self {
         let replay_store =
             atm_runtime::sqlite_remote_replay_store_for_test(replay_db_path).expect("replay store");
         Self {
-            endpoint: Some(endpoint),
-            config,
             replay_store: Some(replay_store),
+            endpoint_resolver,
             peer_security_store: None,
+            test_connection_target: None,
             codec: JsonAtmProtocolCodec,
             observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         }
@@ -244,7 +272,8 @@ impl PeerClientTransport {
                 purged_expired = purged_expired.saturating_add(1);
                 continue;
             }
-            match self.send_to_endpoint(record.peer_addr, record.request.clone()) {
+            let endpoint = self.resolve_replay_endpoint(&record.remote_host)?;
+            match self.send_to_endpoint(endpoint, record.request.clone()) {
                 Ok(_) => {
                     if complete_replay_record(replay_store.as_ref(), &self.observability, &record)?
                     {
@@ -282,33 +311,21 @@ impl PeerClientTransport {
         })
     }
 
-    #[allow(
-        dead_code,
-        reason = "retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch"
-    )]
-    fn persist_replay_request(
+    fn resolve_replay_endpoint(
         &self,
-        team: TeamName,
-        agent: AgentName,
-        message_key: MessageKey,
-        request: RequestEnvelope,
-    ) -> Result<(), AtmError> {
-        let endpoint = self
-            .endpoint
-            .ok_or_else(remote_peer_endpoint_not_configured_error)?;
-        self.persist_replay_request_to_endpoint(
-            Duration::from_secs(60),
-            endpoint,
-            team,
-            agent,
-            message_key,
-            request,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        remote_host: &RemoteTargetHost,
+    ) -> Result<SocketAddr, AtmError> {
+        let resolver = self.endpoint_resolver.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "remote endpoint resolution is unavailable because no resolver boundary is configured",
+            )
+            .with_recovery(
+                "Repair the daemon runtime assembly so remote endpoint resolution is available before retrying deferred remote delivery.",
+            )
+        })?;
+        resolver
+            .resolve_endpoint(remote_host, None)
+            .map_err(|error| error.into_atm_error())
     }
 
     #[expect(
@@ -318,7 +335,7 @@ impl PeerClientTransport {
     fn persist_replay_request_to_endpoint(
         &self,
         retry_budget: Duration,
-        endpoint: SocketAddr,
+        remote_host: RemoteTargetHost,
         team: TeamName,
         agent: AgentName,
         message_key: MessageKey,
@@ -332,7 +349,7 @@ impl PeerClientTransport {
         crate::remote_replay::persist_replay_request(
             retry_budget,
             self.replay_store.as_ref(),
-            endpoint,
+            remote_host,
             team,
             agent,
             message_key,
@@ -539,6 +556,33 @@ impl PeerTransportRuntime {
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
     ) -> Self {
+        #[cfg(test)]
+        let endpoint_resolver = config.peer_listen_addr.map(|endpoint| {
+            Arc::new(StaticRemoteEndpointResolver { endpoint })
+                as Arc<dyn RemoteEndpointResolver + Send + Sync>
+        });
+        #[cfg(not(test))]
+        let endpoint_resolver = None;
+        Self::new_with_endpoint_resolver(
+            replay_store,
+            endpoint_resolver,
+            allowed_host_store,
+            peer_security_store,
+            config,
+            observability,
+            status_cache,
+        )
+    }
+
+    pub(crate) fn new_with_endpoint_resolver(
+        replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        endpoint_resolver: Option<Arc<dyn RemoteEndpointResolver + Send + Sync>>,
+        allowed_host_store: Option<Arc<dyn AllowedHostStore + Send + Sync>>,
+        peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
+        config: PeerTransportConfig,
+        observability: SubsystemObservability,
+        status_cache: RuntimeStatusCache,
+    ) -> Self {
         let authorization_policy: Arc<dyn PeerAuthorizationPolicy> = allowed_host_store
             .map(|store| {
                 Arc::new(SqliteAllowedHostAuthorizationPolicy::new(store))
@@ -555,8 +599,8 @@ impl PeerTransportRuntime {
             )),
             client: PeerClientTransport::new_with_observability(
                 replay_store,
+                endpoint_resolver,
                 peer_security_store,
-                config,
                 observability,
             ),
         }
@@ -599,7 +643,7 @@ impl PeerTransportRuntime {
     pub(crate) fn persist_remote_request_for_retry(
         &self,
         retry_budget: Duration,
-        endpoint: SocketAddr,
+        remote_host: RemoteTargetHost,
         team: TeamName,
         agent: AgentName,
         message_key: MessageKey,
@@ -612,7 +656,7 @@ impl PeerTransportRuntime {
     ) -> Result<(), AtmError> {
         self.client.persist_replay_request_to_endpoint(
             retry_budget,
-            endpoint,
+            remote_host,
             team,
             agent,
             message_key,
@@ -670,9 +714,11 @@ impl PeerTransportRuntime {
     #[cfg(test)]
     pub(crate) fn new_for_test(
         endpoint: SocketAddr,
-        config: PeerTransportConfig,
+        _config: PeerTransportConfig,
         replay_db_path: PathBuf,
     ) -> Self {
+        let endpoint_resolver: Arc<dyn RemoteEndpointResolver + Send + Sync> =
+            Arc::new(StaticRemoteEndpointResolver { endpoint });
         Self {
             server: Arc::new(PeerServerTransport::new(
                 None,
@@ -681,14 +727,14 @@ impl PeerTransportRuntime {
                 Arc::new(AllowAllPeerAuthorizationPolicy),
                 None,
             )),
-            client: PeerClientTransport::new_for_test(endpoint, config, replay_db_path),
+            client: PeerClientTransport::new_for_test(replay_db_path, Some(endpoint_resolver)),
         }
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_test_with_security_store(
         endpoint: SocketAddr,
-        config: PeerTransportConfig,
+        _config: PeerTransportConfig,
         replay_db_path: PathBuf,
         peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     ) -> Self {
@@ -703,10 +749,10 @@ impl PeerTransportRuntime {
                 Some(peer_security_store.clone()),
             )),
             client: PeerClientTransport {
-                endpoint: Some(endpoint),
-                config,
                 replay_store: Some(replay_store),
+                endpoint_resolver: Some(Arc::new(StaticRemoteEndpointResolver { endpoint })),
                 peer_security_store: Some(peer_security_store),
+                test_connection_target: Some(endpoint),
                 codec: JsonAtmProtocolCodec,
                 observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
             },
@@ -731,9 +777,6 @@ impl PeerTransportRuntime {
         observability: SubsystemObservability,
         status_cache: RuntimeStatusCache,
     ) -> Self {
-        let config = PeerTransportConfig {
-            peer_listen_addr: Some(listen_addr),
-        };
         Self {
             server: Arc::new(PeerServerTransport::new(
                 Some(listen_addr),
@@ -742,7 +785,7 @@ impl PeerTransportRuntime {
                 Arc::new(AllowAllPeerAuthorizationPolicy),
                 None,
             )),
-            client: PeerClientTransport::new_with_observability(None, None, config, observability),
+            client: PeerClientTransport::new_with_observability(None, None, None, observability),
         }
     }
 
@@ -753,9 +796,6 @@ impl PeerTransportRuntime {
         status_cache: RuntimeStatusCache,
         allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
     ) -> Self {
-        let config = PeerTransportConfig {
-            peer_listen_addr: Some(listen_addr),
-        };
         Self {
             server: Arc::new(PeerServerTransport::new(
                 Some(listen_addr),
@@ -766,7 +806,7 @@ impl PeerTransportRuntime {
                 )),
                 None,
             )),
-            client: PeerClientTransport::new_with_observability(None, None, config, observability),
+            client: PeerClientTransport::new_with_observability(None, None, None, observability),
         }
     }
 
@@ -778,9 +818,6 @@ impl PeerTransportRuntime {
         allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
         peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     ) -> Self {
-        let config = PeerTransportConfig {
-            peer_listen_addr: Some(listen_addr),
-        };
         Self {
             server: Arc::new(PeerServerTransport::new(
                 Some(listen_addr),
@@ -791,7 +828,7 @@ impl PeerTransportRuntime {
                 )),
                 Some(peer_security_store),
             )),
-            client: PeerClientTransport::new_with_observability(None, None, config, observability),
+            client: PeerClientTransport::new_with_observability(None, None, None, observability),
         }
     }
 
@@ -812,8 +849,19 @@ impl PeerTransportRuntime {
         message_key: MessageKey,
         request: RequestEnvelope,
     ) -> Result<(), AtmError> {
-        self.client
-            .persist_replay_request(team, agent, message_key, request)
+        self.client.persist_replay_request_to_endpoint(
+            Duration::from_secs(60),
+            RemoteTargetHost::parse("127.0.0.1").expect("static test remote host"),
+            team,
+            agent,
+            message_key,
+            request,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
     }
 
     #[cfg(test)]

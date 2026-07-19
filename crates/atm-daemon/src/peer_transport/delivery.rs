@@ -48,63 +48,63 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
     ) -> Result<OutboundDeliveryDisposition, CrossHostDeliveryInfraError>;
 }
 
-#[derive(Clone)]
-pub(crate) struct DaemonCrossHostDelivery {
-    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
-    peer_transport_runtime: PeerTransportRuntime,
+pub(crate) trait RemoteEndpointResolver: boundary::sealed::Sealed + Send + Sync {
+    fn resolve_endpoint(
+        &self,
+        remote_host: &RemoteTargetHost,
+        bound_addr_hint: Option<SocketAddr>,
+    ) -> Result<SocketAddr, CrossHostDeliveryInfraError>;
 }
 
-impl std::fmt::Debug for DaemonCrossHostDelivery {
+#[derive(Clone)]
+pub(crate) struct DaemonRemoteEndpointResolver {
+    peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
+    bound_addr_hint: Option<SocketAddr>,
+}
+
+impl std::fmt::Debug for DaemonRemoteEndpointResolver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DaemonCrossHostDelivery")
+        f.debug_struct("DaemonRemoteEndpointResolver")
             .field(
                 "peer_interface_config_store",
                 &"dyn PeerInterfaceConfigStore",
             )
-            .field("peer_transport_runtime", &self.peer_transport_runtime)
+            .field("bound_addr_hint", &self.bound_addr_hint)
             .finish()
     }
 }
 
-impl DaemonCrossHostDelivery {
+impl DaemonRemoteEndpointResolver {
     pub(crate) fn new(
         peer_interface_config_store: Arc<dyn PeerInterfaceConfigStore + Send + Sync>,
-        peer_transport_runtime: PeerTransportRuntime,
+        bound_addr_hint: Option<SocketAddr>,
     ) -> Self {
         Self {
             peer_interface_config_store,
-            peer_transport_runtime,
+            bound_addr_hint,
         }
     }
+}
 
-    fn decide_remote_delivery(
+impl boundary::sealed::Sealed for DaemonRemoteEndpointResolver {}
+
+impl RemoteEndpointResolver for DaemonRemoteEndpointResolver {
+    fn resolve_endpoint(
         &self,
         remote_host: &RemoteTargetHost,
-    ) -> Result<(RemoteDeliveryDecision, SocketAddr), CrossHostDeliveryInfraError> {
-        let endpoint = self.resolve_remote_endpoint(remote_host)?;
-        let decision = if self
-            .peer_transport_runtime
-            .bound_addr()
-            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?
-            .is_some()
-        {
-            RemoteDeliveryDecision::HealthyImmediateWait
-        } else {
-            RemoteDeliveryDecision::DeferredRetry
-        };
-        Ok((decision, endpoint))
-    }
-
-    fn resolve_remote_endpoint(
-        &self,
-        remote_host: &RemoteTargetHost,
+        bound_addr_hint: Option<SocketAddr>,
     ) -> Result<SocketAddr, CrossHostDeliveryInfraError> {
-        let (port, interface_family_preference) = self.resolve_remote_port_for_host(remote_host)?;
+        let (port, interface_family_preference) = resolve_remote_port_for_host(
+            self.peer_interface_config_store
+                .list_interfaces()
+                .map_err(CrossHostDeliveryInfraError::StorageUnavailable)?,
+            bound_addr_hint.or(self.bound_addr_hint),
+            remote_host,
+        )?;
         let preferred_family = self
-            .peer_transport_runtime
-            .bound_addr()
-            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?
+            .bound_addr_hint
             .map(|addr| addr.is_ipv4())
+            .or(bound_addr_hint.map(|addr| addr.is_ipv4()))
             .or(interface_family_preference);
         let resolved = (remote_host.as_str(), port)
             .to_socket_addrs()
@@ -122,38 +122,67 @@ impl DaemonCrossHostDelivery {
                 )
             })?
             .collect::<Vec<_>>();
-        select_resolved_remote_endpoint(&resolved, preferred_family)
-            .ok_or_else(|| {
-                CrossHostDeliveryInfraError::RuntimeUnavailable(
-                    AtmError::address_parse(format!(
-                        "remote host `{}` did not resolve to any socket addresses",
-                        remote_host.as_str()
-                    ))
-                    .with_recovery(
-                        "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
-                    ),
-                )
-            })
+        select_resolved_remote_endpoint(&resolved, preferred_family).ok_or_else(|| {
+            CrossHostDeliveryInfraError::RuntimeUnavailable(
+                AtmError::address_parse(format!(
+                    "remote host `{}` did not resolve to any socket addresses",
+                    remote_host.as_str()
+                ))
+                .with_recovery(
+                    "Use a reachable literal IP address or resolvable hostname for the remote host before retrying the remote send.",
+                ),
+            )
+        })
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DaemonCrossHostDelivery {
+    endpoint_resolver: Arc<dyn RemoteEndpointResolver + Send + Sync>,
+    peer_transport_runtime: PeerTransportRuntime,
+}
+
+impl std::fmt::Debug for DaemonCrossHostDelivery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DaemonCrossHostDelivery")
+            .field("endpoint_resolver", &"dyn RemoteEndpointResolver")
+            .field("peer_transport_runtime", &self.peer_transport_runtime)
+            .finish()
+    }
+}
+
+impl DaemonCrossHostDelivery {
+    pub(crate) fn new(
+        endpoint_resolver: Arc<dyn RemoteEndpointResolver + Send + Sync>,
+        peer_transport_runtime: PeerTransportRuntime,
+    ) -> Self {
+        Self {
+            endpoint_resolver,
+            peer_transport_runtime,
+        }
     }
 
-    fn resolve_remote_port_for_host(
+    fn decide_remote_delivery(
         &self,
         remote_host: &RemoteTargetHost,
-    ) -> Result<(u16, Option<bool>), CrossHostDeliveryInfraError> {
-        let interface_rows = self
-            .peer_interface_config_store
-            .list_interfaces()
-            .map_err(CrossHostDeliveryInfraError::StorageUnavailable)?;
+    ) -> Result<(RemoteDeliveryDecision, SocketAddr), CrossHostDeliveryInfraError> {
         let bound_addr = self
             .peer_transport_runtime
             .bound_addr()
             .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-        resolve_remote_port_for_host(interface_rows, bound_addr, remote_host)
+        let endpoint = self
+            .endpoint_resolver
+            .resolve_endpoint(remote_host, bound_addr)?;
+        let decision = if bound_addr.is_some() {
+            RemoteDeliveryDecision::HealthyImmediateWait
+        } else {
+            RemoteDeliveryDecision::DeferredRetry
+        };
+        Ok((decision, endpoint))
     }
 
     fn persist_remote_retry(
         &self,
-        endpoint: SocketAddr,
         replay_request: &SendRequest,
         deferred_receipt_message_id: AtmMessageId,
         remote_host: &RemoteTargetHost,
@@ -161,7 +190,7 @@ impl DaemonCrossHostDelivery {
         self.peer_transport_runtime
             .persist_remote_request_for_retry(
                 DEFAULT_REMOTE_RETRY_BUDGET,
-                endpoint,
+                remote_host.clone(),
                 replay_request.caller_team.clone(),
                 replay_request.caller_identity.clone(),
                 boundary::MessageKey::from(deferred_receipt_message_id),
@@ -197,12 +226,7 @@ impl DaemonCrossHostDelivery {
             ),
         };
         if requires_replay(&disposition) {
-            self.persist_remote_retry(
-                endpoint,
-                &replay_request,
-                deferred_receipt_message_id,
-                remote_host,
-            )?;
+            self.persist_remote_retry(&replay_request, deferred_receipt_message_id, remote_host)?;
         }
         Ok(disposition)
     }
@@ -237,7 +261,6 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         match decision {
             RemoteDeliveryDecision::DeferredRetry => {
                 self.persist_remote_retry(
-                    endpoint,
                     &replay_request,
                     deferred_receipt_message_id,
                     &remote_host,

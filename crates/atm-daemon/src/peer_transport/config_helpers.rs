@@ -10,12 +10,6 @@ pub(super) fn remote_replay_store_not_configured_error() -> AtmError {
     )
 }
 
-pub(super) fn remote_peer_endpoint_not_configured_error() -> AtmError {
-    AtmError::daemon_unavailable("remote peer endpoint is not configured").with_recovery(
-        "Use a concrete resolved peer endpoint from the cross-host dispatch path before retrying remote delivery or replay persistence.",
-    )
-}
-
 #[allow(
     dead_code,
     reason = "moved to crate::remote_replay during AG.21 cleanup"
