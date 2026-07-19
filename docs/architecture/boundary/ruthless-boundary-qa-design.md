@@ -1,18 +1,44 @@
-# Ruthless Boundary QA Design Note
+# Ruthless Boundary QA Design
 
-`ruthless-boundary-qa` uses the same fenced-JSON findings envelope as the other
-review agents so `quality-mgr` can consume it without a custom result path.
+`ruthless-boundary-qa` is a principle-first reviewer.
 
-What is different is the finding class:
+Its job is to:
 
-- `boundary_violation` — an active leak or existing boundary break
-- `boundary_tightening` — code works, but the boundary can still be narrowed
-- `lint_gap` — the repo has a repeated leak pattern with no mechanical guard
-- `doc_gap` — boundary docs/TOMLs/ADR guidance are missing or stale
+- find active boundary violations
+- find places where boundaries are wider than necessary
+- find repeated leak patterns that need mechanical enforcement
 
-This keeps the agent mechanically compatible with the current QA pipeline while
-preserving the user-mandated role: architecture optimization, not only fixed
-rule enforcement.
+It is not a historical incident reviewer and it is not a branch archaeology
+agent.
 
-The agent is cadence-limited to QA-1, plan review, and phase review so its
-optimization findings do not create endless scoped-recheck churn.
+## Review model
+
+The reviewer should apply stable rules:
+
+- one owner per decision
+- one production path per behavior
+- transport moves bytes only
+- storage backends are replaceable
+- state machines are minimal
+- proof paths are not product paths
+
+## Finding classes
+
+- `boundary_violation`
+  - active leak or forbidden dependency/logic crossing
+- `boundary_tightening`
+  - code works but the boundary is still wider than necessary
+- `lint_gap`
+  - repeated leak pattern has no machine guard
+- `doc_gap`
+  - rules, TOML policy, or ADR guidance are stale or incomplete
+
+## Scope rule
+
+Use stable architectural rules as the source of truth.
+
+Do not anchor the review on:
+
+- transient branch-specific file layouts
+- historical line numbers
+- incident narratives that will be obsolete after the next cleanup sprint

@@ -61,6 +61,10 @@ Rules:
    - visibility/re-export surfaces wider than required
    - transport/storage/backend knowledge leaking into callers
    - repeated leak patterns with no mechanical lint/TOML guard
+   - transport doing anything other than moving bytes and returning transport facts
+   - storage backend code that would block backend replacement
+   - state machines that exist only because parallel paths were introduced
+   - send/ack splits that should be one path
 4. Actively hunt tightening opportunities:
    - narrower trait method surface
    - move contract to a lower neutral crate
@@ -71,7 +75,8 @@ Rules:
 5. Do not dismiss a finding because it is pre-existing.
 6. If a machine gate already exists, cite it directly.
 7. If a repeated leak has no machine gate, emit a `lint_gap` finding.
-8. Return fenced JSON only.
+8. Prefer stable principle citations over transient historical incident citations.
+9. Return fenced JSON only.
 
 ## Output Format
 
