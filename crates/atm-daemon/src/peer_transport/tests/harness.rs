@@ -658,6 +658,8 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         sender_status_cache.clone(),
     );
+    // AG.23 migration: delete this worker setup with deferred-receipt replay;
+    // retain the direct peer-delivery assertions below.
     let replay_worker = sender_transport
         .start_replay_resume_worker()
         .expect("start replay worker");

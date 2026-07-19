@@ -645,6 +645,11 @@ impl PeerTransportRuntime {
         self.server.shutdown()
     }
 
+    // AG.23 migration: delete this forwarding API with the replay worker; no
+    // peer-transport retry scheduler replaces it.
+    #[deprecated(
+        note = "AG.23 deletion target; remove deferred-receipt replay rather than replacing this worker"
+    )]
     pub(crate) fn start_replay_resume_worker(&self) -> Result<ReplayResumeWorkerHandle, AtmError> {
         replay_resume_worker::start_replay_resume_worker(self)
     }

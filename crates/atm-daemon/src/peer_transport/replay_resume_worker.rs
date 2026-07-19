@@ -6,6 +6,11 @@ use crate::peer_transport::{
     PeerTransportRuntime, REPLAY_RESUME_POLL_INTERVAL, ReplayResumeWorkerHandle,
 };
 
+// AG.23 migration: remove this worker with the deprecated replay entrypoint;
+// no replacement retry scheduler belongs in peer transport.
+#[deprecated(
+    note = "AG.23 deletion target; remove deferred-receipt replay rather than replacing this worker"
+)]
 pub(super) fn start_replay_resume_worker(
     runtime: &PeerTransportRuntime,
 ) -> Result<ReplayResumeWorkerHandle, AtmError> {

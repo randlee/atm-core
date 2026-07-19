@@ -220,10 +220,15 @@ impl RuntimeComposition {
             "daemon start requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        // AG.23 migration: start directly after lifecycle transition once
+        // synthetic deferred-receipt replay is removed; do not replace it.
         self.resume_startup_replay()?;
         self.start_background_lanes()
     }
 
+    #[deprecated(
+        note = "AG.23 deletion target; startup must not resume synthetic deferred-receipt replay"
+    )]
     fn resume_startup_replay(&self) -> Result<(), AtmError> {
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
@@ -415,6 +420,8 @@ impl RuntimeComposition {
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self.refresh_peer_listeners()?;
+        // AG.23 migration: remove this worker start with the replay worker;
+        // direct peer delivery owns no transport retry scheduler.
         let worker = self.peer_transport_runtime.start_replay_resume_worker()?;
         let mut slot = self.replay_resume_worker.lock().map_err(|_| {
             AtmError::daemon_unavailable("daemon replay worker slot lock poisoned").with_recovery(
