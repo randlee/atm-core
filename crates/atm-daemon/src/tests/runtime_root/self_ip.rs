@@ -72,9 +72,7 @@ fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
-        panic!("expected send response");
-    };
+    let outcome = expect_sent_response(response);
     assert_eq!(outcome.agent.as_str(), "qa-a");
     assert_eq!(outcome.outcome.as_str(), "sent");
 
@@ -181,9 +179,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
-        panic!("expected send response");
-    };
+    let outcome = expect_sent_response(response);
     assert_eq!(outcome.agent.as_str(), "qa-a");
     assert!(outcome.requires_ack);
 
@@ -238,9 +234,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
             "ack from secure self ip",
         ))
         .expect("ack over secure self ip");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
-        panic!("expected ack response");
-    };
+    let outcome = expect_ack_response(ack);
     assert!(!outcome.reply_message_id.to_string().is_empty());
 
     let sender_read = dispatcher
@@ -358,9 +352,7 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) = response else {
-        panic!("expected send response");
-    };
+    let _ = expect_sent_response(response);
 
     let read = dispatcher
         .dispatch(RequestEnvelope::Receive(

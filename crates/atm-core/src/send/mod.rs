@@ -4,6 +4,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use crate::ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request};
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
@@ -12,6 +13,7 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
+use crate::protocol::SendResponseEnvelope;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -358,6 +360,26 @@ pub fn send_mail_with_runtime_and_post_send_emitter(
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendOutcome, AtmError> {
     send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+}
+
+pub fn execute_outbound_send_with_runtime_and_post_send_emitter(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<SendResponseEnvelope, AtmError> {
+    if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
+        return ack_mail_with_runtime_and_post_send_emitter(
+            ack_request_from_send_request(request)?,
+            observability,
+            runtime,
+            post_send_emitter,
+        )
+        .map(SendResponseEnvelope::Acknowledged);
+    }
+
+    send_mail_with_runtime_and_post_send_emitter(request, observability, runtime, post_send_emitter)
+        .map(SendResponseEnvelope::Sent)
 }
 
 fn send_mail_with_runtime_impl<

@@ -108,12 +108,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
     let (response_id, response) =
         atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
     assert_eq!(response_id, request_id);
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    assert_eq!(expect_sent_response(response).outcome.as_str(), "sent");
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -242,13 +237,9 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         .dispatch_write(&endpoint, envelope, Duration::from_secs(3))
         .expect("dispatch write");
     let response: ResponseEnvelope = response.decode_body().expect("decode response");
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-            assert!(outcome.requires_ack);
-        }
-        other => panic!("unexpected response: {other:?}"),
-    }
+    let outcome = expect_sent_response(response);
+    assert_eq!(outcome.outcome.as_str(), "sent");
+    assert!(outcome.requires_ack);
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -419,13 +410,9 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "write send frame",
         "read send frame",
     );
-    match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-            assert_eq!(outcome.outcome.as_str(), "sent");
-            assert!(outcome.requires_ack);
-        }
-        other => panic!("unexpected send response: {other:?}"),
-    }
+    let outcome = expect_sent_response(send_response);
+    assert_eq!(outcome.outcome.as_str(), "sent");
+    assert!(outcome.requires_ack);
 
     let read_request_id = next_request_id();
     let read_request = RequestEnvelope::Receive(
@@ -477,12 +464,12 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "write ack frame",
         "read ack frame",
     );
-    match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-            assert!(!outcome.reply_message_id.to_string().is_empty());
-        }
-        other => panic!("unexpected ack response: {other:?}"),
-    }
+    assert!(
+        !expect_ack_response(ack_response)
+            .reply_message_id
+            .to_string()
+            .is_empty()
+    );
 
     let sender_read_request_id = next_request_id();
     let sender_read_request = RequestEnvelope::Receive(

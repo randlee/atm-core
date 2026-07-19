@@ -42,9 +42,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
             .expect("send request"),
         )))
         .expect("dispatch send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = &response else {
-        panic!("expected send response, got {response:?}");
-    };
+    let outcome = sent_response_ref(&response);
     assert_eq!(outcome.outcome.as_str(), "sent");
     JsonAtmProtocolCodec
         .response_to_frame(next_request_id(), response)

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
-    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
-    boundary,
+    RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
@@ -12,8 +10,8 @@ use atm_core::{
     schema::AtmMessageId,
     send::{
         SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
+        execute_outbound_send_with_runtime_and_post_send_emitter,
         persist_remote_delivery_receipt_with_runtime, route_send_request,
-        send_mail_with_runtime_and_post_send_emitter,
     },
 };
 
@@ -60,26 +58,14 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-            return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                ack_mail_with_runtime_and_post_send_emitter(
-                    ack_request_from_send_request(request)?,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?,
-            )));
-        }
         match route_send_request(&request) {
-            SendRequestRoute::Local => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
+            SendRequestRoute::Local => execute_outbound_send_with_runtime_and_post_send_emitter(
+                request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                post_send_emitter,
+            )
+            .map(ResponseEnvelope::Send),
             SendRequestRoute::Remote(remote_host) => {
                 match self
                     .service_runtime
