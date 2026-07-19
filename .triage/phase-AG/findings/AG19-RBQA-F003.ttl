@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "AG19-RBQA-F003" ;
+  triage:title "Divergent outcome-classification for Deferred/OutcomeUnknown implemented independently in two places" ;
+  triage:description "atm-daemon's dispatch_send (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs) treats RemoteSendDeliveryOutcome::Deferred/OutcomeUnknown as a non-error Sent(Deferred) outcome (Ok with a synthesized deferred-outcome response). atm-core's execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs) treats the identical variants as a hard Err that aborts the ack-reply call. This is a regression introduced by AG.19 (delete remote ack success path, commit 59225e0f): the pre-AG.19 baseline (integrate/phase-AG @ 03c873fc, and AG.18 @ 70cce097) correctly returned Ok(DeliveryExecutionResult{ warnings: [...] }) for both Deferred and OutcomeUnknown in execute_remote_ack_reply_plan, matching dispatch_send's non-error semantics. AG.19 collapsed execute_remote_ack_reply_plan into execute_ack_reply_plan and changed the Deferred/OutcomeUnknown arms to `Err(error)`, creating the divergence. The defect is carried forward unchanged into AG.20 (50572166) and AG.21 (56fdcdef, dev in progress). Fix: route ack replies through dispatch_send's existing Local/Remote match (or a shared helper both call) instead of re-implementing outcome classification with different semantics in ack/mod.rs -- restore Ok-with-warnings (or equivalent shared-helper) semantics for Deferred/OutcomeUnknown. Confirmed by ruthless-boundary-qa. AG.21's stated scope (collapse dispatch routing) is the natural landing spot for a shared-helper fix." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "repeatable sweep AG.19-AG.21 for any other divergent Deferred/OutcomeUnknown handling between daemon dispatch and ack/mod.rs -- sweep of feature/pAG-s21-collapse-dispatch-routing found no additional divergent RemoteSendDeliveryOutcome match sites beyond the one described here (dispatch_delivery.rs, ack/mod.rs execute_ack_reply_plan, and non_claude_outbound_runtime.rs construction site all reviewed; only ack/mod.rs diverges)" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:crossReference "AG20-BLOCK-002 (transport-owned deferred/outcome-unknown policy on feature/pAG-s20-move-deferred-policy-out-of-transport) is the same class of defect -- same repeatable pattern (divergent-outcome-classification): outcome-classification logic re-implemented instead of shared. Both findings should be resolved together on AG.21 since it is the branch actively collapsing dispatch routing." ;
+  triage:notes "Root cause identified: AG.19 (commit 59225e0f, 'delete remote ack success path') is the introducing commit. Pre-AG.19 baseline (AG.18 @ 70cce097, and integrate/phase-AG @ 03c873fc) had correct, matching semantics (Ok-with-warnings) in execute_remote_ack_reply_plan. AG.22-25 (03c873fc) are siblings off integrate/phase-AG, not descendants of AG.19-21, and do not yet carry this regression -- they will inherit it only if/when AG.21 is merged forward. highest_open_branch = feature/pAG-s21-collapse-dispatch-routing (56fdcdef): it is the latest branch in the AG.18->AG.19->AG.20->AG.21 merge-forward chain that carries the defect, is dev-in-progress, and its stated scope (collapse dispatch routing) directly matches the prescribed fix (shared Local/Remote match/helper). promote_to_branch = same." .
+
+<urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG19-RBQA-F003/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) } -- vs dispatch_delivery.rs's Ok(Sent(build_remote_deferred_outcome(...))) for the identical variants" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .

@@ -1,0 +1,39 @@
+@prefix qa:   <urn:atm:qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+qa:AG20-BLOCK-005
+    a qa:Finding ;
+    qa:findingId "AG20-BLOCK-005" ;
+    qa:phaseId "phase-AG" ;
+    qa:title "Named Exact Targets in atm-core untouched with no staged-removal marker" ;
+    qa:description """crates/atm-core/src/send/delivery_persistence.rs (DeliveryPersistenceDisposition, DeliveryPersistenceResult) and crates/atm-core/src/delivery_plan.rs (DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan) are named exact removal/deprecation targets in docs/plans/phase-AG/sprint-AG20.md 'Supporting types and staged removal'. Verified against feature/pAG-s20-move-deferred-policy-out-of-transport at 50572166: delivery_persistence.rs is byte-for-byte unchanged vs develop (no diff). delivery_plan.rs was edited (DeliveryPlanDisposition enum + delivery_plan_disposition() fn removed, DeliveryPlan.disposition retyped to DeliveryPersistenceDisposition) but none of the five still-present named symbols (DeliveryPersistenceDisposition, DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan) carry a #[deprecated] marker or any staged-removal annotation, even though the sprint doc's own fallback clause (line 156-160) requires: 'if removal must be staged, deprecate in AG.20 and delete no later than the sprint that lands the shared outbound policy layer.' Confirmed by req-qa (ATM-QA-AG20-005), arch-qa (ARCH-007), ruthless-boundary-qa (RBQA-F003).""" ;
+    qa:severity "blocking" ;
+    qa:pattern "named-target-untouched" ;
+    qa:repeatable false ;
+    qa:sweepScope "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+    qa:sourceReviewers ( "req-qa:ATM-QA-AG20-005" "arch-qa:ARCH-007" "ruthless-boundary-qa:RBQA-F003" ) ;
+    qa:evidence [
+        a qa:Evidence ;
+        qa:evidenceNote "git diff develop -- crates/atm-core/src/send/delivery_persistence.rs is empty (0 lines changed) in feature/pAG-s20-move-deferred-policy-out-of-transport@50572166" ;
+    ], [
+        a qa:Evidence ;
+        qa:evidenceNote "git diff develop -- crates/atm-core/src/delivery_plan.rs shows edits, but zero #[deprecated] attributes added to DeliveryPlanKind, LogicalMessage, DeliveryTarget, DeliveryPlan, or DeliveryPersistenceDisposition" ;
+    ], [
+        a qa:Evidence ;
+        qa:evidenceNote "docs/plans/phase-AG/sprint-AG20.md lines 125-160: 'Supporting types and staged removal' section names all five symbols explicitly and provides an explicit staged-removal/deprecation fallback clause that was not applied" ;
+    ] ;
+    qa:orderedWorktrees (
+        [ qa:sprintTag "AG.18" ; qa:branch "feature/pAG-s18-unify-envelope-handler" ; qa:sha "70cce097" ; qa:state "closed" ]
+        [ qa:sprintTag "AG.19" ; qa:branch "feature/pAG-s19-delete-remote-ack-path" ; qa:sha "59225e0f" ; qa:state "closed" ]
+        [ qa:sprintTag "AG.20" ; qa:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ; qa:sha "50572166" ; qa:state "origin" ]
+        [ qa:sprintTag "AG.21" ; qa:branch "feature/pAG-s21-collapse-dispatch-routing" ; qa:sha "56fdcdef" ; qa:state "dev-in-progress" ]
+        [ qa:sprintTag "AG.22" ; qa:branch "feature/pAG-s22-host-resolution-boundary" ; qa:sha "03c873fc" ; qa:state "not-started" ]
+        [ qa:sprintTag "AG.23" ; qa:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ; qa:sha "03c873fc" ; qa:state "not-started" ]
+        [ qa:sprintTag "AG.24" ; qa:branch "feature/pAG-s24-preserve-request-shape" ; qa:sha "03c873fc" ; qa:state "not-started" ]
+        [ qa:sprintTag "AG.25" ; qa:branch "feature/pAG-s25-live-two-daemon-proof" ; qa:sha "03c873fc" ; qa:state "not-started" ]
+    ) ;
+    qa:highestOpenBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promoteToBranch "feature/pAG-s21-collapse-dispatch-routing" ;
+    qa:promotionRationale """AG.20 is the origin sprint of the finding (the named removal targets belong to its own sprint doc). AG.21 is the highest branch with dev currently in progress (open); AG.22-25 are not-started (03c873fc, no divergent work to carry the fix). Per repo triage convention (promote to highest_open_branch, merge-forward closes lower occurrences), the fix is dispatched once to feature/pAG-s21-collapse-dispatch-routing and merge-forward from AG.20 closes the occurrence there; AG.22-25 will inherit the fix on merge-forward once they start.""" ;
+    qa:triageMode "initial_pass" ;
+    qa:integrationBranch "integrate/phase-AG" .
