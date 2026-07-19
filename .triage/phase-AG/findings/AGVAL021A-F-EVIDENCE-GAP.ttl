@@ -1,0 +1,104 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AGVAL021A-F-EVIDENCE-GAP>
+  a triage:Finding ;
+  triage:findingId "AGVAL021A-F-EVIDENCE-GAP" ;
+  triage:title "AG-VAL-021A-F evidence gap in cross-host smoke checklist" ;
+  triage:description "6 rows in docs/plans/phase-AG/cross-host-smoke-checklist.md:49-54 (AG-VAL-021A-F) remain PENDING with no Mac-Studio smoke evidence recorded. This is the sprint doc's stated sole closure mechanism for AG.15 and is unmet independent of the 9-point CROSSHOST-UNIFY checklist." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-18T20:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/6> ;
+  triage:openOn <urn:atm:triage:worktree/AG15/ce2ab044> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/1>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021A" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 49 ;
+  triage:snippet "other-Mac unauthorized rejection" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/2>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021B" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 50 ;
+  triage:snippet "other-Mac authorized durable send" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/3>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021C" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 51 ;
+  triage:snippet "other-Mac receiver read" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/4>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021D" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 52 ;
+  triage:snippet "other-Mac ack round-trip" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/5>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021E" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 53 ;
+  triage:snippet "other-Mac nudge/notification classification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:occurrence/AGVAL021A-F-EVIDENCE-GAP/AG15/6>
+  a triage:Occurrence ;
+  triage:rowId "AG-VAL-021F" ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 54 ;
+  triage:snippet "other-Mac retry-visible recovery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044" ;
+  triage:occursIn <urn:atm:triage:worktree/AG15/ce2ab044> .
+
+<urn:atm:triage:worktree/AG15/ce2ab044>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "ce2ab044098243d4acb5129c2a16de4fe09c187a" ;
+  triage:orderIndex 1 .
