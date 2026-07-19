@@ -6,8 +6,8 @@ use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
 use crate::delivery_plan::{
-    DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_plan_disposition,
-    delivery_target_for_snapshot, logical_messages_from_persistence,
+    DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_target_for_snapshot,
+    logical_messages_from_persistence,
 };
 use crate::delivery_policy::DeliveryEventFamily;
 use crate::error::AtmError;
@@ -698,7 +698,7 @@ fn build_reply_delivery_plan(
         })?;
     Ok(DeliveryPlan::new(
         DeliveryPlanKind::Reply,
-        delivery_plan_disposition(persistence.disposition),
+        persistence.disposition,
         delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
         ResolvedRecipient {
             agent: reply_target.agent.clone(),
@@ -779,7 +779,7 @@ mod tests {
         self, BuiltInPostSendDispatch, MessageKey, NonClaudeOutboundDeliveryRequest,
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter,
     };
-    use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
+    use crate::delivery_plan::DeliveryTarget;
     use crate::error::AtmErrorKind;
     use crate::error_codes::AtmErrorCode;
     use crate::observability::NullObservability;
@@ -1570,7 +1570,7 @@ mod tests {
 
         assert_eq!(
             plan.disposition,
-            DeliveryPlanDisposition::SqliteFailedRecovered
+            DeliveryPersistenceDisposition::SqliteFailedRecovered
         );
         assert_eq!(plan.messages.len(), 2);
         assert_eq!(plan.messages[0].envelope, original);

@@ -6,11 +6,6 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeliveryPlanDisposition {
-    Persisted,
-    SqliteFailedRecovered,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanKind {
@@ -79,17 +74,6 @@ pub(crate) fn logical_messages_from_persistence(
     Ok(messages)
 }
 
-pub(crate) fn delivery_plan_disposition(
-    disposition: DeliveryPersistenceDisposition,
-) -> DeliveryPlanDisposition {
-    match disposition {
-        DeliveryPersistenceDisposition::Persisted => DeliveryPlanDisposition::Persisted,
-        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
-            DeliveryPlanDisposition::SqliteFailedRecovered
-        }
-    }
-}
-
 pub(crate) fn delivery_target_for_snapshot(
     _inbox_path: &Path,
     delivery_snapshot: &DeliveryRecipientSnapshot,
@@ -117,7 +101,7 @@ impl DeliveryTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DeliveryPlan {
     pub(crate) kind: DeliveryPlanKind,
-    pub(crate) disposition: DeliveryPlanDisposition,
+    pub(crate) disposition: DeliveryPersistenceDisposition,
     pub(crate) delivery_target: DeliveryTarget,
     pub(crate) recipient: ResolvedRecipient,
     pub(crate) messages: Vec<LogicalMessage>,
@@ -127,7 +111,7 @@ pub(crate) struct DeliveryPlan {
 impl DeliveryPlan {
     pub(crate) fn new(
         kind: DeliveryPlanKind,
-        disposition: DeliveryPlanDisposition,
+        disposition: DeliveryPersistenceDisposition,
         delivery_target: DeliveryTarget,
         recipient: ResolvedRecipient,
         messages: Vec<LogicalMessage>,
