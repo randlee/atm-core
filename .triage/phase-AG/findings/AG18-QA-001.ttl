@@ -7,35 +7,34 @@
   triage:title "Hard Merge Gate LOC failure" ;
   triage:description "docs/plans/phase-AG/sprint-AG18.md Hard Merge Gate requires sprint AG.18 to deliver at least -100 net LOC across crates/ measured as git diff --stat <sprint-base-sha>..HEAD -- crates/. On feature/pAG-s18-unify-envelope-handler @ 70cce097, git diff --stat 03c873fc..70cce097 -- crates/ = 387 insertions(+), 365 deletions(-) = +22 net LOC, the wrong sign relative to the required <= -100 net LOC. Independently verified by quality-mgr, req-qa, and arch-qa. This is a per-sprint numeric merge gate on AG.18's own named-target diff, not a repeatable code pattern; sweep_scope is restricted to feature/pAG-s18-unify-envelope-handler." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "feature/pAG-s18-unify-envelope-handler" ;
   triage:category "merge-gate" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T14:32:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-001/pAG-s18/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
-  triage:notes "Correlation across the ordered ladder (sprint-base 03c873fc): s18 own-diff (03c873fc..70cce097, crates/) = +22 net LOC, FAILS its own <= -100 gate. Downstream sprints each pass their own independent per-sprint gates: s19 own-diff (70cce097..59225e0f) = 144 insertions/277 deletions = -133 net LOC (PASS); s20 own-diff (59225e0f..50572166) = 104 insertions/622 deletions = -518 net LOC (PASS). Ladder-wide aggregate at s20 tip (03c873fc..50572166, crates/) = 615 insertions/1244 deletions = -629 net LOC, well under -100, so the aggregate reduction requirement is not at risk -- only s18's own per-sprint deliverable is out of compliance. s21 (head 56fdcdef) is only a merge-forward of s20 into s21 with no new dev commits yet (still in progress); it inherits the s18 defect unchanged and has not yet contributed its own diff to evaluate. s22-25 (feature/pAG-s22.. through s25..) are all still pinned at baseline 03c873fc (not started) and have not yet picked up any AG.18-AG.21 commits, so the defect is not yet present there -- note as not-yet-applicable, re-check when those sprints branch forward. Per team fix-dispatch policy (fix dispatch targets latest sprint branch, never integrate; merge-forward closes lower occurrences), promote_to_branch is set to the highest currently-open branch with real commits, feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef. Fix must land as additional deletions against AG.18's named target files (crates/atm-core/src/protocol.rs, crates/atm-daemon/src/runtime_health.rs, crates/atm-core/src/ack/mod.rs, crates/atm-daemon/src/non_claude_outbound_runtime.rs, crates/atm/src/composition.rs, crates/atm-graft/src/lib.rs, crates/atm-daemon-client/src/rpc.rs, crates/atm-daemon/src/peer_transport.rs) sufficient to bring the s18-attributable portion of the diff to <= -100 net LOC, then merge-forward through s19, s20, s21 to close all occurrences. Re-verify this numeric gate per-branch after the fix lands; do not mark closed on aggregate-ladder numbers alone since the sprint doc gate is per-sprint, not aggregate." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s18/5d1c8861> ;
+  triage:notes "FOLLOWUP PASS: AG18-REASSIGN-1 formal fix dispatch executed. arch-ctm delivered canonical send envelope unification on feature/pAG-s18-unify-envelope-handler, resolving the Hard Merge Gate violation. PRIOR STATE (initial_pass): s18 own-diff (03c873fc..70cce097, crates/) = 387 insertions(+), 365 deletions(-) = +22 net LOC, FAILED required <= -100 net LOC gate. CURRENT STATE (followup_pass): s18 own-diff (03c873fc..5d1c8861, crates/) = 542 insertions(+), 664 deletions(-) = -122 net LOC, PASSES required <= -100 net LOC gate. Commit-local delta at 5d1c8861: 18 files changed, 325 insertions(+), 474 deletions(-) = -149 net LOC (matches arch-ctm report). The Hard Merge Gate numeric condition is now satisfied. dispatchReady set to false pending merge-forward through remaining sprint branches (s19-s21) and final CI validation, but the core technical fix is verified." .
 
 <urn:atm:triage:occurrence/AG18-QA-001/pAG-s18/1>
   a triage:Occurrence ;
   triage:file "crates/" ;
   triage:line 0 ;
-  triage:snippet "git diff --stat 03c873fc..70cce097 -- crates/ => 387 insertions(+), 365 deletions(-) = +22 net LOC vs required <= -100 net LOC" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "PRIOR: git diff --stat 03c873fc..70cce097 -- crates/ => +22 net LOC (FAILED). FIXED: git diff --stat 03c873fc..5d1c8861 -- crates/ => -122 net LOC (PASSED <= -100 gate)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "70cce097" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+  triage:headSha "5d1c8861" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/5d1c8861> .
 
-<urn:atm:triage:worktree/pAG-s18/70cce097>
+<urn:atm:triage:worktree/pAG-s18/5d1c8861>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "70cce097" ;
+  triage:headSha "5d1c8861" ;
   triage:orderIndex 18 .
 
 <urn:atm:triage:worktree/pAG-s19/59225e0f>
