@@ -11,6 +11,8 @@ use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
 
 use super::PeerTransportRuntime;
 
+const DEFAULT_REMOTE_RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RemoteDeliveryDecision {
     HealthyImmediateWait,
@@ -169,6 +171,7 @@ impl DaemonCrossHostDelivery {
     ) -> Result<(), CrossHostDeliveryInfraError> {
         self.peer_transport_runtime
             .persist_remote_request_for_retry(
+                DEFAULT_REMOTE_RETRY_BUDGET,
                 endpoint,
                 replay_request.caller_team.clone(),
                 replay_request.caller_identity.clone(),

@@ -501,7 +501,6 @@ fn start_cross_host_dispatcher(
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((bind_ip, bind_port))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
