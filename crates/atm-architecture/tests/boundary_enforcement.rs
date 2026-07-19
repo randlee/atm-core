@@ -6,8 +6,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -136,20 +135,17 @@ fn ag_delete_lists_must_have_no_forbidden_symbols_or_workaround_paths() {
 
 #[test]
 fn active_sprint_diff_gate_must_hold_when_configured() {
-    let Some(sprint) = env::var_os(ACTIVE_SPRINT_ENV).map(|value| value.to_string_lossy().into_owned())
+    let Some(sprint) =
+        env::var_os(ACTIVE_SPRINT_ENV).map(|value| value.to_string_lossy().into_owned())
     else {
         return;
     };
 
     let base = env::var(DIFF_BASE_ENV).unwrap_or_else(|_| {
-        panic!(
-            "{ACTIVE_SPRINT_ENV} is set to {sprint}, but {DIFF_BASE_ENV} is missing"
-        )
+        panic!("{ACTIVE_SPRINT_ENV} is set to {sprint}, but {DIFF_BASE_ENV} is missing")
     });
     let head = env::var(DIFF_HEAD_ENV).unwrap_or_else(|_| {
-        panic!(
-            "{ACTIVE_SPRINT_ENV} is set to {sprint}, but {DIFF_HEAD_ENV} is missing"
-        )
+        panic!("{ACTIVE_SPRINT_ENV} is set to {sprint}, but {DIFF_HEAD_ENV} is missing")
     });
 
     let manifest = sprint_delete_manifests()
@@ -163,12 +159,8 @@ fn active_sprint_diff_gate_must_hold_when_configured() {
         .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    let violations = validate_manifest_diff_gate(
-        &manifest,
-        &changed_files,
-        &numstat,
-        allow_gate_edits,
-    );
+    let violations =
+        validate_manifest_diff_gate(&manifest, &changed_files, &numstat, allow_gate_edits);
 
     assert!(
         violations.is_empty(),
@@ -291,7 +283,8 @@ fn sprint_delete_manifests() -> Vec<SprintDeleteManifest> {
         .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
         .collect::<Vec<_>>();
     files.sort();
-    files.into_iter()
+    files
+        .into_iter()
         .map(|path| {
             let contents = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
@@ -311,8 +304,17 @@ fn scan_delete_manifest(manifest: &SprintDeleteManifest) -> Vec<String> {
 
 fn scan_manifest_file(manifest: &SprintDeleteManifest, relative_path: &str) -> Vec<String> {
     let path = workspace_root().join(relative_path);
-    let contents = fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            return vec![format!(
+                "{} ({}): scan_files entry not found -- likely stale after a file move; update the manifest: {} ({error})",
+                manifest.sprint,
+                manifest.description,
+                path.display(),
+            )];
+        }
+    };
 
     let mut violations = Vec::new();
 
@@ -561,9 +563,17 @@ fn diff_gate_rejects_out_of_scope_and_positive_loc_growth() {
     ];
 
     let violations = validate_manifest_diff_gate(&manifest, &changed_files, &numstat, false);
-    assert!(violations.iter().any(|v| v.contains("outside the sprint allowlist")));
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("outside the sprint allowlist"))
+    );
     assert!(violations.iter().any(|v| v.contains("forbidden gate edit")));
-    assert!(violations.iter().any(|v| v.contains("net crates/ LOC delta")));
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("net crates/ LOC delta"))
+    );
 }
 
 #[test]
@@ -599,5 +609,8 @@ fn diff_gate_accepts_negative_loc_within_allowlist() {
     ];
 
     let violations = validate_manifest_diff_gate(&manifest, &changed_files, &numstat, false);
-    assert!(violations.is_empty(), "expected no violations, got {violations:?}");
+    assert!(
+        violations.is_empty(),
+        "expected no violations, got {violations:?}"
+    );
 }
