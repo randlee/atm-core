@@ -59,7 +59,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 - `crates/atm-core/src/protocol.rs:504-510`
   - delete split frame decoding and nested payload selection keyed by compose vs
     acknowledge
-- `crates/atm-core/src/protocol.rs:743-761`
+- `crates/atm-core/src/protocol.rs:743-755`
   - delete split request message-kind selection logic
 - `crates/atm-core/src/protocol.rs:757-770`
   - delete split response message-kind selection logic
@@ -132,7 +132,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
     - split request decode branch
   - `crates/atm-core/src/protocol.rs:504-506`
     - split nested payload selection for compose vs acknowledge
-  - `crates/atm-core/src/protocol.rs:743-761`
+  - `crates/atm-core/src/protocol.rs:743-755`
     - split request message-kind selection
   - `crates/atm-core/src/protocol.rs:757-770`
     - split response message-kind selection
