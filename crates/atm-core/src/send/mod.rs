@@ -31,7 +31,6 @@ pub mod input;
 pub mod nudge_template;
 mod outcome;
 mod persistence;
-mod remote_receipt;
 pub(crate) mod summary;
 mod target;
 mod threading_helpers;
@@ -42,11 +41,6 @@ pub(crate) use context::{persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
-pub use remote_receipt::RemoteDeliveryReceiptStatus;
-#[doc(hidden)]
-pub use remote_receipt::{
-    finalize_remote_delivery_receipt_with_runtime, persist_remote_delivery_receipt_with_runtime,
-};
 pub use target::{PeerLoopbackHost, qualified_sender_identity, qualified_sender_origin};
 pub(crate) use target::{
     ResolvedRecipient, resolve_message_body, resolve_recipient, validate_non_self_recipient,

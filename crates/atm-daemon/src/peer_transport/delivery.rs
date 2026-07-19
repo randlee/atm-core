@@ -195,11 +195,6 @@ impl DaemonCrossHostDelivery {
                 replay_request.caller_identity.clone(),
                 boundary::MessageKey::from(deferred_receipt_message_id),
                 RequestEnvelope::Send(Box::new(replay_request.clone())),
-                Some(replay_request.caller_team.clone()),
-                Some(replay_request.caller_identity.clone()),
-                Some(deferred_receipt_message_id),
-                Some(replay_request.to.to_string()),
-                Some(remote_host.as_str().to_string()),
             )
             .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)
     }

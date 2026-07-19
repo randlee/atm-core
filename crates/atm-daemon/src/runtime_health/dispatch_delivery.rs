@@ -11,8 +11,7 @@ use atm_core::{
     send::{
         RemoteSendDeliveryClassification, SendCommandOutcome, SendOutcome, SendRequest,
         SendRequestRoute, classify_remote_send_delivery_outcome,
-        execute_outbound_send_with_runtime_and_post_send_emitter,
-        persist_remote_delivery_receipt_with_runtime, route_send_request,
+        execute_outbound_send_with_runtime_and_post_send_emitter, route_send_request,
     },
 };
 
@@ -76,7 +75,6 @@ impl DaemonRequestDispatcher {
                     RemoteSendDeliveryClassification::Deferred {
                         receipt_message_id, ..
                     } => Ok(send_sent_response(build_remote_deferred_outcome(
-                        &self.service_runtime,
                         &request,
                         &remote_host,
                         receipt_message_id,
@@ -86,11 +84,10 @@ impl DaemonRequestDispatcher {
                     RemoteSendDeliveryClassification::OutcomeUnknown {
                         receipt_message_id, ..
                     } => Ok(send_sent_response(build_remote_deferred_outcome(
-                        &self.service_runtime,
                         &request,
                         &remote_host,
                         receipt_message_id,
-                        "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
+                        "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay.",
                     )?)),
                 }
             }
@@ -118,23 +115,11 @@ impl DaemonRequestDispatcher {
 }
 
 fn build_remote_deferred_outcome(
-    runtime: &atm_core::LocalServiceRuntime,
     request: &SendRequest,
     remote_host: &atm_core::send::RemoteTargetHost,
     receipt_message_id: AtmMessageId,
     receipt_body: &str,
 ) -> Result<SendOutcome, AtmError> {
-    let _receipt = persist_remote_delivery_receipt_with_runtime(
-        runtime,
-        &request.home_dir,
-        &request.caller_team,
-        &request.caller_identity,
-        receipt_message_id,
-        &request.to,
-        remote_host.as_str(),
-        request.task_id.clone(),
-        receipt_body,
-    )?;
     Ok(SendOutcome {
         action: atm_core::types::CommandAction::Send,
         team: request

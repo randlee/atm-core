@@ -12,7 +12,6 @@ use atm_core::boundary::RemoteReplayStateRecord;
 use atm_core::boundary::{self, AtmProtocol, MessageKey, RemoteReplayStore, RequestDispatcher};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
-use atm_core::schema::AtmMessageId;
 use atm_core::send::RemoteTargetHost;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecurityStore};
@@ -246,7 +245,6 @@ impl PeerClientTransport {
                 delivered: 0,
                 retained: 0,
                 purged_expired: 0,
-                receipt_updates: 0,
             });
         };
 
@@ -262,34 +260,22 @@ impl PeerClientTransport {
         let mut delivered = 0usize;
         let mut retained = 0usize;
         let mut purged_expired = 0usize;
-        let mut receipt_updates = 0usize;
         let now = IsoTimestamp::now();
         for mut record in records {
             if record.expires_at <= now {
-                if expire_replay_record(replay_store.as_ref(), &record)? {
-                    receipt_updates = receipt_updates.saturating_add(1);
-                }
+                expire_replay_record(replay_store.as_ref(), &record)?;
                 purged_expired = purged_expired.saturating_add(1);
                 continue;
             }
             let endpoint = self.resolve_replay_endpoint(&record.remote_host)?;
             match self.send_to_endpoint(endpoint, record.request.clone()) {
                 Ok(_) => {
-                    if complete_replay_record(replay_store.as_ref(), &self.observability, &record)?
-                    {
-                        receipt_updates = receipt_updates.saturating_add(1);
-                    }
+                    complete_replay_record(replay_store.as_ref(), &self.observability, &record)?;
                     delivered += 1;
                 }
                 Err(error) => {
                     if replay_error_is_terminal(&error) {
-                        if fail_replay_record_terminal(
-                            replay_store.as_ref(),
-                            &record,
-                            &error.message,
-                        )? {
-                            receipt_updates = receipt_updates.saturating_add(1);
-                        }
+                        fail_replay_record_terminal(replay_store.as_ref(), &record)?;
                         continue;
                     }
                     retain_replay_record(
@@ -307,7 +293,6 @@ impl PeerClientTransport {
             delivered,
             retained,
             purged_expired,
-            receipt_updates,
         })
     }
 
@@ -328,10 +313,6 @@ impl PeerClientTransport {
             .map_err(|error| error.into_atm_error())
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"
-    )]
     fn persist_replay_request_to_endpoint(
         &self,
         retry_budget: Duration,
@@ -340,11 +321,6 @@ impl PeerClientTransport {
         agent: AgentName,
         message_key: MessageKey,
         request: RequestEnvelope,
-        receipt_sender_team: Option<TeamName>,
-        receipt_sender_agent: Option<AgentName>,
-        receipt_message_id: Option<AtmMessageId>,
-        receipt_target: Option<String>,
-        receipt_remote_host: Option<String>,
     ) -> Result<(), AtmError> {
         crate::remote_replay::persist_replay_request(
             retry_budget,
@@ -354,11 +330,6 @@ impl PeerClientTransport {
             agent,
             message_key,
             request,
-            receipt_sender_team,
-            receipt_sender_agent,
-            receipt_message_id,
-            receipt_target,
-            receipt_remote_host,
         )
     }
 
@@ -636,10 +607,6 @@ impl PeerTransportRuntime {
             .send_to_endpoint_immediate_wait(endpoint, request)
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"
-    )]
     pub(crate) fn persist_remote_request_for_retry(
         &self,
         retry_budget: Duration,
@@ -648,11 +615,6 @@ impl PeerTransportRuntime {
         agent: AgentName,
         message_key: MessageKey,
         request: RequestEnvelope,
-        receipt_sender_team: Option<TeamName>,
-        receipt_sender_agent: Option<AgentName>,
-        receipt_message_id: Option<AtmMessageId>,
-        receipt_target: Option<String>,
-        receipt_remote_host: Option<String>,
     ) -> Result<(), AtmError> {
         self.client.persist_replay_request_to_endpoint(
             retry_budget,
@@ -661,11 +623,6 @@ impl PeerTransportRuntime {
             agent,
             message_key,
             request,
-            receipt_sender_team,
-            receipt_sender_agent,
-            receipt_message_id,
-            receipt_target,
-            receipt_remote_host,
         )
     }
 
@@ -856,11 +813,6 @@ impl PeerTransportRuntime {
             agent,
             message_key,
             request,
-            None,
-            None,
-            None,
-            None,
-            None,
         )
     }
 

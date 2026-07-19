@@ -688,7 +688,7 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
     let deferred = sender_dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("initial remote-target send should defer");
-    let receipt_message_id = match deferred {
+    match deferred {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");
             assert_eq!(outcome.receipt_message_id, Some(outcome.message_id));
@@ -698,43 +698,9 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
                     .as_deref()
                     .is_some_and(|summary| summary.contains("deferred remote delivery"))
             );
-            outcome.message_id
         }
         other => panic!("unexpected deferred response: {other:?}"),
     };
-
-    let sender_receipt = sender_dispatcher
-        .dispatch(RequestEnvelope::Receive(
-            ReadQuery::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                None,
-                test_team_name(),
-                atm_core::types::ReadSelection::All,
-                false,
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-            )
-            .expect("read query"),
-        ))
-        .expect("sender receipt read should succeed");
-    match sender_receipt {
-        ResponseEnvelope::Receive(outcome) => {
-            let message = outcome.message.expect("deferred receipt");
-            assert_eq!(message.envelope.message_id, Some(receipt_message_id));
-            assert!(message.envelope.text.contains(
-                "deferred remote delivery because the cross-host path is not currently healthy"
-            ));
-        }
-        other => panic!("unexpected sender receipt response: {other:?}"),
-    }
-
     let listener_status_cache = RuntimeStatusCache::new();
     let listener_transport = PeerTransportRuntime::new_server_for_test_with_allowed_host_store(
         endpoint,
@@ -782,39 +748,7 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
             other => panic!("unexpected receiver replay response: {other:?}"),
         };
 
-        let sender_recovery = sender_dispatcher
-            .dispatch(RequestEnvelope::Receive(
-                ReadQuery::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    None,
-                    test_team_name(),
-                    atm_core::types::ReadSelection::All,
-                    false,
-                    false,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-                .expect("read query"),
-            ))
-            .expect("sender recovery receipt should succeed");
-        let receipt_delivered = match sender_recovery {
-            ResponseEnvelope::Receive(outcome) => outcome.message.is_some_and(|message| {
-                message.envelope.message_id == Some(receipt_message_id)
-                    && message
-                        .envelope
-                        .text
-                        .contains("delivered the deferred remote message")
-            }),
-            other => panic!("unexpected sender recovery response: {other:?}"),
-        };
-
-        if receiver_delivered && receipt_delivered {
+        if receiver_delivered {
             break;
         }
         // The replay worker waits up to one poll interval before sweeping, then the

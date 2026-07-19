@@ -199,11 +199,6 @@ fn persist_replay_request_requires_configured_replay_store_with_recovery() {
                 observed_at: IsoTimestamp::now(),
                 activity: HeartbeatActivity::Idle,
             }),
-            None,
-            None,
-            None,
-            None,
-            None,
         )
         .expect_err("missing replay store should fail closed");
     assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);

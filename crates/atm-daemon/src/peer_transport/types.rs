@@ -8,7 +8,6 @@ pub(crate) struct ReplayResumeSummary {
     pub(crate) delivered: usize,
     pub(crate) retained: usize,
     pub(crate) purged_expired: usize,
-    pub(crate) receipt_updates: usize,
 }
 
 #[derive(Debug)]

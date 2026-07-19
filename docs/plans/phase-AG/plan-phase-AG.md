@@ -254,11 +254,8 @@ Remote-delivery result rules:
   - retry success after a deferred result
   - retry exhaustion
   - terminal rejection without retry
-  - final sender-inbox receipt emission
-- a daemon restart during the deferred window must resume the pending retry and
-  receipt obligation from durable state until the bounded window expires
-- the daemon concludes deferred work by appending a final delivery/failure
-  receipt into the sender inbox
+- a daemon restart during the deferred window must resume the pending retry
+  from durable state until the bounded window expires
 
 ## Validation Lanes
 
@@ -741,7 +738,6 @@ Outputs:
   - healthy path => wait up to `10s` for remote acceptance
   - unhealthy path => return immediate deferred-delivery result
   - daemon continues bounded retry for `60s..120s`
-  - final delivery/failure receipt lands in sender inbox
 - socket transport reuses the same ATM wire message shapes already used on
   other transports; no transport-specific socket schema is introduced
 - `localhost` and self-IP same-host rows remain ordinary non-empty remote-host
