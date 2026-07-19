@@ -14,6 +14,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::protocol::SendResponseEnvelope;
+use crate::protocol::{send_acknowledged_envelope, send_sent_envelope};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -375,11 +376,11 @@ pub fn execute_outbound_send_with_runtime_and_post_send_emitter(
             runtime,
             post_send_emitter,
         )
-        .map(SendResponseEnvelope::Acknowledged);
+        .map(send_acknowledged_envelope);
     }
 
     send_mail_with_runtime_and_post_send_emitter(request, observability, runtime, post_send_emitter)
-        .map(SendResponseEnvelope::Sent)
+        .map(send_sent_envelope)
 }
 
 fn send_mail_with_runtime_impl<

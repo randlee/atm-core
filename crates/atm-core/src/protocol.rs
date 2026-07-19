@@ -71,6 +71,36 @@ pub enum ResponseEnvelope {
     Error(ProtocolErrorEnvelope),
 }
 
+pub fn send_sent_envelope(outcome: SendOutcome) -> SendResponseEnvelope {
+    SendResponseEnvelope::Sent(outcome)
+}
+
+pub fn send_acknowledged_envelope(outcome: AckOutcome) -> SendResponseEnvelope {
+    SendResponseEnvelope::Acknowledged(outcome)
+}
+
+pub fn send_sent_response(outcome: SendOutcome) -> ResponseEnvelope {
+    ResponseEnvelope::Send(send_sent_envelope(outcome))
+}
+
+pub fn send_acknowledged_response(outcome: AckOutcome) -> ResponseEnvelope {
+    ResponseEnvelope::Send(send_acknowledged_envelope(outcome))
+}
+
+pub fn into_send_outcome(response: ResponseEnvelope) -> Result<SendOutcome, Box<ResponseEnvelope>> {
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+        other => Err(Box::new(other)),
+    }
+}
+
+pub fn into_ack_outcome(response: ResponseEnvelope) -> Result<AckOutcome, Box<ResponseEnvelope>> {
+    match response {
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+        other => Err(Box::new(other)),
+    }
+}
+
 /// Serialized daemon-side ATM error for protocol transport.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProtocolErrorEnvelope {

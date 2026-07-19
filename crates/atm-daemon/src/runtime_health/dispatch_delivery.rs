@@ -5,7 +5,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
-    protocol::{CompatibilityVerdict, ReleaseVersion, SendResponseEnvelope},
+    protocol::{CompatibilityVerdict, ReleaseVersion, send_sent_response},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
@@ -74,28 +74,24 @@ impl DaemonRequestDispatcher {
                     boundary::RemoteSendDeliveryOutcome::Delivered(response) => Ok(*response),
                     boundary::RemoteSendDeliveryOutcome::Deferred {
                         receipt_message_id, ..
-                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                        build_remote_deferred_outcome(
-                            &self.service_runtime,
-                            &request,
-                            &remote_host,
-                            receipt_message_id,
-                            "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
-                        )?,
-                    ))),
+                    } => Ok(send_sent_response(build_remote_deferred_outcome(
+                        &self.service_runtime,
+                        &request,
+                        &remote_host,
+                        receipt_message_id,
+                        "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
+                    )?)),
                     boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
                     boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
                         receipt_message_id,
                         ..
-                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                        build_remote_deferred_outcome(
-                            &self.service_runtime,
-                            &request,
-                            &remote_host,
-                            receipt_message_id,
-                            "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
-                        )?,
-                    ))),
+                    } => Ok(send_sent_response(build_remote_deferred_outcome(
+                        &self.service_runtime,
+                        &request,
+                        &remote_host,
+                        receipt_message_id,
+                        "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
+                    )?)),
                 }
             }
         }

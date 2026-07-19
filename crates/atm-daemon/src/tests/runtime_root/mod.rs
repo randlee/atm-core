@@ -4,7 +4,8 @@ use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome,
+    next_request_id,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -45,24 +46,23 @@ pub(super) fn canonical_ack_request(
 }
 
 pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("expected send response, got {other:?}"),
-    }
+    into_send_outcome(response)
+        .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
 }
 
 pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> &SendOutcome {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("expected send response, got {other:?}"),
+    if let ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) =
+        response
+    {
+        outcome
+    } else {
+        panic!("expected send response, got {response:?}");
     }
 }
 
 pub(super) fn expect_ack_response(response: ResponseEnvelope) -> AckOutcome {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("expected ack response, got {other:?}"),
-    }
+    into_ack_outcome(response)
+        .unwrap_or_else(|other| panic!("expected ack response, got {other:?}"))
 }
 use tempfile::TempDir;
 

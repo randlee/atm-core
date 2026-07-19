@@ -4,7 +4,7 @@ use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, into_ack_outcome, into_send_outcome};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -48,17 +48,13 @@ fn replay_source_static(label: &'static str) -> ReplaySource {
 }
 
 fn expect_sent_response(response: ResponseEnvelope) -> atm_core::send::SendOutcome {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
-        other => panic!("expected send response, got {other:?}"),
-    }
+    into_send_outcome(response)
+        .unwrap_or_else(|other| panic!("expected send response, got {other:?}"))
 }
 
 fn expect_ack_response(response: ResponseEnvelope) -> atm_core::ack::AckOutcome {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("expected ack response, got {other:?}"),
-    }
+    into_ack_outcome(response)
+        .unwrap_or_else(|other| panic!("expected ack response, got {other:?}"))
 }
 
 fn install_test_roster_with_harness(
