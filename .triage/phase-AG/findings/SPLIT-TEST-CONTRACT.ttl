@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/SPLIT-TEST-CONTRACT>
+  a triage:Finding ;
+  triage:findingId "SPLIT-TEST-CONTRACT" ;
+  triage:title "split Sent/Acknowledged test contract still asserted via new wrapper helpers, duplicated across two files" ;
+  triage:description "Test code in crates/atm-daemon/src/tests_post_send_graft_warning.rs (lines 50-62) defines expect_sent_response() and expect_ack_response() helper functions. These same helpers are duplicated (with pub(super) visibility and one additional sent_response_ref variant) in crates/atm-daemon/src/tests/runtime_root/mod.rs (lines 47-66). Both sets of helpers maintain exhaustive pattern matching on SendResponseEnvelope::Sent and SendResponseEnvelope::Acknowledged, disguising the split assertion behind helper names rather than eliminating the duplication. This is the test-code counterpart to AG18-QA-004, which identified the same pattern in production code (composition.rs and atm-graft/src/lib.rs). The test code duplication requires a single shared helper module or trait to consolidate the split match logic into one canonical location." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "test-code-structure" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:notes "Occurrence identified during AG21-QA-1 (quality-mgr verdict) and PR #580. Pattern only exists on s21 (feature/pAG-s21-collapse-dispatch-routing), the highest and most recently active development branch. Branches s18-s20 have not yet introduced these test helpers; s22-s25 are not yet started. Correlation with AG18-QA-004: Both findings concern the same Sent/Acknowledged split duplication, but AG18-QA-004 addresses production code (composition.rs, atm-graft) whereas SPLIT-TEST-CONTRACT addresses test code (test_post_send_graft_warning.rs, tests/runtime_root/mod.rs). Treated as distinct findings because they occur in different code domains (prod vs test) and may be fixed independently. Full sweep of crates/atm-daemon/src/tests/** on s21 confirms three duplicate helper definitions: expect_sent_response and expect_ack_response in tests_post_send_graft_warning.rs, expect_sent_response, sent_response_ref, and expect_ack_response in tests/runtime_root/mod.rs. No additional similar patterns found in other test modules on s21." .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 50 ;
+  triage:snippet "fn expect_sent_response(response: ResponseEnvelope) -> atm_core::send::SendOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome, other => panic!(...) } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 57 ;
+  triage:snippet "fn expect_ack_response(response: ResponseEnvelope) -> atm_core::ack::AckOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome, other => panic!(...) } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/mod.rs" ;
+  triage:line 47 ;
+  triage:snippet "pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome, other => panic!(...) } } (and duplicated at line 52 as sent_response_ref, and expect_ack_response at line 61)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 8 .

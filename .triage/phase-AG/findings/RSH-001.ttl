@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-001>
+  a triage:Finding ;
+  triage:findingId "RSH-001" ;
+  triage:title "remote ack replies lose graceful deferred/receipt handling that composed remote sends get" ;
+  triage:description "execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs:677-695) returns a bare Err on Deferred/OutcomeUnknown and discards receipt_message_id, while the equivalent remote branch in dispatch_send converts the same outcomes into a successful deferred response with a persisted receipt. This asymmetry is now visible as a single-entry-point inconsistency because both paths converge on the same unified function this sprint introduced. See AG19-RBQA-F003 for the root-cause analysis: this is the same underlying Deferred/OutcomeUnknown outcome-classification divergence, now identified from the quality-manager AG21-QA-1 pathway." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "correctness" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:crossReference "AG19-RBQA-F003 (ruthless-boundary-qa finding: Divergent outcome-classification for Deferred/OutcomeUnknown implemented independently in two places). RSH-001 is substantially the same underlying defect, identified from the quality-manager AG21-QA-1 verdict pathway. Both findings converge on the same code locations (ack/mod.rs lines 686-690) and the same root cause (semantic divergence in Deferred/OutcomeUnknown handling between execute_ack_reply_plan and dispatch_send). RECOMMENDATION: RSH-001 should merge into AG19-RBQA-F003's record rather than remain a separate finding. They share the same fix (restore Ok-with-warnings semantics for Deferred/OutcomeUnknown), the same promotion target (AG.21), and the same repeatable-pattern strategy (no per-branch fix dispatch; one fix on highest-open branch, merged-forward to lower branches)." ;
+  triage:notes "RSH-001 severity=important vs AG19-RBQA-F003 severity=blocking reflects different review perspectives (quality-manager focusing on graceful-handling loss vs ruthless-boundary-qa focusing on semantic divergence), but both are blocking for delivery: the loss of receipt handling and the divergence are the same defect. AG21-FIX-1 (arch-ctm's in-progress fix on feature/pAG-s21-collapse-dispatch-routing) has already addressed this in the working tree (changed Err to Ok with warnings), but that fix is not yet committed. Triage recorded against committed HEAD state: s19 (59225e0f) and s20 (50572166) both exhibit the defect; s18 (70cce097) has correct Ok-handling but in a separate execute_remote_ack_reply_plan function (pre-merge structure); s21 HEAD (191c198b) still has the defect but working-tree changes show fix in progress. dispatch_ready = false because the fix is entangled with AG18-QA-002 (SendResponseEnvelope envelope-split), per AG19-ATM-QA-AG19-002 notes." .
+
+<urn:atm:triage:occurrence/RSH-001/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/RSH-001/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/RSH-001/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 686 ;
+  triage:snippet "crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => { Err(error) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .

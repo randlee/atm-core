@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/HARD-MERGE-GATE-LOC>
+  a triage:Finding ;
+  triage:findingId "HARD-MERGE-GATE-LOC" ;
+  triage:title "Hard Merge Gate LOC target missed" ;
+  triage:description "sprint-AG21.md (lines 166-171) Hard Merge Gate requires AG.21 to deliver at least -100 net LOC across crates/ measured as git diff --stat <sprint-base-sha>..HEAD -- crates/. On feature/pAG-s21-collapse-dispatch-routing, the development commit e0b2551f shows git diff --stat 50572166..e0b2551f -- crates/ = 109 insertions(+), 115 deletions(-) = -6 net LOC. This fails the gate by approximately 94 lines. The LOC measurement is a per-sprint numeric merge gate on AG.21's own development diff, not a repeatable code pattern. This is the second occurrence of the Hard Merge Gate LOC failure in phase-AG; see correlated finding AG18-QA-001 for AG.18's identical-root systemic issue (AG18 also failed by ~122 lines). Ladder-wide analysis shows s19 and s20 independently passed their own per-sprint gates, but the aggregate ladder-wide LOC may still be sufficient to meet the phase-end consolidation requirement if AG.21's fix is applied; however, this sprint's named-target gate is currently non-compliant and requires fix before merge." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:category "merge-gate" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/HARD-MERGE-GATE-LOC/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/e0b2551f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/e0b2551f> ;
+  triage:correlatedWith <urn:atm:triage:finding/AG18-QA-001> ;
+  triage:notes "HARD-MERGE-GATE-LOC is a ladder-wide cumulative measurement, not per-occurrence code sweep. The current defect is visible at s21 (QA-1 review point e0b2551f): -6 net LOC vs required -100. This measurement was taken at the QA-1 verdict point before fixes were dispatched under AG21-FIX-1. Current HEAD 191c198b (after merge-forward from 50572166) maintains the same -6 net LOC count. Correlation with AG18-QA-001: AG18 had +22 net LOC (FAIL by ~122), s19 had -133 (PASS), s20 had -518 (PASS), now s21 at -6 (FAIL by ~94). The systemic issue is that AG18's unwanted insertions propagated into s19 (then were partially deleted in s20), but s21's own deletions are insufficient. Fix dispatch will target the highest-open branch (s21 in this case, but actual promotion depends on downstream merge-forward topology). Per team policy, merge-forward of the fix through s22-s25 will close all downstream occurrences of this gate. Re-verify this numeric gate after fix lands; do not mark closed on aggregate ladder numbers alone since the sprint doc gate is per-sprint, not aggregate." .
+
+<urn:atm:triage:occurrence/HARD-MERGE-GATE-LOC/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/" ;
+  triage:line 0 ;
+  triage:snippet "git diff --stat 50572166..e0b2551f -- crates/ => 109 insertions(+), 115 deletions(-) = -6 net LOC vs required >= -100 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "e0b2551f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/e0b2551f> .
+
+<urn:atm:triage:worktree/pAG-s21/e0b2551f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "e0b2551f" ;
+  triage:orderIndex 21 .
