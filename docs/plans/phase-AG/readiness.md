@@ -69,12 +69,22 @@ Allowed closure-result values:
 - `AG.16` does not begin until `AG.15` lands
 - `AG.17` does not begin until `AG.16` is green enough to justify copied-state
   revalidation
+- `AG.18` begins the post-AG.15 ruthless-boundary unification ladder
+- `AG.19` does not begin until `AG.18` lands
+- `AG.20` does not begin until `AG.19` lands
+- `AG.21` does not begin until `AG.20` lands
+- `AG.22` does not begin until `AG.21` lands
+- `AG.23` does not begin until `AG.22` lands
+- `AG.24` does not begin until `AG.23` lands
+- `AG.25` does not begin until `AG.18` through `AG.24` all land
 - `AG.9` may not claim transport-security closure until `AG.10` is `PASS`; if
   `AG.10` is deferred, the verdict must explicitly state cross-host is
   functionally usable but not transport-secure
 - `AG.17` inherits the same transport-security rule from `AG.10`
-- `AG.17` is the authoritative final verdict whenever `AG-FIND-005` remains in
-  scope; `AG.9` remains historical reviewed verdict scope only
+- `AG.17` remains the historical corrective-line final verdict for AG.11
+  through AG.16; `AG.9` remains historical reviewed verdict scope only
+- `AG.25` is the authoritative live-proof closeout for the AG.18 through
+  AG.24 unification line
 - every failed row is linked to a finding in
   `cross-host-findings-ledger.md`
 - the final verdict states whether `1.3.1` cross-host communication is
