@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::delivery_execution::{
-    DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
+    DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
 use crate::delivery_plan::{
-    DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_target_for_snapshot,
+    DeliveryPlan, DeliveryPlanKind, delivery_target_for_snapshot,
     logical_messages_from_persistence,
 };
 use crate::delivery_policy::DeliveryEventFamily;
@@ -141,6 +141,13 @@ pub fn ack_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<AckOutcome, AtmError> {
+    // AG.19 migration required: dispatch the SendRequest produced by
+    // prepare_ack_send_request through the canonical send handler, replacing
+    // ack_mail_with_runtime_impl and its FinalizeAckContext result.
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks this legacy entry point until it dispatches the prepared SendRequest directly"
+    )]
     ack_mail_with_runtime_impl(request, observability, runtime, None)
 }
 
@@ -150,6 +157,13 @@ pub fn ack_mail_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<AckOutcome, AtmError> {
+    // AG.19 migration required: dispatch the SendRequest produced by
+    // prepare_ack_send_request through the canonical send handler, preserving
+    // post-send emission there instead of calling the legacy finalize path.
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks this legacy entry point until it dispatches the prepared SendRequest directly"
+    )]
     ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
 }
 
@@ -209,6 +223,9 @@ pub fn ack_request_from_send_request(request: SendRequest) -> Result<AckRequest,
     })
 }
 
+#[deprecated(
+    note = "AG.19 legacy caller: migrate ack execution to the canonical SendRequest handler, then remove this finalize-context path"
+)]
 fn ack_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -225,11 +242,25 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
+    // AG.19 migration required: replace this two-step context/finalize call with
+    // one canonical SendRequest execution; commit receive-side ack state only
+    // from that execution's confirmed result.
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks the legacy context/finalize pair until canonical SendRequest execution replaces it"
+    )]
     ack_mail_with_runtime_sqlite(request, observability, runtime, actor, team).and_then(|context| {
+        #[expect(
+            deprecated,
+            reason = "AG.19 tracks the legacy finalizer until canonical SendRequest execution replaces it"
+        )]
         finalize_sent_ack_outcome(runtime, observability, post_send_emitter, &context)
     })
 }
 
+#[deprecated(
+    note = "AG.19 legacy caller: return the canonical SendRequest execution result instead of FinalizeAckContext"
+)]
 fn ack_mail_with_runtime_sqlite<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -270,6 +301,12 @@ fn ack_mail_with_runtime_sqlite<
             source: &source,
         },
     )?;
+    // AG.19 migration required: return the canonical SendRequest execution
+    // result instead of constructing the legacy FinalizeAckContext.
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks FinalizeAckContext construction until this function returns canonical send execution"
+    )]
     Ok(FinalizeAckContext {
         actor,
         team,
@@ -297,6 +334,9 @@ struct SentAckReply {
     persistence: Box<crate::send::DeliveryPersistenceResult>,
 }
 
+#[deprecated(
+    note = "AG.19 deletion target: replace with canonical SendRequest execution result and remove all finalize-context call sites"
+)]
 struct FinalizeAckContext {
     actor: AgentName,
     team: TeamName,
@@ -595,6 +635,9 @@ fn home_dir(request: &AckRequest) -> &std::path::Path {
     request.home_dir.as_path()
 }
 
+#[deprecated(
+    note = "AG.19 deletion target: execute the prepared canonical SendRequest and remove this separate ack-finalization path"
+)]
 fn finalize_sent_ack_outcome<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -603,15 +646,55 @@ fn finalize_sent_ack_outcome<
     post_send_emitter: Option<&dyn PostSendHookEmitter>,
     context: &FinalizeAckContext,
 ) -> Result<AckOutcome, AtmError> {
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks FinalizeAckContext field access until this legacy finalizer is removed"
+    )]
     let reply = &context.sent_reply;
-    let post_send_messages = reply_post_send_messages(reply.persistence.as_ref())?;
-    let plan = build_reply_delivery_plan(
-        reply.persistence.as_ref(),
-        &reply.reply_target,
-        &reply.reply_snapshot,
-        &reply.reply_inbox_path,
-    )?;
-    let execution = execute_ack_reply_plan(runtime, context, reply, &plan)?;
+    let post_send_messages =
+        logical_messages_from_persistence(reply.persistence.as_ref(), false, true).map_err(
+            |error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted reply-delivery record shape before retrying post-send emission.",
+                )
+            },
+        )?;
+    let plan = DeliveryPlan::new(
+        DeliveryPlanKind::Reply,
+        reply.persistence.disposition,
+        delivery_target_for_snapshot(&reply.reply_inbox_path, &reply.reply_snapshot),
+        ResolvedRecipient {
+            agent: reply.reply_target.agent.clone(),
+            team: reply.reply_target.team.clone(),
+        },
+        logical_messages_from_persistence(reply.persistence.as_ref(), false, true).map_err(
+            |error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted reply-delivery record shape before retrying ack reply execution.",
+                )
+            },
+        )?,
+        reply.persistence.warnings.clone(),
+    );
+    let execution = match route_send_request(&reply.reply_request) {
+        SendRequestRoute::Remote(remote_host) => {
+            match runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)? {
+                crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
+                    crate::delivery_execution::DeliveryExecutionResult {
+                        warnings: Vec::new(),
+                    }
+                }
+                crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. }
+                | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. }
+                | crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => {
+                    return Err(error);
+                }
+            }
+        }
+        SendRequestRoute::Local => {
+            execute_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?
+        }
+    };
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
         team: context.team.clone(),
@@ -624,7 +707,7 @@ fn finalize_sent_ack_outcome<
         warnings: context.warnings.clone(),
     };
     outcome.warnings.extend(plan.warnings.iter().cloned());
-    emit_reply_delivery_plan_transitions(
+    emit_delivery_plan_transitions(
         observability,
         DeliveryTransitionContext {
             family: DeliveryEventFamily::AckReply,
@@ -664,69 +747,6 @@ fn finalize_sent_ack_outcome<
         reply.task_id.clone(),
     );
     Ok(outcome)
-}
-
-fn execute_ack_reply_plan<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    context: &FinalizeAckContext,
-    reply: &SentAckReply,
-    plan: &DeliveryPlan,
-) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
-    if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) {
-        return match runtime
-            .deliver_remote_send_request(reply.reply_request.clone(), remote_host)?
-        {
-            crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
-                Ok(crate::delivery_execution::DeliveryExecutionResult {
-                    warnings: Vec::new(),
-                })
-            }
-            crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. }
-            | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => {
-                Err(error)
-            }
-            crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
-        };
-    }
-
-    execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), plan)
-}
-
-fn build_reply_delivery_plan(
-    persistence: &crate::send::DeliveryPersistenceResult,
-    reply_target: &ReplyTarget,
-    reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
-    reply_inbox_path: &std::path::Path,
-) -> Result<DeliveryPlan, AtmError> {
-    let messages =
-        logical_messages_from_persistence(persistence, false, true).map_err(|error| {
-            AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted reply-delivery record shape before retrying ack reply execution.",
-        )
-        })?;
-    Ok(DeliveryPlan::new(
-        DeliveryPlanKind::Reply,
-        persistence.disposition,
-        delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
-        ResolvedRecipient {
-            agent: reply_target.agent.clone(),
-            team: reply_target.team.clone(),
-        },
-        messages,
-        persistence.warnings.clone(),
-    ))
-}
-
-fn reply_post_send_messages(
-    persistence: &crate::send::DeliveryPersistenceResult,
-) -> Result<Vec<LogicalMessage>, AtmError> {
-    logical_messages_from_persistence(persistence, false, true).map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted reply-delivery record shape before retrying post-send emission.",
-        )
-    })
 }
 
 fn record_ack_telemetry(
@@ -774,6 +794,8 @@ fn canonical_sender_identity(message: &InboxMessage) -> AgentName {
     crate::threading::canonical_sender_identity(message)
 }
 
+// AG.19 migration: these tests exercise the legacy finalize path; replace them with
+// canonical send/receive acknowledgement assertions when FinalizeAckContext is removed.
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
@@ -782,14 +804,13 @@ mod tests {
 
     use super::{
         FinalizeAckContext, PersistedSourceAck, ReplyTarget, SentAckReply,
-        build_reply_delivery_plan, canonical_sender_identity, finalize_sent_ack_outcome,
+        canonical_sender_identity, finalize_sent_ack_outcome,
         resolve_reply_target,
     };
     use crate::boundary::{
         self, BuiltInPostSendDispatch, MessageKey, NonClaudeOutboundDeliveryRequest,
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter,
     };
-    use crate::delivery_plan::DeliveryTarget;
     use crate::error::AtmErrorKind;
     use crate::error_codes::AtmErrorCode;
     use crate::observability::NullObservability;
@@ -797,7 +818,7 @@ mod tests {
     use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, set_remote_host};
     use crate::send::{
         DeliveryPersistenceDisposition, DeliveryPersistenceResult, RemoteTargetHost,
-        SendMessageSource, SendRequest, WarningEntry,
+        SendMessageSource, SendRequest,
     };
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -1467,6 +1488,8 @@ mod tests {
 
     #[test]
     fn finalize_ack_outcome_threads_remote_host_into_outbound_delivery_request() {
+        // AG.19 migration required: cover remote host propagation through the
+        // canonical SendRequest handler; this test constructs FinalizeAckContext.
         let actor = AgentName::from_validated("qa-a");
         let team = TeamName::from_validated(TEST_TEAM);
         let reply_message_id = AtmMessageId::new();
@@ -1543,54 +1566,9 @@ mod tests {
     }
 
     #[test]
-    fn ack_reply_state_machine_builds_reply_plan_with_original_and_companion() {
-        let team = TEST_TEAM.parse::<TeamName>().expect("team");
-        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
-        let mut original = message_with_from(ROLE_TEAM_LEAD);
-        original.message_id = Some(AtmMessageId::new());
-        let mut companion = message_with_from("atm-system");
-        companion.message_id = Some(AtmMessageId::new());
-        companion.source_team = Some(team.clone());
-        let persistence = DeliveryPersistenceResult {
-            disposition: DeliveryPersistenceDisposition::SqliteFailedRecovered,
-            original_message: original.clone(),
-            companion_message: Some(companion.clone()),
-            warnings: vec![WarningEntry::new("warning".to_string(), Some("recovery"))],
-        };
-        let snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
-            agent: agent.clone(),
-            team: team.clone(),
-            remote_host: None,
-            harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
-            recipient_pane_id: None,
-            local_tmux_post_send: false,
-            graft_post_send: false,
-            roster_backed: true,
-        };
-        let plan = build_reply_delivery_plan(
-            &persistence,
-            &super::ReplyTarget::new(agent.clone(), team.clone(), None),
-            &snapshot,
-            std::path::Path::new("reply.jsonl"),
-        )
-        .expect("reply delivery plan");
-
-        assert_eq!(
-            plan.disposition,
-            DeliveryPersistenceDisposition::SqliteFailedRecovered
-        );
-        assert_eq!(plan.messages.len(), 2);
-        assert_eq!(plan.messages[0].envelope, original);
-        assert_eq!(plan.messages[1].envelope, companion);
-        assert_eq!(plan.warnings.len(), 1);
-        assert!(matches!(
-            plan.delivery_target,
-            DeliveryTarget::NonClaude { .. }
-        ));
-    }
-
-    #[test]
     fn ack_write_goes_through_non_claude_outbound_boundary() {
+        // AG.19 migration required: cover non-Claude delivery via canonical
+        // SendRequest execution; this test calls finalize_sent_ack_outcome.
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -1675,6 +1653,8 @@ mod tests {
 
     #[serial_test::serial(env)]
     fn ack_reply_graft_post_send_dispatches_to_graft_port() {
+        // AG.19 migration required: cover graft post-send via canonical
+        // SendRequest execution; this test calls finalize_sent_ack_outcome.
         let tempdir = tempfile::tempdir().expect("tempdir");
         let home_dir = tempdir.path().join("home");
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
@@ -1774,6 +1754,8 @@ mod tests {
     #[test]
     #[serial_test::serial(env)]
     fn finalize_ack_outcome_warns_when_graft_post_send_delivery_fails() {
+        // AG.19 migration required: cover post-send warnings via canonical
+        // SendRequest execution; this test calls finalize_sent_ack_outcome.
         let tempdir = tempfile::tempdir().expect("tempdir");
         let home_dir = tempdir.path().join("home");
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
@@ -2309,6 +2291,8 @@ mod tests {
 
     #[test]
     fn finalize_ack_outcome_rejected_terminal_does_not_commit_source_state() {
+        // AG.19 migration required: cover terminal remote failure through
+        // canonical SendRequest execution; this test calls finalize_sent_ack_outcome.
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2398,6 +2382,8 @@ mod tests {
 
     #[test]
     fn finalize_ack_outcome_deferred_commits_source_state_with_warning() {
+        // AG.19 migration required: cover deferred remote failure through
+        // canonical SendRequest execution; this test calls finalize_sent_ack_outcome.
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();
@@ -2484,6 +2470,8 @@ mod tests {
 
     #[test]
     fn finalize_ack_outcome_outcome_unknown_commits_source_state_with_warning() {
+        // AG.19 migration required: cover unknown remote outcome through
+        // canonical SendRequest execution; this test calls finalize_sent_ack_outcome.
         let team = TEST_TEAM.parse::<TeamName>().expect("team");
         let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
         let reply_message_id = AtmMessageId::new();

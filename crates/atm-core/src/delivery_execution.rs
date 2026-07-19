@@ -76,7 +76,6 @@ where
     Ok(DeliveryExecutionResult::delivered())
 }
 
-pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
 
 pub(crate) fn emit_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
@@ -89,6 +88,13 @@ pub(crate) fn emit_delivery_plan_transitions(
             sqlite_failure_transition_names(plan.delivery_target.harness_path()).to_vec()
         }
         DeliveryPersistenceDisposition::Persisted => {
+            // AG.19 migration required: replace the AckReply branch inside
+            // persisted_success_transition_names with canonical SendRequest
+            // transition inventory before this execution path stops calling it.
+            #[expect(
+                deprecated,
+                reason = "AG.19 tracks this generic transition caller until AckReply uses canonical send transitions"
+            )]
             persisted_success_transition_names(context.family, plan.delivery_target.harness_path())
         }
     };
@@ -111,7 +117,6 @@ pub(crate) fn emit_delivery_plan_transitions(
     Ok(())
 }
 
-pub(crate) use emit_delivery_plan_transitions as emit_reply_delivery_plan_transitions;
 
 #[cfg(test)]
 mod tests {

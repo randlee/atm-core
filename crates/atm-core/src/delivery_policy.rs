@@ -253,6 +253,9 @@ impl ThreadUpdateStateMachine {
     dead_code,
     reason = "Phase Y.4 keeps the full documented ack-reply state inventory explicit even before every failure branch is exercised by runtime callers."
 )]
+#[deprecated(
+    note = "AG.19 deletion target: use canonical send transition inventory and remove the parallel ack-reply state machine"
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AckReplyStateMachine {
     Received,
@@ -266,6 +269,12 @@ pub(crate) enum AckReplyStateMachine {
     Failed,
 }
 
+// AG.19 legacy implementation: delete with AckReplyStateMachine after callers
+// use the canonical SendRequest transition inventory.
+#[expect(
+    deprecated,
+    reason = "AG.19 tracks this legacy state-machine implementation until the type is deleted"
+)]
 impl AckReplyStateMachine {
     fn transition_name(self) -> &'static str {
         match self {
@@ -475,6 +484,9 @@ fn restore_inbox_rebuild_persisted_success_transitions() -> Vec<&'static str> {
         .collect()
 }
 
+#[deprecated(
+    note = "AG.19 legacy caller: route AckReply transition queries through canonical send transition inventory before deleting AckReplyStateMachine"
+)]
 pub(crate) fn persisted_success_transition_names(
     family: DeliveryEventFamily,
     harness: DeliveryHarnessPath,
@@ -486,11 +498,20 @@ pub(crate) fn persisted_success_transition_names(
             .copied()
             .map(ThreadUpdateStateMachine::transition_name)
             .collect(),
-        DeliveryEventFamily::AckReply => ack_reply_transitions()
+        // AG.19 migration required: replace this parallel AckReply inventory
+        // with the canonical SendRequest transition inventory before deleting
+        // AckReplyStateMachine and ack_reply_transitions.
+        DeliveryEventFamily::AckReply => {
+            #[expect(
+                deprecated,
+                reason = "AG.19 tracks the parallel ack inventory until it is replaced by canonical send transitions"
+            )]
+            ack_reply_transitions()
             .iter()
             .copied()
             .map(AckReplyStateMachine::transition_name)
-            .collect(),
+            .collect()
+        }
         DeliveryEventFamily::InboxRepair => inbox_repair_persisted_success_transitions(),
         DeliveryEventFamily::RestoreInboxRebuild => {
             restore_inbox_rebuild_persisted_success_transitions()
@@ -561,7 +582,16 @@ pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine]
     ]
 }
 
+// AG.19 migration: remove this parallel ack state inventory; the canonical send state
+// transitions must be the only observable delivery sequence.
+#[deprecated(
+    note = "AG.19 deletion target: replace callers with canonical send transition inventory"
+)]
 pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
+    #[expect(
+        deprecated,
+        reason = "AG.19 tracks legacy ack-state variants until this inventory is deleted"
+    )]
     &[
         AckReplyStateMachine::Received,
         AckReplyStateMachine::ValidateAckTargetExists,
@@ -597,6 +627,8 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
     ]
 }
 
+// AG.19 migration: replace these legacy ack-state assertions with canonical send-path
+// assertions when AckReplyStateMachine and ack_reply_transitions are deleted.
 #[cfg(test)]
 mod tests {
     use super::{
@@ -781,6 +813,8 @@ mod tests {
                 super::ThreadUpdateStateMachine::Delivered,
             ]
         );
+        // AG.19 migration required: assert the canonical SendRequest
+        // transition inventory after the parallel AckReply inventory is removed.
         assert_eq!(
             ack_reply_transitions(),
             &[
