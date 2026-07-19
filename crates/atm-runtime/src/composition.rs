@@ -121,6 +121,7 @@ fn assemble_sqlite_runtime_at_path(
         storage_backends.rosters.clone(),
         sqlite_backend.nudge_template_override_store(),
         non_claude_outbound,
+        Arc::new(atm_core::LocalRejectingRemoteSendRouter),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
@@ -164,6 +165,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         storage_backends.rosters.clone(),
         sqlite_backend.nudge_template_override_store(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
+        Arc::new(atm_core::LocalRejectingRemoteSendRouter),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
     let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =

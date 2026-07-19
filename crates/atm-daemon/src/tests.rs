@@ -756,7 +756,7 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
                 "10.10.100.10".parse().expect("advertise"),
                 43101,
                 atm_storage::PeerInterfaceKind::Vpn,
-                "arch-ctm@atm-dev",
+                format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
             )
             .expect("add interface"),
         )
@@ -791,7 +791,7 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "10.10.100.98",
-                "arch-ctm@atm-dev",
+                format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
                 Some("windows".to_string()),
             )
             .expect("allow host"),
@@ -799,8 +799,12 @@ fn doctor_projects_cross_host_interface_and_allowlist_state_from_sqlite() {
         .expect("allow host");
     allowed_host_store
         .allow_host(
-            atm_storage::AllowHostCommand::new("10.10.100.99", "arch-ctm@atm-dev", None)
-                .expect("allow host 2"),
+            atm_storage::AllowHostCommand::new(
+                "10.10.100.99",
+                format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+                None,
+            )
+            .expect("allow host 2"),
         )
         .expect("allow host 2");
     allowed_host_store
@@ -940,7 +944,7 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
                 "192.168.1.20".parse().expect("advertise"),
                 43101,
                 atm_storage::PeerInterfaceKind::Lan,
-                "arch-ctm@atm-dev",
+                format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
             )
             .expect("add interface"),
         )
@@ -973,8 +977,12 @@ fn doctor_surfaces_degraded_cross_host_bind_state_and_staleness() {
         .expect("binding update");
     allowed_host_store
         .allow_host(
-            atm_storage::AllowHostCommand::new("192.168.1.21", "arch-ctm@atm-dev", None)
-                .expect("allow host"),
+            atm_storage::AllowHostCommand::new(
+                "192.168.1.21",
+                format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+                None,
+            )
+            .expect("allow host"),
         )
         .expect("allow host");
 

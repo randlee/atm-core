@@ -1,13 +1,10 @@
 use std::collections::BTreeSet;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{
-    DirectDeliveryOutcome, DirectDeliveryRequest, RequestEnvelope, ResponseEnvelope,
-    SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
@@ -23,9 +20,15 @@ pub(crate) enum RemoteDeliveryDecision {
 #[derive(Debug)]
 pub(crate) enum SendOutcome {
     Delivered(Box<ResponseEnvelope>),
-    Deferred { receipt_message_id: AtmMessageId },
+    Deferred {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
     RejectedTerminal(AtmError),
-    OutcomeUnknown { receipt_message_id: AtmMessageId },
+    OutcomeUnknown {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
 }
 
 #[derive(Debug)]
@@ -52,12 +55,6 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
         remote_host: RemoteTargetHost,
         deferred_receipt_message_id: AtmMessageId,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
-
-    fn deliver_direct(
-        &self,
-        request: DirectDeliveryRequest,
-        remote_host: RemoteTargetHost,
-    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError>;
 }
 
 #[derive(Clone)]
@@ -163,10 +160,104 @@ impl DaemonCrossHostDelivery {
         resolve_remote_port_for_host(interface_rows, bound_addr, remote_host)
     }
 
+    fn persist_remote_retry(
+        &self,
+        endpoint: SocketAddr,
+        replay_request: &SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<(), CrossHostDeliveryInfraError> {
+        self.peer_transport_runtime
+            .persist_remote_request_for_retry(
+                endpoint,
+                replay_request.caller_team.clone(),
+                replay_request.caller_identity.clone(),
+                boundary::MessageKey::from(deferred_receipt_message_id),
+                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+                    replay_request.clone(),
+                ))),
+                Some(replay_request.caller_team.clone()),
+                Some(replay_request.caller_identity.clone()),
+                Some(deferred_receipt_message_id),
+                Some(replay_request.to.to_string()),
+                Some(remote_host.as_str().to_string()),
+            )
+            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)
+    }
+
+    fn deferred_listener_unavailable(deferred_receipt_message_id: AtmMessageId) -> SendOutcome {
+        SendOutcome::Deferred {
+            receipt_message_id: deferred_receipt_message_id,
+            error: AtmError::daemon_unavailable(
+                "remote delivery is deferred because no healthy peer listener is currently bound",
+            )
+            .with_recovery(
+                "Restore the cross-host listener health and retry; the daemon queued the send for bounded background replay.",
+            ),
+        }
+    }
+
+    fn deliver_immediate_wait(
+        &self,
+        endpoint: SocketAddr,
+        request: SendRequest,
+        replay_request: SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+        match self.peer_transport_runtime.send_to_endpoint_immediate_wait(
+            endpoint,
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
+        ) {
+            Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
+            Err(error) => self.handle_immediate_wait_error(
+                endpoint,
+                replay_request,
+                deferred_receipt_message_id,
+                remote_host,
+                error,
+            ),
+        }
+    }
+
+    fn handle_immediate_wait_error(
+        &self,
+        endpoint: SocketAddr,
+        replay_request: SendRequest,
+        deferred_receipt_message_id: AtmMessageId,
+        remote_host: &RemoteTargetHost,
+        error: AtmError,
+    ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+        let outcome = Self::classify_error(&error);
+        if matches!(
+            outcome,
+            SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
+        ) {
+            self.persist_remote_retry(
+                endpoint,
+                &replay_request,
+                deferred_receipt_message_id,
+                remote_host,
+            )?;
+        }
+        Ok(match outcome {
+            SendOutcome::Deferred { error, .. } => SendOutcome::Deferred {
+                receipt_message_id: deferred_receipt_message_id,
+                error,
+            },
+            SendOutcome::OutcomeUnknown { error, .. } => SendOutcome::OutcomeUnknown {
+                receipt_message_id: deferred_receipt_message_id,
+                error,
+            },
+            other => other,
+        })
+    }
+
     fn classify_error(error: &AtmError) -> SendOutcome {
         if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown {
             return SendOutcome::OutcomeUnknown {
                 receipt_message_id: AtmMessageId::new(),
+                error: preserve_error_shape(error),
             };
         }
         if error.code == AtmErrorCode::ClientDaemonVersionIncompatible {
@@ -188,12 +279,22 @@ impl DaemonCrossHostDelivery {
         if error.code == AtmErrorCode::DaemonUnavailable || error.is_timeout() {
             return SendOutcome::Deferred {
                 receipt_message_id: AtmMessageId::new(),
+                error: preserve_error_shape(error),
             };
         }
         SendOutcome::Deferred {
             receipt_message_id: AtmMessageId::new(),
+            error: preserve_error_shape(error),
         }
     }
+}
+
+fn preserve_error_shape(error: &AtmError) -> AtmError {
+    let mut preserved = AtmError::new_with_code(error.code, error.kind, error.message.clone());
+    for recovery in &error.recovery {
+        preserved = preserved.with_recovery(recovery.clone());
+    }
+    preserved
 }
 
 fn select_resolved_remote_endpoint(
@@ -224,93 +325,23 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
         let replay_request = request.clone();
         match decision {
             RemoteDeliveryDecision::DeferredRetry => {
-                self.peer_transport_runtime
-                    .persist_remote_request_for_retry(
-                        endpoint,
-                        replay_request.caller_team.clone(),
-                        replay_request.caller_identity.clone(),
-                        boundary::MessageKey::from(deferred_receipt_message_id),
-                        RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                            replay_request.clone(),
-                        ))),
-                        Some(replay_request.caller_team.clone()),
-                        Some(replay_request.caller_identity.clone()),
-                        Some(deferred_receipt_message_id),
-                        Some(replay_request.to.to_string()),
-                        Some(remote_host.as_str().to_string()),
-                    )
-                    .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-                Ok(SendOutcome::Deferred {
-                    receipt_message_id: deferred_receipt_message_id,
-                })
-            }
-            RemoteDeliveryDecision::HealthyImmediateWait => self
-                .peer_transport_runtime
-                .send_to_endpoint_immediate_wait(
+                self.persist_remote_retry(
                     endpoint,
-                    RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
-                )
-                .map(Box::new)
-                .map(SendOutcome::Delivered)
-                .or_else(|error| {
-                    let outcome = Self::classify_error(&error);
-                    if matches!(
-                        outcome,
-                        SendOutcome::Deferred { .. } | SendOutcome::OutcomeUnknown { .. }
-                    ) {
-                        self.peer_transport_runtime
-                            .persist_remote_request_for_retry(
-                                endpoint,
-                                replay_request.caller_team.clone(),
-                                replay_request.caller_identity.clone(),
-                                boundary::MessageKey::from(deferred_receipt_message_id),
-                                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                                    replay_request.clone(),
-                                ))),
-                                Some(replay_request.caller_team.clone()),
-                                Some(replay_request.caller_identity.clone()),
-                                Some(deferred_receipt_message_id),
-                                Some(replay_request.to.to_string()),
-                                Some(remote_host.as_str().to_string()),
-                            )
-                            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-                    }
-                    Ok(match outcome {
-                        SendOutcome::Deferred { .. } => SendOutcome::Deferred {
-                            receipt_message_id: deferred_receipt_message_id,
-                        },
-                        SendOutcome::OutcomeUnknown { .. } => SendOutcome::OutcomeUnknown {
-                            receipt_message_id: deferred_receipt_message_id,
-                        },
-                        other => other,
-                    })
-                }),
-        }
-    }
-
-    fn deliver_direct(
-        &self,
-        request: DirectDeliveryRequest,
-        remote_host: RemoteTargetHost,
-    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> {
-        let (_, endpoint) = self.decide_remote_delivery(&remote_host)?;
-        let response = self
-            .peer_transport_runtime
-            .send_to_endpoint_immediate_wait(
-                endpoint,
-                RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request)),
-            )
-            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-        match response {
-            ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(outcome)) => Ok(outcome),
-            other => Err(CrossHostDeliveryInfraError::InternalInvariantViolation(
-                AtmError::daemon_unavailable(format!(
-                    "remote daemon returned unexpected response for direct delivery: {other:?}"
+                    &replay_request,
+                    deferred_receipt_message_id,
+                    &remote_host,
+                )?;
+                Ok(Self::deferred_listener_unavailable(
+                    deferred_receipt_message_id,
                 ))
-                .with_recovery(
-                    "Align the sender and receiver daemon protocol paths before retrying the cross-host acknowledgement reply.",
-                ),
-            )),
+            }
+            RemoteDeliveryDecision::HealthyImmediateWait => self.deliver_immediate_wait(
+                endpoint,
+                request,
+                replay_request,
+                deferred_receipt_message_id,
+                &remote_host,
+            ),
         }
     }
 }
@@ -324,14 +355,24 @@ fn resolve_remote_port_for_host(
         .into_iter()
         .filter(|row| row.enabled)
         .collect::<Vec<_>>();
-    let enabled_ports = enabled_rows
+    let target_is_loopback = remote_host.targets_loopback();
+    let scoped_rows = enabled_rows
+        .iter()
+        .filter(|row| row.bind_addr.is_loopback() == target_is_loopback)
+        .collect::<Vec<_>>();
+    let candidate_rows = if scoped_rows.is_empty() {
+        enabled_rows.iter().collect::<Vec<_>>()
+    } else {
+        scoped_rows
+    };
+    let enabled_ports = candidate_rows
         .iter()
         .map(|row| row.port)
         .collect::<BTreeSet<_>>();
     match enabled_ports.len() {
         1 => Ok((
             *enabled_ports.iter().next().expect("one enabled port"),
-            interface_family_preference(&enabled_rows),
+            interface_family_preference_refs(&candidate_rows),
         )),
         0 => bound_addr.map(|addr| (addr.port(), Some(addr.is_ipv4()))).ok_or_else(|| {
             CrossHostDeliveryInfraError::RuntimeUnavailable(
@@ -344,15 +385,15 @@ fn resolve_remote_port_for_host(
             )
         }),
         _ => {
-            if let Ok(ip) = remote_host.as_str().parse::<IpAddr>() {
-                let matching_ports = enabled_rows
+            if let Some(ip) = remote_host.literal_ip() {
+                let matching_ports = candidate_rows
                     .iter()
                     .filter(|row| row.bind_addr == ip || row.advertise_addr == ip)
                     .map(|row| row.port)
                     .collect::<BTreeSet<_>>();
                 if matching_ports.len() == 1 {
-                    let matching_rows = enabled_rows
-                        .iter()
+                    let matching_rows = candidate_rows
+                        .into_iter()
                         .filter(|row| row.bind_addr == ip || row.advertise_addr == ip)
                         .collect::<Vec<_>>();
                     return Ok((
@@ -371,10 +412,6 @@ fn resolve_remote_port_for_host(
             ))
         }
     }
-}
-
-fn interface_family_preference(rows: &[PeerInterfaceRow]) -> Option<bool> {
-    interface_family_preference_refs(&rows.iter().collect::<Vec<_>>())
 }
 
 fn interface_family_preference_refs(rows: &[&PeerInterfaceRow]) -> Option<bool> {
@@ -493,5 +530,72 @@ mod tests {
             resolve_remote_port_for_host(rows, None, &host).expect("localhost port");
         assert_eq!(port, 43101);
         assert_eq!(family, Some(true));
+    }
+
+    #[test]
+    fn resolve_remote_port_ignores_loopback_port_for_non_loopback_target() {
+        let rows = vec![
+            interface_row(
+                Ipv4Addr::new(127, 0, 0, 1),
+                Ipv4Addr::new(127, 0, 0, 1),
+                43145,
+                true,
+            ),
+            interface_row(
+                Ipv4Addr::new(192, 168, 128, 82),
+                Ipv4Addr::new(192, 168, 128, 82),
+                43101,
+                true,
+            ),
+        ];
+        let host = parse_send_target("cm5@atm-m5.192.168.128.29", None)
+            .expect("parse target")
+            .remote_host
+            .expect("host");
+        let (port, family) =
+            resolve_remote_port_for_host(rows, None, &host).expect("lan host port");
+        assert_eq!(port, 43101);
+        assert_eq!(family, Some(true));
+    }
+
+    #[test]
+    fn remote_host_loopback_detection_matches_localhost_and_loopback_ip() {
+        let localhost = parse_send_target(
+            &format!(
+                "{}@{}.localhost",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("localhost target")
+        .remote_host
+        .expect("localhost host");
+        let loopback_ip = parse_send_target(
+            &format!(
+                "{}@{}.127.0.0.1",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("loopback target")
+        .remote_host
+        .expect("loopback host");
+        let lan_ip = parse_send_target(
+            &format!(
+                "{}@{}.192.168.128.82",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("lan target")
+        .remote_host
+        .expect("lan host");
+
+        assert!(localhost.targets_loopback());
+        assert!(loopback_ip.targets_loopback());
+        assert!(!lan_ip.targets_loopback());
     }
 }

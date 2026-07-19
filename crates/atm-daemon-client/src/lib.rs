@@ -7,6 +7,10 @@ use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
+pub use atm_core::doctor::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport,
+};
 use atm_core::protocol;
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
@@ -30,44 +34,6 @@ pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 #[cfg(windows)]
 const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapConnectOutcome {
-    Connected,
-    NotFound,
-    Timeout,
-    Failed,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapLaunchGateOutcome {
-    Launched,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapAutoStartOutcome {
-    AutoStarted,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct BootstrapTraceReport {
-    pub daemon_connect: BootstrapConnectOutcome,
-    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
-    pub daemon_auto_start: BootstrapAutoStartOutcome,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connect_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub launch_gate_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_start_detail: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapCommandEvent {

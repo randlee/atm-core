@@ -6,7 +6,7 @@ use crate::boundary::{
 };
 use crate::error::AtmError;
 
-use super::qualified_sender_identity;
+use super::qualified_sender_origin;
 
 pub fn resolve_template(
     override_row: Option<TeamNudgeTemplateOverrideRow>,
@@ -54,11 +54,16 @@ fn render_values(event: &PostSendHookEvent) -> BTreeMap<&'static str, String> {
     BTreeMap::from([
         (
             "from",
-            qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+            qualified_sender_origin(
+                &event.sender,
+                Some(&event.sender_team),
+                event.remote_host.as_deref(),
+            ),
         ),
         ("team", event.recipient_team.to_string()),
         ("message_id", event.message_id.to_string()),
         ("description", event.description.clone()),
+        ("remote_host", event.remote_host.clone().unwrap_or_default()),
         (
             "task_id",
             event
@@ -123,7 +128,7 @@ fn render_template(
                 "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
             ))
             .with_recovery(
-                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, and {{task_id}} in built-in nudge templates.",
+                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, {{remote_host}}, and {{task_id}} in built-in nudge templates.",
             ));
         };
         output.push_str(value);
@@ -140,7 +145,7 @@ mod tests {
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
         TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
-    use crate::send::qualified_sender_identity;
+    use crate::send::{qualified_sender_identity, qualified_sender_origin};
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 
@@ -150,6 +155,7 @@ mod tests {
             sender_team: TeamName::from_validated(TEST_TEAM),
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
+            remote_host: None,
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,
@@ -209,6 +215,18 @@ mod tests {
     }
 
     #[test]
+    fn qualified_sender_origin_appends_remote_host_when_present() {
+        assert_eq!(
+            qualified_sender_origin(
+                &base_event().sender,
+                Some(&base_event().sender_team),
+                Some("127.0.0.1"),
+            ),
+            format!("{TEST_LEAD}@{TEST_TEAM}.127.0.0.1")
+        );
+    }
+
+    #[test]
     fn render_built_in_nudge_populates_placeholders() {
         let rendered = render_built_in_nudge(
             &base_event(),
@@ -217,5 +235,15 @@ mod tests {
         .expect("rendered template");
         assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}")));
         assert!(rendered.contains("01KX1TEST00000000000000000"));
+    }
+
+    #[test]
+    fn render_built_in_nudge_includes_remote_host_in_from_identity() {
+        let mut event = base_event();
+        event.remote_host = Some("127.0.0.1".to_string());
+        let rendered =
+            render_built_in_nudge(&event, default_template(BuiltInNudgeTemplateKind::Delivery))
+                .expect("rendered template");
+        assert!(rendered.contains(&format!("{TEST_LEAD}@{TEST_TEAM}.127.0.0.1")));
     }
 }

@@ -800,6 +800,7 @@ mod tests {
             Arc::new(roster_store(members)),
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+            Arc::new(crate::LocalRejectingRemoteSendRouter),
         )
     }
 
@@ -1210,6 +1211,7 @@ mod tests {
             }),
             Arc::new(NoopNudgeTemplateOverrideStore),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+            Arc::new(crate::LocalRejectingRemoteSendRouter),
         );
 
         let report = run_doctor_with_runtime(

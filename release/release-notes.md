@@ -1,14 +1,14 @@
 # Release Notes
 
 ## Summary
-- version: 1.3.1
+- version: 1.3.2
 - release date: 2026-07-15
 - release owner: publisher (ATM release execution)
 
 This release lands Phase AE (installed-copy packaging, docs/help surfacing,
 publisher freshness gate) and Phase AF (host-wide singleton closure,
 observability/release gates, native send input-integrity hardening), plus a
-1.3.1 cross-host smoke-test validation sprint and a Homebrew tap
+1.3.2 cross-host smoke-test validation sprint and a Homebrew tap
 platform-asset mapping fix.
 
 ## Included Changes
@@ -31,9 +31,9 @@ platform-asset mapping fix.
 - Surface CLI help content and verify the installed user-doc graph
   end-to-end (Sprints AE.6, AE.7, AE.9).
 
-### 1.3.1 cross-host smoke-test validation (PR #540)
+### 1.3.2 cross-host smoke-test validation (PR #540)
 - Independently re-run and verify the full macOS and Windows smoke suites
-  against the 1.3.1 candidate (fast/normal/thorough/shared-host/graft-
+  against the 1.3.2 candidate (fast/normal/thorough/shared-host/graft-
   same-host lanes) with evidence SHAs verified as real ancestors of the
   reviewed commit.
 - Formally document the true cross-host (Windows↔macOS simultaneous)
@@ -69,8 +69,8 @@ platform-asset mapping fix.
   publishable crates): atm-storage → agent-team-mail-core →
   atm-storage-rusqlite → atm-daemon-client → atm-runtime →
   atm-daemon-bootstrap → atm-daemon → atm-graft → agent-team-mail.
-- GitHub Releases: tag v1.3.1 cut from main via the Release workflow.
-- Homebrew: regenerate agent-team-mail.rb and atm.rb at 1.3.1 with the
+- GitHub Releases: tag v1.3.2 cut from main via the Release workflow.
+- Homebrew: regenerate agent-team-mail.rb and atm.rb at 1.3.2 with the
   fixed generator; backfill 1.3.0 and 1.2.3 formulas with corrected
   per-platform url/sha256.
 - winget: token wiring fix included (PR #532); manifest publish follows

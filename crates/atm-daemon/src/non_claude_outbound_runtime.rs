@@ -7,8 +7,8 @@ use atm_core::boundary::{
     self, NonClaudeOutboundDeliveryRequest, NonClaudeOutboundDeliveryResponse,
 };
 use atm_core::error::AtmError;
-use atm_core::protocol::DirectDeliveryRequest;
-use atm_core::send::RemoteTargetHost;
+use atm_core::schema::AtmMessageId;
+use atm_core::send::SendRequest;
 
 use crate::peer_transport::delivery::CrossHostDelivery;
 
@@ -17,7 +17,6 @@ const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 #[derive(Clone)]
 pub(crate) struct DaemonNonClaudeOutbound {
     path_factory: OutputPathFactory,
-    cross_host_delivery: Option<Arc<dyn CrossHostDelivery + Send + Sync>>,
 }
 
 impl std::fmt::Debug for DaemonNonClaudeOutbound {
@@ -40,22 +39,8 @@ impl DaemonNonClaudeOutbound {
         }))
     }
 
-    pub(crate) fn new_with_cross_host_delivery(
-        cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>,
-    ) -> Self {
-        Self {
-            path_factory: Arc::new(|| {
-                Ok(atm_core::home::host_runtime_dir()?.join("non_claude_outbound.jsonl"))
-            }),
-            cross_host_delivery: Some(cross_host_delivery),
-        }
-    }
-
     fn new_with_path_factory(path_factory: OutputPathFactory) -> Self {
-        Self {
-            path_factory,
-            cross_host_delivery: None,
-        }
+        Self { path_factory }
     }
 
     #[cfg(test)]
@@ -71,30 +56,6 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError> {
-        if let Some(remote_host) = request.remote_host.as_deref() {
-            let cross_host_delivery = self.cross_host_delivery.as_ref().ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "cross-host outbound delivery is unavailable for remote acknowledgement reply routing",
-                )
-                .with_recovery(
-                    "Restart atm-daemon with the cross-host runtime fully assembled before retrying the remote acknowledgement reply.",
-                )
-            })?;
-            let remote_host = RemoteTargetHost::parse(remote_host)?;
-            let outcome = cross_host_delivery
-                .deliver_direct(
-                    DirectDeliveryRequest {
-                        team: request.team.clone(),
-                        agent: request.agent.clone(),
-                        messages: request.messages.clone(),
-                    },
-                    remote_host,
-                )
-                .map_err(|error| error.into_atm_error())?;
-            return Ok(NonClaudeOutboundDeliveryResponse {
-                delivered_messages: outcome.delivered_messages,
-            });
-        }
         // This trait is intentionally synchronous; blocking filesystem I/O is
         // the correct execution model here and `spawn_blocking` would violate
         // the trait contract rather than improve it.
@@ -114,6 +75,62 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
 
         Ok(NonClaudeOutboundDeliveryResponse {
             delivered_messages: request.messages.len(),
+        })
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DaemonRemoteSendRouter {
+    cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>,
+}
+
+impl std::fmt::Debug for DaemonRemoteSendRouter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DaemonRemoteSendRouter(..)")
+    }
+}
+
+impl DaemonRemoteSendRouter {
+    pub(crate) fn new(cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>) -> Self {
+        Self {
+            cross_host_delivery,
+        }
+    }
+}
+
+impl boundary::sealed::Sealed for DaemonRemoteSendRouter {}
+
+impl boundary::RemoteSendRouter for DaemonRemoteSendRouter {
+    fn deliver_remote_send(
+        &self,
+        request: SendRequest,
+        remote_host: atm_core::send::RemoteTargetHost,
+    ) -> Result<boundary::RemoteSendDeliveryOutcome, AtmError> {
+        let outcome = self
+            .cross_host_delivery
+            .deliver_remote(request, remote_host, AtmMessageId::new())
+            .map_err(|error| error.into_atm_error())?;
+        Ok(match outcome {
+            crate::peer_transport::delivery::SendOutcome::Delivered(response) => {
+                boundary::RemoteSendDeliveryOutcome::Delivered(response)
+            }
+            crate::peer_transport::delivery::SendOutcome::Deferred {
+                receipt_message_id,
+                error,
+            } => boundary::RemoteSendDeliveryOutcome::Deferred {
+                receipt_message_id,
+                error,
+            },
+            crate::peer_transport::delivery::SendOutcome::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            } => boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            },
+            crate::peer_transport::delivery::SendOutcome::RejectedTerminal(error) => {
+                boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error)
+            }
         })
     }
 }
@@ -182,23 +199,25 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
 
 #[cfg(test)]
 mod tests {
-    use super::DaemonNonClaudeOutbound;
+    use super::{DaemonNonClaudeOutbound, DaemonRemoteSendRouter};
     use crate::peer_transport::delivery::{
         CrossHostDelivery, CrossHostDeliveryInfraError, SendOutcome,
     };
-    use atm_core::boundary::{NonClaudeOutbound, NonClaudeOutboundDeliveryRequest};
-    use atm_core::protocol::{DirectDeliveryOutcome, DirectDeliveryRequest};
+    use atm_core::boundary::{
+        NonClaudeOutbound, NonClaudeOutboundDeliveryRequest, RemoteSendRouter,
+    };
     use atm_core::schema::{AtmMessageId, InboxMessage};
     use atm_core::send::{RemoteTargetHost, SendRequest};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::types::IsoTimestamp;
     use serde_json::Map;
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
     #[derive(Default)]
     struct RecordingCrossHostDelivery {
-        requests: Mutex<Vec<(String, DirectDeliveryRequest)>>,
+        requests: Mutex<Vec<(String, SendRequest)>>,
     }
 
     impl atm_core::boundary::sealed::Sealed for RecordingCrossHostDelivery {}
@@ -206,25 +225,32 @@ mod tests {
     impl CrossHostDelivery for RecordingCrossHostDelivery {
         fn deliver_remote(
             &self,
-            _request: SendRequest,
-            _remote_host: RemoteTargetHost,
+            request: SendRequest,
+            remote_host: RemoteTargetHost,
             _deferred_receipt_message_id: AtmMessageId,
         ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-            unreachable!("test only exercises direct delivery")
-        }
-
-        fn deliver_direct(
-            &self,
-            request: DirectDeliveryRequest,
-            remote_host: RemoteTargetHost,
-        ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> {
             self.requests
                 .lock()
                 .expect("requests")
-                .push((remote_host.as_str().to_string(), request.clone()));
-            Ok(DirectDeliveryOutcome {
-                delivered_messages: request.messages.len(),
-            })
+                .push((remote_host.as_str().to_string(), request));
+            let response = atm_core::ResponseEnvelope::Send(
+                atm_core::protocol::SendResponseEnvelope::Sent(atm_core::send::SendOutcome {
+                    action: atm_core::types::CommandAction::Send,
+                    team: atm_core::types::TeamName::from_validated(TEST_TEAM),
+                    agent: atm_core::types::AgentName::from_validated("recipient"),
+                    sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
+                    outcome: atm_core::send::SendCommandOutcome::Sent,
+                    message_id: AtmMessageId::new(),
+                    receipt_message_id: None,
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                }),
+            );
+            Ok(SendOutcome::Delivered(Box::new(response)))
         }
     }
 
@@ -233,6 +259,7 @@ mod tests {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
             remote_host: None,
+            origin: None,
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
@@ -285,6 +312,7 @@ mod tests {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
             remote_host: None,
+            origin: None,
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
@@ -314,23 +342,48 @@ mod tests {
     }
 
     #[test]
-    fn daemon_non_claude_outbound_routes_remote_host_requests_through_cross_host_delivery() {
+    fn daemon_remote_send_router_routes_remote_host_requests_through_cross_host_delivery() {
         let cross_host_delivery = Arc::new(RecordingCrossHostDelivery::default());
-        let runtime =
-            DaemonNonClaudeOutbound::new_with_cross_host_delivery(cross_host_delivery.clone());
-        let mut request = request();
-        request.remote_host = Some("10.10.100.98".to_string());
+        let runtime = DaemonRemoteSendRouter::new(cross_host_delivery.clone());
+        let request = SendRequest {
+            home_dir: PathBuf::from("/tmp/atm-home"),
+            current_dir: PathBuf::from("/tmp/worktree"),
+            caller_identity: "sender".parse().expect("sender"),
+            caller_team: "test-team".parse().expect("team"),
+            to: "qa-a@test-team".parse().expect("to"),
+            message_source: atm_core::send::SendMessageSource::Inline("hello".to_string()),
+            summary_override: None,
+            requires_ack: false,
+            task_id: None,
+            parent_message_id: None,
+            acknowledges_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            source_remote_host: None,
+            remote_host: Some(
+                atm_core::send::RemoteTargetHost::parse("10.10.100.98").expect("remote host"),
+            ),
+            dry_run: false,
+        };
 
-        let response = runtime
-            .deliver_payloads(request.clone())
-            .expect("deliver payload");
-        assert_eq!(response.delivered_messages, 1);
+        runtime
+            .deliver_remote_send(
+                request.clone(),
+                atm_core::send::RemoteTargetHost::parse("10.10.100.98").expect("remote host"),
+            )
+            .expect("deliver remote send");
 
         let captured = cross_host_delivery.requests.lock().expect("requests");
         assert_eq!(captured.len(), 1);
         assert_eq!(captured[0].0, "10.10.100.98");
-        assert_eq!(captured[0].1.team, request.team);
-        assert_eq!(captured[0].1.agent, request.agent);
-        assert_eq!(captured[0].1.messages, request.messages);
+        assert_eq!(captured[0].1.to, request.to);
+        assert_eq!(
+            captured[0].1.remote_host.as_ref().map(|host| host.as_str()),
+            Some("10.10.100.98")
+        );
+        match &captured[0].1.message_source {
+            atm_core::send::SendMessageSource::Inline(body) => assert_eq!(body, "hello"),
+            other => panic!("unexpected send source: {other:?}"),
+        }
     }
 }

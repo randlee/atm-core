@@ -15,7 +15,7 @@ use crate::boundary::{
     PostSendEmissionPath, PostSendHookEmitter, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
-use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
+use crate::delivery_execution::execute_delivery_plan;
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
@@ -222,6 +222,7 @@ impl RetainedServiceRuntime for TestRuntime {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
                 remote_host: recipient.remote_host.clone(),
+                origin: None,
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             });
@@ -354,6 +355,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         requires_ack: false,
         task_id: Some("task-123".parse().expect("task id")),
         parent_message_id: None,
+        acknowledges_message_id: None,
         thread_mode: None,
         expires_at: None,
         source_remote_host: None,
@@ -367,6 +369,15 @@ fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
         .parse()
         .expect("self address");
+    request
+}
+
+fn self_addressed_remote_send_request(home_dir: &Path, host: &str) -> SendRequest {
+    let mut request = self_addressed_send_request(home_dir);
+    request.remote_host =
+        super::parse_send_target(&format!("{TEST_SENDER}@{TEST_TEAM}"), Some(host))
+            .expect("self remote target")
+            .remote_host;
     request
 }
 
@@ -498,10 +509,6 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
     let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
-    assert_eq!(
-        execution.disposition,
-        DeliveryExecutionDisposition::Delivered
-    );
     assert!(execution.warnings.is_empty());
 }
 
@@ -885,6 +892,84 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
             .lock()
             .expect("non-claude deliveries lock")
             .is_empty()
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_remote_send_is_allowed_for_peer_transport() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_remote_send_request(tempdir.path(), "127.0.0.1");
+    request.task_id = None;
+    request.summary_override = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("remote self-send should use peer transport path");
+
+    assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        1
+    );
+    let deliveries = runtime
+        .non_claude_deliveries
+        .lock()
+        .expect("non-claude deliveries lock");
+    assert_eq!(
+        deliveries[0].messages[0]
+            .extra
+            .get("metadata")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1")
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn self_addressed_inbound_remote_send_is_allowed_for_peer_transport() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let mut request = self_addressed_send_request(tempdir.path());
+    request.source_remote_host = Some("127.0.0.1".to_string());
+    request.task_id = None;
+    request.summary_override = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("inbound remote self-send should persist to mailbox");
+
+    assert_eq!(outcome.agent.as_str(), TEST_SENDER);
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        1
     );
 }
 

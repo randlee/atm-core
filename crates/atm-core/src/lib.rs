@@ -23,9 +23,6 @@ pub(crate) mod delivery_policy;
 /// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
 #[doc(hidden)]
 pub mod direct_boundaries;
-/// Hidden daemon-facing canonical direct-delivery helper surface.
-#[doc(hidden)]
-pub mod direct_delivery;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.
@@ -115,5 +112,6 @@ pub use config::types::GraftConfig;
 pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
 pub use service_runtime::{
-    LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
+    LocalFileNonClaudeOutbound, LocalRejectingRemoteSendRouter, LocalServiceRuntime,
+    with_default_local_service_runtime,
 };

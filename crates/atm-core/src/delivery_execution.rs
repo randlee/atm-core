@@ -1,30 +1,23 @@
 use crate::config::AtmConfig;
-use crate::delivery_plan::{DeliveryPlan, DeliveryPlanDisposition, LogicalMessage};
+use crate::delivery_plan::{DeliveryPlan, LogicalMessage};
 use crate::delivery_policy::{
     DeliveryEventFamily, persisted_success_transition_names, sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::schema::AtmMessageId;
-use crate::send::WarningEntry;
+use crate::send::{DeliveryPersistenceDisposition, WarningEntry};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeliveryExecutionDisposition {
-    Delivered,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeliveryExecutionResult {
-    pub(crate) disposition: DeliveryExecutionDisposition,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
 impl DeliveryExecutionResult {
     fn delivered() -> Self {
         Self {
-            disposition: DeliveryExecutionDisposition::Delivered,
             warnings: Vec::new(),
         }
     }
@@ -92,10 +85,10 @@ pub(crate) fn emit_delivery_plan_transitions(
     _execution: &DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
     let transitions = match plan.disposition {
-        DeliveryPlanDisposition::SqliteFailedRecovered => {
+        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
             sqlite_failure_transition_names(plan.delivery_target.harness_path()).to_vec()
         }
-        DeliveryPlanDisposition::Persisted => {
+        DeliveryPersistenceDisposition::Persisted => {
             persisted_success_transition_names(context.family, plan.delivery_target.harness_path())
         }
     };
@@ -125,12 +118,10 @@ mod tests {
     use serde_json::Map;
 
     use super::{
-        DeliveryExecutionDisposition, DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter,
-        emit_delivery_plan_transitions, execute_delivery_plan,
+        DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions,
+        execute_delivery_plan,
     };
-    use crate::delivery_plan::{
-        DeliveryPlan, DeliveryPlanDisposition, DeliveryPlanKind, DeliveryTarget, LogicalMessage,
-    };
+    use crate::delivery_plan::{DeliveryPlan, DeliveryPlanKind, DeliveryTarget, LogicalMessage};
     use crate::delivery_policy::{
         DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot,
     };
@@ -140,7 +131,7 @@ mod tests {
         CommandEvent, LogTailSession, ObservabilityPort,
     };
     use crate::schema::{AtmMessageId, InboxMessage};
-    use crate::send::ResolvedRecipient;
+    use crate::send::{DeliveryPersistenceDisposition, ResolvedRecipient};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -278,7 +269,7 @@ mod tests {
         let message = logical_message();
         let plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
-            DeliveryPlanDisposition::Persisted,
+            DeliveryPersistenceDisposition::Persisted,
             DeliveryTarget::NonClaude {
                 recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
             },
@@ -291,7 +282,6 @@ mod tests {
         );
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
         assert!(result.warnings.is_empty());
     }
 
@@ -302,7 +292,7 @@ mod tests {
         let message_id = message.message_id();
         let plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
-            DeliveryPlanDisposition::Persisted,
+            DeliveryPersistenceDisposition::Persisted,
             DeliveryTarget::NonClaude {
                 recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
             },
@@ -333,7 +323,7 @@ mod tests {
         let runtime = RecordingRuntime::default();
         let plan = DeliveryPlan::new(
             DeliveryPlanKind::Send,
-            DeliveryPlanDisposition::SqliteFailedRecovered,
+            DeliveryPersistenceDisposition::SqliteFailedRecovered,
             DeliveryTarget::NonClaude {
                 recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
             },
@@ -349,7 +339,6 @@ mod tests {
         );
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
         assert!(result.warnings.is_empty());
         assert_eq!(
             *runtime.delivered_texts.lock().expect("deliveries"),

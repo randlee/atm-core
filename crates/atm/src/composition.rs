@@ -470,7 +470,7 @@ impl<'a> CliComposition<'a> {
             transport.probe_connection().map(|_| ())
         })?;
         let mut composition = Self::from_transport(transport, observability);
-        composition.bootstrap_trace = Some(bootstrap_trace_to_core(traceability.snapshot()));
+        composition.bootstrap_trace = Some(traceability.snapshot());
         Ok(composition)
     }
 }
@@ -503,37 +503,6 @@ fn decode_daemon_frame(frame: FramePayload) -> Result<protocol::FramePayload, At
         flags: frame.flags,
         bytes: frame.bytes,
     })
-}
-
-fn bootstrap_trace_to_core(
-    report: atm_daemon_client::BootstrapTraceReport,
-) -> BootstrapTraceReport {
-    use atm_core::doctor::{
-        BootstrapAutoStartOutcome as CoreAutoStart, BootstrapConnectOutcome as CoreConnect,
-        BootstrapLaunchGateOutcome as CoreLaunch,
-    };
-
-    BootstrapTraceReport {
-        daemon_connect: match report.daemon_connect {
-            atm_daemon_client::BootstrapConnectOutcome::Connected => CoreConnect::Connected,
-            atm_daemon_client::BootstrapConnectOutcome::NotFound => CoreConnect::NotFound,
-            atm_daemon_client::BootstrapConnectOutcome::Timeout => CoreConnect::Timeout,
-            atm_daemon_client::BootstrapConnectOutcome::Failed => CoreConnect::Failed,
-        },
-        daemon_launch_gate: match report.daemon_launch_gate {
-            atm_daemon_client::BootstrapLaunchGateOutcome::Launched => CoreLaunch::Launched,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Failed => CoreLaunch::Failed,
-            atm_daemon_client::BootstrapLaunchGateOutcome::Skipped => CoreLaunch::Skipped,
-        },
-        daemon_auto_start: match report.daemon_auto_start {
-            atm_daemon_client::BootstrapAutoStartOutcome::AutoStarted => CoreAutoStart::AutoStarted,
-            atm_daemon_client::BootstrapAutoStartOutcome::Failed => CoreAutoStart::Failed,
-            atm_daemon_client::BootstrapAutoStartOutcome::Skipped => CoreAutoStart::Skipped,
-        },
-        connect_detail: report.connect_detail,
-        launch_gate_detail: report.launch_gate_detail,
-        auto_start_detail: report.auto_start_detail,
-    }
 }
 
 impl AtmGraftClient for CliComposition<'_> {

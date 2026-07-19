@@ -1139,6 +1139,7 @@ mod tests {
             sender_team: TeamName::from_validated(TEST_TEAM),
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),
+            remote_host: None,
             message_id: AtmMessageId::new(),
             description: "review failing smoke lane".to_string(),
             requires_ack: false,

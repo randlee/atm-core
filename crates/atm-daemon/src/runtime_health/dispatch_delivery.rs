@@ -5,19 +5,17 @@ use atm_core::{
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary,
     clear::clear_mail_with_runtime,
-    direct_delivery::deliver_direct_messages_with_runtime_and_post_send_emitter,
     error::AtmError,
     list::list_mail,
     protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, persist_remote_delivery_receipt_with_runtime,
+        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
+        persist_remote_delivery_receipt_with_runtime, route_send_request,
         send_mail_with_runtime_and_post_send_emitter,
     },
 };
-
-use crate::peer_transport::delivery::SendOutcome as RemoteSendOutcome;
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
@@ -40,16 +38,6 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                     )?,
                 )))
             }
-            RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request)) => Ok(
-                ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(
-                    deliver_direct_messages_with_runtime_and_post_send_emitter(
-                        self.home_dir.as_path(),
-                        request,
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )),
-            ),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
@@ -84,42 +72,48 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let Some(remote_host) = request.remote_host.clone() else {
-            let outcome = send_mail_with_runtime_and_post_send_emitter(
-                request,
-                self.observability.as_ref(),
-                &self.service_runtime,
-                post_send_emitter,
-            )?;
-            return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)));
-        };
-        let deferred_receipt_message_id = AtmMessageId::new();
-        match self.cross_host_delivery.deliver_remote(
-            request.clone(),
-            remote_host.clone(),
-            deferred_receipt_message_id,
-        ) {
-            Ok(RemoteSendOutcome::Delivered(response)) => Ok(*response),
-            Ok(RemoteSendOutcome::Deferred { receipt_message_id }) => Ok(ResponseEnvelope::Send(
-                SendResponseEnvelope::Sent(build_remote_deferred_outcome(
+        match route_send_request(&request) {
+            SendRequestRoute::Local => {
+                let outcome = send_mail_with_runtime_and_post_send_emitter(
+                    request,
+                    self.observability.as_ref(),
                     &self.service_runtime,
-                    &request,
-                    &remote_host,
-                    receipt_message_id,
-                    "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
-                )?),
-            )),
-            Ok(RemoteSendOutcome::RejectedTerminal(error)) => Err(error),
-            Ok(RemoteSendOutcome::OutcomeUnknown { receipt_message_id }) => Ok(
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(build_remote_deferred_outcome(
-                    &self.service_runtime,
-                    &request,
-                    &remote_host,
-                    receipt_message_id,
-                    "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
-                )?)),
-            ),
-            Err(error) => Err(error.into_atm_error()),
+                    post_send_emitter,
+                )?;
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
+            }
+            SendRequestRoute::Remote(remote_host) => {
+                match self
+                    .service_runtime
+                    .deliver_remote_send_request(request.clone(), remote_host.clone())?
+                {
+                    boundary::RemoteSendDeliveryOutcome::Delivered(response) => Ok(*response),
+                    boundary::RemoteSendDeliveryOutcome::Deferred {
+                        receipt_message_id, ..
+                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                        build_remote_deferred_outcome(
+                            &self.service_runtime,
+                            &request,
+                            &remote_host,
+                            receipt_message_id,
+                            "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
+                        )?,
+                    ))),
+                    boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
+                    boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
+                        receipt_message_id,
+                        ..
+                    } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
+                        build_remote_deferred_outcome(
+                            &self.service_runtime,
+                            &request,
+                            &remote_host,
+                            receipt_message_id,
+                            "ATM could not confirm the remote delivery outcome. The daemon retained the remote send for bounded replay and will report the final result through the sender inbox.",
+                        )?,
+                    ))),
+                }
+            }
         }
     }
 
@@ -129,7 +123,9 @@ impl DaemonRequestDispatcher {
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
         if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
-            && preflight.client_release == daemon_release
+            && preflight
+                .client_release
+                .is_same_compatibility_line(&daemon_release)
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });
         }

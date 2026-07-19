@@ -4,9 +4,7 @@ use super::*;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
 };
-use crate::delivery_plan::{
-    DeliveryPlan, delivery_plan_disposition, logical_messages_from_persistence,
-};
+use crate::delivery_plan::{DeliveryPlan, logical_messages_from_persistence};
 use crate::observability::{CommandEvent, action_name, outcome_label};
 
 #[expect(
@@ -124,7 +122,7 @@ pub(super) fn build_send_delivery_plan(
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
         crate::delivery_plan::DeliveryPlanKind::Send,
-        delivery_plan_disposition(persistence.disposition),
+        persistence.disposition,
         crate::delivery_plan::delivery_target_for_snapshot(
             &context.inbox_path,
             &context.delivery_snapshot,

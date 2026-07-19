@@ -9,9 +9,11 @@
     reason = "AC.2 internalizes Claude-only storage seams before their later deletion or full consumer cutover."
 )]
 
+use crate::ResponseEnvelope;
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, HOME_DIR_METADATA_KEY, InboxMessage};
+use crate::schema::{AgentMember, AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage};
+use crate::send::SendRequest;
 use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 pub use atm_storage::contract::{RosterHarness, RosterMemberKind};
 use serde::{Deserialize, Serialize};
@@ -158,11 +160,19 @@ pub struct NonClaudeOutboundDeliveryRequest {
     pub agent: AgentName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_host: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<NonClaudeOutboundOriginContext>,
     pub recipient_pane_id: Option<PaneId>,
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
     /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and
     /// `LocalFileNonClaudeOutbound::deliver_payloads` (CLI path, see service_runtime.rs:218).
     pub messages: Vec<InboxMessage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NonClaudeOutboundOriginContext {
+    pub home_dir: PathBuf,
+    pub current_dir: PathBuf,
 }
 
 /// Canonical non-Claude outbound response payload.
@@ -243,6 +253,35 @@ pub trait NonClaudeOutbound: sealed::Sealed {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError>;
+}
+
+/// BOUNDARY-RemoteSendRouter — daemon-owned seam for confirmed remote-target
+/// send execution. This stays separate from the non-Claude payload sink so
+/// remote-target routing happens in one place.
+#[derive(Debug)]
+pub enum RemoteSendDeliveryOutcome {
+    Delivered(Box<ResponseEnvelope>),
+    Deferred {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+    RejectedTerminal(AtmError),
+    OutcomeUnknown {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+}
+
+pub trait RemoteSendRouter: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when confirmed remote-target delivery cannot be
+    /// completed through the canonical daemon-owned cross-host transport.
+    fn deliver_remote_send(
+        &self,
+        request: SendRequest,
+        remote_host: crate::send::RemoteTargetHost,
+    ) -> Result<RemoteSendDeliveryOutcome, AtmError>;
 }
 
 #[cfg(test)]

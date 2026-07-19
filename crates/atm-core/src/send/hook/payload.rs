@@ -1,4 +1,6 @@
 use super::*;
+use crate::schema::remote_host as message_remote_host;
+use crate::send::qualified_sender_origin;
 
 pub(super) struct HookExecution {
     pub(super) command_path: PathBuf,
@@ -22,7 +24,11 @@ pub(super) fn prepare_post_send_hook_execution(
 
 fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
     let mut payload = json!({
-        "from": qualified_sender_identity(&event.sender, Some(&event.sender_team)),
+        "from": qualified_sender_origin(
+            &event.sender,
+            Some(&event.sender_team),
+            event.remote_host.as_deref(),
+        ),
         "to": qualified_sender_identity(&event.recipient, Some(&event.recipient_team)),
         "sender": event.sender.as_str(),
         "recipient": event.recipient.as_str(),
@@ -33,6 +39,9 @@ fn post_send_hook_payload(event: &PostSendHookEvent) -> Value {
         "requires_ack": event.requires_ack,
         "is_ack": event.is_ack,
     });
+    if let Some(remote_host) = &event.remote_host {
+        payload["remote_host"] = Value::String(remote_host.clone());
+    }
     if let Some(task_id) = &event.task_id {
         payload["task_id"] = Value::String(task_id.to_string());
     }
@@ -66,6 +75,7 @@ pub(super) fn notification_event(event: &PostSendHookEvent) -> NotificationEvent
             "sender_team": event.sender_team.as_str(),
             "message_id": event.message_id.to_string(),
             "description": event.description,
+            "remote_host": event.remote_host,
             "requires_ack": event.requires_ack,
             "is_ack": event.is_ack,
             "task_id": event.task_id.as_ref().map(ToString::to_string),
@@ -91,6 +101,7 @@ pub(super) fn post_send_event_from_message(
             .unwrap_or_else(|| recipient.team.clone()),
         recipient: recipient.agent.clone(),
         recipient_team: recipient.team.clone(),
+        remote_host: message_remote_host(&message.envelope).map(str::to_owned),
         message_id: message.message_id(),
         description: message
             .envelope

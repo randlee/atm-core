@@ -489,6 +489,7 @@ pub(crate) fn build_production_runtime(
         assembly.shared_roster_store_arc(),
         assembly.nudge_template_override_store.clone(),
         non_claude_outbound,
+        Arc::new(atm_core::LocalRejectingRemoteSendRouter),
     )
 }
 

@@ -14,6 +14,7 @@ use crate::error::AtmError;
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::InboxMessage;
+use crate::send::{RemoteTargetHost, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
@@ -59,6 +60,18 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
+    fn deliver_remote_send_request(
+        &self,
+        _request: SendRequest,
+        _remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "remote send routing is unavailable in this runtime",
+        )
+        .with_recovery(
+            "Run the request through atm-daemon with the cross-host runtime assembled before retrying the remote-target send.",
+        ))
+    }
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -78,6 +91,8 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    pub(crate) remote_send_router:
+        std::sync::Arc<dyn crate::boundary::RemoteSendRouter + Send + Sync>,
 }
 
 impl LocalServiceRuntime {
@@ -88,12 +103,14 @@ impl LocalServiceRuntime {
             dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync,
         >,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+        remote_send_router: std::sync::Arc<dyn crate::boundary::RemoteSendRouter + Send + Sync>,
     ) -> Self {
         Self {
             message_store,
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            remote_send_router,
         }
     }
 
@@ -119,6 +136,15 @@ impl LocalServiceRuntime {
             .map(|snapshot| snapshot.members)
     }
 
+    pub fn deliver_remote_send_request(
+        &self,
+        request: SendRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        self.remote_send_router
+            .deliver_remote_send(request, remote_host)
+    }
+
     #[doc(hidden)]
     pub fn shared_roster_store_arc(&self) -> std::sync::Arc<dyn SharedRosterStore + Send + Sync> {
         self.roster_store.clone()
@@ -140,6 +166,10 @@ impl fmt::Debug for LocalServiceRuntime {
             .field(
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
+            )
+            .field(
+                "remote_send_router",
+                &std::sync::Arc::as_ptr(&self.remote_send_router),
             )
             .finish()
     }
@@ -226,6 +256,26 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         Ok(crate::boundary::NonClaudeOutboundDeliveryResponse {
             delivered_messages: request.messages.len(),
         })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct LocalRejectingRemoteSendRouter;
+
+impl crate::boundary::sealed::Sealed for LocalRejectingRemoteSendRouter {}
+
+impl crate::boundary::RemoteSendRouter for LocalRejectingRemoteSendRouter {
+    fn deliver_remote_send(
+        &self,
+        _request: SendRequest,
+        _remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "remote send routing is unavailable in the local retained runtime",
+        )
+        .with_recovery(
+            "Run the request through atm-daemon with the cross-host runtime assembled before retrying the remote-target send.",
+        ))
     }
 }
 
@@ -327,10 +377,20 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
                 remote_host: recipient.remote_host.clone(),
+                origin: None,
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             })
             .map(|_| ())
+    }
+
+    fn deliver_remote_send_request(
+        &self,
+        request: SendRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        self.remote_send_router
+            .deliver_remote_send(request, remote_host)
     }
 }
 
@@ -406,6 +466,7 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 agent: AgentName::from_validated("recipient"),
                 remote_host: None,
+                origin: None,
                 recipient_pane_id: None,
                 messages: vec![InboxMessage {
                     text: oversized_body,

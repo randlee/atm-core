@@ -1,7 +1,7 @@
 ---
 title: Doctor And Log
 audience: end-user
-reviewed_for_release: 1.3.1
+reviewed_for_release: 1.3.2
 ---
 
 # Doctor And Log

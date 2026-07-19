@@ -404,6 +404,18 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     };
     let message = report.message.expect("loopback message");
     assert_eq!(message.envelope.text, "hello secure ack loopback");
+    assert_eq!(
+        message
+            .envelope
+            .extra
+            .get("metadata")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1")
+    );
     let source_message_id = message.envelope.message_id.expect("message id");
 
     let ack = dispatcher
@@ -455,6 +467,18 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     assert_eq!(
         ack_message.envelope.acknowledges_message_id,
         Some(source_message_id)
+    );
+    assert_eq!(
+        ack_message
+            .envelope
+            .extra
+            .get("metadata")
+            .and_then(serde_json::Value::as_object)
+            .and_then(|metadata| metadata.get("atm"))
+            .and_then(serde_json::Value::as_object)
+            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(serde_json::Value::as_str),
+        Some("127.0.0.1")
     );
 
     peer_transport

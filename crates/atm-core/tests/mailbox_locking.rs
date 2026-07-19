@@ -7,7 +7,7 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
 
-use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
+use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 #[cfg(unix)]
 use atm_core::error::AtmErrorCode;
@@ -832,7 +832,7 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
 
 #[test]
 #[serial_test::serial(env)]
-fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
+fn ack_self_addressed_poison_message_requires_explicit_host() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     let message_id = AtmMessageId::new();
@@ -846,23 +846,24 @@ fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
         )],
     );
 
-    let ack_outcome = ack_mail(
+    let error = ack_mail(
         fixture.ack_request(PRIMARY_AGENT, message_id, "resolved"),
         &observability,
     )
-    .expect("self ack outcome");
+    .expect_err("local self-ack should fail without explicit host");
 
-    assert!(matches!(
-        ack_outcome.reply_disposition,
-        AckReplyDisposition::SuppressedSelfAck
-    ));
-    assert_eq!(ack_outcome.reply_text, "resolved");
+    assert!(
+        error
+            .message
+            .contains("local self-ack is not allowed without an explicit host target"),
+        "{error:?}"
+    );
 
     let inbox = fixture.inbox_contents(PRIMARY_AGENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].message_id, Some(message_id));
-    assert!(inbox[0].pending_ack_at.is_none());
-    assert!(inbox[0].acknowledged_at.is_some());
+    assert!(inbox[0].pending_ack_at.is_some());
+    assert!(inbox[0].acknowledged_at.is_none());
     assert!(inbox[0].acknowledges_message_id.is_none());
 }
 
