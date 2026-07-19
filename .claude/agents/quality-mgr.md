@@ -203,7 +203,7 @@ For PR updates:
 Use concise ATM summaries to team-lead.
 
 PASS format:
-`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-qa PASS, arch-qa PASS, ruthless-boundary-qa PASS|SKIPPED, rust-qa PASS|SKIPPED; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
+`Sprint <id> QA: PASS — deliverables <complete>/<total> (100%); req-qa PASS, arch-qa PASS, ruthless-boundary-qa PASS|SKIPPED, rust-qa PASS; rust-best-practices PASS|SKIPPED; rust-service-hardening PASS|SKIPPED; flaky-test-qa PASS|SKIPPED; PR #<n>; worktree <path>`
 
 FAIL format:
 `Sprint <id> QA: FAIL — deliverables <complete>/<total> (<percent>%); blockers: <ids>; req-qa=<status>; arch-qa=<status>; ruthless-boundary-qa=<status>; rust-qa=<status>; rust-best-practices=<status>; rust-service-hardening=<status>; flaky-test-qa=<status>; PR #<n>; worktree <path>`
