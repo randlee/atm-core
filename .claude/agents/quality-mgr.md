@@ -20,6 +20,7 @@ Always read before starting a QA assignment:
 - `docs/team-protocol.md`
 - `.claude/agents/req-qa.md`
 - `.claude/agents/arch-qa.md`
+- `.claude/agents/ruthless-boundary-qa.md`
 - `.claude/agents/flaky-test-qa.md`
 - `.claude/skills/quality-management-gh/SKILL.md`
 - `.claude/skills/todo-triage/SKILL.md`
