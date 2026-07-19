@@ -3,18 +3,17 @@ use super::*;
 fn canonical_ack_request(
     home_dir: &std::path::Path,
     current_dir: &std::path::Path,
-    caller_identity: &str,
+    caller: &str,
+    recipient: &str,
     caller_team: &str,
-    recipient_identity: &str,
-    recipient_team: &str,
     message_id: atm_core::schema::AtmMessageId,
     body: &str,
 ) -> RequestEnvelope {
     let mut request = SendRequest::new(
         home_dir.to_path_buf(),
         current_dir.to_path_buf(),
-        caller_identity.parse().expect("caller identity"),
-        &format!("{recipient_identity}@{recipient_team}"),
+        caller.parse().expect("caller identity"),
+        recipient,
         caller_team.parse().expect("caller team"),
         SendMessageSource::Inline(body.to_string()),
         None,
@@ -153,8 +152,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
             &workspace_dir,
             "qa-a",
             test_team_name().as_str(),
-            ROLE_TEAM_LEAD,
-            test_team_name().as_str(),
+            &format!("{ROLE_TEAM_LEAD}@{}", test_team_name().as_str()),
             source_message_id,
             "ack over peer listener",
         ))

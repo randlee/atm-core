@@ -17,7 +17,9 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]

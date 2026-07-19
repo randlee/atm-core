@@ -349,7 +349,8 @@ impl MessageKind {
     pub const fn is_request(self) -> bool {
         matches!(
             self,
-            Self::SendRequest | Self::HeartbeatRequest
+            Self::SendRequest
+                | Self::HeartbeatRequest
                 | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
                 | Self::PeekRequest
