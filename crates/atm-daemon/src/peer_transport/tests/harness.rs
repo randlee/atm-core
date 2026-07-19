@@ -151,8 +151,8 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
             &atm_home,
             &workspace_dir,
             "qa-a",
-            test_team_name().as_str(),
             &format!("{ROLE_TEAM_LEAD}@{}", test_team_name().as_str()),
+            test_team_name().as_str(),
             source_message_id,
             "ack over peer listener",
         ))
