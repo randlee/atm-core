@@ -1,0 +1,156 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-001>
+  a triage:Finding ;
+  triage:findingId "QA-001" ;
+  triage:title "dispatch_delivery.rs unnecessary Result/? wrapper post-deletion" ;
+  triage:description "AG23-QA-1 (rust-qa-agent, minor): following AG.23's deletion of synthetic deferred-receipt construction (persist_remote_delivery_receipt_with_runtime), a Result/? operator wrapper around build_remote_deferred_outcome call sites remains that can no longer actually fail/return an Err — the wrapper is now unnecessary and should be simplified/removed." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/AG25/2> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/3eab4e6e> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG25/3eab4e6e> .
+
+<urn:atm:triage:occurrence/QA-001/AG23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 77 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM deferred remote delivery...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/e46c3a6d> .
+
+<urn:atm:triage:occurrence/QA-001/AG23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 86 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM could not confirm...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/e46c3a6d> .
+
+<urn:atm:triage:occurrence/QA-001/AG24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 77 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM deferred remote delivery...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/QA-001/AG24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 86 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM could not confirm...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/QA-001/AG25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 77 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM deferred remote delivery...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/3eab4e6e> .
+
+<urn:atm:triage:occurrence/QA-001/AG25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 86 ;
+  triage:snippet "build_remote_deferred_outcome(&request, &remote_host, receipt_message_id, \"ATM could not confirm...\")?)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/3eab4e6e> .
+
+<urn:atm:triage:worktree/AG18/fd098b7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/6a3c1e5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/7f4d2c9e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/8e5a3f7c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG22/9f6b4a8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/IntegrateAG/23bdc60e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "23bdc60e" ;
+  triage:orderIndex 100 .

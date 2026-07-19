@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG23-QA001-min>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG23-QA001-min" ;
+  triage:title "dispatch_delivery.rs unnecessary Result/? wrapper post-deletion" ;
+  triage:description "Function build_remote_deferred_outcome in dispatch_delivery.rs retains an unnecessary Result-returning signature with ? operator wrapper that is no longer needed after deletion of persist_remote_delivery_receipt_with_runtime call in AG.23. Dead abstraction residue from deletion work." ;
+  triage:category "minor" ;
+  triage:severity "minor" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T18:56:46.315Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAG-s24-preserve-request-shape" ;
+  triage:highestFixedBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:promoteTo "feature/pAG-s24-preserve-request-shape" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-QA001-min/AG23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-QA001-min/AG24/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/82f38708> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/0dd783d4> ;
+  triage:fixedOn <urn:atm:triage:worktree/AG25/03c873fc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-QA001-min/AG23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 117 ;
+  triage:snippet "fn build_remote_deferred_outcome(...) -> Result<SendOutcome, AtmError> { Ok(SendOutcome { ... }) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/82f38708> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-QA001-min/AG24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 117 ;
+  triage:snippet "fn build_remote_deferred_outcome(...) -> Result<SendOutcome, AtmError> { Ok(SendOutcome { ... }) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/0dd783d4> .
+
+<urn:atm:triage:worktree/AG23/82f38708>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AG24/0dd783d4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AG25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 8 .

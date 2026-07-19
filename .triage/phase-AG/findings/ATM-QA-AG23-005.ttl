@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG23-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG23-005" ;
+  triage:title "CROSSHOST-UNIFY-4.ttl and CROSSHOST-UNIFY-7.ttl reference deleted direct_delivery.rs" ;
+  triage:description "Triage record staleness detected during AG.23 QA. The triage records CROSSHOST-UNIFY-4.ttl and CROSSHOST-UNIFY-7.ttl were created when direct_delivery.rs existed and assert open status with concrete line-number references. However, direct_delivery.rs has been fully deleted between AG.15 and AG.18 (in commit 9a52c0f0 'Unify cross-host ack/send routing'). The deletion FIXED the underlying architectural issue (duplication), but the triage records have become stale and inconsistent with current code state. They reference file paths and line numbers that no longer exist. This is a triage-hygiene defect: the records must be reconciled to reflect current code state. Scope of reconciliation: check and update all CROSSHOST-UNIFY-*.ttl records (1-8) for similar staleness issues." ;
+  triage:category "triage-hygiene" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:severity "important" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-005/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-005/s23/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/82f38708> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AG/23bdc60e> ;
+  triage:highestOpenBranch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:promoteReason "Triage record reconciliation on integrate/phase-AG; no feature-branch code fix needed" .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-005/s23/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/CROSSHOST-UNIFY-4.ttl" ;
+  triage:line 14 ;
+  triage:snippet "triage:status \"open\" (references deleted direct_delivery.rs line 10)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/82f38708> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-005/s23/2>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/CROSSHOST-UNIFY-7.ttl" ;
+  triage:line 15 ;
+  triage:snippet "triage:status \"open\" (references deleted direct_delivery.rs line 9 and 10)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/82f38708> .
+
+<urn:atm:triage:worktree/pAG-s23/82f38708>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/integrate-AG/23bdc60e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "23bdc60e" ;
+  triage:orderIndex 99 .

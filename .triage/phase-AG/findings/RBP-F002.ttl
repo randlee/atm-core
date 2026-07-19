@@ -4,415 +4,271 @@
 <urn:atm:triage:finding/RBP-F002>
   a triage:Finding ;
   triage:findingId "RBP-F002" ;
-  triage:title "Hand-rolled agent@team identity string duplicated in 4 places instead of using AgentAddress newtype" ;
-  triage:description "The AG.10 refactor propagated rather than consolidated a hand-rolled 'agent@team' identity string construction in 4 places instead of reusing the existing AgentAddress newtype (crates/atm-core/src/address.rs:37-44): send/nudge_template.rs:28, send/mod.rs:720, send/hook.rs:378, commands/send.rs:85-87." ;
-  triage:category "RBP" ;
-  triage:severity "Important" ;
+  triage:title "PeerServerTransport Mutex fields lack rationale comment" ;
+  triage:description "rust-best-practices-agent found PeerServerTransport's Mutex-wrapped fields lack a rationale comment explaining why a Mutex (vs alternative synchronization) was chosen." ;
   triage:phaseId "phase-AG" ;
   triage:triageMode "initial_pass" ;
-  triage:repeatable true ;
-  triage:sweepScope "crate" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-16T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s10/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s10/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s10/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s10/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s11/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s11/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s11/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s11/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s12/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s12/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s12/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s12/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s13/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s13/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s13/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s13/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s14/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s14/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s14/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s14/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s15/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s15/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s15/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pAG-s15/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate/4> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s13/512f3afa> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s14/94b969b6> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s15/d05ee158> ;
-  triage:openOn <urn:atm:triage:worktree/integrate/39dae6fa> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate/39dae6fa> .
+  triage:triagedAt "2026-07-19T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s18/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s18/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s19/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s19/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s20/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s20/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s21/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s21/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s22/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s22/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s23/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s23/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s24/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s24/state> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s25/listen_addrs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/AG-s25/state> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s21/758732cd> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG-s25/3eab4e6e> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG-s25/3eab4e6e> .
 
-# Occurrences on feature/pAG-s10-secured-transport (88eb5bcf)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s10/1>
+<urn:atm:triage:occurrence/RBP-F002/AG-s18/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s18/e46c3a6d> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s10/2>
+<urn:atm:triage:occurrence/RBP-F002/AG-s18/state>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s18/e46c3a6d> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s10/3>
+<urn:atm:triage:occurrence/RBP-F002/AG-s19/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s19/5d20ca5a> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s10/4>
+<urn:atm:triage:occurrence/RBP-F002/AG-s19/state>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s19/5d20ca5a> .
 
-# Occurrences on feature/pAG-s11-remote-target-contract (8e9d1ac4)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s11/1>
+<urn:atm:triage:occurrence/RBP-F002/AG-s20/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s20/50572166> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s11/2>
+<urn:atm:triage:occurrence/RBP-F002/AG-s20/state>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s20/50572166> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s11/3>
+<urn:atm:triage:occurrence/RBP-F002/AG-s21/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s21/758732cd> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s11/4>
+<urn:atm:triage:occurrence/RBP-F002/AG-s21/state>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s21/758732cd> .
 
-# Occurrences on feature/pAG-s12-localhost-proof (cbc6a19a)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s12/1>
+<urn:atm:triage:occurrence/RBP-F002/AG-s22/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s22/c9aedbcc> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s12/2>
+<urn:atm:triage:occurrence/RBP-F002/AG-s22/state>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s22/c9aedbcc> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s12/3>
+<urn:atm:triage:occurrence/RBP-F002/AG-s23/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s23/a13fc219> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s12/4>
+<urn:atm:triage:occurrence/RBP-F002/AG-s23/state>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s23/a13fc219> .
 
-# Occurrences on feature/pAG-s13-selfip-proof (512f3afa)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s13/1>
+<urn:atm:triage:occurrence/RBP-F002/AG-s24/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s24/81298e32> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s13/2>
+<urn:atm:triage:occurrence/RBP-F002/AG-s24/state>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s24/81298e32> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s13/3>
+<urn:atm:triage:occurrence/RBP-F002/AG-s25/listen_addrs>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 54 ;
+  triage:snippet "listen_addrs: Mutex<Vec<SocketAddr>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s25/3eab4e6e> .
 
-<urn:atm:triage:occurrence/RBP-F002/pAG-s13/4>
+<urn:atm:triage:occurrence/RBP-F002/AG-s25/state>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
+  triage:file "crates/atm-daemon/src/peer_transport/server.rs" ;
+  triage:line 58 ;
+  triage:snippet "state: Mutex<BTreeMap<SocketAddr, PeerServerHandle>>," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-s25/3eab4e6e> .
 
-# Occurrences on feature/pAG-s14-integration-coverage (94b969b6)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s14/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s14/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s14/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s14/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
-
-# Occurrences on feature/pAG-s15-othermac-smoke (d05ee158)
-<urn:atm:triage:occurrence/RBP-F002/pAG-s15/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s15/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 720 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s15/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
-
-<urn:atm:triage:occurrence/RBP-F002/pAG-s15/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
-
-# Occurrences on integrate/phase-AG (39dae6fa)
-<urn:atm:triage:occurrence/RBP-F002/integrate/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/nudge_template.rs" ;
-  triage:line 28 ;
-  triage:snippet "format!(\"{}@{}\", event.sender, event.sender_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/39dae6fa> .
-
-<urn:atm:triage:occurrence/RBP-F002/integrate/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 815 ;
-  triage:snippet "format!(\"{sender}@{team}\")" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/39dae6fa> .
-
-<urn:atm:triage:occurrence/RBP-F002/integrate/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/send/hook.rs" ;
-  triage:line 378 ;
-  triage:snippet "format!(\"{}@{}\", event.recipient, event.recipient_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/39dae6fa> .
-
-<urn:atm:triage:occurrence/RBP-F002/integrate/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm/src/commands/send.rs" ;
-  triage:line 85 ;
-  triage:snippet "format!(\"{}@{}\", caller_context.caller_identity, caller_context.caller_team)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/39dae6fa> .
-
-# Worktree snapshots
-<urn:atm:triage:worktree/pAG-s10/88eb5bcf>
+<urn:atm:triage:worktree/AG-s18/e46c3a6d>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:orderIndex 1 .
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
 
-<urn:atm:triage:worktree/pAG-s11/8e9d1ac4>
+<urn:atm:triage:worktree/AG-s19/5d20ca5a>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:orderIndex 2 .
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
 
-<urn:atm:triage:worktree/pAG-s12/cbc6a19a>
+<urn:atm:triage:worktree/AG-s20/50572166>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:orderIndex 3 .
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
 
-<urn:atm:triage:worktree/pAG-s13/512f3afa>
+<urn:atm:triage:worktree/AG-s21/758732cd>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:orderIndex 4 .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 21 .
 
-<urn:atm:triage:worktree/pAG-s14/94b969b6>
+<urn:atm:triage:worktree/AG-s22/c9aedbcc>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:orderIndex 5 .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
 
-<urn:atm:triage:worktree/pAG-s15/d05ee158>
+<urn:atm:triage:worktree/AG-s23/a13fc219>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:orderIndex 6 .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
 
-<urn:atm:triage:worktree/integrate/39dae6fa>
+<urn:atm:triage:worktree/AG-s24/81298e32>
   a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-AG" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:orderIndex 7 .
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG-s25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .
