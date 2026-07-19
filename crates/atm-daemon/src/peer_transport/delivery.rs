@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
@@ -173,9 +173,7 @@ impl DaemonCrossHostDelivery {
                 replay_request.caller_team.clone(),
                 replay_request.caller_identity.clone(),
                 boundary::MessageKey::from(deferred_receipt_message_id),
-                RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
-                    replay_request.clone(),
-                ))),
+                RequestEnvelope::Send(Box::new(replay_request.clone())),
                 Some(replay_request.caller_team.clone()),
                 Some(replay_request.caller_identity.clone()),
                 Some(deferred_receipt_message_id),
@@ -207,7 +205,7 @@ impl DaemonCrossHostDelivery {
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
         match self.peer_transport_runtime.send_to_endpoint_immediate_wait(
             endpoint,
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))),
+            RequestEnvelope::Send(Box::new(request)),
         ) {
             Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
             Err(error) => self.handle_immediate_wait_error(

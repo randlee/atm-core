@@ -1,8 +1,6 @@
 use super::*;
 use atm_core::boundary::RequestDispatcher;
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -630,9 +628,7 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
         .remote_host;
     match caller
         .dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))
+        .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("send request should succeed")
     {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
@@ -711,18 +707,14 @@ fn dispatch_ack_over_local_ipc(
     message_id: AtmMessageId,
     body: &str,
 ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-        atm_core::ack::AckRequest {
-            home_dir: home.to_path_buf(),
-            current_dir: current_dir.to_path_buf(),
-            caller_identity: caller_identity
-                .parse::<AgentName>()
-                .expect("caller identity"),
-            caller_team: caller_team.parse::<TeamName>().expect("caller team"),
-            message_id,
-            reply_body: body.to_string(),
-        },
-    ));
+    let request = canonical_ack_request(
+        home,
+        current_dir,
+        caller_identity,
+        caller_team,
+        message_id,
+        body,
+    );
     dispatch_over_local_ipc(socket_path, request)
 }
 

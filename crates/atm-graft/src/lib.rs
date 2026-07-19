@@ -9,16 +9,14 @@ use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use atm_core::ack::{AckOutcome, AckRequest};
+use atm_core::ack::{AckOutcome, AckRequest, prepare_ack_send_request};
 use atm_core::boundary::{ClientTransport, PostSendHookEvent};
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -225,9 +223,7 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))? {
+        match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }
@@ -241,9 +237,9 @@ impl AtmGraftClient for GraftClient {
     }
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+        match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
-        )))? {
+        )?)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
         }
@@ -602,7 +598,8 @@ mod tests {
         let transport = Arc::new(FakeClientTransport::new(Box::new(
             |request| {
                 match request {
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => Ok(
+                CoreRequestEnvelope::Send(request)
+                    if request.acknowledges_message_id.is_none() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
@@ -657,7 +654,8 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => Ok(
+                CoreRequestEnvelope::Send(request)
+                    if request.acknowledges_message_id.is_some() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
                         serde_json::from_value(json!({
                             "action": "ack",
@@ -677,7 +675,7 @@ mod tests {
                     )),
                 ),
                 other => panic!("unexpected request: {other:?}"),
-            }
+                }
             },
         )));
         let client = GraftClient::from_transport(transport);
