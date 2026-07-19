@@ -12,8 +12,8 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady false ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
   triage:propagated false ;
   triage:mergeForwardNeeded true ;
   triage:regressed false ;
