@@ -207,7 +207,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         .shutdown()
         .expect("shutdown source peer listener");
 
-    let ack_error = dispatch_ack_over_local_ipc(
+    let ack_response = dispatch_ack_over_local_ipc(
         &child_state.local_ipc_socket_path,
         &cm5_home,
         &cm5_workspace,
@@ -216,10 +216,21 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
     )
-    .expect_err("remote ack should fail closed while source peer listener is down");
+    .expect("remote ack should return a deferred warning while source peer listener is down");
+    let ack_outcome = expect_ack_response(ack_response);
     assert_eq!(
-        ack_error.code,
-        atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        ack_outcome.reply_target.to_string(),
+        "team-lead@test-team.192.0.0.2"
+    );
+    assert_eq!(ack_outcome.warnings.len(), 1);
+    assert_eq!(
+        ack_outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::DaemonUnavailable)
+    );
+    assert!(
+        ack_outcome.warnings[0]
+            .message
+            .contains("ack reply deferred for bounded remote retry")
     );
 
     let still_pending = read_message_over_local_ipc(

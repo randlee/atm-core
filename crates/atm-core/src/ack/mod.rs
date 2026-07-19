@@ -17,7 +17,8 @@ use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, remote_host as message_remote_host,
 };
 use crate::send::{
-    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, SendRequestRoute, input,
+    RemoteSendDeliveryClassification, RemoteTargetHost, ResolvedRecipient, SendMessageSource,
+    SendRequest, SendRequestRoute, classify_remote_send_delivery_outcome, input,
     persist_send_message, prepare_send_context, route_send_request, summary,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -650,12 +651,14 @@ fn finalize_sent_ack_outcome<
         &reply.reply_snapshot,
         &post_send_messages,
     );
-    commit_source_ack_state(
-        runtime,
-        &context.actor,
-        &context.team,
-        &reply.persisted_source,
-    )?;
+    if execution.commit_source_state {
+        commit_source_ack_state(
+            runtime,
+            &context.actor,
+            &context.team,
+            &reply.persisted_source,
+        )?;
+    }
     record_ack_telemetry(
         observability,
         &context.actor,
@@ -675,17 +678,43 @@ fn execute_ack_reply_plan<
     plan: &DeliveryPlan,
 ) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
     if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) {
-        return match runtime
-            .deliver_remote_send_request(reply.reply_request.clone(), remote_host)?
-        {
-            crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
-                Ok(crate::delivery_execution::DeliveryExecutionResult {
-                    warnings: Vec::new(),
-                })
+        return match classify_remote_send_delivery_outcome(
+            runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)?,
+        ) {
+            RemoteSendDeliveryClassification::Delivered(_) => {
+                Ok(crate::delivery_execution::DeliveryExecutionResult::delivered())
             }
-            crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } => Err(error),
-            crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => Err(error),
-            crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
+            RemoteSendDeliveryClassification::Deferred {
+                receipt_message_id,
+                error,
+            } => Ok(
+                crate::delivery_execution::DeliveryExecutionResult::delivered_without_commit(vec![
+                    crate::send::WarningEntry::with_code(
+                        error.code,
+                        format!(
+                            "ack reply deferred for bounded remote retry; reply receipt {} remains pending final confirmation",
+                            receipt_message_id
+                        ),
+                        error.recovery.first().cloned(),
+                    ),
+                ]),
+            ),
+            RemoteSendDeliveryClassification::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            } => Ok(
+                crate::delivery_execution::DeliveryExecutionResult::delivered_without_commit(vec![
+                    crate::send::WarningEntry::with_code(
+                        error.code,
+                        format!(
+                            "ack reply outcome is unknown; reply receipt {} remains pending final confirmation",
+                            receipt_message_id
+                        ),
+                        error.recovery.first().cloned(),
+                    ),
+                ]),
+            ),
+            RemoteSendDeliveryClassification::RejectedTerminal(error) => Err(error),
         };
     }
 
@@ -2461,7 +2490,7 @@ mod tests {
             )),
         };
 
-        let error = finalize_sent_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
@@ -2474,9 +2503,19 @@ mod tests {
                 warnings: Vec::new(),
             },
         )
-        .expect_err("deferred remote ack should fail closed");
+        .expect("deferred remote ack should preserve the reply receipt");
 
-        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        assert_eq!(outcome.warnings.len(), 1);
+        assert_eq!(
+            outcome.warnings[0].code,
+            Some(AtmErrorCode::DaemonUnavailable)
+        );
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ack reply deferred for bounded remote retry")
+        );
         assert!(
             runtime.persisted_states().is_empty(),
             "source ack state must remain pending when remote delivery is deferred"
@@ -2550,7 +2589,7 @@ mod tests {
             )),
         };
 
-        let error = finalize_sent_ack_outcome(
+        let outcome = finalize_sent_ack_outcome(
             &runtime,
             &NullObservability,
             None,
@@ -2563,9 +2602,19 @@ mod tests {
                 warnings: Vec::new(),
             },
         )
-        .expect_err("outcome-unknown remote ack should fail closed");
+        .expect("outcome-unknown remote ack should preserve the reply receipt");
 
-        assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        assert_eq!(outcome.warnings.len(), 1);
+        assert_eq!(
+            outcome.warnings[0].code,
+            Some(AtmErrorCode::RemoteDeliveryOutcomeUnknown)
+        );
+        assert!(
+            outcome.warnings[0]
+                .message
+                .contains("ack reply outcome is unknown")
+        );
         assert!(
             runtime.persisted_states().is_empty(),
             "source ack state must remain pending when remote delivery is not confirmed"

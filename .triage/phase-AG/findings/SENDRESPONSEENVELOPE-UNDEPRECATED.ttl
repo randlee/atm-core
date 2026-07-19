@@ -1,0 +1,173 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/SENDRESPONSEENVELOPE-UNDEPRECATED>
+  a triage:Finding ;
+  triage:findingId "SENDRESPONSEENVELOPE-UNDEPRECATED" ;
+  triage:title "SendResponseEnvelope missing #[deprecated] despite sprint doc staged-removal rule" ;
+  triage:description "Sprint AG.21 doc (lines 108-112) enforces a staged-removal rule: if AG.18 did not physically remove SendResponseEnvelope and SendRequestEnvelope, then AG.21 must deprecate them with deletion no later than the sprint that physically removes the split wire families. AG.18 did not remove these types (confirmed via AG18-QA-002 record). Therefore, AG.21 must add #[deprecated] attribute to both SendResponseEnvelope and SendRequestEnvelope. As of all current worktrees (AG.18 through AG.25), SendResponseEnvelope at crates/atm-core/src/protocol.rs:42-45 carries no #[deprecated] marker and remains actively constructed/matched at 10-14 call sites per worktree across crates/atm-core, crates/atm-daemon, crates/atm-daemon-client, and crates/atm-graft." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "protocol_staged_removal" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/protocol.rs definition only (single enum); construction sites swept to confirm scope but deprecation is attribute-only edit" ;
+  triage:pattern "enum SendResponseEnvelope.*without #[deprecated]" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/70cce097> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/59225e0f> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:note "Sweep on bf96dc86 finds 14 active construction/match sites: atm-daemon-client/src/rpc.rs:339, atm-core/src/ack/mod.rs:1026,1130, protocol.rs:75,79,92,99, peer_transport/tests/harness.rs:110,161,286,409,529,686, tests/runtime_root/mod.rs:54. Enum definition at protocol.rs:42-45 remains undeprecated." .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/03c873fc> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/03c873fc> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/03c873fc> .
+
+<urn:atm:triage:occurrence/SENDRESPONSEENVELOPE-UNDEPRECATED/AG25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/03c873fc> .
+
+<urn:atm:triage:worktree/AG18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AG19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/AG22/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/AG23/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/AG24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/AG25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 8 .
