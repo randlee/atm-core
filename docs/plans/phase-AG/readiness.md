@@ -41,6 +41,14 @@ release line.
 | `AG.15` | `PENDING` | `TBD` | other-Mac cross-host smoke not yet executed across the full corrective matrix |
 | `AG.16` | `PENDING` | `TBD` | Windows/macOS cross-host smoke not yet executed across the full corrective matrix |
 | `AG.17` | `PENDING` | `TBD` | authoritative copied-state revalidation and final verdict for the corrective line not yet executed |
+| `AG.18` | `PENDING` | `TBD` | envelope/handler collapse cleanup ladder not yet executed on the corrective unification line |
+| `AG.19` | `PENDING` | `TBD` | remote-ack path collapse not yet executed on the corrective unification line |
+| `AG.20` | `PENDING` | `TBD` | transport-policy deletion not yet executed on the corrective unification line |
+| `AG.21` | `PENDING` | `TBD` | dispatch/inbound single-route cleanup not yet executed on the corrective unification line |
+| `AG.22` | `PENDING` | `TBD` | endpoint-resolution boundary relocation not yet executed on the corrective unification line |
+| `AG.23` | `PENDING` | `TBD` | synthetic deferred-receipt deletion not yet executed on the corrective unification line |
+| `AG.24` | `PENDING` | `TBD` | request-shape preservation cleanup not yet executed on the corrective unification line |
+| `AG.25` | `PENDING` | `TBD` | final live-proof closeout for the unification line not yet executed |
 
 Allowed closure-result values:
 

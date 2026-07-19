@@ -160,8 +160,9 @@ atm ack <message-id> <reply>
 
 ## Hard Merge Gate
 
-- AG.25 itself may not add net production code while closing proof gaps; flat
-  or net-positive deltas fail the sprint
+- AG.25 itself may not add net production code while closing proof gaps; if it
+  touches `crates/`, the delta must be at most `-25` net LOC, and any result
+  above `-25` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - AG.25 must also report a ladder-wide rollup:

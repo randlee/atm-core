@@ -2,6 +2,7 @@
 id: AG.21
 title: Collapse Duplicate Dispatch Routing And Inbound Persistence Paths
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s21-collapse-dispatch-routing
 worktree: ../atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing
 target: develop
@@ -68,7 +69,7 @@ persistence path for send-shaped requests.
 - one inbound send persistence path for all send-shaped requests
 - elimination of duplicate compose-vs-ack branching above the shared outbound
   delivery layer
-- explicit canonical outbound symbol:
+- retain the explicit canonical outbound symbol introduced in AG.18:
   `execute_outbound_send(dispatcher, request, post_send_emitter)`
 
 ## Required Work
@@ -160,9 +161,9 @@ fn dispatch_send(
 
 ## Hard Merge Gate
 
-- this sprint must deliver a material net deletion in its named target files
-  and contribute to the AG.18-AG.25 ladder-wide aggregate reduction; flat or
-  net-positive deltas fail the sprint
+- this sprint must deliver at least `-100` net LOC across `crates/` in its
+  named target files and contribute to the AG.18-AG.25 ladder-wide aggregate
+  reduction; any result above `-100` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - every added line must be scrutinized for absolute necessity; lines added only

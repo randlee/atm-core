@@ -2,6 +2,7 @@
 id: AG.19
 title: Delete Separate Remote-Ack Execution Path
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s19-delete-remote-ack-path
 worktree: ../atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path
 target: develop
@@ -94,17 +95,12 @@ the receive-side-only ack-state mutation rule.
 ## Explicit Code Samples
 
 ```rust
-fn execute_outbound_send(
-    runtime: &impl boundary::RemoteSendRouter,
-    request: SendRequest,
-) -> Result<OutboundSendExecution, AtmError>;
-
 let reply_request = SendRequest {
     acknowledges_message_id: Some(source_message_id),
     ..shared_send_shape
 };
 
-let delivery = execute_outbound_send(runtime, reply_request)?;
+let delivery = execute_outbound_send(dispatcher, reply_request, post_send_emitter)?;
 if delivery.is_confirmed_delivered() {
     commit_source_ack_state(...)?;
 }
@@ -221,9 +217,9 @@ sprint that collapses the last separate ack-send branch:
 
 ## Hard Merge Gate
 
-- this sprint must deliver a material net deletion in its named target files
-  and contribute to the AG.18-AG.25 ladder-wide aggregate reduction; flat or
-  net-positive deltas fail the sprint
+- this sprint must deliver at least `-100` net LOC across `crates/` in its
+  named target files and contribute to the AG.18-AG.25 ladder-wide aggregate
+  reduction; any result above `-100` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - every added line must be scrutinized for absolute necessity; lines added only

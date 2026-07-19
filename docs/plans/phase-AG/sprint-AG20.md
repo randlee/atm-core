@@ -2,6 +2,7 @@
 id: AG.20
 title: Move Deferred Replay Policy Out Of Transport
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s20-move-deferred-policy-out-of-transport
 worktree: ../atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport
 target: develop
@@ -48,10 +49,10 @@ retry, replay, and semantic-outcome policy from `peer_transport/delivery.rs`.
 - `crates/atm-daemon/src/peer_transport.rs:24-82`
   - delete transport-owned retry-budget policy from `PeerTransportConfig`
 - `crates/atm-daemon/src/peer_transport.rs:216-338`
-  - delete transport-owned replay resume / replay enqueue policy:
-    `resume_pending_replay(...)`,
-    `persist_replay_request(...)`,
-    `persist_outcome_unknown_request(...)`
+  - delete transport-owned retry-loop entry and replay-policy branching around
+    the retained helper calls; AG.22 owns `persist_replay_request(...)` /
+    persisted endpoint identity and AG.23 owns
+    `persist_outcome_unknown_request(...)` / `resume_pending_replay(...)`
 - `crates/atm-daemon/src/peer_transport.rs:341-620`
   - delete transport-owned retry loop and delivery-outcome shaping:
     `send_to_endpoint(...)`,
@@ -79,7 +80,7 @@ retry, replay, and semantic-outcome policy from `peer_transport/delivery.rs`.
 - any replay budget, expiry, or terminality policy inside `peer_transport/*`
 - any transport-owned receipt finalization or sender-inbox mutation policy
 - any transport-owned backoff timer / retry sleep loop
-- any transport-owned persistence enqueue / replay resume state machine
+- any transport-owned persistence enqueue / replay resume policy state machine
 - any transport-owned mapping from raw socket or protocol facts to operator
   policy outcome
 - any transport-owned retry/replay config field
@@ -100,7 +101,8 @@ retry, replay, and semantic-outcome policy from `peer_transport/delivery.rs`.
 
 - delete transport-local semantic outcome enums where possible
 - replace transport result shaping with a narrower result contract
-- move retry persistence to the higher shared outbound delivery policy layer
+- move retry persistence policy to the higher shared outbound delivery policy
+  layer without claiming AG.22/AG.23-owned helper deletion in this sprint
 - remove transport-local retry/backoff loop ownership
 - remove replay-store ownership from the peer transport client surface
 
@@ -133,7 +135,7 @@ pub enum OutboundDeliveryDisposition {
   - `crates/atm-daemon/src/peer_transport.rs:620-623`
     - `DeliveryLoopDecision`
   - `crates/atm-daemon/src/peer_transport.rs:216-338`
-    - replay policy methods on `PeerClientTransport`
+    - transport-owned replay policy methods on `PeerClientTransport`
   - `crates/atm-daemon/src/peer_transport.rs:161-163`
     - `PeerClientTransport::replay_store`
     - transport should not own durable replay storage
@@ -207,8 +209,10 @@ pub enum OutboundDeliveryDisposition {
 ## This Sprint Does Not Close
 
 - AG.21 owns duplicate daemon dispatch/inbound persistence routing
-- AG.22 owns host-resolution relocation
-- AG.23 owns deferred-receipt dispatch deletion
+- AG.22 owns host-resolution relocation, `persist_replay_request(...)`, and
+  persisted endpoint identity (`peer_addr` replacement)
+- AG.23 owns deferred-receipt dispatch deletion,
+  `persist_outcome_unknown_request(...)`, and `resume_pending_replay(...)`
 - AG.24 owns request-shape preservation
 - AG.25 owns live proof
 
@@ -221,9 +225,9 @@ pub enum OutboundDeliveryDisposition {
 
 ## Hard Merge Gate
 
-- this sprint must deliver a material net deletion in its named target files
-  and contribute to the AG.18-AG.25 ladder-wide aggregate reduction; flat or
-  net-positive deltas fail the sprint
+- this sprint must deliver at least `-100` net LOC across `crates/` in its
+  named target files and contribute to the AG.18-AG.25 ladder-wide aggregate
+  reduction; any result above `-100` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - every added line must be scrutinized for absolute necessity; lines added only
@@ -243,4 +247,4 @@ pub enum OutboundDeliveryDisposition {
 - `just test`
 - `just lint`
 - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
-- `rg -n "AttemptFailureKind|DeliveryRetryState|persist_replay_request|persist_outcome_unknown_request|handle_retryable_failure|handle_terminal_failure|DeliveryLoopDecision|wait_for_retry_backoff|classify_io_error" crates/atm-daemon/src/peer_transport.rs`
+- `rg -n "AttemptFailureKind|DeliveryRetryState|handle_retryable_failure|handle_terminal_failure|DeliveryLoopDecision|wait_for_retry_backoff|classify_io_error" crates/atm-daemon/src/peer_transport.rs`

@@ -2,6 +2,7 @@
 id: AG.22
 title: Relocate Host Matching And Endpoint Selection Out Of Transport
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s22-host-resolution-boundary
 worktree: ../atm-core-worktrees/feature/pAG-s22-host-resolution-boundary
 target: develop
@@ -43,6 +44,8 @@ policy out of the transport implementation into a narrower resolution boundary.
 ## Scope Boundary
 
 - this sprint owns outbound endpoint resolution only
+- this sprint is the sole owner for deleting `persist_replay_request(...)` and
+  replacing persisted `peer_addr` with resolver-owned target identity
 - inbound host-allowlist authorization remains AG.5 scope
 
 ## Specific Deletions Required
@@ -170,9 +173,9 @@ pub trait RemoteEndpointResolver {
 
 ## Hard Merge Gate
 
-- this sprint must deliver a material net deletion in its named target files
-  and contribute to the AG.18-AG.25 ladder-wide aggregate reduction; flat or
-  net-positive deltas fail the sprint
+- this sprint must deliver at least `-100` net LOC across `crates/` in its
+  named target files and contribute to the AG.18-AG.25 ladder-wide aggregate
+  reduction; any result above `-100` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - every added line must be scrutinized for absolute necessity; lines added only

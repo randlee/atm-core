@@ -2,6 +2,7 @@
 id: AG.23
 title: Remove Synthetic Deferred Receipt Construction From Daemon Dispatch
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s23-remove-synthetic-deferred-receipts
 worktree: ../atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts
 target: develop
@@ -28,6 +29,12 @@ messages itself.
 ## Hard Dependencies
 
 - AG.22 merged
+
+## Scope Boundary
+
+- this sprint is the sole owner for deleting
+  `persist_outcome_unknown_request(...)` and
+  `resume_pending_replay(...)` from the retained production contract
 
 ## Exact Targets
 
@@ -165,9 +172,9 @@ match deliver_remote_send_request(...) ? {
 
 ## Hard Merge Gate
 
-- this sprint must deliver a material net deletion in its named target files
-  and contribute to the AG.18-AG.25 ladder-wide aggregate reduction; flat or
-  net-positive deltas fail the sprint
+- this sprint must deliver at least `-100` net LOC across `crates/` in its
+  named target files and contribute to the AG.18-AG.25 ladder-wide aggregate
+  reduction; any result above `-100` net LOC fails the sprint
 - every completion, validation, and QA verdict must report:
   - `git diff --stat <sprint-base-sha>..HEAD -- crates/`
 - every added line must be scrutinized for absolute necessity; lines added only
