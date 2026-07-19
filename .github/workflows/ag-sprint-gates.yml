@@ -1,0 +1,44 @@
+name: AG sprint gates
+
+on:
+  pull_request:
+    branches: [develop, main, "integrate/*"]
+
+jobs:
+  ag-sprint-gates:
+    if: startsWith(github.head_ref, 'feature/pAG-s')
+    name: AG deletion gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94.1"
+
+      - name: Resolve active AG sprint
+        id: sprint
+        shell: bash
+        run: |
+          case "${GITHUB_HEAD_REF}" in
+            feature/pAG-s18-*) echo "name=AG.18" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s19-*) echo "name=AG.19" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s20-*) echo "name=AG.20" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s21-*) echo "name=AG.21" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s22-*) echo "name=AG.22" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s23-*) echo "name=AG.23" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s24-*) echo "name=AG.24" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s25-*) echo "name=AG.25" >> "$GITHUB_OUTPUT" ;;
+            *) echo "unsupported AG sprint branch: ${GITHUB_HEAD_REF}" >&2; exit 1 ;;
+          esac
+
+      - name: Enforce deletion manifest
+        shell: bash
+        run: |
+          scripts/check-ag-sprint-gates.sh \
+            "${{ steps.sprint.outputs.name }}" \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"

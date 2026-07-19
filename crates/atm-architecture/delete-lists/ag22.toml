@@ -1,0 +1,29 @@
+sprint = "AG.22"
+description = "Relocate host matching and endpoint selection out of transport so transport consumes only already-resolved endpoints."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-core/src/boundary/runtime.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-core/src/boundary/runtime.rs",
+]
+
+forbidden_literals = [
+  "ATM_DAEMON_PEER_ADDR",
+  "remote_peer_endpoint_not_configured_error",
+  "daemon_peer_endpoint_from_env",
+  "parse_peer_endpoint",
+  "peer_addr: SocketAddr",
+  "endpoint: Option<SocketAddr>",
+]
+
+forbidden_regexes = [
+  "std::env::var\\([^)]*ATM_DAEMON_PEER_ADDR",
+  "peer_addr\\s*:\\s*SocketAddr",
+  "endpoint\\s*:\\s*Option<\\s*SocketAddr\\s*>",
+  "parse_peer_endpoint\\s*\\(",
+]

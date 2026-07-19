@@ -1,0 +1,42 @@
+sprint = "AG.18"
+description = "Collapse compose and acknowledge into one canonical send request/response envelope and one handler family."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-core/src/protocol.rs",
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm-daemon/src/non_claude_outbound_runtime.rs",
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-daemon/src/tests/runtime_root.rs",
+  "crates/atm-daemon/src/tests_post_send_graft_warning.rs",
+  "crates/atm-daemon-client/src/rpc.rs",
+  "crates/atm/src/composition.rs",
+  "crates/atm-graft/src/lib.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon-client/src/rpc.rs",
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm-core/src/ack/mod.rs",
+  "crates/atm-daemon/src/non_claude_outbound_runtime.rs",
+  "crates/atm-core/src/protocol.rs",
+]
+
+forbidden_literals = [
+  "SendRequestEnvelope::Compose",
+  "SendRequestEnvelope::Acknowledge",
+  "SendResponseEnvelope::Sent",
+  "SendResponseEnvelope::Acknowledged",
+  "MessageKind::SendComposeRequest",
+  "MessageKind::SendAcknowledgeRequest",
+  "MessageKind::SendSentResponse",
+  "MessageKind::SendAcknowledgedResponse",
+  "dispatch_compose_send",
+]
+
+forbidden_regexes = [
+  "enum\\s+SendRequestEnvelope\\s*\\{[^}]*Compose[^}]*Acknowledge",
+  "enum\\s+SendResponseEnvelope\\s*\\{[^}]*Sent[^}]*Acknowledged",
+  "RequestEnvelope::Send\\(SendRequestEnvelope::(Compose|Acknowledge)\\(",
+  "ResponseEnvelope::Send\\(SendResponseEnvelope::(Sent|Acknowledged)\\(",
+]

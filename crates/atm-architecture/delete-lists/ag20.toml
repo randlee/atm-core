@@ -1,0 +1,49 @@
+sprint = "AG.20"
+description = "Move deferred/retry/replay policy out of peer transport so transport returns transport facts only."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+]
+
+forbidden_literals = [
+  "AttemptFailureKind",
+  "AttemptFailure",
+  "DeliveryRetryState",
+  "DeliveryLoopDecision",
+  "handle_send_failure",
+  "handle_retryable_failure",
+  "handle_terminal_failure",
+  "wait_for_retry_backoff",
+  "classify_io_error",
+  "persist_replay_request",
+  "persist_outcome_unknown_request",
+  "resume_pending_replay",
+  "replay_store",
+  "remote_retry_budget",
+  "DeliveryPersistenceDisposition",
+  "DeliveryPersistenceResult",
+  "DeliveryPlanDisposition",
+  "DeliveryPlanKind",
+  "LogicalMessage",
+  "DeliveryTarget",
+  "DeliveryPlan",
+]
+
+forbidden_regexes = [
+  "enum\\s+AttemptFailureKind\\b",
+  "struct\\s+AttemptFailure\\b",
+  "enum\\s+DeliveryRetryState\\b",
+  "enum\\s+DeliveryLoopDecision\\b",
+  "fn\\s+handle_(send_failure|retryable_failure|terminal_failure)\\b",
+  "fn\\s+wait_for_retry_backoff\\b",
+  "fn\\s+classify_io_error\\b",
+]

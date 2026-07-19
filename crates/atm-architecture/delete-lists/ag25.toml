@@ -1,0 +1,31 @@
+sprint = "AG.25"
+description = "Live proof must not preserve stale split-path assumptions or proof-only fallback paths."
+min_net_crates_loc = -25
+
+scan_files = [
+  "docs/plans/phase-AG/plan-phase-AG.md",
+  "crates/atm/src/composition.rs",
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-daemon/src/tests/runtime_root.rs",
+]
+
+allowed_changed_files = [
+  "docs/plans/phase-AG/plan-phase-AG.md",
+  "crates/atm/src/composition.rs",
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-daemon/src/tests/runtime_root.rs",
+]
+
+forbidden_literals = [
+  "AG.25 is complete",
+  "other-Mac smoke lane is complete",
+  "Windows/macOS smoke lane is complete",
+  "SendRequestEnvelope",
+  "SendResponseEnvelope",
+]
+
+forbidden_regexes = [
+  "hidden local fallback",
+  "split send semantics",
+  "loopback-only exceptions",
+]
