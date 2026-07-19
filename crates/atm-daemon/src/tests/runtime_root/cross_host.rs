@@ -220,7 +220,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     let ack_outcome = expect_ack_response(ack_response);
     assert_eq!(
         ack_outcome.reply_target.to_string(),
-        "team-lead@test-team.192.0.0.2"
+        format!("team-lead@test-team.{self_ip}")
     );
     assert_eq!(ack_outcome.warnings.len(), 1);
     assert_eq!(
