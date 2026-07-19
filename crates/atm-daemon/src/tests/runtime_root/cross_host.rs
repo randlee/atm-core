@@ -11,7 +11,12 @@ use atm_core::types::{AgentName, ReadSelection, TeamName};
 use atm_storage::{
     AddPeerInterfaceCommand, AllowHostCommand, AtmMessageId, PeerInterfaceKey, PeerInterfaceKind,
 };
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -19,6 +24,20 @@ const ARCH: &str = ROLE_TEAM_LEAD;
 const ARCH_TEAM: &str = TEST_TEAM;
 const CM5: &str = TEST_QA;
 const CM5_TEAM: &str = "test-peer-team";
+const CROSS_HOST_CHILD_ENV: &str = "ATM_CROSS_HOST_CHILD_STATE";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CrossHostChildState {
+    home_dir: PathBuf,
+    workspace_dir: PathBuf,
+    db_path: PathBuf,
+    local_ipc_socket_path: PathBuf,
+    ready_file: PathBuf,
+    stop_file: PathBuf,
+    bind_ip: Ipv4Addr,
+    bind_port: u16,
+}
+
 #[test]
 #[serial_test::serial(env)]
 fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
@@ -51,21 +70,26 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     add_member_via_retained_admin(&cm5_db, &cm5_home, CM5_TEAM, CM5, &cm5_workspace);
     configure_cross_host_sqlite(&cm5_db, self_ip, arch_port, &[self_ip]);
 
+    let child_state = CrossHostChildState {
+        home_dir: cm5_home.clone(),
+        workspace_dir: cm5_workspace.clone(),
+        db_path: cm5_db.clone(),
+        local_ipc_socket_path: tempdir.path().join("cm5-daemon.sock"),
+        ready_file: tempdir.path().join("cm5-ready"),
+        stop_file: tempdir.path().join("cm5-stop"),
+        bind_ip: self_ip,
+        bind_port: cm5_port,
+    };
+
+    let mut cm5_process = spawn_cross_host_child(&child_state);
+
     let arch_dispatcher = start_cross_host_dispatcher(&arch_home, &arch_db, self_ip, arch_port);
-    let cm5_dispatcher = start_cross_host_dispatcher(&cm5_home, &cm5_db, self_ip, cm5_port);
     let arch_ctx = CallerContext::new(
         &arch_dispatcher.dispatcher,
         &arch_home,
         &arch_workspace,
         ARCH,
         ARCH_TEAM,
-    );
-    let cm5_ctx = CallerContext::new(
-        &cm5_dispatcher.dispatcher,
-        &cm5_home,
-        &cm5_workspace,
-        CM5,
-        CM5_TEAM,
     );
     let remote_host = self_ip.to_string();
     wait_for_peer_listener(
@@ -74,12 +98,11 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
             .bound_addr_for_test()
             .expect("arch bound addr"),
     );
-    wait_for_peer_listener(
-        cm5_dispatcher
-            .peer_transport
-            .bound_addr_for_test()
-            .expect("cm5 bound addr"),
-    );
+    wait_for_child_ready(&child_state);
+    wait_for_peer_listener(SocketAddr::from((
+        child_state.bind_ip,
+        child_state.bind_port,
+    )));
 
     let first_send = send_compose(
         &arch_ctx,
@@ -93,12 +116,12 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     assert_eq!(first_send.outcome.as_str(), "sent");
     let source_message_id = first_send.message_id;
 
-    let received = read_message(
-        cm5_ctx.dispatcher,
-        cm5_ctx.home,
-        cm5_ctx.current_dir,
-        cm5_ctx.caller_identity,
-        cm5_ctx.caller_team,
+    let received = read_message_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
         ReadSelection::PendingAck,
         None,
     );
@@ -114,14 +137,22 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
             .extra
             .get("metadata")
             .and_then(serde_json::Value::as_object)
-            .and_then(|metadata| metadata.get("atm"))
+            .and_then(|metadata: &serde_json::Map<String, serde_json::Value>| metadata.get("atm"))
             .and_then(serde_json::Value::as_object)
-            .and_then(|atm| atm.get("remoteHost"))
+            .and_then(|atm: &serde_json::Map<String, serde_json::Value>| atm.get("remoteHost"))
             .and_then(serde_json::Value::as_str),
         Some(remote_host.as_str())
     );
 
-    let ack = send_ack(&cm5_ctx, recipient_message_id, "cross-host ack success");
+    let ack = send_ack_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
+        recipient_message_id,
+        "cross-host ack success",
+    );
     match ack.reply_disposition {
         atm_core::ack::AckReplyDisposition::Sent {
             reply_message_id: _,
@@ -159,12 +190,12 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     );
     assert_eq!(second_send.outcome.as_str(), "sent");
 
-    let second_received = read_message(
-        cm5_ctx.dispatcher,
-        cm5_ctx.home,
-        cm5_ctx.current_dir,
-        cm5_ctx.caller_identity,
-        cm5_ctx.caller_team,
+    let second_received = read_message_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
         ReadSelection::PendingAck,
         None,
     );
@@ -183,8 +214,12 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         .shutdown()
         .expect("shutdown source peer listener");
 
-    let ack_error = send_ack_expect_error(
-        &cm5_ctx,
+    let ack_error = send_ack_over_local_ipc_expect_error(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
     );
@@ -194,12 +229,12 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         "{ack_error:?}"
     );
 
-    let still_pending = read_message(
-        cm5_ctx.dispatcher,
-        cm5_ctx.home,
-        cm5_ctx.current_dir,
-        cm5_ctx.caller_identity,
-        cm5_ctx.caller_team,
+    let still_pending = read_message_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
         ReadSelection::PendingAck,
         Some(second_recipient_message_id),
     );
@@ -211,10 +246,19 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     assert!(still_pending_message.envelope.pending_ack_at.is_some());
     assert!(still_pending_message.envelope.acknowledged_at.is_none());
 
-    cm5_dispatcher
-        .peer_transport
-        .shutdown()
-        .expect("shutdown receiver peer listener");
+    stop_cross_host_child(&child_state, &mut cm5_process);
+}
+
+#[test]
+#[ignore = "helper invoked by cross-host parent test only"]
+#[serial_test::serial(env)]
+fn cross_host_child_process_runtime() {
+    let Some(raw_state) = std::env::var_os(CROSS_HOST_CHILD_ENV) else {
+        return;
+    };
+    let state: CrossHostChildState =
+        serde_json::from_str(&raw_state.to_string_lossy()).expect("decode child state");
+    run_cross_host_child_process(state);
 }
 
 struct CrossHostHarness {
@@ -253,6 +297,137 @@ struct SendSpec<'a> {
     remote_host: Option<&'a str>,
     body: &'a str,
     requires_ack: bool,
+}
+
+fn spawn_cross_host_child(state: &CrossHostChildState) -> Child {
+    let current_exe = std::env::current_exe().expect("current exe");
+    let state_json = serde_json::to_string(state).expect("encode child state");
+    Command::new(current_exe)
+        .arg("--ignored")
+        .arg("cross_host_child_process_runtime")
+        .arg("--nocapture")
+        .env(CROSS_HOST_CHILD_ENV, state_json)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn cross-host child test process")
+}
+
+fn wait_for_child_ready(state: &CrossHostChildState) {
+    let started = std::time::Instant::now();
+    loop {
+        if state.ready_file.exists() {
+            return;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "cross-host child did not publish readiness within the bounded window"
+        );
+        std::thread::park_timeout(Duration::from_millis(25));
+    }
+}
+
+fn stop_cross_host_child(state: &CrossHostChildState, child: &mut Child) {
+    fs::write(&state.stop_file, b"stop").expect("write child stop file");
+    let status = child.wait().expect("wait for cross-host child");
+    assert!(
+        status.success(),
+        "cross-host child exited unsuccessfully: {status}"
+    );
+}
+
+fn run_cross_host_child_process(state: CrossHostChildState) {
+    install_retained_runtime_factory();
+    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+    let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+    let _env = EnvGuard::set_many([
+        (
+            "ATM_HOME",
+            Some(state.home_dir.to_str().expect("utf8 child atm home")),
+        ),
+        (
+            "ATM_CONFIG_HOME",
+            Some(
+                state
+                    .home_dir
+                    .parent()
+                    .expect("child config parent")
+                    .to_str()
+                    .expect("utf8 child config home"),
+            ),
+        ),
+        (
+            SQLITE_RUNTIME_PATH_ENV,
+            Some(state.db_path.to_str().expect("utf8 child db path")),
+        ),
+        (
+            "HOME",
+            Some(
+                state
+                    .home_dir
+                    .parent()
+                    .expect("child home parent")
+                    .to_str()
+                    .expect("utf8 child home parent"),
+            ),
+        ),
+        ("USERPROFILE", None),
+    ]);
+
+    let harness = start_cross_host_dispatcher(
+        &state.home_dir,
+        &state.db_path,
+        state.bind_ip,
+        state.bind_port,
+    );
+    let dispatch_for_runtime: Arc<dyn RequestDispatcher + Send + Sync> = harness.dispatcher.clone();
+    let server_transport = LocalIpcServerTransportAdapter::new();
+    let runtime = server_transport
+        .prepare_runtime_at_socket_path_for_home(
+            state.local_ipc_socket_path.clone(),
+            &state.home_dir,
+        )
+        .expect("prepare child local ipc runtime");
+    let mut runtime = runtime;
+    let endpoint_guard = runtime
+        .take_endpoint_guard()
+        .expect("take child endpoint guard");
+    let stop_file = state.stop_file.clone();
+    let ready_file = state.ready_file.clone();
+    std::thread::spawn(move || {
+        loop {
+            if stop_file.exists() {
+                lifecycle.set_terminate_for_test(true);
+                break;
+            }
+            std::thread::park_timeout(Duration::from_millis(25));
+        }
+    });
+    runtime
+        .serve_with_runtime_hooks(
+            dispatch_for_runtime,
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                finalize_shutdown: || {},
+                publish_ready: move || {
+                    fs::write(&ready_file, b"ready").map_err(|source| {
+                        AtmError::daemon_unavailable(
+                            "cross-host child failed to publish the ready signal file",
+                        )
+                        .with_source(source)
+                    })
+                },
+            },
+        )
+        .expect("serve child local ipc runtime");
+    harness
+        .peer_transport
+        .shutdown()
+        .expect("shutdown child peer listener");
 }
 
 impl<'a> SendSpec<'a> {
@@ -456,54 +631,144 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
     }
 }
 
-fn send_ack(
-    caller: &CallerContext<'_>,
-    message_id: AtmMessageId,
-    body: &str,
-) -> atm_core::ack::AckOutcome {
-    match caller
-        .dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: caller.home.to_path_buf(),
-                current_dir: caller.current_dir.to_path_buf(),
-                caller_identity: caller
-                    .caller_identity
-                    .parse::<AgentName>()
-                    .expect("caller identity"),
-                caller_team: caller.caller_team.parse::<TeamName>().expect("caller team"),
-                message_id,
-                reply_body: body.to_string(),
-            },
-        )))
-        .expect("ack should succeed")
-    {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
-        other => panic!("unexpected ack response: {other:?}"),
+fn read_message_over_local_ipc(
+    socket_path: &std::path::Path,
+    home: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    selection: ReadSelection,
+    message_id: Option<AtmMessageId>,
+) -> ReadOutcome {
+    let message_id_filter = message_id.map(|id| id.to_string());
+    let request = RequestEnvelope::Receive(
+        ReadQuery::new(
+            home.to_path_buf(),
+            current_dir.to_path_buf(),
+            caller_identity
+                .parse::<AgentName>()
+                .expect("caller identity"),
+            None,
+            caller_team.parse::<TeamName>().expect("caller team"),
+            selection,
+            false,
+            false,
+            message_id_filter.as_deref(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query"),
+    );
+    match dispatch_over_local_ipc(socket_path, request).expect("read over local ipc") {
+        ResponseEnvelope::Receive(outcome) => *outcome,
+        other => panic!("unexpected local ipc read response: {other:?}"),
     }
 }
 
-fn send_ack_expect_error(
-    caller: &CallerContext<'_>,
+fn send_ack_over_local_ipc(
+    socket_path: &std::path::Path,
+    home: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    message_id: AtmMessageId,
+    body: &str,
+) -> atm_core::ack::AckOutcome {
+    match dispatch_ack_over_local_ipc(
+        socket_path,
+        home,
+        current_dir,
+        caller_identity,
+        caller_team,
+        message_id,
+        body,
+    )
+    .expect("ack over local ipc")
+    {
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        other => panic!("unexpected local ipc ack response: {other:?}"),
+    }
+}
+
+fn send_ack_over_local_ipc_expect_error(
+    socket_path: &std::path::Path,
+    home: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
     message_id: AtmMessageId,
     body: &str,
 ) -> atm_core::error::AtmError {
-    caller
-        .dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            atm_core::ack::AckRequest {
-                home_dir: caller.home.to_path_buf(),
-                current_dir: caller.current_dir.to_path_buf(),
-                caller_identity: caller
-                    .caller_identity
-                    .parse::<AgentName>()
-                    .expect("caller identity"),
-                caller_team: caller.caller_team.parse::<TeamName>().expect("caller team"),
-                message_id,
-                reply_body: body.to_string(),
-            },
-        )))
-        .expect_err("ack should fail")
+    dispatch_ack_over_local_ipc(
+        socket_path,
+        home,
+        current_dir,
+        caller_identity,
+        caller_team,
+        message_id,
+        body,
+    )
+    .expect_err("ack over local ipc should fail")
+}
+
+fn dispatch_ack_over_local_ipc(
+    socket_path: &std::path::Path,
+    home: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    caller_team: &str,
+    message_id: AtmMessageId,
+    body: &str,
+) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+    let request = RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+        atm_core::ack::AckRequest {
+            home_dir: home.to_path_buf(),
+            current_dir: current_dir.to_path_buf(),
+            caller_identity: caller_identity
+                .parse::<AgentName>()
+                .expect("caller identity"),
+            caller_team: caller_team.parse::<TeamName>().expect("caller team"),
+            message_id,
+            reply_body: body.to_string(),
+        },
+    ));
+    dispatch_over_local_ipc(socket_path, request)
+}
+
+fn dispatch_over_local_ipc(
+    socket_path: &std::path::Path,
+    request: RequestEnvelope,
+) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+    let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(socket_path)
+        .expect("ipc name")
+        .into_owned();
+    let frame =
+        atm_core::protocol::request_to_frame_payload(next_request_id(), request).expect("frame");
+    let mut stream =
+        crate::test_support::connect_local_ipc_with_timeout(ipc_name, Duration::from_secs(3))
+            .map_err(|source| {
+                AtmError::daemon_unavailable("connect local ipc for cross-host child")
+                    .with_source(source)
+            })?;
+    configure_test_local_ipc_timeouts(&stream);
+    atm_core::protocol::write_frame(&mut stream, &frame, "write local ipc frame")?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("flush local ipc frame").with_source(source)
+    })?;
+    let response_frame = atm_core::protocol::read_frame(
+        &mut stream,
+        "read local ipc frame",
+        "local ipc response frame too large",
+    )?
+    .expect("local ipc response frame");
+    let (_, response) = atm_core::protocol::response_from_frame_payload(response_frame)?;
+    match response {
+        ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+        other => Ok(other),
+    }
 }
 
 fn read_message(

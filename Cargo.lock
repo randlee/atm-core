@@ -185,6 +185,7 @@ dependencies = [
  "rustls",
  "sc-observability",
  "sc-observability-types",
+ "serde",
  "serde_json",
  "serial_test",
  "signal-hook",
