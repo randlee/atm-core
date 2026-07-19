@@ -49,7 +49,7 @@ required_variables:
     <step id="d">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
     <step id="e">As soon as the development changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so PR work and QA preparation can begin in parallel.</step>
     <step id="f">After the push report, run the required validation and tests. Do not wait for PR creation before starting validation.</step>
-    <step id="g">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
+    <step id="g">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required. For each claimed acceptance item, include a deliverable inventory: acceptance item, file, symbol or code path, live line, and short change note. For deletion or cleanup sprints, also include before/after targeted symbol or code-path inventory; net LOC is secondary evidence only.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

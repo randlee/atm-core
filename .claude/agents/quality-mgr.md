@@ -120,6 +120,8 @@ TODO-specific rule:
    - blocking
    - non-blocking
    - skipped
+   Before citing any reviewer-supplied `file:line`, re-resolve it in the
+   current branch/worktree. Missing or stale evidence is a finding.
 9. Check PR CI state when a PR number is present:
    - prefer `atm gh monitor status`
    - prefer `atm gh monitor pr <PR> --start-timeout 120`

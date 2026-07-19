@@ -156,6 +156,12 @@ Phase-AF planning note:
   and its Windows handoff checklist is
   [`docs/plans/phase-af/smoke-1.3.1-windows-checklist.md`](./plans/phase-af/smoke-1.3.1-windows-checklist.md).
 
+Prompt-hardening note:
+- `feature/prompt-hardening` is the prompt/template hardening branch for
+  concise evidence discipline across dev, QA, and review reporting.
+- the authoritative plan is
+  [`docs/plans/prompt-hardening/plan-prompt-hardening.md`](./plans/prompt-hardening/plan-prompt-hardening.md)
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
