@@ -1,0 +1,179 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-007>
+  a triage:Finding ;
+  triage:findingId "ARCH-007" ;
+  triage:title "routing not fully consolidated into one shared outbound delivery function" ;
+  triage:description "Acceptance Criteria requires local-vs-remote routing in one shared outbound delivery function. Remote-path business logic (deliver_remote_send_request, Deferred/RejectedTerminal/OutcomeUnknown handling, build_remote_deferred_outcome) remains inline in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:69-100 rather than inside the same shared core function used for the Local path (execute_outbound_send_with_runtime_and_post_send_emitter at line 62). Correlation note: related to AG20-BLOCK-001 (shared_outcome_policy never implemented — .triage/phase-AG/findings/AG20-BLOCK-001.ttl, already dispatched in AG21-FIX-1). Both describe missing consolidation of routing and outcome-disposition logic into shared boundary functions." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs and crates/atm-core/src/send/mod.rs" ;
+  triage:category "acceptance-criteria-not-met" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-007/pAG-s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s22/03c873fc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/03c873fc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/03c873fc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:notes "Initial pass baseline correlation: remote-path business logic inline in dispatch_send (lines 69-100) with helper build_remote_deferred_outcome (lines 124-165) remains unconsolidated vs. local path (line 62) which delegates to execute_outbound_send_with_runtime_and_post_send_emitter. All branches AG18-25 contain this issue; fix is currently in progress on feature/pAG-s21-collapse-dispatch-routing via arch-ctm's AG21-FIX-1 task. S22-25 remain pinned at baseline 03c873fc (not yet branched/started) and will inherit fix via merge-forward after AG21 lands. Verify fix by confirming (1) shared core function consolidates both local and remote paths, (2) no inline outcome-disposition logic remains in dispatch_send, (3) symbol resolves in crates/ and matches sprint-AG21.md acceptance criteria, (4) req-qa/arch-qa re-confirm consolidation is complete. Do not mark closed until all consolidated logic is wired through all call sites." .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/03c873fc> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/03c873fc> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/03c873fc> .
+
+<urn:atm:triage:occurrence/ARCH-007/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 69 ;
+  triage:snippet "SendRequestRoute::Remote(remote_host) => { match self.service_runtime.deliver_remote_send_request(...) { ... boundary::RemoteSendDeliveryOutcome::Deferred { ... } => build_remote_deferred_outcome(...) ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/03c873fc> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/pAG-s22/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/pAG-s23/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/pAG-s24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/pAG-s25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 25 .

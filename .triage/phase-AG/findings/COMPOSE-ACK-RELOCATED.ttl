@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/COMPOSE-ACK-RELOCATED>
+  a triage:Finding ;
+  triage:findingId "COMPOSE-ACK-RELOCATED" ;
+  triage:title "compose-vs-ack decision relocated (not collapsed) into atm-core, plus a second independent construction site in the daemon dispatcher" ;
+  triage:description """The dispatcher-local compose-vs-ack branch (request.acknowledges_message_id.is_some() && request.source_remote_host.is_none()) was deleted from crates/atm-daemon/src/runtime_health/dispatch_delivery.rs in AG.21, but the identical decision now lives in two locations instead of being collapsed:
+
+(1) crates/atm-core/src/send/mod.rs:365-383 (execute_outbound_send_with_runtime_and_post_send_emitter): Contains the relocated fork at line 371, branching to ack_mail_with_runtime_and_post_send_emitter (returns SendResponseEnvelope::Acknowledged) vs send_mail_with_runtime_and_post_send_emitter (returns SendResponseEnvelope::Sent). This is documented by AG18-QA-003 as "open-relocated" (moved from daemon to core, but the fork not collapsed).
+
+(2) crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:74-98: Contains a second, independent construction site that bypasses the canonical send/mod.rs entrypoint entirely. Lines 77 and 90 directly construct SendResponseEnvelope::Sent for RemoteSendDeliveryOutcome::Deferred and RemoteSendDeliveryOutcome::OutcomeUnknown remote outcomes, forming a separate decision fork that would not be addressed by fixing the send/mod.rs relocation alone.
+
+The architectural violation is not collapsed: the canonical decision (send vs ack, determined by a boolean flag check) exists in TWO independent call sites (send/mod.rs and dispatch_delivery.rs), and the daemon-layer call site bypasses the core-layer canonical function entirely, preventing a single unified fix. This is the ladder's 4th confirmed "relocated, not collapsed" recurrence (prior occurrences: AG18-QA-002, AG18-QA-003 fork relocation, AG18-QA-004 caller-side duplication).""" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T12:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:notes """Occurrence 1 is the relocated fork in send/mod.rs:371-382, already documented by AG18-QA-003 as "open-relocated". Occurrences 2 and 3 are the second, independent construction site in dispatch_delivery.rs:77 and :90 that directly construct SendResponseEnvelope::Sent for remote deferred/unknown outcomes, bypassing the canonical entrypoint and forming a second, independent architectural violation (not just a duplication of the first). The full workspace sweep on AG.21 confirms no occurrence on lower branches (AG.18-AG.20) has this specific bypass pattern yet; it was introduced when dispatch_delivery.rs was refactored to separate local vs remote routing. This finding overlaps with AG18-QA-002 and AG18-QA-003 but specifically clarifies that there are TWO distinct construction-site issues that together form a "relocated but not collapsed" pattern. AG21-FIX-1 is currently in progress on this branch.""" .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 371 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter(...).map(SendResponseEnvelope::Acknowledged) ... } send_mail_with_runtime_and_post_send_emitter(request, ...).map(SendResponseEnvelope::Sent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 77 ;
+  triage:snippet "RemoteSendDeliveryOutcome::Deferred { ... } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(build_remote_deferred_outcome(...))))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 90 ;
+  triage:snippet "RemoteSendDeliveryOutcome::OutcomeUnknown { ... } => Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(build_remote_deferred_outcome(...))))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 372 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter(...).map(send_acknowledged_envelope) ... } send_mail_with_runtime_and_post_send_emitter(request, ...).map(send_sent_envelope)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 77 ;
+  triage:snippet "RemoteSendDeliveryOutcome::Deferred { receipt_message_id, .. } => Ok(send_sent_response(build_remote_deferred_outcome(...)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/COMPOSE-ACK-RELOCATED/pAG-s21-followup/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 90 ;
+  triage:snippet "RemoteSendDeliveryOutcome::OutcomeUnknown { receipt_message_id, .. } => Ok(send_sent_response(build_remote_deferred_outcome(...)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
