@@ -15,7 +15,7 @@ use crate::boundary::{
     PostSendEmissionPath, PostSendHookEmitter, RosterEntry, RosterHarness, RosterMemberKind,
 };
 use crate::config::AtmConfig;
-use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
+use crate::delivery_execution::execute_delivery_plan;
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
@@ -509,10 +509,6 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
     let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
-    assert_eq!(
-        execution.disposition,
-        DeliveryExecutionDisposition::Delivered
-    );
     assert!(execution.warnings.is_empty());
 }
 

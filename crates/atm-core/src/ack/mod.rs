@@ -656,13 +656,11 @@ fn execute_remote_ack_reply_plan<
     match runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)? {
         crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
             Ok(crate::delivery_execution::DeliveryExecutionResult {
-                disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
                 warnings: Vec::new(),
             })
         }
         crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. } => {
             Ok(crate::delivery_execution::DeliveryExecutionResult {
-                disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
                 warnings: vec![crate::send::WarningEntry::with_code(
                     error.code,
                     "warning: ATM deferred remote ack delivery because the cross-host path is not currently healthy. The daemon will retry this remote ack in the background.",
@@ -672,7 +670,6 @@ fn execute_remote_ack_reply_plan<
         }
         crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. } => {
             Ok(crate::delivery_execution::DeliveryExecutionResult {
-                disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
                 warnings: vec![crate::send::WarningEntry::with_code(
                     error.code,
                     "warning: ATM could not confirm the remote ack delivery outcome. The daemon retained the remote ack for bounded replay and will report the final result through the sender inbox.",

@@ -10,21 +10,14 @@ use crate::send::{DeliveryPersistenceDisposition, WarningEntry};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeliveryExecutionDisposition {
-    Delivered,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeliveryExecutionResult {
-    pub(crate) disposition: DeliveryExecutionDisposition,
     pub(crate) warnings: Vec<WarningEntry>,
 }
 
 impl DeliveryExecutionResult {
     fn delivered() -> Self {
         Self {
-            disposition: DeliveryExecutionDisposition::Delivered,
             warnings: Vec::new(),
         }
     }
@@ -125,8 +118,8 @@ mod tests {
     use serde_json::Map;
 
     use super::{
-        DeliveryExecutionDisposition, DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter,
-        emit_delivery_plan_transitions, execute_delivery_plan,
+        DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions,
+        execute_delivery_plan,
     };
     use crate::delivery_plan::{DeliveryPlan, DeliveryPlanKind, DeliveryTarget, LogicalMessage};
     use crate::delivery_policy::{
@@ -289,7 +282,6 @@ mod tests {
         );
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
         assert!(result.warnings.is_empty());
     }
 
@@ -347,7 +339,6 @@ mod tests {
         );
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert_eq!(result.disposition, DeliveryExecutionDisposition::Delivered);
         assert!(result.warnings.is_empty());
         assert_eq!(
             *runtime.delivered_texts.lock().expect("deliveries"),
