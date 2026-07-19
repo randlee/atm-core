@@ -21,7 +21,7 @@ with free-form input.
 
 ```json
 {
-  "review_mode": "sprint_review | round_limit | phase_end | integration_review",
+  "review_mode": "sprint_review | round_limit | phase_end | integration_review | doc_review",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "feature/branch-name",
   "commit": "abc1234",
@@ -49,6 +49,9 @@ Rules:
 - `review_mode` is required
 - `authoritative_sprint_doc` is the primary task-level architecture source when
   provided
+- `doc_review` is valid for docs-only plan review and should inspect planning,
+  boundary, packaging, checklist, readiness, and gate artifacts without
+  expecting implementation code changes
 - if required inputs are missing or malformed, return `FAIL`
 
 ## Architectural Rules

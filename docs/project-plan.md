@@ -94,6 +94,9 @@ Phase-AG planning note:
 - the AG corrective routing/revalidation plan is now merged into `develop`, and
   execution proceeds on separate per-sprint worktrees beginning with
   `feature/pAG-s11-remote-target-contract`
+- the remaining ruthless-boundary cleanup and cross-host unification line is
+  split into separate critically reviewed hardening sprints `AG.18` through
+  `AG.25` on top of the AG.11-AG.17 corrective line
 - transport security / encryption remains a later AG sprint concern and must
   not be implied by earlier functional cross-host closure
 - standalone follow-up fix work also exists off `develop` for identifier
@@ -744,6 +747,14 @@ Execution shape:
 - `AG.15` other-Mac cross-host smoke for the corrective path
 - `AG.16` Windows/macOS cross-host smoke for the corrective path
 - `AG.17` corrective copied-state revalidation and final release verdict
+- `AG.18` collapse Compose and DirectDeliver into one envelope/handler
+- `AG.19` delete separate remote-ack execution path
+- `AG.20` move deferred/replay policy out of transport
+- `AG.21` collapse duplicate dispatch routing and inbound persistence paths
+- `AG.22` relocate host matching and endpoint selection out of transport
+- `AG.23` remove synthetic deferred-receipt construction from daemon dispatch
+- `AG.24` stop transport from mutating request shape before send
+- `AG.25` live two-daemon-pair proof for the unified cross-host line
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
