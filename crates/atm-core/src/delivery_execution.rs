@@ -13,12 +13,21 @@ use crate::types::{AgentName, TaskId, TeamName};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DeliveryExecutionResult {
     pub(crate) warnings: Vec<WarningEntry>,
+    pub(crate) commit_source_state: bool,
 }
 
 impl DeliveryExecutionResult {
-    fn delivered() -> Self {
+    pub(crate) fn delivered() -> Self {
         Self {
             warnings: Vec::new(),
+            commit_source_state: true,
+        }
+    }
+
+    pub(crate) fn delivered_without_commit(warnings: Vec<WarningEntry>) -> Self {
+        Self {
+            warnings,
+            commit_source_state: false,
         }
     }
 }
