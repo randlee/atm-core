@@ -354,6 +354,9 @@ impl PeerClientTransport {
         )
     }
 
+    // AG.20 migration: fold this into `send_to_endpoint_immediate_wait`; callers
+    // must use the one bounded peer-client send path.
+    #[deprecated(note = "AG.20 deletion target; use the single bounded peer-client send path")]
     fn send_to_endpoint(
         &self,
         endpoint: SocketAddr,
@@ -442,6 +445,8 @@ impl PeerClientTransport {
     }
 
     fn apply_peer_io_deadlines(&self, stream: &std::net::TcpStream) -> Result<(), AtmError> {
+        // AG.20 migration: inline these transport facts at the unified peer
+        // client boundary when the legacy peer error helpers are deleted.
         stream
             .set_read_timeout(Some(PEER_IO_DEADLINE))
             .map_err(peer_read_deadline_error)?;
@@ -456,6 +461,8 @@ impl PeerClientTransport {
         stream: &mut impl std::io::Write,
         request_frame: &atm_core::protocol::FramePayload,
     ) -> Result<(), AtmError> {
+        // AG.20 migration: propagate the frame write/flush failure directly
+        // when `peer_flush_error` is deleted with the legacy helper set.
         atm_core::protocol::write_frame(
             stream,
             request_frame,
@@ -469,6 +476,8 @@ impl PeerClientTransport {
         &self,
         stream: &mut impl std::io::Read,
     ) -> Result<atm_core::protocol::FramePayload, AtmError> {
+        // AG.20 migration: construct the missing-response error directly at
+        // this peer-client boundary when the legacy helper is deleted.
         atm_core::protocol::read_frame(
             stream,
             "failed to read remote peer response frame",
@@ -482,6 +491,8 @@ impl PeerClientTransport {
         request_id: atm_core::protocol::RequestId,
         response_frame: atm_core::protocol::FramePayload,
     ) -> Result<ResponseEnvelope, AtmError> {
+        // AG.20 migration: keep decode and request-id validation here, then
+        // construct their errors directly after the legacy helpers are deleted.
         let (response_id, response) = self
             .codec
             .response_from_frame(response_frame)
@@ -586,6 +597,9 @@ impl PeerTransportRuntime {
         dead_code,
         reason = "retained for existing test helpers and transitional peer-runtime entrypoints"
     )]
+    // AG.20 migration: remove this forwarding endpoint API; dispatch through
+    // the single bounded peer-client send path.
+    #[deprecated(note = "AG.20 deletion target; use the single bounded peer-client send path")]
     pub(crate) fn send_to_endpoint(
         &self,
         endpoint: SocketAddr,

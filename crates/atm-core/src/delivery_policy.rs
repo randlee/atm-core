@@ -254,6 +254,9 @@ impl ThreadUpdateStateMachine {
     reason = "Phase Y.4 keeps the full documented ack-reply state inventory explicit even before every failure branch is exercised by runtime callers."
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(
+    note = "AG.20 deletion target; derive acknowledgement transitions from the canonical send result instead of a separate state inventory"
+)]
 pub(crate) enum AckReplyStateMachine {
     Received,
     ValidateAckTargetExists,
@@ -489,6 +492,8 @@ pub(crate) fn persisted_success_transition_names(
         DeliveryEventFamily::AckReply => ack_reply_transitions()
             .iter()
             .copied()
+            // AG.20 migration: derive these labels from the canonical send
+            // result after `AckReplyStateMachine` is removed.
             .map(AckReplyStateMachine::transition_name)
             .collect(),
         DeliveryEventFamily::InboxRepair => inbox_repair_persisted_success_transitions(),
@@ -562,6 +567,8 @@ pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine]
 }
 
 pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
+    // AG.20 migration: replace this legacy inventory with canonical send-result
+    // transitions; acknowledgement delivery must not retain a separate model.
     &[
         AckReplyStateMachine::Received,
         AckReplyStateMachine::ValidateAckTargetExists,
@@ -768,6 +775,8 @@ mod tests {
 
     #[test]
     fn state_machine_sequences_stay_auditable() {
+        // AG.20 migration: replace this legacy inventory assertion with the
+        // canonical send-result transition coverage when the type is removed.
         assert_eq!(
             thread_update_transitions(),
             &[

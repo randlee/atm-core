@@ -33,6 +33,10 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
+// AG.20 migration: fixtures below that construct legacy delivery-plan or
+// persistence types must be rewritten around the canonical persisted envelope
+// when those deletion targets are removed; retain their behavioral assertions.
+
 fn message(
     from: &str,
     message_id: AtmMessageId,

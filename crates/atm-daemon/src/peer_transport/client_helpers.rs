@@ -1,5 +1,8 @@
 use super::*;
 
+#[deprecated(
+    note = "AG.20 deletion target; construct the bounded-read transport error at the unified peer client boundary"
+)]
 pub(super) fn peer_read_deadline_error(source: std::io::Error) -> AtmError {
     AtmError::daemon_unavailable("failed to apply remote peer read deadline")
         .with_recovery(
@@ -8,6 +11,9 @@ pub(super) fn peer_read_deadline_error(source: std::io::Error) -> AtmError {
         .with_source(source)
 }
 
+#[deprecated(
+    note = "AG.20 deletion target; construct the bounded-write transport error at the unified peer client boundary"
+)]
 pub(super) fn peer_write_deadline_error(source: std::io::Error) -> AtmError {
     AtmError::daemon_unavailable("failed to apply remote peer write deadline")
         .with_recovery(
@@ -16,6 +22,9 @@ pub(super) fn peer_write_deadline_error(source: std::io::Error) -> AtmError {
         .with_source(source)
 }
 
+#[deprecated(
+    note = "AG.20 deletion target; propagate the frame-flush error directly from the unified peer client boundary"
+)]
 pub(super) fn peer_flush_error(source: std::io::Error) -> AtmError {
     AtmError::remote_delivery_outcome_unknown(
         "failed to flush the remote peer request frame before waiting for a response",
@@ -23,6 +32,9 @@ pub(super) fn peer_flush_error(source: std::io::Error) -> AtmError {
     .with_source(source)
 }
 
+#[deprecated(
+    note = "AG.20 deletion target; construct the closed-peer error at the unified peer client boundary"
+)]
 pub(super) fn peer_closed_before_response_error() -> AtmError {
     AtmError::remote_delivery_outcome_unknown(
         "remote peer closed the connection before returning a response frame",
@@ -32,6 +44,9 @@ pub(super) fn peer_closed_before_response_error() -> AtmError {
     )
 }
 
+#[deprecated(
+    note = "AG.20 deletion target; propagate the response-decode error directly from the unified peer client boundary"
+)]
 pub(super) fn peer_response_decode_error(error: AtmError) -> AtmError {
     AtmError::daemon_unavailable("failed to decode remote peer response frame")
         .with_recovery(
@@ -40,6 +55,9 @@ pub(super) fn peer_response_decode_error(error: AtmError) -> AtmError {
         .with_source(error)
 }
 
+#[deprecated(
+    note = "AG.20 deletion target; construct the request-id mismatch error at the unified peer client boundary"
+)]
 pub(super) fn peer_response_id_mismatch_error(
     response_id: atm_core::protocol::RequestId,
     request_id: atm_core::protocol::RequestId,
@@ -64,6 +82,8 @@ impl ClientTransport for PeerClientTransport {
         let endpoint = self
             .endpoint
             .ok_or_else(remote_peer_endpoint_not_configured_error)?;
+        // AG.20 migration: route through the single immediate client send after
+        // `send_to_endpoint` is removed; do not retain an alternate endpoint path.
         self.send_to_endpoint(endpoint, request)
     }
 }
