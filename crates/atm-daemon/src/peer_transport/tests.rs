@@ -1,8 +1,6 @@
 use super::{
-    AttemptFailureKind, PEER_REQUEST_DEADLINE, PeerClientTransport, PeerTransportConfig,
-    PeerTransportRuntime, classify_io_error, jittered_backoff,
-    remote_peer_endpoint_not_configured_error, remote_replay_persistence_failed_error,
-    remote_replay_store_not_configured_error,
+    PEER_REQUEST_DEADLINE, PeerClientTransport, PeerTransportConfig, PeerTransportRuntime,
+    remote_peer_endpoint_not_configured_error,
 };
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::runtime_health::DaemonRequestDispatcher;

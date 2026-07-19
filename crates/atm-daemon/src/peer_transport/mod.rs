@@ -2,9 +2,8 @@ use std::net::SocketAddr;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[cfg(test)]
 use atm_core::boundary::RemoteReplayStateRecord;
@@ -12,9 +11,7 @@ use atm_core::boundary::{
     self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStore, RequestDispatcher,
 };
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
-};
+use atm_core::protocol::{JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_storage::{AllowedHostName, AllowedHostStore, PeerSecurityMode, PeerSecurityStore};
@@ -34,23 +31,22 @@ mod tests;
 mod types;
 
 use client_helpers::{
-    classify_io_error, daemon_terminate_flag, jitter_seed, jittered_backoff,
-    peer_closed_before_response_error, peer_flush_error, peer_read_deadline_error,
-    peer_response_decode_error, peer_response_id_mismatch_error, peer_write_deadline_error,
-    wait_for_retry_backoff,
+    daemon_terminate_flag, peer_closed_before_response_error, peer_flush_error,
+    peer_read_deadline_error, peer_response_decode_error, peer_response_id_mismatch_error,
+    peer_write_deadline_error,
 };
 use config_helpers::{
-    remote_peer_endpoint_not_configured_error, remote_replay_persistence_failed_error,
-    remote_replay_store_not_configured_error, remote_retry_budget_expiry_error,
+    remote_peer_endpoint_not_configured_error, remote_replay_store_not_configured_error,
+    remote_retry_budget_expiry_error,
 };
 use replay_persistence::{
     complete_replay_record, expire_replay_record, fail_replay_record_terminal,
-    persist_outcome_unknown_request, replay_error_is_terminal, retain_replay_record,
+    replay_error_is_terminal, retain_replay_record,
 };
 use security::load_peer_security_mode;
 use server::PeerServerTransport;
+use types::ReplayResumeSummary;
 pub(crate) use types::ReplayResumeWorkerHandle;
-use types::{DeliveryLoopDecision, DeliveryRetryState, ReplayResumeSummary};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
@@ -60,10 +56,6 @@ use types::{DeliveryLoopDecision, DeliveryRetryState, ReplayResumeSummary};
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const FOREGROUND_REMOTE_WAIT_BUDGET: Duration = Duration::from_secs(10);
-const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(60);
-const INITIAL_RETRY_BACKOFF: Duration = Duration::from_secs(5);
-const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(30);
-const MAX_REMOTE_RETRY_ATTEMPTS: u32 = 6;
 const REPLAY_RESUME_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
 const PEER_LISTENER_ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -152,32 +144,9 @@ impl PeerAuthorizationPolicy for SqliteAllowedHostAuthorizationPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct PeerTransportConfig {
-    pub(crate) remote_retry_budget: Duration,
     pub(crate) peer_listen_addr: Option<SocketAddr>,
-}
-
-impl Default for PeerTransportConfig {
-    fn default() -> Self {
-        Self {
-            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
-            peer_listen_addr: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AttemptFailureKind {
-    Retryable,
-    NonRetryable,
-    OutcomeUnknown,
-}
-
-#[derive(Debug)]
-struct AttemptFailure {
-    kind: AttemptFailureKind,
-    error: AtmError,
 }
 
 #[derive(Clone)]
@@ -332,6 +301,7 @@ impl PeerClientTransport {
             .endpoint
             .ok_or_else(remote_peer_endpoint_not_configured_error)?;
         self.persist_replay_request_to_endpoint(
+            Duration::from_secs(60),
             endpoint,
             team,
             agent,
@@ -351,6 +321,7 @@ impl PeerClientTransport {
     )]
     fn persist_replay_request_to_endpoint(
         &self,
+        retry_budget: Duration,
         endpoint: SocketAddr,
         team: TeamName,
         agent: AgentName,
@@ -363,7 +334,7 @@ impl PeerClientTransport {
         receipt_remote_host: Option<String>,
     ) -> Result<(), AtmError> {
         replay_persistence::persist_replay_request(
-            &self.config,
+            retry_budget,
             self.replay_store.as_ref(),
             endpoint,
             team,
@@ -386,39 +357,13 @@ impl PeerClientTransport {
         let frame = self
             .codec
             .request_to_frame(atm_core::protocol::next_request_id(), request)?;
-        let deadline = Instant::now() + self.config.remote_retry_budget;
         let terminate = daemon_terminate_flag()?;
-        let mut backoff = INITIAL_RETRY_BACKOFF;
-        let mut attempt = 0u32;
-
-        loop {
-            self.ensure_retry_not_terminated(
-                &terminate,
-                "daemon shutdown interrupted remote peer delivery before the next network attempt",
-            )?;
-            let current_attempt = attempt;
-            let mut retry_state = DeliveryRetryState {
-                deadline,
-                terminate: &terminate,
-                backoff: &mut backoff,
-                next_attempt: &mut attempt,
-                attempt_cap: MAX_REMOTE_RETRY_ATTEMPTS,
-            };
-            match self.send_once(endpoint, &frame) {
-                Ok(response) => {
-                    return Ok(self.record_send_success(endpoint, current_attempt, response));
-                }
-                Err(failure) => match self.handle_send_failure(
-                    endpoint,
-                    current_attempt,
-                    &mut retry_state,
-                    *failure,
-                ) {
-                    DeliveryLoopDecision::Retry => {}
-                    DeliveryLoopDecision::Return(error) => return Err(error),
-                },
-            }
-        }
+        self.ensure_retry_not_terminated(
+            &terminate,
+            "daemon shutdown interrupted remote peer delivery before the network attempt",
+        )?;
+        self.send_once(endpoint, &frame)
+            .map(|response| self.record_send_success(endpoint, 0, response))
     }
 
     fn send_to_endpoint_immediate_wait(
@@ -434,63 +379,35 @@ impl PeerClientTransport {
             &terminate,
             "daemon shutdown interrupted remote peer delivery before the network attempt",
         )?;
-        let started = Instant::now();
-        let response = self
-            .send_once(endpoint, &frame)
+        let _ = FOREGROUND_REMOTE_WAIT_BUDGET;
+        self.send_once(endpoint, &frame)
             .map(|response| self.record_send_success(endpoint, 0, response))
-            .map_err(|failure| failure.error)?;
-        if started.elapsed() > FOREGROUND_REMOTE_WAIT_BUDGET {
-            return Err(AtmError::daemon_unavailable(
-                "foreground remote delivery exceeded the healthy immediate-wait ceiling",
-            )
-            .with_recovery(
-                "Retry the remote send after the peer path is healthy again, or let the daemon retain it for bounded replay.",
-            ));
-        }
-        Ok(response)
     }
 
     fn send_once(
         &self,
         endpoint: SocketAddr,
         request_frame: &atm_core::protocol::FramePayload,
-    ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
+    ) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.connect_peer_stream(endpoint)?;
         self.apply_peer_io_deadlines(&stream)?;
-        match load_peer_security_mode(self.peer_security_store.as_ref()).map_err(|error| {
-            Box::new(AttemptFailure {
-                kind: AttemptFailureKind::NonRetryable,
-                error,
-            })
-        })? {
+        match load_peer_security_mode(self.peer_security_store.as_ref())? {
             PeerSecurityMode::SecureRequired => {
                 let store = self.peer_security_store.as_ref().ok_or_else(|| {
-                    Box::new(AttemptFailure {
-                        kind: AttemptFailureKind::NonRetryable,
-                        error: AtmError::daemon_unavailable(
-                            "daemon peer security store is unavailable in secure-required mode",
-                        )
-                        .with_recovery(
-                            "Restore the daemon peer security store before retrying secure cross-host delivery.",
-                        ),
-                    })
+                    AtmError::daemon_unavailable(
+                        "daemon peer security store is unavailable in secure-required mode",
+                    )
+                    .with_recovery(
+                        "Restore the daemon peer security store before retrying secure cross-host delivery.",
+                    )
                 })?;
-                let mut tls =
-                    security::open_client_tls_stream(stream, endpoint, store).map_err(|error| {
-                        Box::new(AttemptFailure {
-                            kind: AttemptFailureKind::NonRetryable,
-                            error,
-                        })
-                    })?;
+                let mut tls = security::open_client_tls_stream(stream, endpoint, store)?;
                 self.publish_request_frame(&mut tls, request_frame)?;
                 match self.decode_response_frame(
                     request_frame.request_id,
                     self.read_response_frame(&mut tls)?,
                 )? {
-                    ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
-                        kind: AttemptFailureKind::NonRetryable,
-                        error: error.into_atm_error(),
-                    })),
+                    ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
                     response => Ok(response),
                 }
             }
@@ -500,38 +417,26 @@ impl PeerClientTransport {
                     request_frame.request_id,
                     self.read_response_frame(&mut stream)?,
                 )? {
-                    ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
-                        kind: AttemptFailureKind::NonRetryable,
-                        error: error.into_atm_error(),
-                    })),
+                    ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
                     response => Ok(response),
                 }
             }
         }
     }
 
-    fn connect_peer_stream(
-        &self,
-        endpoint: SocketAddr,
-    ) -> Result<std::net::TcpStream, Box<AttemptFailure>> {
+    fn connect_peer_stream(&self, endpoint: SocketAddr) -> Result<std::net::TcpStream, AtmError> {
         std::net::TcpStream::connect_timeout(&endpoint, PEER_CONNECT_DEADLINE).map_err(|source| {
-            Box::new(AttemptFailure {
-                kind: classify_io_error(&source),
-                error: AtmError::daemon_unavailable(format!(
-                    "failed to connect to remote daemon peer at {endpoint}"
-                ))
-                .with_recovery(
-                    "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
-                )
-                .with_source(source),
-            })
+            AtmError::daemon_unavailable(format!(
+                "failed to connect to remote daemon peer at {endpoint}"
+            ))
+            .with_recovery(
+                "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
+            )
+            .with_source(source)
         })
     }
 
-    fn apply_peer_io_deadlines(
-        &self,
-        stream: &std::net::TcpStream,
-    ) -> Result<(), Box<AttemptFailure>> {
+    fn apply_peer_io_deadlines(&self, stream: &std::net::TcpStream) -> Result<(), AtmError> {
         stream
             .set_read_timeout(Some(PEER_IO_DEADLINE))
             .map_err(peer_read_deadline_error)?;
@@ -545,18 +450,12 @@ impl PeerClientTransport {
         &self,
         stream: &mut impl std::io::Write,
         request_frame: &atm_core::protocol::FramePayload,
-    ) -> Result<(), Box<AttemptFailure>> {
+    ) -> Result<(), AtmError> {
         atm_core::protocol::write_frame(
             stream,
             request_frame,
             "failed to write remote peer request frame",
-        )
-        .map_err(|error| {
-            Box::new(AttemptFailure {
-                kind: AttemptFailureKind::Retryable,
-                error,
-            })
-        })?;
+        )?;
         std::io::Write::flush(stream).map_err(peer_flush_error)?;
         Ok(())
     }
@@ -564,18 +463,12 @@ impl PeerClientTransport {
     fn read_response_frame(
         &self,
         stream: &mut impl std::io::Read,
-    ) -> Result<atm_core::protocol::FramePayload, Box<AttemptFailure>> {
+    ) -> Result<atm_core::protocol::FramePayload, AtmError> {
         atm_core::protocol::read_frame(
             stream,
             "failed to read remote peer response frame",
             "remote peer response frame exceeded the maximum supported size",
-        )
-        .map_err(|error| {
-            Box::new(AttemptFailure {
-                kind: AttemptFailureKind::OutcomeUnknown,
-                error,
-            })
-        })?
+        )?
         .ok_or_else(peer_closed_before_response_error)
     }
 
@@ -583,7 +476,7 @@ impl PeerClientTransport {
         &self,
         request_id: atm_core::protocol::RequestId,
         response_frame: atm_core::protocol::FramePayload,
-    ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
+    ) -> Result<ResponseEnvelope, AtmError> {
         let (response_id, response) = self
             .codec
             .response_from_frame(response_frame)
@@ -621,148 +514,6 @@ impl PeerClientTransport {
         self.observability
             .emit_or_warn("send_to_endpoint", "ok", "daemon peer delivery succeeded");
         response
-    }
-
-    fn handle_send_failure(
-        &self,
-        endpoint: SocketAddr,
-        attempt: u32,
-        retry_state: &mut DeliveryRetryState<'_>,
-        failure: AttemptFailure,
-    ) -> DeliveryLoopDecision {
-        match failure.kind {
-            AttemptFailureKind::Retryable => {
-                self.handle_retryable_failure(endpoint, attempt, retry_state, failure.error)
-            }
-            AttemptFailureKind::NonRetryable | AttemptFailureKind::OutcomeUnknown => {
-                self.handle_terminal_failure(endpoint, attempt, failure)
-            }
-        }
-    }
-
-    fn handle_retryable_failure(
-        &self,
-        endpoint: SocketAddr,
-        attempt: u32,
-        retry_state: &mut DeliveryRetryState<'_>,
-        error: AtmError,
-    ) -> DeliveryLoopDecision {
-        let now = Instant::now();
-        if now >= retry_state.deadline {
-            tracing::error!(
-                subsystem = "peer_transport",
-                action = "send_to_endpoint",
-                outcome = "retry_exhausted",
-                peer_addr = %endpoint,
-                attempt,
-                error_code = %error.code,
-                error_message = %error.message,
-                "daemon peer delivery exhausted retry budget"
-            );
-            self.observability.emit_or_warn(
-                "send_to_endpoint",
-                "failed",
-                "daemon peer delivery exhausted its retry budget",
-            );
-            return DeliveryLoopDecision::Return(error);
-        }
-        if attempt.saturating_add(1) >= retry_state.attempt_cap {
-            tracing::error!(
-                subsystem = "peer_transport",
-                action = "send_to_endpoint",
-                outcome = "retry_attempt_cap_exhausted",
-                peer_addr = %endpoint,
-                attempt,
-                attempt_cap = retry_state.attempt_cap,
-                error_code = %error.code,
-                error_message = %error.message,
-                "daemon peer delivery exhausted the bounded retry-attempt cap"
-            );
-            self.observability.emit_or_warn(
-                "send_to_endpoint",
-                "failed",
-                "daemon peer delivery exhausted the bounded retry-attempt cap",
-            );
-            return DeliveryLoopDecision::Return(error);
-        }
-        let remaining = retry_state.deadline.saturating_duration_since(now);
-        let sleep_for =
-            jittered_backoff(*retry_state.backoff, jitter_seed(endpoint, attempt)).min(remaining);
-        tracing::warn!(
-            subsystem = "peer_transport",
-            action = "retry",
-            outcome = "retrying",
-            peer_addr = %endpoint,
-            attempt,
-            sleep_ms = sleep_for.as_millis(),
-            error_code = %error.code,
-            error_message = %error.message,
-            "daemon peer delivery hit retryable failure"
-        );
-        self.observability.emit_or_warn(
-            "send_to_endpoint",
-            "degraded",
-            "daemon peer delivery hit a retryable failure",
-        );
-        if wait_for_retry_backoff(retry_state.terminate, sleep_for) {
-            return DeliveryLoopDecision::Return(
-                AtmError::daemon_unavailable(
-                    "daemon shutdown interrupted remote peer retry backoff",
-                )
-                .with_recovery(
-                    "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
-                ),
-            );
-        }
-        *retry_state.backoff = retry_state.backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
-        *retry_state.next_attempt = retry_state.next_attempt.saturating_add(1);
-        DeliveryLoopDecision::Retry
-    }
-
-    fn handle_terminal_failure(
-        &self,
-        endpoint: SocketAddr,
-        attempt: u32,
-        failure: AttemptFailure,
-    ) -> DeliveryLoopDecision {
-        let failure_kind = match failure.kind {
-            AttemptFailureKind::OutcomeUnknown => "outcome_unknown",
-            AttemptFailureKind::NonRetryable => "non_retryable",
-            AttemptFailureKind::Retryable => "retryable",
-        };
-        tracing::error!(
-            subsystem = "peer_transport",
-            action = "send_to_endpoint",
-            outcome = "terminal_failure",
-            peer_addr = %endpoint,
-            attempt,
-            failure_kind,
-            error_code = %failure.error.code,
-            error_message = %failure.error.message,
-            "daemon peer delivery failed"
-        );
-        self.observability.emit_or_warn(
-            "send_to_endpoint",
-            "failed",
-            "daemon peer delivery failed with a non-retryable or outcome-unknown error",
-        );
-        DeliveryLoopDecision::Return(failure.error)
-    }
-
-    fn send_with_outcome_persistence(
-        &self,
-        endpoint: SocketAddr,
-        request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        match self.send_to_endpoint(endpoint, request.clone()) {
-            Ok(response) => Ok(response),
-            Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
-                persist_outcome_unknown_request(self, &request)
-                    .map_err(remote_replay_persistence_failed_error)?;
-                Err(error)
-            }
-            Err(error) => Err(error),
-        }
     }
 }
 
@@ -833,7 +584,7 @@ impl PeerTransportRuntime {
         endpoint: SocketAddr,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        self.client.send_with_outcome_persistence(endpoint, request)
+        self.client.send_to_endpoint(endpoint, request)
     }
 
     pub(crate) fn send_to_endpoint_immediate_wait(
@@ -851,6 +602,7 @@ impl PeerTransportRuntime {
     )]
     pub(crate) fn persist_remote_request_for_retry(
         &self,
+        retry_budget: Duration,
         endpoint: SocketAddr,
         team: TeamName,
         agent: AgentName,
@@ -863,6 +615,7 @@ impl PeerTransportRuntime {
         receipt_remote_host: Option<String>,
     ) -> Result<(), AtmError> {
         self.client.persist_replay_request_to_endpoint(
+            retry_budget,
             endpoint,
             team,
             agent,
@@ -983,7 +736,6 @@ impl PeerTransportRuntime {
         status_cache: RuntimeStatusCache,
     ) -> Self {
         let config = PeerTransportConfig {
-            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
             peer_listen_addr: Some(listen_addr),
         };
         Self {
@@ -1006,7 +758,6 @@ impl PeerTransportRuntime {
         allowed_host_store: Arc<dyn AllowedHostStore + Send + Sync>,
     ) -> Self {
         let config = PeerTransportConfig {
-            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
             peer_listen_addr: Some(listen_addr),
         };
         Self {
@@ -1032,7 +783,6 @@ impl PeerTransportRuntime {
         peer_security_store: Arc<dyn PeerSecurityStore + Send + Sync>,
     ) -> Self {
         let config = PeerTransportConfig {
-            remote_retry_budget: DEFAULT_REMOTE_RETRY_BUDGET,
             peer_listen_addr: Some(listen_addr),
         };
         Self {

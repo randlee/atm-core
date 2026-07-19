@@ -328,7 +328,6 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
@@ -502,7 +501,6 @@ fn dispatcher_secure_loopback_send_round_trips_through_peer_listener_into_self_i
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),

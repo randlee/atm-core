@@ -9,47 +9,15 @@ use atm_core::send::{RemoteDeliveryReceiptStatus, finalize_remote_delivery_recei
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::with_default_local_service_runtime;
 
-use super::{PeerTransportConfig, remote_retry_budget_expiry_error};
+use super::remote_retry_budget_expiry_error;
 use crate::SubsystemObservability;
-use crate::peer_transport::client_helpers::replay_metadata_for_request;
-
-pub(super) fn persist_outcome_unknown_request(
-    client: &super::PeerClientTransport,
-    request: &RequestEnvelope,
-) -> Result<(), AtmError> {
-    let Some((team, agent, message_key)) = replay_metadata_for_request(request) else {
-        tracing::warn!(
-            subsystem = "peer_transport",
-            action = "persist",
-            outcome = "unknown",
-            request = ?request,
-            "remote delivery outcome is unknown but this request family does not support durable replay persistence",
-        );
-        return Ok(());
-    };
-    let endpoint = client
-        .endpoint
-        .ok_or_else(super::remote_peer_endpoint_not_configured_error)?;
-    client.persist_replay_request_to_endpoint(
-        endpoint,
-        team,
-        agent,
-        message_key,
-        request.clone(),
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-}
 
 #[expect(
     clippy::too_many_arguments,
     reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"
 )]
 pub(super) fn persist_replay_request(
-    config: &PeerTransportConfig,
+    retry_budget: std::time::Duration,
     replay_store: Option<&Arc<dyn RemoteReplayStore>>,
     endpoint: SocketAddr,
     team: TeamName,
@@ -68,8 +36,7 @@ pub(super) fn persist_replay_request(
     let recorded_at = IsoTimestamp::now();
     let expires_at = IsoTimestamp::from_datetime(
         recorded_at.into_inner()
-            + chrono::Duration::from_std(config.remote_retry_budget)
-                .map_err(remote_retry_budget_expiry_error)?,
+            + chrono::Duration::from_std(retry_budget).map_err(remote_retry_budget_expiry_error)?,
     );
     replay_store.enqueue(RemoteReplayStateRecord {
         team,

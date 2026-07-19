@@ -145,7 +145,6 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((self_ip, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
@@ -323,7 +322,6 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
         Some(assembly.allowed_host_store_arc()),
         Some(assembly.peer_security_store_arc()),
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((self_ip, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),

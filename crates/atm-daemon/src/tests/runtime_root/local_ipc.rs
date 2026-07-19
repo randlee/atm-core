@@ -297,7 +297,6 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         Some(assembly.allowed_host_store_arc()),
         None,
         crate::peer_transport::PeerTransportConfig {
-            remote_retry_budget: Duration::from_secs(30),
             peer_listen_addr: Some(SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))),
         },
         crate::SubsystemObservability::disabled(crate::DaemonSubsystem::PeerTransport),
