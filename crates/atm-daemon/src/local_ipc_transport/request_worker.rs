@@ -28,7 +28,8 @@ use super::{
 
 const SAME_HOST_HEADER_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
 const SAME_HOST_PAYLOAD_READ_DEADLINE: std::time::Duration = std::time::Duration::from_secs(2);
-const SAME_HOST_RESPONSE_WRITE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+const SAME_HOST_RESPONSE_WRITE_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(12);
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
@@ -472,12 +473,14 @@ fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
 
 fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEnvelope {
     let error = match execution_risk {
-        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(
-            "daemon request exceeded the 3s runtime deadline; retry the read-only ATM command after the same-host daemon catches up",
-        ),
-        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(
-            "daemon request exceeded the 3s runtime deadline after side-effecting work may have started",
-        ),
+        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(format!(
+            "daemon request exceeded the {}s runtime deadline; retry the read-only ATM command after the same-host daemon catches up",
+            REQUEST_DEADLINE.as_secs()
+        )),
+        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(format!(
+            "daemon request exceeded the {}s runtime deadline after side-effecting work may have started",
+            REQUEST_DEADLINE.as_secs()
+        )),
     };
     ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error))
 }

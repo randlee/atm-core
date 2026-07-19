@@ -7,7 +7,7 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::prelude::*;
 
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const REQUEST_DEADLINE: Duration = Duration::from_secs(12);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DeadlineSupport {

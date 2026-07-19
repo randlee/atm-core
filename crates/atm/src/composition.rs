@@ -39,7 +39,7 @@ use atm_runtime_test_support::install_sqlite_retained_runtime_factory as install
 
 use crate::observability::CliObservability;
 
-const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(12);
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 #[cfg(not(test))]
