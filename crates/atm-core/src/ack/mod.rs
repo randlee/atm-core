@@ -194,12 +194,17 @@ pub fn ack_request_from_send_request(request: SendRequest) -> Result<AckRequest,
     })?;
     let reply_body = match request.message_source {
         SendMessageSource::Inline(message) => message,
-        SendMessageSource::File { message: Some(message), .. } => message,
+        SendMessageSource::File {
+            message: Some(message),
+            ..
+        } => message,
         SendMessageSource::File { message: None, .. } => {
             return Err(AtmError::validation(
                 "canonical ack send request must carry the reply body inline".to_string(),
             )
-            .with_recovery("Materialize the ack reply body before dispatching the canonical send request."));
+            .with_recovery(
+                "Materialize the ack reply body before dispatching the canonical send request.",
+            ));
         }
     };
     Ok(AckRequest {

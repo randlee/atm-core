@@ -203,10 +203,10 @@ impl DaemonCrossHostDelivery {
         deferred_receipt_message_id: AtmMessageId,
         remote_host: &RemoteTargetHost,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-        match self.peer_transport_runtime.send_to_endpoint_immediate_wait(
-            endpoint,
-            RequestEnvelope::Send(Box::new(request)),
-        ) {
+        match self
+            .peer_transport_runtime
+            .send_to_endpoint_immediate_wait(endpoint, RequestEnvelope::Send(Box::new(request)))
+        {
             Ok(response) => Ok(SendOutcome::Delivered(Box::new(response))),
             Err(error) => self.handle_immediate_wait_error(
                 endpoint,
