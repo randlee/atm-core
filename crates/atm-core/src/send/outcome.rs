@@ -115,6 +115,7 @@ fn build_send_outcome(
     }
 }
 
+// AG.20 migration: return the canonical persisted send inputs directly; this helper and DeliveryPlan are removed together.
 pub(super) fn build_send_delivery_plan(
     context: &SendExecutionContext,
     requires_ack: bool,
@@ -137,6 +138,7 @@ pub(super) fn build_send_delivery_plan(
     ))
 }
 
+// AG.20 migration: feed the canonical persisted message to post-send effects without LogicalMessage.
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,

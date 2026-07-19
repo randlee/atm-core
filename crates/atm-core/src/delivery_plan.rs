@@ -8,12 +8,14 @@ use crate::send::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) enum DeliveryPlanKind {
     Send,
     Reply,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) struct LogicalMessage {
     pub(crate) message_id: AtmMessageId,
     pub(crate) envelope: InboxMessage,
@@ -58,6 +60,7 @@ impl LogicalMessage {
     }
 }
 
+// AG.20 migration: remove this adapter; callers consume canonical persisted envelopes directly.
 pub(crate) fn logical_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
@@ -74,6 +77,7 @@ pub(crate) fn logical_messages_from_persistence(
     Ok(messages)
 }
 
+// AG.20 migration: resolve the recipient at the canonical send boundary, not through DeliveryTarget.
 pub(crate) fn delivery_target_for_snapshot(
     _inbox_path: &Path,
     delivery_snapshot: &DeliveryRecipientSnapshot,
@@ -84,6 +88,7 @@ pub(crate) fn delivery_target_for_snapshot(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) enum DeliveryTarget {
     NonClaude {
         recipient: DeliveryRecipientSnapshot,
@@ -99,6 +104,7 @@ impl DeliveryTarget {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) struct DeliveryPlan {
     pub(crate) kind: DeliveryPlanKind,
     pub(crate) disposition: DeliveryPersistenceDisposition,

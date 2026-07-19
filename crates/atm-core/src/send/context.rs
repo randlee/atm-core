@@ -125,6 +125,7 @@ pub(crate) fn prepare_send_context<
     clippy::too_many_arguments,
     reason = "Send persistence needs the explicit request/body/message envelope fields documented in the Y.4 state-machine seam."
 )]
+// AG.20 migration: return the persisted canonical envelope directly; remove DeliveryPersistenceResult.
 pub(crate) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     request: &SendRequest,

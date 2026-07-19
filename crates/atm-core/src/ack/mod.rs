@@ -9,6 +9,7 @@ use crate::delivery_plan::{
     DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_target_for_snapshot,
     logical_messages_from_persistence,
 };
+// AG.20 migration: remove this legacy delivery-plan import group; ack handling must consume the canonical send result.
 use crate::delivery_policy::DeliveryEventFamily;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};

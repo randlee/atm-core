@@ -266,6 +266,8 @@ fn replay_resume_replays_and_deletes_delivered_rows() {
         observed_at: IsoTimestamp::now(),
         activity: HeartbeatActivity::Idle,
     });
+    // AG.20 migration: delete this setup with `persist_replay_request`; direct
+    // immediate-delivery coverage remains in the non-replay tests.
     transport
         .persist_replay_request(
             team.clone(),
@@ -289,6 +291,7 @@ fn replay_resume_replays_and_deletes_delivered_rows() {
         write_response_frame(&mut stream, &codec, request_id, response);
     });
 
+    // AG.20 migration: delete this assertion with `resume_pending_replay`.
     let summary = transport.resume_pending_replay().expect("resume");
     assert_eq!(summary.delivered, 1);
     assert_eq!(summary.retained, 0);
@@ -411,6 +414,8 @@ fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
         observed_at: IsoTimestamp::now(),
         activity: HeartbeatActivity::Idle,
     });
+    // AG.20 migration: delete this setup with `persist_replay_request`; it
+    // tests the removed replay lifecycle rather than direct delivery.
     first
         .persist_replay_request(
             team.clone(),
@@ -436,6 +441,7 @@ fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
         write_response_frame(&mut stream, &codec, request_id, response);
     });
 
+    // AG.20 migration: delete this replay assertion with the deprecated API.
     let summary = second.resume_pending_replay().expect("resume");
     assert_eq!(summary.delivered, 1);
     deliveries_rx.recv().expect("delivery");
@@ -446,6 +452,7 @@ fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
             .is_empty()
     );
 
+    // AG.20 migration: delete this idempotence assertion with the replay API.
     let summary = second.resume_pending_replay().expect("second resume");
     assert_eq!(summary.delivered, 0);
     assert_eq!(summary.retained, 0);
@@ -480,6 +487,8 @@ fn replay_store_upsert_deduplicates_same_message_key() {
         activity: HeartbeatActivity::ActiveToolUse,
     });
 
+    // AG.20 migration: delete this replay-store setup with
+    // `persist_replay_request`; it has no immediate-delivery replacement.
     transport
         .persist_replay_request(
             team.clone(),
@@ -488,6 +497,7 @@ fn replay_store_upsert_deduplicates_same_message_key() {
             first_request,
         )
         .expect("persist first");
+    // AG.20 migration: delete this second replay-store write with the first.
     transport
         .persist_replay_request(team, member, message_key, second_request)
         .expect("persist second");

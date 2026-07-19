@@ -12,6 +12,7 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 use super::{DeliveryPersistenceResult, WarningEntry, prepare_threaded_message};
 
+// AG.20 migration: persist the canonical envelope directly; delete the recovery-result wrapper.
 pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,

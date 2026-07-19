@@ -153,6 +153,7 @@ pub(crate) struct PeerTransportConfig {
 struct PeerClientTransport {
     endpoint: Option<SocketAddr>,
     config: PeerTransportConfig,
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
     peer_security_store: Option<Arc<dyn PeerSecurityStore + Send + Sync>>,
     codec: JsonAtmProtocolCodec,
@@ -216,6 +217,8 @@ impl PeerClientTransport {
         }
     }
 
+    // AG.20 migration: retry/replay ownership leaves peer transport; callers use one immediate transport result.
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
         let Some(replay_store) = &self.replay_store else {
             return Ok(ReplayResumeSummary {
@@ -290,6 +293,7 @@ impl PeerClientTransport {
         dead_code,
         reason = "retained for legacy replay-persistence contract tests while the explicit-endpoint path is used in production dispatch"
     )]
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     fn persist_replay_request(
         &self,
         team: TeamName,
@@ -319,6 +323,7 @@ impl PeerClientTransport {
         clippy::too_many_arguments,
         reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"
     )]
+    // AG.20 migration: the transport must report I/O facts only; remove replay persistence from this boundary.
     fn persist_replay_request_to_endpoint(
         &self,
         retry_budget: Duration,
@@ -571,6 +576,8 @@ impl PeerTransportRuntime {
         &self.client
     }
 
+    // AG.20 migration: daemon startup must not invoke a peer-transport replay state machine.
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     pub(crate) fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
         self.client.resume_pending_replay()
     }
@@ -600,6 +607,7 @@ impl PeerTransportRuntime {
         clippy::too_many_arguments,
         reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"
     )]
+    // AG.20 migration: eliminate this retry entrypoint; callers handle the immediate transport result only.
     pub(crate) fn persist_remote_request_for_retry(
         &self,
         retry_budget: Duration,
@@ -809,6 +817,7 @@ impl PeerTransportRuntime {
         dead_code,
         reason = "retained for direct replay-store tests on the runtime wrapper"
     )]
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     pub(crate) fn persist_replay_request(
         &self,
         team: TeamName,

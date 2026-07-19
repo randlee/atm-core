@@ -44,6 +44,7 @@ use payload::{
     sender_config_root,
 };
 
+// AG.20 migration: accept canonical persisted envelopes here after LogicalMessage is removed.
 pub(crate) fn emit_post_send_effects<R>(
     runtime: &R,
     warnings: &mut Vec<WarningEntry>,

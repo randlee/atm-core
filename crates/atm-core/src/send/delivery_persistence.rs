@@ -3,12 +3,14 @@ use crate::schema::InboxMessage;
 use super::WarningEntry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) enum DeliveryPersistenceDisposition {
     Persisted,
     SqliteFailedRecovered,
 }
 
 #[derive(Debug, Clone)]
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 pub(crate) struct DeliveryPersistenceResult {
     pub(crate) disposition: DeliveryPersistenceDisposition,
     pub(crate) original_message: InboxMessage,

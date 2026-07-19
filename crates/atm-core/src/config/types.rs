@@ -36,6 +36,7 @@ impl ByteCount {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DaemonConfig {
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     pub remote_retry_budget: Duration,
     pub peer_listen_addr: Option<SocketAddr>,
 }

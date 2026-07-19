@@ -12,6 +12,7 @@ use atm_core::with_default_local_service_runtime;
 use super::remote_retry_budget_expiry_error;
 use crate::SubsystemObservability;
 
+#[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
 #[expect(
     clippy::too_many_arguments,
     reason = "cross-host retry persistence needs explicit sender and receipt metadata at the peer-transport boundary"

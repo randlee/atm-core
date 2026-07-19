@@ -63,6 +63,8 @@ where
     }
 }
 
+// AG.20 migration: execute the canonical persisted send directly; delete DeliveryPlan,
+// DeliveryTarget, and LogicalMessage instead of carrying a second delivery model.
 pub(crate) fn execute_delivery_plan<R>(
     runtime: &R,
     _config: Option<&AtmConfig>,
@@ -78,6 +80,7 @@ where
 
 pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
 
+// AG.20 migration: derive observability from the canonical send result after DeliveryPlan disappears.
 pub(crate) fn emit_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
     context: DeliveryTransitionContext<'_>,

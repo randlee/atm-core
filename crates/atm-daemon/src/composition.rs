@@ -226,6 +226,9 @@ impl RuntimeComposition {
     fn resume_startup_replay(&self) -> Result<(), AtmError> {
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
+        // AG.20 migration: this caller exists solely for the deprecated
+        // `resume_pending_replay` API. Delete this startup sweep when outbound
+        // delivery owns retry policy; do not replace it in peer transport.
         let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
         if replay_summary.delivered > 0
             || replay_summary.retained > 0

@@ -123,6 +123,7 @@ fn parse_daemon_config(
     daemon: &RawDaemonSection,
     path: &Path,
 ) -> Result<types::DaemonConfig, AtmError> {
+    // AG.20 migration: remove retry-budget parsing when deferred replay policy leaves daemon configuration.
     let mut config = daemon
         .remote_retry_budget
         .as_deref()
@@ -258,6 +259,7 @@ struct RawAtmSection {
 #[derive(Debug, Default, Deserialize)]
 struct RawDaemonSection {
     #[serde(default)]
+    #[deprecated(note = "AG.20 deletion target; remove this symbol and all call sites")]
     remote_retry_budget: Option<String>,
     #[serde(default)]
     peer_listen_addr: Option<String>,

@@ -35,6 +35,7 @@ mod warning;
 
 use context::SendExecutionContext;
 pub(crate) use context::{persist_send_message, prepare_send_context};
+// AG.20 migration: remove this re-export with the legacy persistence result model.
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;

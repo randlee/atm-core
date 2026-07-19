@@ -87,6 +87,7 @@ pub(super) fn notification_event(event: &PostSendHookEvent) -> NotificationEvent
     }
 }
 
+// AG.20 migration: build this event from the canonical persisted envelope, not LogicalMessage.
 pub(super) fn post_send_event_from_message(
     recipient: &ResolvedRecipient,
     message: &crate::delivery_plan::LogicalMessage,

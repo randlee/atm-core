@@ -6,6 +6,7 @@ use crate::peer_transport::{
     PeerTransportRuntime, REPLAY_RESUME_POLL_INTERVAL, ReplayResumeWorkerHandle,
 };
 
+// AG.20 migration: delete the replay worker; peer transport must not own retry scheduling.
 pub(super) fn start_replay_resume_worker(
     runtime: &PeerTransportRuntime,
 ) -> Result<ReplayResumeWorkerHandle, AtmError> {
@@ -18,6 +19,9 @@ pub(super) fn start_replay_resume_worker(
                 match stop_rx.recv_timeout(REPLAY_RESUME_POLL_INTERVAL) {
                     Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // AG.20 migration: this worker calls the deprecated
+                        // replay API. Delete the worker when outbound delivery
+                        // owns retries; it must not gain a transport replacement.
                         if let Err(error) = runtime.resume_pending_replay() {
                             tracing::warn!(
                                 subsystem = "peer_transport",
