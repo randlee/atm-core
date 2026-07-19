@@ -8,6 +8,7 @@ depends_on:
   req-qa: 0.x
   arch-qa: 0.x
   flaky-test-qa: 0.x
+  ruthless-boundary-qa: 0.x
   rust-qa-agent: 0.x
   rust-best-practices-agent: 0.x
   rust-service-hardening-agent: 0.x
@@ -43,6 +44,9 @@ Before starting a sprint:
 7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
 8. `sc-compose` is available for rendering the JSON and markdown templates.
+9. `.claude/agents/ruthless-boundary-qa.md` and
+   `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
+   exist for first-pass boundary optimization review.
 
 ## Sprint Flow
 
@@ -63,16 +67,21 @@ Before starting a sprint:
 6. `quality-mgr` launches the reviewer set:
    - `req-qa`
    - `arch-qa`
+   - `ruthless-boundary-qa`
    - `rust-qa-agent`
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
+   - for the near term, `ruthless-boundary-qa` stays enabled on every sprint
+     QA round, plus docs-only plan review and phase-ending review
 7. QA-2 and later rounds must omit `rust-best-practices-agent` and
-   `rust-service-hardening-agent`. All RBP and service-hardening findings from
-   QA-1 must be fixed before merge — merge gate is 0B+0I+0m with no
-   exceptions and no backlog deferral. QA-1 findings route back to `arch-ctm`
-   via `fix-assignment.xml.j2` before QA-2, following the standard
-   triage-and-fix path.
+   `rust-service-hardening-agent`. All
+   first-pass findings from those reviewers must be fixed before merge —
+   merge gate is 0B+0I+0m with no exceptions and no backlog deferral. QA-1
+   findings route back to `arch-ctm` via `fix-assignment.xml.j2` before
+   QA-2, following the standard triage-and-fix path.
+   `ruthless-boundary-qa` remains part of that loop unless team-lead
+   explicitly narrows the reviewer set for a specific task.
 8. If QA passes and CI is green, merge may proceed.
 9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
@@ -91,6 +100,7 @@ Before starting a sprint:
 4. `quality-mgr` treats `review_mode: plan` as docs-only review and launches:
    - `req-qa`
    - `arch-qa`
+   - `ruthless-boundary-qa`
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
@@ -118,6 +128,7 @@ For phase-ending QA routed through `quality-mgr`, the reviewer set is
 mandatory:
 - `req-qa`
 - `arch-qa`
+- `ruthless-boundary-qa`
 - `rust-qa-agent`
 - `rust-best-practices-agent`
 - `rust-service-hardening-agent`
