@@ -51,19 +51,15 @@ fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
         .start(dispatcher.clone())
         .expect("start peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello self ip".to_string()),
-        None,
+        TEST_TEAM,
+        "hello self ip",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host =
         atm_core::send::parse_send_target("qa-a@test-team", Some(&self_ip.to_string()))
             .expect("parse target")
@@ -161,19 +157,15 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
         .start(dispatcher.clone())
         .expect("start secure peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello secure self ip".to_string()),
-        None,
+        TEST_TEAM,
+        "hello secure self ip",
         true,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host =
         atm_core::send::parse_send_target("qa-a@test-team", Some(&self_ip.to_string()))
             .expect("parse target")
@@ -342,19 +334,15 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
         .start(dispatcher.clone())
         .expect("start secure peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("hello failed ack self ip".to_string()),
-        None,
+        TEST_TEAM,
+        "hello failed ack self ip",
         true,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host =
         atm_core::send::parse_send_target("qa-a@test-team", Some(&self_ip.to_string()))
             .expect("parse target")
@@ -468,19 +456,15 @@ fn dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation() {
         RuntimeStatusCache::new(),
         db_path.clone(),
     );
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("self ip without listener".to_string()),
-        None,
+        TEST_TEAM,
+        "self ip without listener",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host =
         atm_core::send::parse_send_target("qa-a@test-team", Some(&self_ip.to_string()))
             .expect("parse target")
@@ -581,19 +565,15 @@ fn dispatcher_self_ip_send_rejects_disabled_host_before_mailbox_mutation() {
         .start(dispatcher.clone())
         .expect("start peer listener");
 
-    let mut request = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        ROLE_TEAM_LEAD.parse().expect("caller"),
+    let mut request = canonical_send_request(
+        &atm_home,
+        &workspace_dir,
+        ROLE_TEAM_LEAD,
         "qa-a@test-team",
-        TEST_TEAM.parse().expect("team"),
-        SendMessageSource::Inline("unauthorized self ip".to_string()),
-        None,
+        TEST_TEAM,
+        "unauthorized self ip",
         false,
-        None,
-        false,
-    )
-    .expect("send request");
+    );
     request.remote_host =
         atm_core::send::parse_send_target("qa-a@test-team", Some(&self_ip.to_string()))
             .expect("parse target")

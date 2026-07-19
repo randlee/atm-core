@@ -1,3 +1,4 @@
+use atm_core::ack::{AckRequest, prepare_ack_send_request};
 use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
@@ -17,31 +18,6 @@ use tempfile::TempDir;
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
 const TEST_TEAM: &str = "test-team";
-
-fn canonical_ack_request(
-    home_dir: std::path::PathBuf,
-    current_dir: std::path::PathBuf,
-    caller_identity: &str,
-    caller_team: &str,
-    message_id: atm_core::schema::AtmMessageId,
-    body: &str,
-) -> RequestEnvelope {
-    let mut request = SendRequest::new(
-        home_dir,
-        current_dir,
-        caller_identity.parse().expect("caller"),
-        &format!("{caller_identity}@{caller_team}"),
-        caller_team.parse().expect("team"),
-        SendMessageSource::Inline(body.to_string()),
-        None,
-        false,
-        None,
-        false,
-    )
-    .expect("ack request");
-    request.acknowledges_message_id = Some(message_id);
-    RequestEnvelope::Send(Box::new(request))
-}
 
 fn replay_source_static(label: &'static str) -> ReplaySource {
     ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
@@ -136,27 +112,47 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
     .expect("write graft config");
 }
 
+fn canonical_send_request(
+    home_dir: &std::path::Path,
+    current_dir: &std::path::Path,
+    caller_identity: &str,
+    recipient: &str,
+    caller_team: &str,
+    body: &str,
+    requires_ack: bool,
+) -> RequestEnvelope {
+    RequestEnvelope::Send(Box::new(
+        SendRequest::new(
+            home_dir.to_path_buf(),
+            current_dir.to_path_buf(),
+            caller_identity.parse().expect("caller"),
+            recipient,
+            caller_team.parse().expect("team"),
+            SendMessageSource::Inline(body.to_string()),
+            None,
+            requires_ack,
+            None,
+            false,
+        )
+        .expect("send request"),
+    ))
+}
+
 #[test]
 #[serial_test::serial(env)]
 fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello graft".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .dispatch(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            TEST_TEAM,
+            "hello graft",
+            false,
+        ))
         .expect("send response");
 
     let outcome = match response {
@@ -177,21 +173,15 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                "qa-a".parse().expect("caller"),
-                &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("please ack".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("source send request"),
-        )))
+        .dispatch(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            "qa-a",
+            &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+            TEST_TEAM,
+            "please ack",
+            true,
+        ))
         .expect("source send response");
     let source_message_id = match source_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
@@ -199,14 +189,17 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     };
 
     let ack_response = dispatcher
-        .dispatch(canonical_ack_request(
-            atm_home,
-            workspace_dir,
-            ROLE_TEAM_LEAD,
-            TEST_TEAM,
-            source_message_id,
-            "ack reply",
-        ))
+        .dispatch(RequestEnvelope::Send(Box::new(
+            prepare_ack_send_request(AckRequest {
+                home_dir: atm_home,
+                current_dir: workspace_dir,
+                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id: source_message_id,
+                reply_body: "ack reply".to_string(),
+            })
+            .expect("ack request"),
+        )))
         .expect("ack response");
 
     let ack_outcome = match ack_response {
@@ -271,21 +264,15 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ("USERPROFILE", None),
     ]);
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello graft".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
+        .dispatch(canonical_send_request(
+            &atm_home,
+            &workspace_dir,
+            ROLE_TEAM_LEAD,
+            "qa-a@test-team",
+            TEST_TEAM,
+            "hello graft",
+            false,
+        ))
         .expect("send response");
     let response = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
