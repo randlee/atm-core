@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG25-LOC-GATE>
+  a triage:Finding ;
+  triage:findingId "AG25-LOC-GATE" ;
+  triage:title "Hard Merge Gate LOC target missed (AG.25)" ;
+  triage:description "sprint-AG25.md (lines 162-166) Hard Merge Gate states AG.25 may not add net production code while closing proof gaps; if it touches crates/, the delta must be at most -25 net LOC, and any result above -25 net LOC fails the sprint. On feature/pAG-s25-live-two-daemon-proof, git diff --stat 81298e32..3eab4e6e -- crates/ = 15 insertions(+), 10 deletions(-) = +5 net LOC, which both has the wrong sign and misses the required <= -25 gate by 30 lines. Raised by arch-ctm's independent ladder audit (2026-07-19) and independently re-verified by team-lead via direct git measurement on the same commit range (4 files changed, 15 insertions(+), 10 deletions(-)). No prior triage record existed for this sprint's LOC gate; AG.25 had zero existing .ttl findings in this directory before this record. Note: arch-ctm's accompanying code citations (crates/atm/src/composition.rs:1160 and crates/atm-daemon/src/tests/runtime_root.rs:335/:472) do not correspond to real content on this branch -- composition.rs is only 1022 lines long and contains no SendResponseEnvelope/SendRequestEnvelope/Compose/Acknowledge references, and tests/runtime_root.rs is a directory (tests/runtime_root/), not a file, on this worktree. Root-cause investigation (2026-07-19, single commit 3eab4e6e 'Align same-host IPC deadline with AG.25 foreground wait') confirms the +5 net LOC is NOT a new production timeout path: it retunes four pre-existing Duration constants (REQUEST_DEADLINE in local_ipc_transport.rs and local_ipc_wake.rs, SAME_HOST_RESPONSE_WRITE_DEADLINE in local_ipc_transport/request_worker.rs, SAME_HOST_REQUEST_DEADLINE in atm/src/composition.rs) from 3s to 12s, plus two error-message strings switched from hardcoded '3s' to interpolated values, so they causally exceed the pre-existing, untouched FOREGROUND_REMOTE_WAIT_BUDGET=10s in peer_transport/mod.rs:54 -- fixing a real correctness bug (same-host deadline firing before a legitimate cross-host round trip could complete) surfaced by AG.25's own live two-daemon proof. arch-ctm's 'unnecessary production timeout' characterization is therefore also inaccurate for this sprint, consistent with the other stale/incorrect citations already noted above. The LOC-gate numeric failure itself remains a confirmed, real fact and is the basis of this finding, but the remedy is NOT to delete or revert the deadline fix (doing so would reintroduce a real bug)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:category "merge-gate" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-LOC-GATE/pAG-s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s25/3eab4e6e> ;
+  triage:correlatedWith <urn:atm:triage:finding/AG24-LOC-GATE> ;
+  triage:correlatedWith <urn:atm:triage:finding/HARD-MERGE-GATE-LOC> ;
+  triage:notes "OPEN. Fourth occurrence of the Hard Merge Gate LOC failure in phase-AG (see AG18-QA-001, HARD-MERGE-GATE-LOC, AG24-LOC-GATE for the prior three). AG.25's own sprint doc explicitly forbids net-positive production code while closing proof gaps; the sprint instead added 15 lines against a 10-line deletion, netting +5 against a required <= -25. Root-cause investigation confirms the +5 LOC is a legitimate, necessary deadline-consistency fix (same-host IPC deadlines were shorter than the cross-host wait budget they front) and should NOT be reverted -- reverting would reintroduce a real correctness bug. Recommended remedy: do not touch the deadline fix; instead close the gate via genuine deletions already in AG.25's own scope (e.g. any remaining proof-only scaffolding/glue this sprint was supposed to remove per its own deliverables), or, if no further deletions are available in-scope, escalate for an explicit, documented waiver of the numeric gate on the grounds that the added code is a verified bug fix rather than scope creep -- do not silently accept the shortfall without one of these two paths." .
+
+<urn:atm:triage:occurrence/AG25-LOC-GATE/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/" ;
+  triage:line 0 ;
+  triage:snippet "git diff --stat 81298e32..3eab4e6e -- crates/ => 15 insertions(+), 10 deletions(-) = +5 net LOC vs required <= -25 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> .
+
+<urn:atm:triage:worktree/pAG-s25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .
