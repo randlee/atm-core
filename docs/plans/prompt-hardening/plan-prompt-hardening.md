@@ -16,6 +16,7 @@ ambiguous reporting without adding phase-specific gate logic to general prompts.
 - `.claude/skills/codex-orchestration/qa-template.xml.j2`
 - `.claude/skills/codex-orchestration/review-template.xml.j2`
 - `.claude/agents/quality-mgr.md`
+- `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
 
 # Proposed Changes
 
