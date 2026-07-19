@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG15-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG15-002" ;
+  triage:title "DeliveryExecutionDisposition: redundant enum with mislabeling defect" ;
+  triage:description "DeliveryExecutionDisposition is a single-variant enum (Delivered only) whose only consumer discards it (emit_delivery_plan_transitions parameter unused). Worse: execute_remote_ack_reply_plan hardcodes DeliveryExecutionDisposition::Delivered for all three RemoteSendDeliveryOutcome arms including Deferred and OutcomeUnknown, mislabeling cases where delivery did not actually complete." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "ATM-QA-AG15" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/4> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_execution.rs" ;
+  triage:line 14 ;
+  triage:snippet "pub(crate) enum DeliveryExecutionDisposition { Delivered, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_execution.rs" ;
+  triage:line 92 ;
+  triage:snippet "_execution: &DeliveryExecutionResult (parameter unused in emit_delivery_plan_transitions)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 657 ;
+  triage:snippet "RemoteSendDeliveryOutcome::Deferred: hardcodes DeliveryExecutionDisposition::Delivered when delivery was deferred, not delivered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG15-002/pAG-s15-othermac-smoke/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 673 ;
+  triage:snippet "RemoteSendDeliveryOutcome::OutcomeUnknown: hardcodes DeliveryExecutionDisposition::Delivered when outcome is unknown, not delivered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:orderIndex 1 .

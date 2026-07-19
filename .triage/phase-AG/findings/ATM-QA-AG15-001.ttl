@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG15-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG15-001" ;
+  triage:title "Documentation: removed DeliveryPlanDisposition referenced in boundaries.md" ;
+  triage:description "docs/atm-core/boundaries.md:353 references removed DeliveryPlanDisposition::SqliteFailedRecovered. Should reference DeliveryPersistenceDisposition::SqliteFailedRecovered instead." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "ATM-QA-AG15" ;
+  triage:severity "minor" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG15-001/pAG-s15-othermac-smoke/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG15-001/pAG-s15-othermac-smoke/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 353 ;
+  triage:snippet "for `DeliveryPlanDisposition::SqliteFailedRecovered` through" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b> .
+
+<urn:atm:triage:worktree/pAG-s15-othermac-smoke/93395a0b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "93395a0b" ;
+  triage:orderIndex 1 .
