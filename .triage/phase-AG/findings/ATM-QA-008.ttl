@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008" ;
+  triage:title "localhost runbook additions absent from cross-host-setup-runbook.md" ;
+  triage:description "Sprint AG.12 named deliverable 'exact localhost runbook additions for the corrective path' is entirely absent from docs/plans/phase-AG/cross-host-setup-runbook.md — zero mentions of localhost anywhere in the runbook file." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T05:59:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/AG12/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG12/34fe27b7> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/AG12/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-setup-runbook.md" ;
+  triage:line 0 ;
+  triage:snippet "File exists but lacks any localhost section or guidance" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:occursIn <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:worktree/AG12/34fe27b7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:orderIndex 12 .
