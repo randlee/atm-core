@@ -322,6 +322,8 @@ struct LoadedAckSource {
     row: boundary::MailStoreMailboxMetadataRow,
 }
 
+// AG.19 legacy carrier: canonical SendRequest execution must return this
+// information directly before the separate ack-finalization path is deleted.
 struct SentAckReply {
     persisted_source: PersistedSourceAck,
     reply_target: ReplyTarget,
@@ -346,6 +348,8 @@ struct FinalizeAckContext {
     warnings: Vec<crate::send::WarningEntry>,
 }
 
+// AG.19 legacy carrier: canonical SendRequest execution replaces this
+// separate ack-persistence context.
 struct AckPersistenceContext<'a> {
     request: &'a AckRequest,
     actor: &'a AgentName,
@@ -353,6 +357,8 @@ struct AckPersistenceContext<'a> {
     source: &'a LoadedAckSource,
 }
 
+// AG.19 legacy carrier: canonical SendRequest confirmation owns this source
+// acknowledgement state instead of this intermediate value.
 struct PersistedSourceAck {
     reply_target: ReplyTarget,
     task_id: Option<TaskId>,
@@ -512,6 +518,8 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     context: AckPersistenceContext<'_>,
 ) -> Result<SentAckReply, AtmError> {
+    // AG.19 migration: canonical SendRequest execution must replace this
+    // separate ack-persistence assembly and return its confirmed outcome.
     let ack_timestamp = IsoTimestamp::now();
     let ack_intent = AckIntentFields::not_required();
     let reply_text = input::validate_message_text(context.request.reply_body.clone())?;
@@ -532,6 +540,8 @@ fn persist_source_ack_state<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     context: &AckPersistenceContext<'_>,
     ack_timestamp: IsoTimestamp,
 ) -> Result<PersistedSourceAck, AtmError> {
+    // AG.19 migration: retain the source key in canonical send execution and
+    // commit acknowledgement only after that execution confirms delivery.
     let source_record = load_ack_source_record(
         runtime,
         home_dir(context.request),
@@ -557,6 +567,8 @@ fn commit_source_ack_state<R: RetainedMailboxRuntime + ?Sized>(
     team: &TeamName,
     persisted_source: &PersistedSourceAck,
 ) -> Result<(), AtmError> {
+    // AG.19 migration: canonical send execution owns this post-confirmation
+    // state update; remove this standalone ack-finalizer helper.
     runtime.persist_message_state(boundary::MailMessageState {
         team: team.clone(),
         agent: actor.clone(),
@@ -579,6 +591,8 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     reply_text: String,
     ack_intent: AckIntentFields,
 ) -> Result<SentAckReply, AtmError> {
+    // AG.19 migration: construct and execute this SendRequest in the
+    // canonical send handler, not through the legacy ack persistence path.
     let reply_message_id = AtmMessageId::new();
     let reply_target = persisted_source.reply_target.clone();
     let task_id = persisted_source.task_id.clone();

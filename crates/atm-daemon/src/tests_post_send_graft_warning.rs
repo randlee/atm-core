@@ -264,23 +264,6 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ("USERPROFILE", None),
     ]);
     let response = dispatcher
-<<<<<<< HEAD
-        .dispatch(RequestEnvelope::Send(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello graft".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
-        )))
-=======
         .dispatch(canonical_send_request(
             &atm_home,
             &workspace_dir,
@@ -290,7 +273,6 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
             "hello graft",
             false,
         ))
->>>>>>> 5d1c8861
         .expect("send response");
     let response = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
