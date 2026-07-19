@@ -52,7 +52,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 
 - `crates/atm-core/src/protocol.rs:30-37`
   - delete the `SendRequestEnvelope::{Compose,Acknowledge}` request split
-- `crates/atm-core/src/protocol.rs:314-324`
+- `crates/atm-core/src/protocol.rs:314-331`
   - delete split request/response message kinds:
     `SendComposeRequest`, `SendAcknowledgeRequest`,
     `SendSentResponse`, `SendAcknowledgedResponse`
@@ -60,7 +60,9 @@ the existing `rg -n ...` validation first as the anti-staleness check.
   - delete split frame decoding and nested payload selection keyed by compose vs
     acknowledge
 - `crates/atm-core/src/protocol.rs:743-761`
-  - delete split request/response message-kind selection logic
+  - delete split request message-kind selection logic
+- `crates/atm-core/src/protocol.rs:757-770`
+  - delete split response message-kind selection logic
 - `crates/atm-daemon/src/runtime_health.rs`
   - delete the top-level send-vs-ack semantic fork in daemon dispatch
 - `crates/atm/src/composition.rs:293-319`
@@ -117,7 +119,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
     - `SendRequestEnvelope::{Compose,Acknowledge}`
   - `crates/atm-core/src/protocol.rs:37-37`
     - `SendResponseEnvelope::{Sent,Acknowledged}`
-  - `crates/atm-core/src/protocol.rs:314-324`
+  - `crates/atm-core/src/protocol.rs:314-331`
     - `SendComposeRequest`
     - `SendAcknowledgeRequest`
     - `SendSentResponse`
@@ -131,7 +133,9 @@ the existing `rg -n ...` validation first as the anti-staleness check.
   - `crates/atm-core/src/protocol.rs:504-506`
     - split nested payload selection for compose vs acknowledge
   - `crates/atm-core/src/protocol.rs:743-761`
-    - split request/response message-kind selection
+    - split request message-kind selection
+  - `crates/atm-core/src/protocol.rs:757-770`
+    - split response message-kind selection
   - `crates/atm-core/src/protocol.rs:1222-1243`
     - compose-shaped protocol round-trip test assumptions
 
@@ -142,7 +146,7 @@ the existing `rg -n ...` validation first as the anti-staleness check.
     - `SendRequestEnvelope`
   - `crates/atm-core/src/protocol.rs:37-37`
     - `SendResponseEnvelope`
-  - `crates/atm-core/src/protocol.rs:314-324`
+  - `crates/atm-core/src/protocol.rs:314-331`
     - split `MessageKind` variants for compose/ack and sent/acknowledged
   - `crates/atm-daemon/src/runtime_health.rs`
     - `dispatch_compose_send(...)`
