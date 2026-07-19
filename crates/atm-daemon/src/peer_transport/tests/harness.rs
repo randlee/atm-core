@@ -1,5 +1,6 @@
 use super::*;
 
+// AG.18 migration: harness send expectations must decode the canonical send response.
 fn canonical_ack_request(
     home_dir: &std::path::Path,
     current_dir: &std::path::Path,
@@ -54,6 +55,8 @@ fn canonical_send_request(
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
+#[allow(deprecated)]
 fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -227,6 +230,8 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
+#[allow(deprecated)]
 fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -316,6 +321,8 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
+#[allow(deprecated)]
 fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -459,6 +466,8 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
+#[allow(deprecated)]
 fn localhost_remote_target_notification_degradation_is_classified_without_failing_delivery() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -580,6 +589,8 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
+#[allow(deprecated)]
 fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();

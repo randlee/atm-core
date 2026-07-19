@@ -16,7 +16,11 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+// AG.18 migration: graft send/ack callers must decode canonical unified outcomes before this
+// legacy response type is deleted.
+#[allow(deprecated)]
+use atm_core::protocol::SendResponseEnvelope;
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -223,6 +227,9 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        // AG.18 migration: decode/return the canonical unified send outcome, then delete
+        // `SendResponseEnvelope::Sent/Acknowledged` matching.
+        #[allow(deprecated)]
         match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
@@ -237,6 +244,9 @@ impl AtmGraftClient for GraftClient {
     }
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        // AG.18 migration: decode/return the canonical unified send outcome, then delete
+        // `SendResponseEnvelope::Sent/Acknowledged` matching and derive AckOutcome receive-side.
+        #[allow(deprecated)]
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {
@@ -593,6 +603,9 @@ mod tests {
     }
 
     #[test]
+    // AG.18 migration: replace mock legacy response variants with canonical unified send outcomes,
+    // then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
+    #[allow(deprecated)]
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(

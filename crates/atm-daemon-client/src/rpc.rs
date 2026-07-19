@@ -149,10 +149,11 @@ impl RpcEnvelope {
 #[cfg(test)]
 mod tests {
     use super::{MessageKind, RpcEnvelope, RpcHeader};
-    use crate::wire::{
-        RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
-        request_from_frame_payload,
-    };
+    use crate::wire::{RequestEnvelope, ResponseEnvelope, next_request_id, request_from_frame_payload};
+    // AG.18 migration: this test-only import remains until the response fixture uses the
+    // canonical unified send outcome instead of `SendResponseEnvelope`.
+    #[allow(deprecated)]
+    use crate::wire::SendResponseEnvelope;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_storage::{
@@ -313,7 +314,11 @@ mod tests {
     }
 
     #[test]
+    // AG.18 migration: replace legacy response-envelope matching with a canonical unified send
+    // outcome fixture, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
+    #[allow(deprecated)]
     fn rpc_envelope_round_trips_response_envelopes() {
+        // AG.18 migration: replace this tagged-response round trip with the canonical send-response shape.
         let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
             action: atm_core::types::CommandAction::Send,
             team: RPC_TEST_TEAM.parse().expect("team"),

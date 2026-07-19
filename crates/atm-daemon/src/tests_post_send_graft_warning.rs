@@ -5,7 +5,11 @@ use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+// AG.18 migration: each test below must move to canonical unified send outcomes before this
+// legacy response type is deleted.
+#[allow(deprecated)]
+use atm_core::protocol::SendResponseEnvelope;
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -140,6 +144,8 @@ fn canonical_send_request(
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
@@ -169,6 +175,8 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: derive the ack result receive-side from the canonical unified send outcome.
+#[allow(deprecated)]
 fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
@@ -216,6 +224,8 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
 
 #[test]
 #[serial_test::serial(env)]
+// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
+#[allow(deprecated)]
 fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
     write_graft_enabled_config(&workspace_dir);

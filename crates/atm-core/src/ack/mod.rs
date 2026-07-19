@@ -1012,6 +1012,9 @@ mod tests {
             Ok(())
         }
 
+        // AG.18 migration: replace this legacy test response fixture with the canonical unified
+        // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
+        #[allow(deprecated)]
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,
@@ -1161,6 +1164,9 @@ mod tests {
             Ok(())
         }
 
+        // AG.18 migration: replace this legacy test response fixture with the canonical unified
+        // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
+        #[allow(deprecated)]
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,

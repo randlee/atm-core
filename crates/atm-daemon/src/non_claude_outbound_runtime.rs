@@ -229,6 +229,7 @@ mod tests {
             remote_host: RemoteTargetHost,
             _deferred_receipt_message_id: AtmMessageId,
         ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
+            // AG.18 migration: construct the canonical send response instead of the legacy Sent variant.
             self.requests
                 .lock()
                 .expect("requests")
@@ -342,6 +343,9 @@ mod tests {
     }
 
     #[test]
+    // AG.18 migration: replace this legacy remote-response fixture with the canonical unified
+    // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
+    #[allow(deprecated)]
     fn daemon_remote_send_router_routes_remote_host_requests_through_cross_host_delivery() {
         let cross_host_delivery = Arc::new(RecordingCrossHostDelivery::default());
         let runtime = DaemonRemoteSendRouter::new(cross_host_delivery.clone());

@@ -17,9 +17,11 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{
-    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope};
+// AG.18 migration: CLI send/ack must decode canonical unified outcomes before the legacy
+// response type is deleted.
+#[allow(deprecated)]
+use atm_core::protocol::SendResponseEnvelope;
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
@@ -270,6 +272,9 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
+        // AG.18 migration: decode/return the canonical unified send outcome, then delete
+        // `SendResponseEnvelope::Sent/Acknowledged` matching.
+        #[allow(deprecated)]
         match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
@@ -297,6 +302,9 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        // AG.18 migration: decode/return the canonical unified send outcome, then delete
+        // `SendResponseEnvelope::Sent/Acknowledged` matching and derive AckOutcome receive-side.
+        #[allow(deprecated)]
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {

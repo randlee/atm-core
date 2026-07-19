@@ -7,7 +7,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
-    protocol::{CompatibilityVerdict, ReleaseVersion, SendResponseEnvelope},
+    protocol::{CompatibilityVerdict, ReleaseVersion},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
@@ -16,6 +16,10 @@ use atm_core::{
         send_mail_with_runtime_and_post_send_emitter,
     },
 };
+// AG.18 migration: dispatch must return the canonical unified send outcome before this legacy
+// response type is deleted.
+#[allow(deprecated)]
+use atm_core::protocol::SendResponseEnvelope;
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
 
@@ -55,6 +59,9 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    // AG.18 migration: decode/return the canonical unified send outcome, then delete
+    // `SendResponseEnvelope::Sent/Acknowledged` matching; ack state is receiver-derived.
+    #[allow(deprecated)]
     fn dispatch_send(
         &self,
         request: SendRequest,
