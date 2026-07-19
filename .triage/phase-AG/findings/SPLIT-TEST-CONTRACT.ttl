@@ -4,56 +4,128 @@
 <urn:atm:triage:finding/SPLIT-TEST-CONTRACT>
   a triage:Finding ;
   triage:findingId "SPLIT-TEST-CONTRACT" ;
-  triage:title "split Sent/Acknowledged test contract still asserted via new wrapper helpers, duplicated across two files" ;
-  triage:description "Test code in crates/atm-daemon/src/tests_post_send_graft_warning.rs (lines 50-62) defines expect_sent_response() and expect_ack_response() helper functions. These same helpers are duplicated (with pub(super) visibility and one additional sent_response_ref variant) in crates/atm-daemon/src/tests/runtime_root/mod.rs (lines 47-66). Both sets of helpers maintain exhaustive pattern matching on SendResponseEnvelope::Sent and SendResponseEnvelope::Acknowledged, disguising the split assertion behind helper names rather than eliminating the duplication. This is the test-code counterpart to AG18-QA-004, which identified the same pattern in production code (composition.rs and atm-graft/src/lib.rs). The test code duplication requires a single shared helper module or trait to consolidate the split match logic into one canonical location." ;
+  triage:title "split Sent/Acknowledged test contract duplicated across three patterns: 2 helper-pair definitions + 6 direct-match sites" ;
+  triage:description "Test code in crates/atm-daemon/src/tests_post_send_graft_warning.rs (lines 50, 55) defines expect_sent_response() and expect_ack_response() helpers. Identical helpers duplicated with pub(super) visibility in crates/atm-daemon/src/tests/runtime_root/mod.rs (lines 48, 53, 63: expect_sent_response, sent_response_ref, expect_ack_response). Additionally, peer_transport/tests/harness.rs has 6 sites (lines 110, 161, 286, 409, 529, 686) where the ResponseEnvelope::Send(SendResponseEnvelope::Sent(...)) pattern is matched directly inline instead of using helpers. All three patterns maintain exhaustive matching on SendResponseEnvelope::Sent and SendResponseEnvelope::Acknowledged. This is the test-code counterpart to AG18-QA-004, which identified the same pattern in production code (composition.rs and atm-graft/src/lib.rs). The test code duplication requires a single shared helper module or trait to consolidate the split match logic into one canonical location." ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:category "test-code-structure" ;
   triage:severity "blocking" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-19T22:31:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/3> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/191c198b> ;
-  triage:notes "Occurrence identified during AG21-QA-1 (quality-mgr verdict) and PR #580. Pattern only exists on s21 (feature/pAG-s21-collapse-dispatch-routing), the highest and most recently active development branch. Branches s18-s20 have not yet introduced these test helpers; s22-s25 are not yet started. Correlation with AG18-QA-004: Both findings concern the same Sent/Acknowledged split duplication, but AG18-QA-004 addresses production code (composition.rs, atm-graft) whereas SPLIT-TEST-CONTRACT addresses test code (test_post_send_graft_warning.rs, tests/runtime_root/mod.rs). Treated as distinct findings because they occur in different code domains (prod vs test) and may be fixed independently. Full sweep of crates/atm-daemon/src/tests/** on s21 confirms three duplicate helper definitions: expect_sent_response and expect_ack_response in tests_post_send_graft_warning.rs, expect_sent_response, sent_response_ref, and expect_ack_response in tests/runtime_root/mod.rs. No additional similar patterns found in other test modules on s21." .
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/9> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:notes "AG21-QA-2 recheck on feature/pAG-s21-collapse-dispatch-routing @ bf96dc86: QA-1 identified 2-way duplication (two independent helper-pair definitions). QA-2 recheck now confirms 3-way duplication, worsened: both helper-pair definitions remain active PLUS 6 additional direct-match sites in peer_transport/tests/harness.rs where the split pattern is matched inline without using any helper. This indicates the duplication pattern is more pervasive than initially triaged. Occurrence nodes 1-2 (tests_post_send_graft_warning.rs, lines 50 and 55) and 3 (tests/runtime_root/mod.rs, lines 48/53/63 consolidated) remain from QA-1; occurrences 4-9 document the 6 direct-match sites in harness.rs (lines 110, 161, 286, 409, 529, 686) newly identified in QA-2. All on s21; branches s18-s20 do not have these test helpers, s22-s25 pinned at baseline. Correlation: AG18-QA-004 addresses production Sent/Acknowledged split (composition.rs, atm-graft); SPLIT-TEST-CONTRACT addresses test code. dispatchReady remains true; worsened duplication does not change dispatch readiness, only fix scope." .
 
 <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
   triage:line 50 ;
-  triage:snippet "fn expect_sent_response(response: ResponseEnvelope) -> atm_core::send::SendOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome, other => panic!(...) } }" ;
+  triage:snippet "fn expect_sent_response(response: ResponseEnvelope) -> atm_core::send::SendOutcome" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "191c198b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
 
 <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
-  triage:line 57 ;
-  triage:snippet "fn expect_ack_response(response: ResponseEnvelope) -> atm_core::ack::AckOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome, other => panic!(...) } }" ;
+  triage:line 55 ;
+  triage:snippet "fn expect_ack_response(response: ResponseEnvelope) -> atm_core::ack::AckOutcome" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "191c198b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
 
 <urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests/runtime_root/mod.rs" ;
-  triage:line 47 ;
-  triage:snippet "pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome { match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome, other => panic!(...) } } (and duplicated at line 52 as sent_response_ref, and expect_ack_response at line 61)" ;
+  triage:line 48 ;
+  triage:snippet "pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome (also sent_response_ref at line 53, expect_ack_response at line 63)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "191c198b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 110 ;
+  triage:snippet "match send_response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 161 ;
+  triage:snippet "match ack_response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 286 ;
+  triage:snippet "match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 409 ;
+  triage:snippet "match send_response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 529 ;
+  triage:snippet "match response { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/SPLIT-TEST-CONTRACT/pAG-s21/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 686 ;
+  triage:snippet "match deferred { ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
 
 <urn:atm:triage:worktree/pAG-s18/70cce097>
   a triage:WorktreeSnapshot ;
@@ -76,11 +148,11 @@
   triage:headSha "50572166" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pAG-s21/191c198b>
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "191c198b" ;
+  triage:headSha "bf96dc86" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pAG-s22/03c873fc>
