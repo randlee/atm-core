@@ -106,6 +106,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
             .expect("send request"),
         )))
         .expect("authorized send should succeed");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     match send_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -157,6 +158,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
             "ack over peer listener",
         ))
         .expect("authorized ack should succeed");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     match ack_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -282,6 +284,7 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
             .expect("send request"),
         )))
         .expect("send should still succeed");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -405,6 +408,7 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
             .expect("send request"),
         )))
         .expect("send should succeed after listener startup");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     match send_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -525,6 +529,7 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("remote-target send should still succeed");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -682,6 +687,7 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
     let deferred = sender_dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("initial remote-target send should defer");
+    // AG.21 migration: match the unified `ResponseEnvelope::Send(SendOutcome)` directly.
     let receipt_message_id = match deferred {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");

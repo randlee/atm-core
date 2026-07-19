@@ -38,9 +38,11 @@ pub use runtime_status::{
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
 /// Shared protocol send-shaped response envelope.
+#[deprecated(note = "AG.21 deletion target; remove this symbol and all call sites")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendResponseEnvelope {
     Sent(SendOutcome),
+    #[deprecated(note = "AG.21 deletion target; remove this symbol and all call sites")]
     Acknowledged(AckOutcome),
 }
 
@@ -60,6 +62,7 @@ pub enum RequestEnvelope {
 /// Shared protocol response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
+    // AG.21 migration: make this carry `SendOutcome` directly when the split response wrapper is removed.
     Send(SendResponseEnvelope),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
@@ -72,22 +75,27 @@ pub enum ResponseEnvelope {
 }
 
 pub fn send_sent_envelope(outcome: SendOutcome) -> SendResponseEnvelope {
+    // AG.21 migration: return `SendOutcome` directly once `ResponseEnvelope::Send` is unified.
     SendResponseEnvelope::Sent(outcome)
 }
 
 pub fn send_acknowledged_envelope(outcome: AckOutcome) -> SendResponseEnvelope {
+    // AG.21 migration: remove this ack-specific wrapper with the split response family.
     SendResponseEnvelope::Acknowledged(outcome)
 }
 
 pub fn send_sent_response(outcome: SendOutcome) -> ResponseEnvelope {
+    // AG.21 migration: construct `ResponseEnvelope::Send(outcome)` directly.
     ResponseEnvelope::Send(send_sent_envelope(outcome))
 }
 
 pub fn send_acknowledged_response(outcome: AckOutcome) -> ResponseEnvelope {
+    // AG.21 migration: remove this ack-specific response constructor with the split family.
     ResponseEnvelope::Send(send_acknowledged_envelope(outcome))
 }
 
 pub fn into_send_outcome(response: ResponseEnvelope) -> Result<SendOutcome, Box<ResponseEnvelope>> {
+    // AG.21 migration: match `ResponseEnvelope::Send(SendOutcome)` directly.
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
         other => Err(Box::new(other)),
@@ -95,6 +103,7 @@ pub fn into_send_outcome(response: ResponseEnvelope) -> Result<SendOutcome, Box<
 }
 
 pub fn into_ack_outcome(response: ResponseEnvelope) -> Result<AckOutcome, Box<ResponseEnvelope>> {
+    // AG.21 migration: remove this ack-specific response extraction with the split family.
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
         other => Err(Box::new(other)),

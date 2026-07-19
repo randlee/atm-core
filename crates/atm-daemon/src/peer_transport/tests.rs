@@ -13,6 +13,7 @@ use atm_core::boundary::{
 };
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmErrorCode;
+// AG.21 migration: remove `SendResponseEnvelope` from this test prelude once response matching is unified.
 use atm_core::protocol::{
     HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
     RuntimeMemberState, RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,

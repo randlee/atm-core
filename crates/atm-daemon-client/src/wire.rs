@@ -56,6 +56,7 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 }
 
 #[cfg(test)]
+// AG.21 migration: remove this split response-envelope test re-export after the wire contract unifies.
 pub(crate) use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
     request_from_frame_payload, request_to_frame_payload, response_from_frame_payload,

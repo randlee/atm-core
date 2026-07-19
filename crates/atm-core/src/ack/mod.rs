@@ -1050,6 +1050,7 @@ mod tests {
                     }
                 });
             }
+            // AG.21 migration: construct the unified `ResponseEnvelope::Send(SendOutcome)` directly.
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
                 Box::new(crate::ResponseEnvelope::Send(
                     crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
@@ -1154,6 +1155,7 @@ mod tests {
                 .lock()
                 .expect("remote send requests")
                 .push(request);
+            // AG.21 migration: construct the unified `ResponseEnvelope::Send(SendOutcome)` directly.
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
                 Box::new(crate::ResponseEnvelope::Send(
                     crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {

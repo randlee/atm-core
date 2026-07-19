@@ -51,6 +51,7 @@ pub(super) fn expect_sent_response(response: ResponseEnvelope) -> SendOutcome {
 }
 
 pub(super) fn sent_response_ref(response: &ResponseEnvelope) -> &SendOutcome {
+    // AG.21 migration: match `ResponseEnvelope::Send(SendOutcome)` directly.
     if let ResponseEnvelope::Send(atm_core::protocol::SendResponseEnvelope::Sent(outcome)) =
         response
     {

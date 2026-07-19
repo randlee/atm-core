@@ -314,6 +314,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_response_envelopes() {
+        // AG.21 migration: assert the unified `ResponseEnvelope::Send(SendOutcome)` shape directly.
         let response = atm_core::protocol::send_sent_response(SendOutcome {
             action: atm_core::types::CommandAction::Send,
             team: RPC_TEST_TEAM.parse().expect("team"),

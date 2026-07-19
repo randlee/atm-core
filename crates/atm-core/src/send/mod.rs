@@ -14,6 +14,7 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
+// AG.21 migration: remove this import when outbound execution returns `SendOutcome` directly.
 use crate::protocol::SendResponseEnvelope;
 use crate::protocol::{ResponseEnvelope, send_acknowledged_envelope, send_sent_envelope};
 use crate::schema::{AtmMessageId, ThreadMode};
@@ -415,6 +416,7 @@ pub fn execute_outbound_send_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendResponseEnvelope, AtmError> {
+    // AG.21 migration: return the unified send outcome after send and ack share one response shape.
     if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
         return ack_mail_with_runtime_and_post_send_emitter(
             ack_request_from_send_request(request)?,
