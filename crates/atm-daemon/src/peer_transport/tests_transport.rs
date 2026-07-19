@@ -289,6 +289,8 @@ fn replay_resume_replays_and_deletes_delivered_rows() {
         write_response_frame(&mut stream, &codec, request_id, response);
     });
 
+    // AG.23 migration: remove this deferred-receipt replay test with the
+    // deprecated replay entrypoint; retain delivery-fact coverage elsewhere.
     let summary = transport.resume_pending_replay().expect("resume");
     assert_eq!(summary.delivered, 1);
     assert_eq!(summary.retained, 0);
@@ -436,6 +438,8 @@ fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
         write_response_frame(&mut stream, &codec, request_id, response);
     });
 
+    // AG.23 migration: remove this deferred-receipt replay assertion with the
+    // deprecated replay entrypoint; retain direct delivery coverage elsewhere.
     let summary = second.resume_pending_replay().expect("resume");
     assert_eq!(summary.delivered, 1);
     deliveries_rx.recv().expect("delivery");
@@ -446,6 +450,8 @@ fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
             .is_empty()
     );
 
+    // AG.23 migration: remove this idempotent replay assertion with the
+    // deprecated replay entrypoint; retain direct delivery coverage elsewhere.
     let summary = second.resume_pending_replay().expect("second resume");
     assert_eq!(summary.delivered, 0);
     assert_eq!(summary.retained, 0);

@@ -239,6 +239,7 @@ impl PeerClientTransport {
         }
     }
 
+    #[deprecated(note = "AG.23 deletion target; remove this symbol and all call sites")]
     fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
         let Some(replay_store) = &self.replay_store else {
             return Ok(ReplayResumeSummary {
@@ -582,7 +583,10 @@ impl PeerTransportRuntime {
         &self.client
     }
 
+    #[deprecated(note = "AG.23 deletion target; remove this symbol and all call sites")]
     pub(crate) fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {
+        // AG.23 migration: delete this forwarding call with the deprecated
+        // runtime replay API; no replacement delivery path is permitted.
         self.client.resume_pending_replay()
     }
 

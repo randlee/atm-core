@@ -1,3 +1,8 @@
+#![allow(
+    deprecated,
+    reason = "This test-only module is the isolated Phase AD compatibility adapter; remove it with its deprecated ingress type."
+)]
+
 #[cfg(test)]
 use atm_core::boundary;
 #[cfg(test)]

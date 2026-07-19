@@ -18,6 +18,8 @@ pub(super) fn start_replay_resume_worker(
                 match stop_rx.recv_timeout(REPLAY_RESUME_POLL_INTERVAL) {
                     Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // AG.23 migration: delete the replay sweep with the
+                        // deprecated deferred-receipt replay entrypoint.
                         if let Err(error) = runtime.resume_pending_replay() {
                             tracing::warn!(
                                 subsystem = "peer_transport",

@@ -1,8 +1,4 @@
 #![forbid(unsafe_code)]
-#![allow(
-    deprecated,
-    reason = "Phase AC daemon composition still consumes the transitional shared storage traits while backend cleanup lands"
-)]
 //! Daemon runtime composition and portability adapters.
 
 mod active_connection_registry;
