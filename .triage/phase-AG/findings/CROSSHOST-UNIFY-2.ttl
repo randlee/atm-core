@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-2>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-2" ;
+  triage:title "Deferred/replay not on unified outbound path" ;
+  triage:description "Item 2 of user-mandated 9-point ack/send routing unification checklist VIOLATED. peer_transport/delivery.rs:216-289 (deliver_remote, used by Compose/send) has full deferred/replay handling (RemoteDeliveryDecision::DeferredRetry, persist_remote_request_for_retry, OutcomeUnknown). deliver_direct (lines 291-315, used exclusively by ack replies) has NO deferred/replay branch -- single send_to_endpoint_immediate_wait(...).map_err(...)? call with no retry persistence. Checklist requires deferred/replay logic to be unchanged in behavior but operating on the SAME unified outbound path as send; currently ack replies bypass it entirely." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-duplication" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-AG" ;
+  triage:promoteTo "integrate/phase-AG" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-2/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-2/int-AG/1> ;
+  triage:openOn <urn:atm:triage:worktree/s15/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/int-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-2/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 291 ;
+  triage:snippet "fn deliver_direct(&self, request: DirectDeliveryRequest, remote_host: RemoteTargetHost) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> { let (_, endpoint) = self.decide_remote_delivery(&remote_host)?; let response = self.peer_transport_runtime.send_to_endpoint_immediate_wait(endpoint, RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request))).map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?; match response { ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(outcome)) => Ok(outcome), other => Err(..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-2/int-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 291 ;
+  triage:snippet "fn deliver_direct(&self, request: DirectDeliveryRequest, remote_host: RemoteTargetHost) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> { let (_, endpoint) = self.decide_remote_delivery(&remote_host)?; let response = self.peer_transport_runtime.send_to_endpoint_immediate_wait(endpoint, RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request))).map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?; match response { ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(outcome)) => Ok(outcome), other => Err(..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/int-AG/e89ad8df> .
+
+<urn:atm:triage:worktree/s15/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/int-AG/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,182 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-7>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-7" ;
+  triage:title "Duplicate message-semantic abstractions above transport layer not folded" ;
+  triage:description "Item 7 of user-mandated 9-point ack/send routing unification checklist VIOLATED. Duplicate message-semantic paths: 'compose send' (send_mail_with_runtime_and_post_send_emitter) vs 'direct deliver' (deliver_direct_messages_with_runtime_and_post_send_emitter), each with own RequestEnvelope/ResponseEnvelope variants (SendRequestEnvelope::{Compose,DirectDeliver})." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-duplication" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/6> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/e89ad8df> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:highestOpenBranch "feature/pAG-s15-othermac-smoke" ;
+  triage:promoteReason "Active feature branch with open violations; architecture fix required" .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 327 ;
+  triage:snippet "pub fn send_mail_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/direct_delivery.rs" ;
+  triage:line 10 ;
+  triage:snippet "pub fn deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 770 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::Compose(_))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 774 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(_))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 1108 ;
+  triage:snippet "RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/pAG-s15/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 1129 ;
+  triage:snippet "RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 327 ;
+  triage:snippet "pub fn send_mail_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/direct_delivery.rs" ;
+  triage:line 9 ;
+  triage:snippet "pub fn deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 764 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::Compose(_))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 768 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(_))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 1102 ;
+  triage:snippet "RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-7/integrate-AG/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 1123 ;
+  triage:snippet "RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:worktree/pAG-s15/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 ;
+  triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/integrate-AG/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 ;
+  triage:branchStatus "open" .

@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-4>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-4" ;
+  triage:title "Inbound persistence path partially duplicated" ;
+  triage:description "Item 4 of user-mandated 9-point ack/send routing unification checklist PARTIAL. Both Compose and DirectDeliver requests land on the same RequestDispatcher::dispatch (peer_transport/server.rs:743), and a received Compose request re-enters the ordinary local send path (runtime_health/dispatch_delivery.rs:87-94) -- same mailbox write/nudge/response contract as local send. BUT DirectDeliver requests use a distinct handler, deliver_direct_messages_with_runtime_and_post_send_emitter (direct_delivery.rs:10-73), which duplicates persistence/nudge logic instead of reusing send_mail's path. Root cause is the same FINDING-1 wire-shape (Compose vs DirectDeliver) duplication, shared with CROSSHOST-UNIFY-1, -3, -7." ;
+  triage:category "architecture-duplication" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:severity "important" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 8 ;
+  triage:snippet "direct_delivery::deliver_direct_messages_with_runtime_and_post_send_emitter," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 45 ;
+  triage:snippet "deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/direct_delivery.rs" ;
+  triage:line 10 ;
+  triage:snippet "pub fn deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:worktree/pAG-s15/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .

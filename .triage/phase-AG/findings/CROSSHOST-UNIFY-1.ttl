@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-1>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-1" ;
+  triage:title "Separate ack send path not deleted" ;
+  triage:description "Item 1 of user-mandated 9-point ack/send routing unification checklist VIOLATED. ack/mod.rs:504-566 (persist_sent_ack_reply) builds its own outbound envelope via build_outbound_envelope(...) and its own DeliveryRecipientSnapshot construction, independent of send::send_mail's prepare_send_context/persist_send_message (send/context.rs, send/mod.rs:344-380). Cross-host ack replies travel as SendRequestEnvelope::DirectDeliver (non_claude_outbound_runtime.rs:74-98) while atm send cross-host travels as SendRequestEnvelope::Compose (runtime_health/dispatch_delivery.rs:87-124) -- two distinct wire shapes/handlers, not \"send + acknowledges_message_id\" as the checklist requires. Root cause shared with CROSSHOST-UNIFY-3, -4, -7 (same Compose/DirectDeliver duplication)." ;
+  triage:category "architecture-duplication" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/pAG-s15-othermac-smoke/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/pAG-s15-othermac-smoke/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/integrate-phase-AG/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/integrate-phase-AG/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/e89ad8df> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/pAG-s15-othermac-smoke/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 504 ;
+  triage:snippet "fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/pAG-s15-othermac-smoke/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 30 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::Compose(request))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/integrate-phase-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 492 ;
+  triage:snippet "fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-1/integrate-phase-AG/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 43 ;
+  triage:snippet "RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/e89ad8df> .
+
+<urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 .

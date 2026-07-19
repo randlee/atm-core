@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-3>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-3" ;
+  triage:title "Routing not collapsed to one decision point" ;
+  triage:description "Item 3 of user-mandated 9-point ack/send routing unification checklist VIOLATED. Two independent local-vs-remote branches exist: dispatch_compose_send (runtime_health/dispatch_delivery.rs:87-95, if-let pattern) for send, and DaemonNonClaudeOutbound::deliver_payloads (non_claude_outbound_runtime.rs:74-98, if-let pattern) for ack/non-Claude outbound. Same semantic local-vs-remote decision implemented twice in independent call chains, not one shared decision point." ;
+  triage:category "architecture-duplication" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/pAG-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/AG-integrate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/AG-integrate/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/AG-integrate/e89ad8df> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG-integrate/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 87 ;
+  triage:snippet "let Some(remote_host) = request.remote_host.clone() else { send_mail_with_runtime..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/pAG-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 74 ;
+  triage:snippet "if let Some(remote_host) = request.remote_host.as_deref() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/AG-integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 87 ;
+  triage:snippet "let Some(remote_host) = request.remote_host.clone() else { send_mail_with_runtime..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-integrate/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-3/AG-integrate/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 74 ;
+  triage:snippet "if let Some(remote_host) = request.remote_host.as_deref() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-integrate/e89ad8df> .
+
+<urn:atm:triage:worktree/pAG-s15/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/AG-integrate/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 .

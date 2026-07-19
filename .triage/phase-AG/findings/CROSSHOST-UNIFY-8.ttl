@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-8>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-8" ;
+  triage:title "Missing regression test coverage for genuine cross-host cases" ;
+  triage:description "Item 8 of user-mandated 9-point ack/send routing unification checklist. Loopback send/ack COVERED. Same-host public-IP send/ack COVERED. Cross-host send NOT COVERED. Cross-host ack NOT COVERED. Failed-cross-host-ack-leaves-source-pending PARTIAL (only single-daemon self-ip simulation). All 5 cases required as regression tests." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/e89ad8df> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 5 ;
+  triage:snippet "fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:context "Loopback SEND test: COVERED. Covers single-daemon loopback send via 127.0.0.1." ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 310 ;
+  triage:snippet "fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:context "Loopback ACK test: COVERED. Covers single-daemon loopback ack via 127.0.0.1." ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-8/s15-othermac-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 307 ;
+  triage:snippet "fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:context "Failed ack PARTIAL coverage: line 309 calls discover_non_loopback_ipv4_for_test() for self-ip simulation only. Genuine two-daemon cross-host ack failure test MISSING." ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e> .
+
+<urn:atm:triage:worktree/pAG-s15-othermac-smoke/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CROSSHOST-UNIFY-5>
+  a triage:Finding ;
+  triage:findingId "CROSSHOST-UNIFY-5" ;
+  triage:title "Transport/host-matching logic duplicated above the parser boundary" ;
+  triage:description "Item 5 of user-mandated 9-point ack/send routing unification checklist PARTIAL. Target-string parsing is centralized (send/mod.rs:128-184, parse_send_target_impl) and remote_host storage is centralized (schema/inbox_message.rs:76-105). BUT host-matching/interface-selection logic is duplicated in peer_transport/delivery.rs:318-394 (resolve_remote_port_for_host, remote_host_targets_loopback) -- a second, independent host-classification layer beyond the parser, violating the 'parse/normalize remote target once, no remote-host logic scattered' requirement." ;
+  triage:category "architecture-duplication" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/e89ad8df> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
+  triage:triagedAt "2026-07-18T16:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 128 ;
+  triage:snippet "fn parse_send_target_impl(raw_target: &str, explicit_host: Option<&str>) -> Result<ParsedSendTarget, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "Centralized target-string parsing logic (lines 128-184)" ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 76 ;
+  triage:snippet "pub(crate) fn remote_host(message: &InboxMessage) -> Option<&str>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "Centralized remote_host storage logic (lines 76-105)" ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/pAG-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 318 ;
+  triage:snippet "fn resolve_remote_port_for_host(interface_rows: Vec<PeerInterfaceRow>, bound_addr: Option<SocketAddr>, remote_host: &RemoteTargetHost) -> Result<(u16, Option<bool>), CrossHostDeliveryInfraError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "DUPLICATED host-matching/interface-selection logic above parser boundary (lines 318-394). remote_host_targets_loopback at line 386-394 re-implements loopback detection instead of using normalized fact from parser." ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 128 ;
+  triage:snippet "fn parse_send_target_impl(raw_target: &str, explicit_host: Option<&str>) -> Result<ParsedSendTarget, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "Centralized target-string parsing logic (lines 128-184)" ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 76 ;
+  triage:snippet "pub(crate) fn remote_host(message: &InboxMessage) -> Option<&str>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "Centralized remote_host storage logic (lines 76-105)" ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-5/integrate-AG/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 318 ;
+  triage:snippet "fn resolve_remote_port_for_host(interface_rows: Vec<PeerInterfaceRow>, bound_addr: Option<SocketAddr>, remote_host: &RemoteTargetHost) -> Result<(u16, Option<bool>), CrossHostDeliveryInfraError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:description "DUPLICATED host-matching/interface-selection logic above parser boundary (lines 318-394). remote_host_targets_loopback at line 386-394 re-implements loopback detection instead of using normalized fact from parser." ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/e89ad8df> .
+
+<urn:atm:triage:worktree/pAG-s15/4caa741e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "4caa741e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-AG/e89ad8df>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e89ad8df" ;
+  triage:orderIndex 2 .
