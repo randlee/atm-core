@@ -44,6 +44,6 @@ required_variables:
     <step id="a">ACK this message immediately.</step>
     <step id="b">Read the relevant source and doc files in the specified worktree and commit context.</step>
     <step id="c">Do not make any code changes.</step>
-    <step id="d">Send the structured findings report directly in the ATM message.</step>
+    <step id="d">Send the structured findings report directly in the ATM message. Re-verify every cited file:line against the current branch and worktree before reporting it; stale or missing evidence is a finding, not a guess.</step>
   </workflow>
 </atm-review>
