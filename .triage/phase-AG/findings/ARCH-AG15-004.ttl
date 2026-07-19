@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-AG15-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-AG15-004" ;
+  triage:title "Data-integrity bug: source message ack state committed without remote delivery confirmation" ;
+  triage:description "In crates/atm-core/src/ack/mod.rs, execute_remote_ack_reply_plan() (lines 649-682) maps RemoteSendDeliveryOutcome::Deferred and ::OutcomeUnknown into Ok(DeliveryExecutionResult { warnings: ... }). This causes the caller finalize_sent_ack_outcome() to unconditionally call commit_source_ack_state() (line 618), marking the local source message as acknowledged even when remote delivery was not confirmed. This is a live mailbox state mutation decoupled from actual remote delivery confirmation." ;
+  triage:category "RULE-005" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-AG" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AG15-004/s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/s15/6e38c403> ;
+  triage:promoteTo <urn:atm:triage:worktree/s15/6e38c403> .
+
+<urn:atm:triage:occurrence/ARCH-AG15-004/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 649 ;
+  triage:snippet "fn execute_remote_ack_reply_plan<...>(...) -> Result<DeliveryExecutionResult, AtmError> { ... Deferred { ... } => Ok(...), OutcomeUnknown { ... } => Ok(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "6e38c403" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/6e38c403> .
+
+<urn:atm:triage:worktree/s15/6e38c403>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "6e38c403" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s9/32b5e3fd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s9-release-verdict" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s9-release-verdict" ;
+  triage:headSha "32b5e3fd" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s7/2e0a0b5c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s7-live-revalidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s7-live-revalidation" ;
+  triage:headSha "2e0a0b5c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s6/09775a4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s6-doctor-visibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s6-doctor-visibility" ;
+  triage:headSha "09775a4c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s5/7f18d7b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s5-host-allowlist" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s5-host-allowlist" ;
+  triage:headSha "7f18d7b4" ;
+  triage:orderIndex 1 .
