@@ -1,0 +1,119 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-004>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-004" ;
+  triage:title "Caller-side duplication of the response split" ;
+  triage:description "crates/atm/src/composition.rs (send()/ack()) and crates/atm-graft/src/lib.rs (send_message()/acknowledge_message()) each independently match on SendResponseEnvelope::{Sent,Acknowledged} with separate error paths. The original split was relocated from the request side to the response side by AG.18's unify-envelope-handler work, but the duplication itself was not removed -- it now exists identically in two crates instead of one. Confirmed by arch-qa (ARCH-002/ARCH-003). Tied to AG18-QA-002 (same underlying SendResponseEnvelope type)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s18-unify-envelope-handler and any branch built on top of it (AG.19-AG.21)" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "Occurrence is byte-identical across s18, s19, s20, and s21 (verified via direct grep of SendResponseEnvelope:: match sites in composition.rs and atm-graft/src/lib.rs on all four worktrees) -- s19/s20/s21 build sequentially on s18 and none of them have touched this call site yet, so the duplication has simply carried forward unchanged rather than being reintroduced independently. s21 (feature/pAG-s21-collapse-dispatch-routing) is the highest open branch in the stack and has dev in progress; s22-s25 are not yet started and therefore not applicable to this sweep. Fix should land on s21 per strict latest-branch dispatch policy -- once s21 merges to integrate/phase-AG it subsumes s18-s20's lineage and closes the occurrence phase-wide. A shared helper (e.g. a From/TryFrom conversion or a single free function consuming SendResponseEnvelope) should replace both independent match arms so the split lives in exactly one place." .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 270 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send()/ack()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 224 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send_message()/acknowledge_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send()/ack()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send_message()/acknowledge_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send()/ack()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send_message()/acknowledge_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send()/ack()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::{Sent,Acknowledged} in send_message()/acknowledge_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .
