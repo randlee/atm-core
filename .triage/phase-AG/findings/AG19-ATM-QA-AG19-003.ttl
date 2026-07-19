@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-ATM-QA-AG19-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-003" ;
+  triage:title "Production dispatch_send still forks on acknowledges_message_id, untouched by AG.19 (duplicate of AG18-QA-003)" ;
+  triage:description "atm-daemon's dispatch_send() (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:63) still forks entirely away from the unified send path whenever request.acknowledges_message_id.is_some() && request.source_remote_host.is_none(), calling ack::ack_mail_with_runtime_and_post_send_emitter directly before route_send_request is ever consulted. This is the identical AG18-QA-003 fork, untouched by AG.19 despite AG.19's own 'one outbound send path for send and ack' acceptance criterion. Not an independently occurring defect -- same call site, same condition, same code, carried forward unchanged from AG.18." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "same as AG18-QA-003: feature/pAG-s18-unify-envelope-handler and any branch built on top of it (AG.19-AG.21)" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:status "duplicate" ;
+  triage:duplicateOf "AG18-QA-003" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "Independently reconfirmed by direct grep of dispatch_send() in crates/atm-daemon/src/runtime_health/dispatch_delivery.rs across worktrees: byte-identical special-case fork present at line 63 on s18 (70cce097), s19 (59225e0f), and s20 (50572166) -- none of those three sprints touched dispatch_send's acknowledges_message_id branch. This record is a duplicate of AG18-QA-003 (same underlying defect, same pattern id unresolved-dispatch-fork, same sweep_scope) and should be aggregated under that canonical finding rather than dispatched separately. Independent determination of promote_to_branch: s21 (feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef) is the highest open branch in the ordered stack and, per direct inspection, has ALREADY collapsed this exact fork as of its current in-flight state -- dispatch_send on s21 now routes acknowledges_message_id requests through route_send_request/SendRequestRoute like any other send, with no special-case branch remaining (grep for acknowledges_message_id in s21's dispatch_delivery.rs returns zero matches, vs. one match on s18/s19/s20). This is consistent with AG.21's stated sprint goal (collapse-dispatch-routing) being literally this fix. Recommend: do not dispatch a separate fix for this finding -- treat as resolved-in-flight on s21 pending that branch's own QA pass and merge; if AG18-QA-003's canonical record reaches a different promote_to_branch determination, reconcile the two records to agree before dispatch." .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter(...) ... } (fork precedes route_send_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter(...) ... } (fork precedes route_send_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter(...) ... } (fork precedes route_send_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-003/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "acknowledges_message_id special-case fork REMOVED -- dispatch_send now routes uniformly via route_send_request/SendRequestRoute for both send and ack requests" ;
+  triage:status "resolved_in_flight" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .

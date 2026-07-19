@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG24-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG24-004" ;
+  triage:title "sprint-AG24.md tracking references stale HEAD SHA (5c17b6b3) vs real current HEAD (81298e32)" ;
+  triage:description "quality-mgr's AG24-QA-1 verdict notes PR #583's real HEAD is 81298e32, but PR description's merge-forward chain cites a stale SHA of 5c17b6b3 -- the tracking documentation has drifted from the actual worktree tip." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG24-004/s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:triageNotes "PR #583 merge-forward chain documentation cites 5c17b6b3 (original AG.24 commit) but actual branch HEAD is 81298e32 (post-merge from AG.23). Stale reference exists only in PR description text, not in sprint-AG24.md itself. Fix: update PR #583 description to cite correct HEAD 81298e32." .
+
+<urn:atm:triage:occurrence/ATM-QA-AG24-004/s24/1>
+  a triage:Occurrence ;
+  triage:file "PR #583 description text" ;
+  triage:snippet "Merge-forward chain: AG.18 -> AG.19 -> AG.20 -> AG.21 -> AG.22 -> AG.23 -> AG.24 (HEAD 5c17b6b3)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .

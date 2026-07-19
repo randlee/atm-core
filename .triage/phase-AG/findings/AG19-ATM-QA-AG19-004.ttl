@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-004" ;
+  triage:title "AG.19 built on AG.18's unmerged tip despite stated hard dependency on 'AG.18 merged'" ;
+  triage:description "docs/plans/phase-AG/sprint-AG19.md declares under 'Hard Dependencies' (line 30): 'AG.18 merged.' AG.18 (feature/pAG-s18-unify-envelope-handler @ 70cce097) has a FAIL verdict and remains open (AG18-QA-002: Compose/DirectDeliver split not collapsed). AG.19's branch (feature/pAG-s19-delete-remote-ack-path @ 59225e0f) builds directly on AG.18's tip commit rather than a merged integrate/phase-AG state. The dispatch_send fork (AG18-QA-003/ATM-QA-AG19-003) is the literal unresolved AG.18 defect carried forward into AG.19, confirming AG.19 proceeded despite its own stated hard dependency being unmet as literally written." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "process/sequencing-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint-doc dependency language for AG.18-AG.25; AG.20 depends on 'AG.19 merged' (sprint-AG20.md:30) and AG.21 depends on 'AG.20 merged' (sprint-AG21.md:34) -- same literal wording pattern, same likely mismatch against actual pipeline execution, present in every downstream sprint doc through AG.25" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T10:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:notes """Followup pass: AG.21 occurrence has been partially corrected from '- AG.20 merged' to '- AG.20 merged forward into this branch'. However, req-qa rates this as still insufficient (blocking per PR mergeability determination). The partial clarification addresses the ambiguity slightly but does not meet the recommended fix standard, which calls for explicit language about commits and open defects (e.g. 'AG.20's commits present in this branch's ancestry; AG.20's open defects are NOT presumed resolved unless explicitly closed'). AG19's Hard Dependencies still show the original '- AG.18 merged' (line 30) and AG22-AG.25 likely retain old wording. This is a documentation-wording finding blocking PR merge until the language across all affected sprint docs meets req-qa's clarity standard. The underlying execution model (sprints proceed back-to-back on unmerged tips, with arch-ctm merge-forwarding branch-to-branch) is deliberate policy, but the sprint-doc wording must clearly reflect this without ambiguity. Promoted to feature/pAG-s21-collapse-dispatch-routing for comprehensive language correction across all sprint docs, to be merge-forwarded phase-wide.""" .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG19.md" ;
+  triage:line 30 ;
+  triage:snippet "- AG.18 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG20.md" ;
+  triage:line 30 ;
+  triage:snippet "- AG.19 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 34 ;
+  triage:snippet "- AG.20 merged forward into this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 3 .

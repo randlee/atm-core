@@ -1,0 +1,179 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-ATM-QA-AG19-001>
+  a triage:Finding ;
+  triage:findingId "AG19-ATM-QA-AG19-001" ;
+  triage:title "ack path bypasses canonical outbound function" ;
+  triage:description "execute_ack_reply_plan (crates/atm-core/src/ack/mod.rs:680-719) contains a dedicated remote-ack execution branch: `if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }`. This path executes independently outside the canonical outbound send executor (execute_delivery_plan / send_mail_with_runtime_and_post_send_emitter) that ordinary sends use, bypassing unified dispatch routing logic." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/AG22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/c245c2ea> ;
+  triage:highestOpenBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:promoteToBranch "feature/pAG-s25-live-two-daemon-proof" .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 698 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 677 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 677 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/81298e32> .
+
+<urn:atm:triage:occurrence/AG19-ATM-QA-AG19-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 680 ;
+  triage:snippet "if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) { deliver_remote_send_request(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/c245c2ea> .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 25 .

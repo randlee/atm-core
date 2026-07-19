@@ -1,0 +1,404 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-F004" ;
+  triage:title "3 pub(crate) methods marked #[allow(dead_code)] with test-only-admitting doc comments (repeat of AG20-BLOCK-003 pattern)" ;
+  triage:description "AG23-QA-1 (ruthless-boundary-qa): 3 pub(crate) items are marked with #[allow(dead_code)] using #[cfg_attr(not(test), allow(dead_code, reason=\"...\"))] gates. The reason texts explicitly admit these items are test-only, violating the principle that test-only code should either be gated with #[cfg(test)] visibility or removed entirely if genuinely unused outside tests. InboxFileFormat enum and inbox_file_format() function in mailbox/store.rs both cite \"mailbox format detection remains test-only after compat retirement\"; load_compat_mailbox_messages_strict() in mailbox/mod.rs cites \"strict mailbox compatibility reads remain test-only\". This is a repeat of the AG20-BLOCK-003 pattern already flagged in an earlier sprint." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T15:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s18/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s19/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s20/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s21/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s22/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s23/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s24/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/s25/3> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/758732cd> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/s25/3eab4e6e> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/3eab4e6e> ;
+  triage:notes "Workspace sweep found all 3 test-only-admitting dead_code items present on all 8 feature branches (s18-s25). Pattern spans entire AG phase. highest_open_branch = feature/pAG-s25-live-two-daemon-proof (3eab4e6e, order 25). integrate/phase-AG branch (23bdc60e) not yet scanned for merge-forward state. All occurrences are concrete file/line locations with dead_code cfg_attr gates that explicitly admit test-only usage via reason text. Repeatable sweep scope: workspace — full crate tree. Fix targets s25; merge-forward on merge to integrate closes all earlier branch occurrences." .
+
+# S18 occurrences: feature/pAG-s18-unify-envelope-handler (e46c3a6d)
+<urn:atm:triage:occurrence/RBQA-F004/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:evidence "pub(crate) enum InboxFileFormat marked with #[cfg_attr(not(test), allow(dead_code, reason=\"...\"))] — reason text explicitly states test-only usage." ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:evidence "pub(crate) fn inbox_file_format() marked with same test-only-admitting dead_code gate as enum." ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s18/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:evidence "pub(crate) fn load_compat_mailbox_messages_strict() marked with test-only-admitting dead_code gate. Third item establishing pattern repeat." ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+# S19 occurrences: feature/pAG-s19-delete-remote-ack-path (5d20ca5a)
+<urn:atm:triage:occurrence/RBQA-F004/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:evidence "Occurrence carries forward from s18 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:evidence "Occurrence carries forward from s18 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s19/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:evidence "Occurrence carries forward from s18 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+# S20 occurrences: feature/pAG-s20-move-deferred-policy-out-of-transport (50572166)
+<urn:atm:triage:occurrence/RBQA-F004/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:evidence "Occurrence carries forward from s19 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:evidence "Occurrence carries forward from s19 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s20/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:evidence "Occurrence carries forward from s19 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+# S21 occurrences: feature/pAG-s21-collapse-dispatch-routing (758732cd)
+<urn:atm:triage:occurrence/RBQA-F004/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:evidence "Occurrence carries forward from s20 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:evidence "Occurrence carries forward from s20 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s21/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:evidence "Occurrence carries forward from s20 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
+
+# S22 occurrences: feature/pAG-s22-host-resolution-boundary (c9aedbcc)
+<urn:atm:triage:occurrence/RBQA-F004/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:evidence "Occurrence carries forward from s21 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:evidence "Occurrence carries forward from s21 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s22/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:evidence "Occurrence carries forward from s21 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+# S23 occurrences: feature/pAG-s23-remove-synthetic-deferred-receipts (a13fc219)
+<urn:atm:triage:occurrence/RBQA-F004/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:evidence "Item on AG.23 where ruthless-boundary-qa reported these 3 items. This is the branch that introduced or first exposed the pattern via PR #582." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:evidence "Item on AG.23 where ruthless-boundary-qa reported these 3 items." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s23/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:evidence "Item on AG.23 where ruthless-boundary-qa reported these 3 items. Third instance on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+# S24 occurrences: feature/pAG-s24-preserve-request-shape (81298e32)
+<urn:atm:triage:occurrence/RBQA-F004/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:evidence "Occurrence carries forward from s23 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:evidence "Occurrence carries forward from s23 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s24/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:evidence "Occurrence carries forward from s23 via merge-forward or no change." ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+# S25 occurrences: feature/pAG-s25-live-two-daemon-proof (3eab4e6e)
+<urn:atm:triage:occurrence/RBQA-F004/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 24 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) enum InboxFileFormat" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:evidence "Highest open branch. Fix should target this branch; merge-forward to integrate closes all earlier branches." ;
+  triage:occursIn <urn:atm:triage:worktree/s25/3eab4e6e> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 74 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"mailbox format detection remains test-only after compat retirement\"))] pub(crate) fn inbox_file_format(path: &Path)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:evidence "Highest open branch. Fix should target this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s25/3eab4e6e> .
+
+<urn:atm:triage:occurrence/RBQA-F004/s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[cfg_attr(not(test), allow(dead_code, reason = \"strict mailbox compatibility reads remain test-only\"))] pub(crate) fn load_compat_mailbox_messages_strict()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:evidence "Highest open branch. Fix should target this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/s25/3eab4e6e> .
+
+# WorktreeSnapshots
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/s21/758732cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/s25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .

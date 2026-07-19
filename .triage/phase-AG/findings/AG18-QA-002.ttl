@@ -1,0 +1,191 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-002>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-002" ;
+  triage:title "SendResponseEnvelope/SendRequestEnvelope never marked deprecated" ;
+  triage:description "SendResponseEnvelope::{Sent,Acknowledged} was never deprecated in AG.18-AG.23 despite plan requirements. Enum definition at crates/atm-core/src/protocol.rs lines 42-45 lacks #[deprecated] attribute. 40+ construction/match sites across 4 crates in S18-S23. Reopened: the prior fixed claim did not apply to the AG.18 branch tip 5d1c8861, where the enum remains defined and actively constructed/matched." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "BREAKING_CHANGE" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded true ;
+  triage:regressed false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:promoteToBranch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-002/s23/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/c245c2ea> .
+
+# Occurrence in S18
+<urn:atm:triage:occurrence/AG18-QA-002/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+# Occurrence in S19
+<urn:atm:triage:occurrence/AG18-QA-002/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+# Occurrence in S20
+<urn:atm:triage:occurrence/AG18-QA-002/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occurrenceCount 40 ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+# Occurrence in S21
+<urn:atm:triage:occurrence/AG18-QA-002/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occurrenceCount 14 ;
+  triage:note "New construction site introduced at crates/atm-core/src/send/mod.rs during this sprint despite enum scheduled for removal." ;
+  triage:occursIn <urn:atm:triage:worktree/s21/bf96dc86> .
+
+# Occurrence in S22
+<urn:atm:triage:occurrence/AG18-QA-002/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occurrenceCount 14 ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+# Occurrence in S23
+<urn:atm:triage:occurrence/AG18-QA-002/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub enum SendResponseEnvelope { Sent(SendOutcome), Acknowledged(AckOutcome) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occurrenceCount 14 ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+# WorktreeSnapshot for S18
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S19
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S20
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S21
+<urn:atm:triage:worktree/s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S22
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S23
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .
+
+# WorktreeSnapshot for S24 (FIXED)
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 ;
+  triage:branchState "fixed" ;
+  triage:fixMethod "removal" ;
+  triage:fixDescription "Enum SendResponseEnvelope completely removed from protocol.rs; all construction/match sites refactored or removed." .
+
+# WorktreeSnapshot for S25 (FIXED)
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 ;
+  triage:branchState "fixed" ;
+  triage:fixMethod "inherited" ;
+  triage:fixDescription "Inherits fix from S24; enum removed, no construction sites present." .

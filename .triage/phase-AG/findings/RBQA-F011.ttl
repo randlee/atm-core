@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F011>
+  a triage:Finding ;
+  triage:findingId "RBQA-F011" ;
+  triage:title "No mechanical lint gate for duplicate-constant-drift or classification-leak patterns" ;
+  triage:description "This is a NEW meta-finding covering two distinct recurring defect classes in the codebase, first raised in AG21-QA-2 (PR #580, commit bf96dc86) and independently corroborated in AG25-QA-1 (PR #584, commit c245c2ea). The finding documents the absence of structural lint gates preventing either pattern's recurrence. (1) Classification-leak pattern: field-presence tests (is_none()/is_some()) used as type discriminators to route compose vs ack paths in SendResponseEnvelope matching (RBQA-F006, F007, F008 — three prior manual-review catches; RBQA-F009.ttl documents the missing lint gate for this pattern at severity minor). (2) Duplicate-constant-drift pattern: identical constants defined separately in multiple crates (e.g. SAME_HOST_REQUEST_DEADLINE in atm/src/composition.rs vs atm-graft/src/lib.rs, initially 3s vs 12s drift), or code duplicated across crates with divergent implementations (e.g. SendResponseEnvelope match logic in composition.rs vs atm-graft/src/lib.rs, AG18-QA-004), each caught only through manual inspection. The duplicate-constant-drift pattern has now caused a live correctness bug: AG.25's aligned-deadline fix tuning SAME_HOST_REQUEST_DEADLINE from 3s to 12s was necessary to prevent the same-host IPC deadline from firing before a legitimate cross-host round trip could complete (root cause: the deadline constants were drifting in opposite directions, eventually causing inconsistent behavior). RBQA-F011 is distinct from RBQA-F009 because it covers BOTH patterns and is severity important (vs F009's minor) due to the demonstrated correctness impact. This is a meta-finding; no repeatable sweep applies. Concrete occurrences (AG18-QA-004 SendResponseEnvelope duplication, AG25 SAME_HOST_REQUEST_DEADLINE drift) are triaged separately under their own finding_ids and should be fixed independently. This meta-finding tracks the infrastructure gap: no lint gate exists to prevent future recurrences of either pattern." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:findingType "meta_infrastructure" ;
+  triage:highestOpenBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:highestOpenBranchSha "c245c2ea" ;
+  triage:promoteToBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:correlatedWith <urn:atm:triage:finding/RBQA-F009> ;
+  triage:correlatedWith <urn:atm:triage:finding/AG18-QA-004> ;
+  triage:correlatedWith <urn:atm:triage:finding/AG25-LOC-GATE> ;
+  triage:notes "OPEN. Meta-finding tracking infrastructure gap for two lint patterns. First detection in AG21-QA-2 (commit bf96dc86) documented the classification-leak pattern; independently re-detected in AG25-QA-1 (commit c245c2ea) via discovery of the duplicate-constant-drift correctness bug (SAME_HOST_REQUEST_DEADLINE deadline consistency). RBQA-F009.ttl (severity minor, dispatchReady true) addresses only the field-presence classification-leak pattern and its missing lint gate. RBQA-F011 elevates and broadens the scope to include the separate duplicate-constant-drift pattern (demonstrated by AG18-QA-004 and the AG25 deadline drift) and is severity important due to correctness impact. The concrete defect locations (AG18-QA-004 SendResponseEnvelope match duplication; AG25 SAME_HOST_REQUEST_DEADLINE values) are documented in separate findings; this record documents only the meta-finding that both patterns lack protective lint gates. Recommended remedy: implement (or delegate to arch-inj for implementation) two new cargo clippy lints or a custom build-script/xtask check: (1) classification-leak-discriminator-lint that flags field-presence tests (is_none/is_some) used as control-flow discriminators on composite enum types in critical routing paths; (2) constant-drift-detector-lint that flags identical-name constant definitions in multiple crates and flags mismatches or requires a shared definition point. Both lints must run pre-commit as part of the mandatory reviewer stack, not as deferred QA gates." .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 ;
+  triage:status "open" .

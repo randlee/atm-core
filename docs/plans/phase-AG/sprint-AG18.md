@@ -42,6 +42,9 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 - `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
   - `CROSSHOST-UNIFY-1` cites `74-98` as the separate ack outbound path
 - `crates/atm-core/src/protocol.rs`
+- `crates/atm-architecture/delete-lists/ag18.toml`
+- `crates/atm-architecture/delete-lists/README.md`
+- `scripts/check-ag-sprint-gates.sh`
 - source findings:
   - `CROSSHOST-UNIFY-1`
   - `CROSSHOST-UNIFY-3`
@@ -258,6 +261,13 @@ the existing `rg -n ...` validation first as the anti-staleness check.
 - one canonical outbound ATM send envelope for:
   - ordinary send
   - ack reply send
+- one hard fail-closed architecture gate for AG delete-list enforcement:
+  - forbidden-symbol / forbidden-regex scan over the AG sprint manifest files
+  - active-sprint diff gate for allowlisted file scope and required net-negative
+    `crates/` LOC
+- one operator-facing runbook for the AG delete-list gates:
+  - `crates/atm-architecture/delete-lists/README.md`
+  - `scripts/check-ag-sprint-gates.sh`
 - one canonical inbound send handler family
 - deletion of the `Compose` vs `DirectDeliver` semantic split
 - updated protocol/requirements/ADR references naming the single envelope

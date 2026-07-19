@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG24-LOC-GATE>
+  a triage:Finding ;
+  triage:findingId "AG24-LOC-GATE" ;
+  triage:title "Hard Merge Gate LOC target missed (AG.24)" ;
+  triage:description "sprint-AG24.md (lines 173-177) Hard Merge Gate requires AG.24 to deliver at least -100 net LOC across crates/ in its named target files, measured as git diff --stat <sprint-base-sha>..HEAD -- crates/. On feature/pAG-s24-preserve-request-shape, git diff --stat a13fc219..81298e32 -- crates/ = 89 insertions(+), 46 deletions(-) = +43 net LOC, the wrong sign relative to the required <= -100 net LOC, and a shortfall of approximately 143 lines. Raised by arch-ctm's independent ladder audit (2026-07-19) and independently re-verified by team-lead via direct git measurement on the same commit range. No prior triage record existed for this sprint's LOC gate; AG.24 had zero existing .ttl findings in this directory before this record. Note: arch-ctm's accompanying claim that SendRequestEnvelope/SendResponseEnvelope still exist undeleted at crates/atm-core/src/protocol.rs:30/:37 was checked directly against this branch's HEAD (81298e32) and found to be FALSE -- protocol.rs no longer defines either type; only the LOC-gate numeric failure is confirmed real and is the basis of this finding." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:category "merge-gate" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG24-LOC-GATE/pAG-s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:correlatedWith <urn:atm:triage:finding/AG18-QA-001> ;
+  triage:correlatedWith <urn:atm:triage:finding/HARD-MERGE-GATE-LOC> ;
+  triage:notes "OPEN. This is the third occurrence of the Hard Merge Gate LOC failure in phase-AG (see AG18-QA-001 and HARD-MERGE-GATE-LOC for the first two, both on AG.18 and AG.21 respectively). AG.24's own named-target diff fails by a wide margin (+43 vs required <= -100) with no offsetting ladder-wide justification recorded. Fix must actually delete the split request/protocol boundary named in sprint-AG24.md rather than add further shim/carrier logic around SendOutcome." .
+
+<urn:atm:triage:occurrence/AG24-LOC-GATE/pAG-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/" ;
+  triage:line 0 ;
+  triage:snippet "git diff --stat a13fc219..81298e32 -- crates/ => 89 insertions(+), 46 deletions(-) = +43 net LOC vs required <= -100 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .

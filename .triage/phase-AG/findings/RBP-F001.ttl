@@ -4,155 +4,203 @@
 <urn:atm:triage:finding/RBP-F001>
   a triage:Finding ;
   triage:findingId "RBP-F001" ;
-  triage:title "record_heartbeat's AtmError::agent_not_found missing .with_recovery() guidance" ;
-  triage:description "crates/atm-daemon/src/runtime_health.rs — record_heartbeat's AtmError::agent_not_found(...) call is missing .with_recovery(...), inconsistent with every other call site in the codebase (ack/mod.rs:400, delivery_policy.rs:327, list.rs:213, read/mod.rs:807) and with this same file's other error paths." ;
+  triage:title "outbound_delivery_policy.rs drops original error's source/backtrace on reconstruction" ;
+  triage:description "AG23-QA-1 (rust-best-practices-agent, new, important): in outbound_delivery_policy.rs, an error value is reconstructed (e.g. re-wrapped into a new error type/variant) in a way that drops the original error's source()/backtrace chain, losing diagnostic provenance for failures in this path." ;
   triage:triageMode "initial_pass" ;
   triage:category "RBP" ;
   triage:phaseId "phase-AG" ;
-  triage:severity "Important" ;
+  triage:severity "important" ;
   triage:repeatable false ;
-  triage:sweepScope "file_only" ;
+  triage:sweepScope "file" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-16T01:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s10/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s11/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s12/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s13/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s14/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s15/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-integrate/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s13/512f3afa> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s14/94b969b6> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s15/d05ee158> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-integrate/39dae6fa> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:triagedAt "2026-07-19T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/pAG-s25/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/758732cd> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/758732cd> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s10/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s21/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 604 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 92 ;
+  triage:snippet "AtmError::validation(\"remote daemon rejected the cross-host request protocol\").with_recovery(...)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s10/88eb5bcf> .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/758732cd> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s11/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s21/2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 681 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::new_with_code(...) in preserve_error_shape: reconstructs without with_source()" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s11/8e9d1ac4> .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/758732cd> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s12/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s22/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 895 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 92 ;
+  triage:snippet "AtmError::validation(\"remote daemon rejected the cross-host request protocol\").with_recovery(...)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s12/cbc6a19a> .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s13/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s22/2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 895 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::new_with_code(...) in preserve_error_shape: reconstructs without with_source()" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s13/512f3afa> .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s14/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s23/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 895 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 92 ;
+  triage:snippet "AtmError::validation(\"remote daemon rejected the cross-host request protocol\").with_recovery(...)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s14/94b969b6> .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-s15/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s23/2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 895 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::new_with_code(...) in preserve_error_shape: reconstructs without with_source()" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/d05ee158> .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
 
-<urn:atm:triage:occurrence/RBP-F001/pAG-integrate/1>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s24/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 794 ;
-  triage:snippet "return Err(AtmError::agent_not_found(request.member.as_str(), request.team.as_str()))" ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 92 ;
+  triage:snippet "AtmError::validation(\"remote daemon rejected the cross-host request protocol\").with_recovery(...)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-integrate/39dae6fa> .
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
 
-<urn:atm:triage:worktree/pAG-s10/88eb5bcf>
+<urn:atm:triage:occurrence/RBP-F001/pAG-s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::new_with_code(...) in preserve_error_shape: reconstructs without with_source()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 92 ;
+  triage:snippet "AtmError::validation(\"remote daemon rejected the cross-host request protocol\").with_recovery(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> .
+
+<urn:atm:triage:occurrence/RBP-F001/pAG-s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/outbound_delivery_policy.rs" ;
+  triage:line 112 ;
+  triage:snippet "AtmError::new_with_code(...) in preserve_error_shape: reconstructs without with_source()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> .
+
+<urn:atm:triage:worktree/pAG-s18/e46c3a6d>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s10-secured-transport" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s10-secured-transport" ;
-  triage:headSha "88eb5bcf" ;
-  triage:orderIndex 1 .
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
 
-<urn:atm:triage:worktree/pAG-s11/8e9d1ac4>
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s11-remote-target-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s11-remote-target-contract" ;
-  triage:headSha "8e9d1ac4" ;
-  triage:orderIndex 2 .
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
 
-<urn:atm:triage:worktree/pAG-s12/cbc6a19a>
+<urn:atm:triage:worktree/pAG-s20/50572166>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s12-localhost-proof" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
-  triage:headSha "cbc6a19a" ;
-  triage:orderIndex 3 .
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
 
-<urn:atm:triage:worktree/pAG-s13/512f3afa>
+<urn:atm:triage:worktree/pAG-s21/758732cd>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s13-selfip-proof" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s13-selfip-proof" ;
-  triage:headSha "512f3afa" ;
-  triage:orderIndex 4 .
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 21 .
 
-<urn:atm:triage:worktree/pAG-s14/94b969b6>
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s14-integration-coverage" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s14-integration-coverage" ;
-  triage:headSha "94b969b6" ;
-  triage:orderIndex 5 .
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
 
-<urn:atm:triage:worktree/pAG-s15/d05ee158>
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "d05ee158" ;
-  triage:orderIndex 6 .
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
 
-<urn:atm:triage:worktree/pAG-integrate/39dae6fa>
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/pAG-s25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAG-integrate/23bdc60e>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AG" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
-  triage:headSha "39dae6fa" ;
-  triage:orderIndex 7 .
+  triage:headSha "23bdc60e" ;
+  triage:orderIndex 100 .

@@ -1,0 +1,34 @@
+sprint = "AG.21"
+description = "Collapse duplicate daemon dispatch routing and inbound persistence paths to one send-shaped entry and one shared persistence path."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm-core/src/transport/testing.rs",
+  "crates/atm-daemon/src/tests_post_send_graft_warning.rs",
+  "crates/atm-daemon/src/tests/runtime_root/cross_host.rs",
+  "crates/atm-daemon/src/tests/runtime_root/dispatch.rs",
+  "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs",
+  "crates/atm-daemon/src/tests/runtime_root/loopback.rs",
+  "crates/atm-daemon/src/tests/runtime_root/mod.rs",
+  "crates/atm-daemon/src/tests/runtime_root/self_ip.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm-core/src/transport/testing.rs",
+  "crates/atm-daemon/src/tests_post_send_graft_warning.rs",
+  "crates/atm-daemon/src/tests/runtime_root.rs",
+]
+
+forbidden_literals = [
+  "SendRequestEnvelope::Compose",
+  "SendRequestEnvelope::Acknowledge",
+  "SendResponseEnvelope::Sent",
+  "SendResponseEnvelope::Acknowledged",
+]
+
+forbidden_regexes = [
+  "match[\\s\\S]{0,600}SendRequestEnvelope::Compose[\\s\\S]{0,600}SendRequestEnvelope::Acknowledge",
+  "match[\\s\\S]{0,600}SendResponseEnvelope::Sent[\\s\\S]{0,600}SendResponseEnvelope::Acknowledged",
+]

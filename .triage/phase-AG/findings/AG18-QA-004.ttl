@@ -1,0 +1,275 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-004>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-004" ;
+  triage:title "caller-side match duplication (composition.rs + atm-graft)" ;
+  triage:description "crates/atm/src/composition.rs (send()/ack()) and crates/atm-graft/src/lib.rs (send_message()/acknowledge_message()) each independently match on SendResponseEnvelope::{Sent,Acknowledged} with separate error paths. The original split was relocated from the request side to the response side by AG.18's unify-envelope-handler work, but the duplication itself was not fully removed -- it now exists identically in two crates instead of one. AG.21's collapse-dispatch-routing sprint introduced helper functions (into_send_outcome, into_ack_outcome) in atm-core::protocol to factor out the match logic, but s18-s20 still contain the original inline duplication patterns. Confirmed open by arch-qa (ARCH-002/ARCH-003) and still present on AG.21-QA-2 verdict (PR #580, bf96dc86)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:category "architecture" ;
+  triage:severity "important" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T13:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-004/pAG-s25/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:notes "Followup pass: s18-s20 retain original inline match duplication pattern; s21-s25 have been refactored (s21's collapse-dispatch-routing sprint) to use shared helper functions (into_send_outcome, into_ack_outcome) from atm-core::protocol module. Caller-side duplication eliminated in s21+, but library-level duplication of the two helper functions persists (tracked separately as RBQA-F011 meta-finding about missing lint gate for this pattern class). Dispatch targets s20 (highest open branch); fix should consolidate s18-s20 lineage to match s21+ refactored pattern using protocol helpers, OR conversely, extract a shared From/TryFrom trait to handle both Sent and Acknowledged outcomes in one place. Both approaches eliminate the caller-side duplication present in s18-s20." .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 227 ;
+  triage:snippet "match on SendResponseEnvelope::Sent in send_message()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "calls into_send_outcome() helper (refactored)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s21/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 226 ;
+  triage:snippet "calls into_send_outcome() helper (refactored)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 226 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 226 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 226 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 274 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG18-QA-004/pAG-s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 226 ;
+  triage:snippet "calls into_send_outcome() helper (inherited from s21)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:worktree/pAG-s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

@@ -1,0 +1,188 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG23-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG23-003" ;
+  triage:title "sprint-AG23.md's Required Validation rg command targets nonexistent single-file peer_transport.rs" ;
+  triage:description "sprint doc validation commands reference single-file path crates/atm-daemon/src/peer_transport.rs, but the codebase has refactored this to a multi-file module at peer_transport/mod.rs and related submodules. Stale documentation across AG sprint docs (AG18-25)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T11:47:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S21/5ba8c6fe> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S22/0dac5ed2> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S23/82f38708> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S24/0dd783d4> ;
+  triage:openOn <urn:atm:triage:worktree/AG-S25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG-S25/03c873fc> ;
+  triage:highestOpenBranch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:highestOpenBranchIndex 25 .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 75 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG23.md" ;
+  triage:line 46 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:324-338`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG20.md" ;
+  triage:line 34 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:133-145`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S20/50572166> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG20.md" ;
+  triage:line 34 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:133-145`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "5ba8c6fe" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S21/5ba8c6fe> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG22.md" ;
+  triage:line 38 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:93-116`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "0dac5ed2" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S22/0dac5ed2> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG23.md" ;
+  triage:line 46 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:324-338`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S23/82f38708> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 48 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:1156-1625`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S24/0dd783d4> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-003/AG-S25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 48 ;
+  triage:snippet "- `crates/atm-daemon/src/peer_transport.rs:1156-1625`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG-S25/03c873fc> .
+
+<urn:atm:triage:worktree/AG-S18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 0 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S21/5ba8c6fe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "5ba8c6fe" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S22/0dac5ed2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "0dac5ed2" ;
+  triage:orderIndex 4 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S23/82f38708>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:orderIndex 5 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S24/0dd783d4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:orderIndex 6 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/AG-S25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 7 ;
+  triage:status "open" .

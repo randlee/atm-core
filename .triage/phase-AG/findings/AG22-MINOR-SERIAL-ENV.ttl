@@ -1,0 +1,2087 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG22-MINOR-SERIAL-ENV>
+  a triage:Finding ;
+  triage:findingId "AG22-MINOR-SERIAL-ENV" ;
+  triage:title "Stale #[serial_test::serial(env)] annotations now that env-driven config is gone" ;
+  triage:description "Tests still carry #[serial_test::serial(env)] annotations even though ATM_DAEMON_PEER_ADDR / env-driven endpoint config was fully purged this sprint, making the annotation vestigial." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "MINOR" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T18:30:00.201440Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/36> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/37> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/38> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/39> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/40> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/41> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/42> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/43> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/44> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/45> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/46> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/47> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/48> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/49> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/50> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/51> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/52> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/53> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/54> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/55> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/56> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/57> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/58> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/59> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/61> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/62> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/63> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/64> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/65> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/66> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/67> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/68> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/69> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/70> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/71> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/73> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/74> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/75> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/76> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/77> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/78> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/79> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/80> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/81> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/82> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/83> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/84> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/85> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/86> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/87> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/88> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/90> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/91> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/92> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/93> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/94> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/95> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/96> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/97> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/98> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/99> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/100> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/101> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/102> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/103> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/104> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/105> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/106> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/107> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/108> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/109> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/110> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/111> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/112> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/113> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/114> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/115> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/116> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/117> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/118> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/119> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/120> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/121> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/122> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/123> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/124> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/125> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/126> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/127> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/128> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/129> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/130> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/131> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/132> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/133> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/134> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/135> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/136> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/137> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/138> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/139> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/140> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/141> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/142> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/143> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/144> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/145> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/146> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/147> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/148> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/149> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/150> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/151> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/152> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/153> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/154> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/155> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/156> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/157> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/158> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/159> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/160> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG20/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG21/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG22/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG23/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG24/7> ;
+  triage:openOn <urn:atm:triage:worktree/AG.18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG.19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG.20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG.21/720b2737> ;
+  triage:openOn <urn:atm:triage:worktree/AG.22/c5a79d89> ;
+  triage:openOn <urn:atm:triage:worktree/AG.23/82a105d1> ;
+  triage:openOn <urn:atm:triage:worktree/AG.24/03c873fc> ;
+  triage:openOn <urn:atm:triage:worktree/AG.25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1672 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1777 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 169 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 188 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 203 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 214 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 231 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 240 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 255 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 266 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 297 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 279 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 298 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 317 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 1059 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 150 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/health.rs" ;
+  triage:line 176 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 1327 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/19>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/mod.rs" ;
+  triage:line 1367 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/20>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 507 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/21>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 518 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/22>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 529 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/23>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 543 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 556 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/25>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 597 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 630 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/27>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 666 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 711 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/29>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 723 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 741 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 796 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 813 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 831 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 849 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/35>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 872 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/36>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 888 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/37>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 903 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/38>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 923 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/39>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/identity/mod.rs" ;
+  triage:line 105 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/40>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/identity/mod.rs" ;
+  triage:line 124 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/41>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/identity/mod.rs" ;
+  triage:line 142 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/42>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/identity/mod.rs" ;
+  triage:line 159 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/43>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/identity/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/44>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/persistence.rs" ;
+  triage:line 267 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/45>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/graft_warning_tests.rs" ;
+  triage:line 13 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/46>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/graft_warning_tests.rs" ;
+  triage:line 63 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/47>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 552 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/48>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 607 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/49>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 686 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/50>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook.rs" ;
+  triage:line 785 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/51>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 491 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/52>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 577 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/53>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 642 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/54>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 682 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/55>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 725 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/56>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 753 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/57>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 793 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/58>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 829 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/59>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 862 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/60>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 899 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/61>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/tests.rs" ;
+  triage:line 945 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/62>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1026 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/63>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1092 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/64>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1127 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/65>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 140 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/66>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 286 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/67>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 359 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/68>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 417 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/69>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 444 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/70>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 506 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/71>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 57 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/72>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 588 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/73>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 613 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/74>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 650 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/75>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 713 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/76>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 785 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/77>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 834 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/78>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 871 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/79>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 917 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/80>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 991 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/81>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 821 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/82>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 855 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/83>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 876 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/84>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 912 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/85>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 734 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/86>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 749 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/87>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 763 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/88>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 792 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/89>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 869 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/90>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 115 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/91>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 180 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/92>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 212 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/93>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 250 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/94>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 306 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/95>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 31 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/96>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 348 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/97>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 392 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/98>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests_transport.rs" ;
+  triage:line 79 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/99>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 188 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/100>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 285 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/101>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/102>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 441 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/103>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 566 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/104>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/harness.rs" ;
+  triage:line 826 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/105>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 349 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/106>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 397 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/107>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 433 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/108>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 498 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/109>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 532 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/110>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 572 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/111>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 626 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/112>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 668 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/113>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/tests/transport_client.rs" ;
+  triage:line 710 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/114>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 654 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/115>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 687 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/116>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 112 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/117>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 137 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/118>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 164 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/119>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_lifecycle.rs" ;
+  triage:line 20 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/120>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 118 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/121>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 155 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/122>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_post_send_graft_warning.rs" ;
+  triage:line 209 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/123>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1022 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/124>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 124 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/125>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 177 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/126>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 354 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/127>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 615 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/128>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 673 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/129>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 733 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/130>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 867 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/131>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 921 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/132>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/local_ipc_depth.rs" ;
+  triage:line 149 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/133>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/local_ipc_depth.rs" ;
+  triage:line 239 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/134>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/local_ipc_depth.rs" ;
+  triage:line 90 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/135>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 263 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/136>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 42 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/137>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/dispatch.rs" ;
+  triage:line 111 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/138>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/dispatch.rs" ;
+  triage:line 161 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/139>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/dispatch.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/140>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/dispatch.rs" ;
+  triage:line 57 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/141>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs" ;
+  triage:line 127 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/142>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs" ;
+  triage:line 262 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/143>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/144>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 116 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/145>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 229 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/146>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 309 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/147>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/148>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/loopback.rs" ;
+  triage:line 490 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/149>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 121 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/150>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 306 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/151>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/152>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 455 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/153>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/self_ip.rs" ;
+  triage:line 537 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/154>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_startup.rs" ;
+  triage:line 100 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/155>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_startup.rs" ;
+  triage:line 4 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/156>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/tests_cross_host_doctor.rs" ;
+  triage:line 150 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/157>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/tests_cross_host_doctor.rs" ;
+  triage:line 16 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/158>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/tests_cross_host_doctor.rs" ;
+  triage:line 204 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/159>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 740 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG25/160>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/teams.rs" ;
+  triage:line 756 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.25/03c873fc> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1777 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.18" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 169 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.19" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG20/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 188 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.20" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.20/50572166> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG21/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 203 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.21" ;
+  triage:headSha "720b2737" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.21/720b2737> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG22/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 214 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.22" ;
+  triage:headSha "c5a79d89" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.22/c5a79d89> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG23/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 231 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.23" ;
+  triage:headSha "82a105d1" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.23/82a105d1> .
+
+<urn:atm:triage:occurrence/AG22-MINOR-SERIAL-ENV/AG24/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 240 ;
+  triage:snippet "#[serial_test::serial(env)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.24" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG.24/03c873fc> .
+
+<urn:atm:triage:worktree/AG.18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-*" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG.19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-*" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG.20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.20" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-*" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG.21/720b2737>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.21" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-*" ;
+  triage:headSha "720b2737" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG.22/c5a79d89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.22" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-*" ;
+  triage:headSha "c5a79d89" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG.23/82a105d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-*" ;
+  triage:headSha "82a105d1" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG.24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-*" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG.25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-*" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 25 .
+

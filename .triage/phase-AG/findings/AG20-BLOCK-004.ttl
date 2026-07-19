@@ -1,0 +1,179 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-004" ;
+  triage:title "transport-owned replay -- companion finding to BLOCK-003" ;
+  triage:description "replay ownership not actually moved out of peer_transport/mod.rs despite persistence extraction to remote_replay.rs. AG21-QA-2 (PR #580, commit bf96dc86) confirms STILL OPEN on AG.21. Root cause: replay_resume_worker module remains locally defined in peer_transport/mod.rs, orchestrating replay resumption as a transport concern. AG.21 partially addresses this by extracting replay persistence functions (persist_replay_request, expire_replay_record, complete_replay_record, replay_error_is_terminal) to crate::remote_replay at crate root, but the worker that uses those functions still owns replay orchestration via its local module definition." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:category "architecture-boundary" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-004/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:notes "Followup sweep (2026-07-19) from AG21-QA-2 finding report (PR #580 @ bf96dc86). Finding status: STILL OPEN across all branches. Occurrence evidence: s18-s20 have both replay_persistence and replay_resume_worker as mod declarations in peer_transport/mod.rs (60, 60, 56 lines with 'replay' respectively). s21-s25 show partial progress: replay_persistence extracted (mod declaration removed from peer_transport/mod.rs), but replay_resume_worker remains locally defined in peer_transport/mod.rs, and crate root remote_replay.rs exists with persistence functions. This is incomplete: the worker that coordinates replay resumption (replay_resume_worker) should not be owned by the transport layer. Immediate dispatch recommendation: promote_to_branch = s25 (feature/pAG-s25-live-two-daemon-proof @ c245c2ea). Merge-forward fix will close lower-branch occurrences automatically." .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 28 ;
+  triage:snippet "mod replay_persistence; mod replay_resume_worker;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 28 ;
+  triage:snippet "mod replay_persistence; mod replay_resume_worker;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 25 ;
+  triage:snippet "mod replay_persistence; mod replay_resume_worker;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 25 ;
+  triage:snippet "mod replay_resume_worker; (replay_persistence extracted to crate::remote_replay, but worker ownership still in peer_transport)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 26 ;
+  triage:snippet "mod replay_resume_worker; (replay_persistence extracted to crate::remote_replay, but worker ownership still in peer_transport)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 25 ;
+  triage:snippet "mod replay_resume_worker; (replay_persistence extracted to crate::remote_replay, but worker ownership still in peer_transport)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 25 ;
+  triage:snippet "mod replay_resume_worker; (replay_persistence extracted to crate::remote_replay, but worker ownership still in peer_transport)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-004/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 25 ;
+  triage:snippet "mod replay_resume_worker; (replay_persistence extracted to crate::remote_replay, but worker ownership still in peer_transport)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
+
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 25 .

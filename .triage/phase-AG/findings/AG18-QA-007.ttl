@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-007>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-007" ;
+  triage:title "Requirements/ADR not updated to name the single canonical send envelope/handler family" ;
+  triage:description "docs/requirements.md contains zero mentions of a single canonical send envelope/handler family (grep for 'canonical' + 'envelope'/'handler family' turns up only unrelated mail-envelope and nudge-envelope references). No ADR under docs/adr/ names the AG.18-21 unification result either. The AG.18 sprint deliverable 'requirements/architecture/ADR references updated to name the single envelope/handler family explicitly' is unmet on every worktree checked (s18-s21). Confirmed by arch-qa (ARCH-005)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s18-unify-envelope-handler docs only" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-007/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-007/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-007/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-007/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/70cce097> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/59225e0f> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "Highest branch with real commits in the AG.18-21 unification stack is feature/pAG-s21-collapse-dispatch-routing (56fdcdef), which is dev-in-progress; feature/pAG-s22..s25 are not yet started (common base 03c873fc) and are out of scope for this sweep. The finding is held rather than dispatched now: AG18-QA-002 and AG18-QA-004 (same triage pass) show the underlying SendResponseEnvelope::{Sent,Acknowledged} split is still fully live and actively fed on s18-s21 -- the envelope/handler unification this doc update is supposed to describe is not yet real in code. Writing a canonical-envelope/handler-family doc update now would document an aspirational state, not the shipped architecture, and would likely need to be rewritten once AG.19-AG.21 (and any follow-on cleanup) actually land. Recommendation: hold this finding open (dispatchReady=false) and re-evaluate once AG.18-AG.21 close out for real (SendResponseEnvelope split fully removed/collapsed per AG18-QA-002/004), then dispatch the requirements.md + relevant ADR update to whichever branch is the merge point at that time -- currently projected to be feature/pAG-s21-collapse-dispatch-routing or its successor on the integration branch. Do not dispatch this as a standalone doc fix before that gate; re-sweep triage_root for this finding at the next initial_pass once AG.21 merges." .
+
+<urn:atm:triage:occurrence/AG18-QA-007/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "no mention of a single canonical send envelope/handler family anywhere in the file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/70cce097> .
+
+<urn:atm:triage:occurrence/AG18-QA-007/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "no mention of a single canonical send envelope/handler family anywhere in the file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/59225e0f> .
+
+<urn:atm:triage:occurrence/AG18-QA-007/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "no mention of a single canonical send envelope/handler family anywhere in the file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG18-QA-007/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "no mention of a single canonical send envelope/handler family anywhere in the file; docs/adr/* also silent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .

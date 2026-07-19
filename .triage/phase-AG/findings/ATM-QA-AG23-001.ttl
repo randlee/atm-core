@@ -1,0 +1,163 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG23-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG23-001" ;
+  triage:title "docs/plans/phase-AG/readiness.md still lists AG.23 as PENDING/TBD" ;
+  triage:description "req-qa on PR #582 (feature/pAG-s23-remove-synthetic-deferred-receipts @ 82f38708) found the phase's own authoritative closure gate (readiness.md) has not been updated to reflect AG.23's completion at 82f38708. Sweeping AG.18-AG.25 reveals the entire AG.18 through AG.25 row set is stale across all sprint branches." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG23-001/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/03c873fc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 44 ;
+  triage:snippet "| `AG.18` | `PENDING` | `TBD` | envelope/handler collapse cleanup ladder not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 45 ;
+  triage:snippet "| `AG.19` | `PENDING` | `TBD` | remote-ack path collapse not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 46 ;
+  triage:snippet "| `AG.20` | `PENDING` | `TBD` | transport-policy deletion not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 47 ;
+  triage:snippet "| `AG.21` | `PENDING` | `TBD` | dispatch/inbound single-route cleanup not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/5ba8c6fe> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 48 ;
+  triage:snippet "| `AG.22` | `PENDING` | `TBD` | endpoint-resolution boundary relocation not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/0dac5ed2> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 49 ;
+  triage:snippet "| `AG.23` | `PENDING` | `TBD` | synthetic deferred-receipt deletion not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/82f38708> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 50 ;
+  triage:snippet "| `AG.24` | `PENDING` | `TBD` | request-shape preservation cleanup not yet executed on the corrective unification line |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/0dd783d4> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG23-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "| `AG.25` | `PENDING` | `TBD` | final live-proof closeout for the unification line not yet executed |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/03c873fc> .
+
+<urn:atm:triage:worktree/s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s21/5ba8c6fe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "5ba8c6fe" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s22/0dac5ed2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "0dac5ed2" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/82f38708>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s24/0dd783d4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 8 .

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-001" ;
+  triage:title "Sprint's own required boundary contract missing entirely" ;
+  triage:description "docs/plans/phase-AG/sprint-AG20.md names `shared_outcome_policy(attempt: TransportAttemptResult) -> OutboundDeliveryDisposition` as AG.20's headline deliverable (a shared policy function moving deferred-delivery-disposition logic out of the transport layer, with OutboundDeliveryDisposition enum defined at sprint-AG20.md:117 and the function signature at sprint-AG20.md:95). A repo-wide search of crates/ on feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166 finds zero occurrences of shared_outcome_policy, OutboundDeliveryDisposition, or TransportAttemptResult anywhere in the implementation. The deliverable was never implemented. Independently confirmed by req-qa (ATM-QA-AG20-001), arch-qa (ARCH-001), and ruthless-boundary-qa (RBQA-F001)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:category "headline-deliverable-never-implemented" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-001/pAG-s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "Correlation across the ordered ladder: this is AG.20's own named deliverable, not a repeatable code pattern, so sweep_scope is restricted to feature/pAG-s20-move-deferred-policy-out-of-transport. Verified zero occurrences of shared_outcome_policy / OutboundDeliveryDisposition / TransportAttemptResult in crates/ on both feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166 and feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef (s21 is a merge-forward of s20 with no new dev commits yet, still in progress, so it inherits the gap unchanged). s22-25 (feature/pAG-s22.. through s25..) remain pinned at baseline 03c873fc (not started) and have not branched forward past s20/s21, so the gap is not yet applicable there -- re-check when those sprints branch forward. Per team fix-dispatch policy (fix dispatch targets latest sprint branch, never integrate; merge-forward closes lower occurrences -- see feedback_fix_dispatch_latest_branch, feedback_fix_dispatch_strict_earliest_order), promote_to_branch is set to the highest currently-open branch with real activity, feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef. Fix must implement shared_outcome_policy(attempt: TransportAttemptResult) -> OutboundDeliveryDisposition per sprint-AG20.md (function at line 95, OutboundDeliveryDisposition enum at line 117) as a real shared boundary function extracted out of the transport layer, wired into all call sites that currently duplicate or inline the deferred-delivery-disposition decision, then merge-forward through s21 (and s22-25 once they branch) to close all occurrences. Do not mark closed without an actual `shared_outcome_policy` symbol resolving in crates/ and req-qa/arch-qa/ruthless-boundary-qa re-confirming the signature and call-site wiring match sprint-AG20.md." .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-001/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/" ;
+  triage:line 0 ;
+  triage:snippet "grep -rn 'shared_outcome_policy|OutboundDeliveryDisposition|TransportAttemptResult' crates/ => 0 occurrences; sprint-AG20.md:95 and :117 name this as AG.20's headline deliverable" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/56fdcdef>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:orderIndex 21 .
