@@ -17,6 +17,8 @@ ambiguous reporting without adding phase-specific gate logic to general prompts.
 - `.claude/skills/codex-orchestration/review-template.xml.j2`
 - `.claude/agents/quality-mgr.md`
 - `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
+- `.gitignore` (`.sc/oversigne/*` from commit `c926daa4`) so local oversight
+  artifacts stay out of prompt-hardening diffs
 
 # Proposed Changes
 
