@@ -17,8 +17,8 @@ use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, remote_host as message_remote_host,
 };
 use crate::send::{
-    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, input,
-    persist_send_message, prepare_send_context, summary,
+    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, SendRequestRoute, input,
+    persist_send_message, prepare_send_context, route_send_request, summary,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -639,8 +639,8 @@ fn execute_ack_reply_plan<
     reply: &SentAckReply,
     plan: &DeliveryPlan,
 ) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
-    if reply.reply_target.remote_host.is_some() {
-        return execute_remote_ack_reply_plan(runtime, reply);
+    if let SendRequestRoute::Remote(remote_host) = route_send_request(&reply.reply_request) {
+        return execute_remote_ack_reply_plan(runtime, reply, remote_host);
     }
 
     execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), plan)
@@ -651,12 +651,19 @@ fn execute_remote_ack_reply_plan<
 >(
     runtime: &R,
     reply: &SentAckReply,
+    remote_host: RemoteTargetHost,
 ) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
-    runtime.deliver_remote_send_request(reply.reply_request.clone())?;
-    Ok(crate::delivery_execution::DeliveryExecutionResult {
-        disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
-        warnings: Vec::new(),
-    })
+    match runtime.deliver_remote_send_request(reply.reply_request.clone(), remote_host)? {
+        crate::boundary::RemoteSendDeliveryOutcome::Delivered(_) => {
+            Ok(crate::delivery_execution::DeliveryExecutionResult {
+                disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
+                warnings: Vec::new(),
+            })
+        }
+        crate::boundary::RemoteSendDeliveryOutcome::Deferred { error, .. }
+        | crate::boundary::RemoteSendDeliveryOutcome::OutcomeUnknown { error, .. }
+        | crate::boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
+    }
 }
 
 fn build_reply_delivery_plan(
@@ -761,13 +768,13 @@ mod tests {
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, set_remote_host};
     use crate::send::{
-        DeliveryPersistenceDisposition, DeliveryPersistenceResult, SendMessageSource, SendRequest,
-        WarningEntry,
+        DeliveryPersistenceDisposition, DeliveryPersistenceResult, RemoteTargetHost,
+        SendMessageSource, SendRequest, WarningEntry,
     };
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_QA, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::types::{AgentName, CommandAction, IsoTimestamp, TeamName};
     use serde_json::Map;
 
     struct AckRuntime {
@@ -930,7 +937,8 @@ mod tests {
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,
-        ) -> Result<(), crate::error::AtmError> {
+            _remote_host: RemoteTargetHost,
+        ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, crate::error::AtmError> {
             if let Some(code) = self.fail_remote_send {
                 return Err(crate::error::AtmError::new_with_code(
                     code,
@@ -943,7 +951,25 @@ mod tests {
                 .lock()
                 .expect("remote send requests")
                 .push(request);
-            Ok(())
+            Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
+                Box::new(crate::ResponseEnvelope::Send(
+                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
+                        action: CommandAction::Send,
+                        team: TeamName::from_validated(TEST_TEAM),
+                        agent: AgentName::from_validated("recipient"),
+                        sender: AgentName::from_validated(TEST_SENDER),
+                        outcome: crate::send::SendCommandOutcome::Sent,
+                        message_id: AtmMessageId::new(),
+                        receipt_message_id: None,
+                        requires_ack: false,
+                        task_id: None,
+                        summary: None,
+                        message: None,
+                        warnings: Vec::new(),
+                        dry_run: false,
+                    }),
+                )),
+            ))
         }
 
         fn load_roster_member(
@@ -1023,12 +1049,31 @@ mod tests {
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,
-        ) -> Result<(), crate::error::AtmError> {
+            _remote_host: RemoteTargetHost,
+        ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, crate::error::AtmError> {
             self.remote_send_requests
                 .lock()
                 .expect("remote send requests")
                 .push(request);
-            Ok(())
+            Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
+                Box::new(crate::ResponseEnvelope::Send(
+                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
+                        action: CommandAction::Send,
+                        team: TeamName::from_validated(TEST_TEAM),
+                        agent: AgentName::from_validated("recipient"),
+                        sender: AgentName::from_validated(TEST_SENDER),
+                        outcome: crate::send::SendCommandOutcome::Sent,
+                        message_id: AtmMessageId::new(),
+                        receipt_message_id: None,
+                        requires_ack: false,
+                        task_id: None,
+                        summary: None,
+                        message: None,
+                        warnings: Vec::new(),
+                        dry_run: false,
+                    }),
+                )),
+            ))
         }
 
         fn load_roster_member(

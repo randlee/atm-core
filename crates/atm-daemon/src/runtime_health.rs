@@ -59,7 +59,6 @@ pub(crate) struct DaemonRequestDispatcher {
     remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     peer_transport_runtime: PeerTransportRuntime,
-    cross_host_delivery: Arc<dyn CrossHostDelivery + Send + Sync>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -85,7 +84,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
                 &self.storage_finalizer.is_some(),
             )
             .field("peer_transport_runtime", &self.peer_transport_runtime)
-            .field("cross_host_delivery", &"dyn CrossHostDelivery")
             .finish()
     }
 }
@@ -372,7 +370,6 @@ impl DaemonRequestDispatcher {
             peer_security_store: runtime_assembly.peer_security_store,
             remote_replay_store: Some(runtime_assembly.remote_replay_store),
             storage_finalizer: Some(runtime_assembly.storage_finalizer),
-            cross_host_delivery,
             peer_transport_runtime,
         }
     }
@@ -619,7 +616,6 @@ impl DaemonRequestDispatcher {
             peer_security_store: runtime_assembly.peer_security_store.clone(),
             remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
             storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
-            cross_host_delivery,
             peer_transport_runtime,
         }
     }

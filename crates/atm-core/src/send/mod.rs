@@ -228,6 +228,12 @@ pub struct SendRequest {
     pub dry_run: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendRequestRoute {
+    Local,
+    Remote(RemoteTargetHost),
+}
+
 impl SendRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -260,6 +266,14 @@ impl SendRequest {
             remote_host: None,
             dry_run,
         })
+    }
+}
+
+#[doc(hidden)]
+pub fn route_send_request(request: &SendRequest) -> SendRequestRoute {
+    match request.remote_host.clone() {
+        Some(remote_host) => SendRequestRoute::Remote(remote_host),
+        None => SendRequestRoute::Local,
     }
 }
 

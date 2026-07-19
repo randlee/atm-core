@@ -101,23 +101,37 @@ impl DaemonRemoteSendRouter {
 impl boundary::sealed::Sealed for DaemonRemoteSendRouter {}
 
 impl boundary::RemoteSendRouter for DaemonRemoteSendRouter {
-    fn deliver_remote_send(&self, request: SendRequest) -> Result<(), AtmError> {
-        let remote_host = request.remote_host.clone().ok_or_else(|| {
-            AtmError::validation("remote send router requires request.remote_host")
-                .with_recovery("Populate the remote host before retrying remote-target delivery.")
-        })?;
+    fn deliver_remote_send(
+        &self,
+        request: SendRequest,
+        remote_host: atm_core::send::RemoteTargetHost,
+    ) -> Result<boundary::RemoteSendDeliveryOutcome, AtmError> {
         let outcome = self
             .cross_host_delivery
             .deliver_remote(request, remote_host, AtmMessageId::new())
             .map_err(|error| error.into_atm_error())?;
-        match outcome {
-            crate::peer_transport::delivery::SendOutcome::Delivered(_) => Ok(()),
-            crate::peer_transport::delivery::SendOutcome::Deferred { error, .. } => Err(error),
-            crate::peer_transport::delivery::SendOutcome::OutcomeUnknown { error, .. } => {
-                Err(error)
+        Ok(match outcome {
+            crate::peer_transport::delivery::SendOutcome::Delivered(response) => {
+                boundary::RemoteSendDeliveryOutcome::Delivered(response)
             }
-            crate::peer_transport::delivery::SendOutcome::RejectedTerminal(error) => Err(error),
-        }
+            crate::peer_transport::delivery::SendOutcome::Deferred {
+                receipt_message_id,
+                error,
+            } => boundary::RemoteSendDeliveryOutcome::Deferred {
+                receipt_message_id,
+                error,
+            },
+            crate::peer_transport::delivery::SendOutcome::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            } => boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
+                receipt_message_id,
+                error,
+            },
+            crate::peer_transport::delivery::SendOutcome::RejectedTerminal(error) => {
+                boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error)
+            }
+        })
     }
 }
 
@@ -353,7 +367,10 @@ mod tests {
         };
 
         runtime
-            .deliver_remote_send(request.clone())
+            .deliver_remote_send(
+                request.clone(),
+                atm_core::send::RemoteTargetHost::parse("10.10.100.98").expect("remote host"),
+            )
             .expect("deliver remote send");
 
         let captured = cross_host_delivery.requests.lock().expect("requests");

@@ -14,7 +14,7 @@ use crate::error::AtmError;
 use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::InboxMessage;
-use crate::send::SendRequest;
+use crate::send::{RemoteTargetHost, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
@@ -60,7 +60,11 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
-    fn deliver_remote_send_request(&self, _request: SendRequest) -> Result<(), AtmError> {
+    fn deliver_remote_send_request(
+        &self,
+        _request: SendRequest,
+        _remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "remote send routing is unavailable in this runtime",
         )
@@ -130,6 +134,15 @@ impl LocalServiceRuntime {
         self.roster_store
             .load_roster(team)
             .map(|snapshot| snapshot.members)
+    }
+
+    pub fn deliver_remote_send_request(
+        &self,
+        request: SendRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        self.remote_send_router
+            .deliver_remote_send(request, remote_host)
     }
 
     #[doc(hidden)]
@@ -252,7 +265,11 @@ pub struct LocalRejectingRemoteSendRouter;
 impl crate::boundary::sealed::Sealed for LocalRejectingRemoteSendRouter {}
 
 impl crate::boundary::RemoteSendRouter for LocalRejectingRemoteSendRouter {
-    fn deliver_remote_send(&self, _request: SendRequest) -> Result<(), AtmError> {
+    fn deliver_remote_send(
+        &self,
+        _request: SendRequest,
+        _remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
         Err(AtmError::daemon_unavailable(
             "remote send routing is unavailable in the local retained runtime",
         )
@@ -367,8 +384,13 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .map(|_| ())
     }
 
-    fn deliver_remote_send_request(&self, request: SendRequest) -> Result<(), AtmError> {
-        self.remote_send_router.deliver_remote_send(request)
+    fn deliver_remote_send_request(
+        &self,
+        request: SendRequest,
+        remote_host: RemoteTargetHost,
+    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
+        self.remote_send_router
+            .deliver_remote_send(request, remote_host)
     }
 }
 
