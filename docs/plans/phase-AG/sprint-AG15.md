@@ -1,10 +1,10 @@
 ---
 id: AG.15
 title: Other-Mac Cross-Host Smoke
-status: planned
+status: in_progress
 branch: feature/pAG-s15-othermac-smoke
 worktree: ../atm-core-worktrees/feature/pAG-s15-othermac-smoke
-target: develop
+target: integrate/phase-AG
 ---
 
 # Sprint AG.15 — Other-Mac Cross-Host Smoke
@@ -15,7 +15,7 @@ phase: AG
 sprint: AG.15
 worktree: ../atm-core-worktrees/feature/pAG-s15-othermac-smoke
 branch: feature/pAG-s15-othermac-smoke
-status: planned
+status: in_progress
 estimated_scope: medium
 ```
 
@@ -67,7 +67,10 @@ before introducing Windows-specific variables.
 
 ## Unit-Test Plan
 
-- none; this sprint closes through retained smoke evidence
+- cross-host ack/send unification regression coverage must stay green:
+  - `ack_mail_allows_cross_host_reply_without_receiver_local_roster_entry`
+  - `daemon_non_claude_outbound_routes_remote_host_requests_through_cross_host_delivery`
+  - peer listener authorization coverage
 
 ## Integration-Test Plan
 

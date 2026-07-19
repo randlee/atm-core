@@ -1,6 +1,5 @@
 //! Shared protocol DTOs for the core transport boundary family.
 
-mod direct_delivery;
 mod runtime_status;
 
 use std::env;
@@ -25,7 +24,6 @@ use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, TeamName};
-pub use direct_delivery::{DirectDeliveryOutcome, DirectDeliveryRequest};
 #[allow(
     deprecated,
     reason = "Phase AD obsolete watch/reconcile DTOs remain part of the historical protocol surface."
@@ -44,7 +42,6 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 pub enum SendRequestEnvelope {
     Compose(Box<SendRequest>),
     Acknowledge(AckRequest),
-    DirectDeliver(DirectDeliveryRequest),
 }
 
 /// Shared protocol send-shaped response envelope.
@@ -52,7 +49,6 @@ pub enum SendRequestEnvelope {
 pub enum SendResponseEnvelope {
     Sent(SendOutcome),
     Acknowledged(AckOutcome),
-    DirectDelivered(DirectDeliveryOutcome),
 }
 
 /// Shared protocol request envelope.
@@ -335,7 +331,6 @@ impl fmt::Display for RequestId {
 pub enum MessageKind {
     SendComposeRequest = 0x0001,
     SendAcknowledgeRequest = 0x0002,
-    SendDirectDeliverRequest = 0x000a,
     HeartbeatRequest = 0x0003,
     CompatibilityPreflightRequest = 0x0009,
     ListRequest = 0x0004,
@@ -345,7 +340,6 @@ pub enum MessageKind {
     DoctorRequest = 0x0008,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
-    SendDirectDeliveredResponse = 0x100a,
     HeartbeatResponse = 0x1003,
     CompatibilityVerdictResponse = 0x1009,
     ListResponse = 0x1004,
@@ -366,7 +360,6 @@ impl MessageKind {
             self,
             Self::SendComposeRequest
                 | Self::SendAcknowledgeRequest
-                | Self::SendDirectDeliverRequest
                 | Self::HeartbeatRequest
                 | Self::CompatibilityPreflightRequest
                 | Self::ListRequest
@@ -389,7 +382,6 @@ impl TryFrom<u16> for MessageKind {
         let kind = match value {
             0x0001 => Self::SendComposeRequest,
             0x0002 => Self::SendAcknowledgeRequest,
-            0x000a => Self::SendDirectDeliverRequest,
             0x0003 => Self::HeartbeatRequest,
             0x0009 => Self::CompatibilityPreflightRequest,
             0x0004 => Self::ListRequest,
@@ -399,7 +391,6 @@ impl TryFrom<u16> for MessageKind {
             0x0008 => Self::DoctorRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
-            0x100a => Self::SendDirectDeliveredResponse,
             0x1003 => Self::HeartbeatResponse,
             0x1009 => Self::CompatibilityVerdictResponse,
             0x1004 => Self::ListResponse,
@@ -771,9 +762,6 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
             MessageKind::SendAcknowledgeRequest
         }
-        RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(_)) => {
-            MessageKind::SendDirectDeliverRequest
-        }
         RequestEnvelope::CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
         RequestEnvelope::List(_) => MessageKind::ListRequest,
@@ -789,9 +777,6 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => MessageKind::SendSentResponse,
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
             MessageKind::SendAcknowledgedResponse
-        }
-        ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(_)) => {
-            MessageKind::SendDirectDeliveredResponse
         }
         ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,

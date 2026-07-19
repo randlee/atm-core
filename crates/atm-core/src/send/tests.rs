@@ -222,6 +222,7 @@ impl RetainedServiceRuntime for TestRuntime {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
                 remote_host: recipient.remote_host.clone(),
+                origin: None,
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             });
@@ -354,6 +355,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         requires_ack: false,
         task_id: Some("task-123".parse().expect("task id")),
         parent_message_id: None,
+        acknowledges_message_id: None,
         thread_mode: None,
         expires_at: None,
         source_remote_host: None,

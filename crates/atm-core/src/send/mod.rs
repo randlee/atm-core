@@ -1,5 +1,6 @@
 //! Send command service implementation and post-send hook handling.
 
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -32,8 +33,8 @@ mod target;
 mod threading_helpers;
 mod warning;
 
-pub(crate) use context::build_outbound_envelope;
-use context::{SendExecutionContext, persist_send_message, prepare_send_context};
+use context::SendExecutionContext;
+pub(crate) use context::{persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;
 pub(crate) use persistence::persist_message;
@@ -87,6 +88,15 @@ impl RemoteTargetHost {
 
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+
+    pub fn literal_ip(&self) -> Option<IpAddr> {
+        self.as_str().parse::<IpAddr>().ok()
+    }
+
+    pub fn targets_loopback(&self) -> bool {
+        self.as_str().eq_ignore_ascii_case("localhost")
+            || self.literal_ip().is_some_and(|ip| ip.is_loopback())
     }
 }
 
@@ -208,6 +218,7 @@ pub struct SendRequest {
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -242,6 +253,7 @@ impl SendRequest {
             requires_ack,
             task_id,
             parent_message_id: None,
+            acknowledges_message_id: None,
             thread_mode: None,
             expires_at: None,
             source_remote_host: None,

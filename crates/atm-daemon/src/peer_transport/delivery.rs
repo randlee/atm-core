@@ -1,13 +1,10 @@
 use std::collections::BTreeSet;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::Arc;
 
 use atm_core::boundary;
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_core::protocol::{
-    DirectDeliveryOutcome, DirectDeliveryRequest, RequestEnvelope, ResponseEnvelope,
-    SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
 use atm_core::schema::AtmMessageId;
 use atm_core::send::{RemoteTargetHost, SendRequest};
 use atm_storage::{PeerInterfaceConfigStore, PeerInterfaceRow};
@@ -52,12 +49,6 @@ pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync {
         remote_host: RemoteTargetHost,
         deferred_receipt_message_id: AtmMessageId,
     ) -> Result<SendOutcome, CrossHostDeliveryInfraError>;
-
-    fn deliver_direct(
-        &self,
-        request: DirectDeliveryRequest,
-        remote_host: RemoteTargetHost,
-    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError>;
 }
 
 #[derive(Clone)]
@@ -287,32 +278,6 @@ impl CrossHostDelivery for DaemonCrossHostDelivery {
                 }),
         }
     }
-
-    fn deliver_direct(
-        &self,
-        request: DirectDeliveryRequest,
-        remote_host: RemoteTargetHost,
-    ) -> Result<DirectDeliveryOutcome, CrossHostDeliveryInfraError> {
-        let (_, endpoint) = self.decide_remote_delivery(&remote_host)?;
-        let response = self
-            .peer_transport_runtime
-            .send_to_endpoint_immediate_wait(
-                endpoint,
-                RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request)),
-            )
-            .map_err(CrossHostDeliveryInfraError::RuntimeUnavailable)?;
-        match response {
-            ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(outcome)) => Ok(outcome),
-            other => Err(CrossHostDeliveryInfraError::InternalInvariantViolation(
-                AtmError::daemon_unavailable(format!(
-                    "remote daemon returned unexpected response for direct delivery: {other:?}"
-                ))
-                .with_recovery(
-                    "Align the sender and receiver daemon protocol paths before retrying the cross-host acknowledgement reply.",
-                ),
-            )),
-        }
-    }
 }
 
 fn resolve_remote_port_for_host(
@@ -324,7 +289,7 @@ fn resolve_remote_port_for_host(
         .into_iter()
         .filter(|row| row.enabled)
         .collect::<Vec<_>>();
-    let target_is_loopback = remote_host_targets_loopback(remote_host);
+    let target_is_loopback = remote_host.targets_loopback();
     let scoped_rows = enabled_rows
         .iter()
         .filter(|row| row.bind_addr.is_loopback() == target_is_loopback)
@@ -354,7 +319,7 @@ fn resolve_remote_port_for_host(
             )
         }),
         _ => {
-            if let Ok(ip) = remote_host.as_str().parse::<IpAddr>() {
+            if let Some(ip) = remote_host.literal_ip() {
                 let matching_ports = candidate_rows
                     .iter()
                     .filter(|row| row.bind_addr == ip || row.advertise_addr == ip)
@@ -383,16 +348,6 @@ fn resolve_remote_port_for_host(
     }
 }
 
-fn remote_host_targets_loopback(remote_host: &RemoteTargetHost) -> bool {
-    if remote_host.as_str().eq_ignore_ascii_case("localhost") {
-        return true;
-    }
-    remote_host
-        .as_str()
-        .parse::<IpAddr>()
-        .is_ok_and(|ip| ip.is_loopback())
-}
-
 fn interface_family_preference_refs(rows: &[&PeerInterfaceRow]) -> Option<bool> {
     let mut families = rows
         .iter()
@@ -407,9 +362,7 @@ fn interface_family_preference_refs(rows: &[&PeerInterfaceRow]) -> Option<bool> 
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        remote_host_targets_loopback, resolve_remote_port_for_host, select_resolved_remote_endpoint,
-    };
+    use super::{resolve_remote_port_for_host, select_resolved_remote_endpoint};
     use atm_core::send::parse_send_target;
     use atm_core::types::IsoTimestamp;
     use atm_storage::PeerInterfaceKind;
@@ -541,21 +494,42 @@ mod tests {
 
     #[test]
     fn remote_host_loopback_detection_matches_localhost_and_loopback_ip() {
-        let localhost = parse_send_target("arch-ctm@atm-dev.localhost", None)
-            .expect("localhost target")
-            .remote_host
-            .expect("localhost host");
-        let loopback_ip = parse_send_target("arch-ctm@atm-dev.127.0.0.1", None)
-            .expect("loopback target")
-            .remote_host
-            .expect("loopback host");
-        let lan_ip = parse_send_target("arch-ctm@atm-dev.192.168.128.82", None)
-            .expect("lan target")
-            .remote_host
-            .expect("lan host");
+        let localhost = parse_send_target(
+            &format!(
+                "{}@{}.localhost",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("localhost target")
+        .remote_host
+        .expect("localhost host");
+        let loopback_ip = parse_send_target(
+            &format!(
+                "{}@{}.127.0.0.1",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("loopback target")
+        .remote_host
+        .expect("loopback host");
+        let lan_ip = parse_send_target(
+            &format!(
+                "{}@{}.192.168.128.82",
+                atm_core::test_support::TEST_SENDER,
+                atm_core::test_support::TEST_TEAM
+            ),
+            None,
+        )
+        .expect("lan target")
+        .remote_host
+        .expect("lan host");
 
-        assert!(remote_host_targets_loopback(&localhost));
-        assert!(remote_host_targets_loopback(&loopback_ip));
-        assert!(!remote_host_targets_loopback(&lan_ip));
+        assert!(localhost.targets_loopback());
+        assert!(loopback_ip.targets_loopback());
+        assert!(!lan_ip.targets_loopback());
     }
 }

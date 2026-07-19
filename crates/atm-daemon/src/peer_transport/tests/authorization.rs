@@ -57,7 +57,7 @@ fn peer_listener_accepts_allowed_socket_host_and_dispatches() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                atm_core::test_support::TEST_SENDER_ADDRESS,
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),
@@ -113,7 +113,7 @@ fn peer_listener_rejects_disabled_host_before_dispatch() {
         .allow_host(
             atm_storage::AllowHostCommand::new(
                 "127.0.0.1",
-                "arch-ctm@atm-dev",
+                atm_core::test_support::TEST_SENDER_ADDRESS,
                 Some("loopback".to_string()),
             )
             .expect("allow host command"),

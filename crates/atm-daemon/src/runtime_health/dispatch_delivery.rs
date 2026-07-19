@@ -5,7 +5,6 @@ use atm_core::{
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary,
     clear::clear_mail_with_runtime,
-    direct_delivery::deliver_direct_messages_with_runtime_and_post_send_emitter,
     error::AtmError,
     list::list_mail,
     protocol::{CompatibilityVerdict, ReleaseVersion, SendRequestEnvelope, SendResponseEnvelope},
@@ -40,16 +39,6 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                     )?,
                 )))
             }
-            RequestEnvelope::Send(SendRequestEnvelope::DirectDeliver(request)) => Ok(
-                ResponseEnvelope::Send(SendResponseEnvelope::DirectDelivered(
-                    deliver_direct_messages_with_runtime_and_post_send_emitter(
-                        self.home_dir.as_path(),
-                        request,
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )),
-            ),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }

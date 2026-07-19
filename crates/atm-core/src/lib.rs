@@ -25,7 +25,6 @@ pub(crate) mod delivery_policy;
 pub mod direct_boundaries;
 /// Hidden daemon-facing canonical direct-delivery helper surface.
 #[doc(hidden)]
-pub mod direct_delivery;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.

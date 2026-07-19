@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::boundary;
+use crate::boundary::NonClaudeOutboundOriginContext;
 use crate::boundary::PostSendHookEmitter;
 use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
@@ -9,14 +10,17 @@ use crate::delivery_plan::{
     DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_plan_disposition,
     delivery_target_for_snapshot, logical_messages_from_persistence,
 };
-use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
+use crate::delivery_policy::{DeliveryEventFamily, DeliveryRecipientSnapshot};
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, remote_host as message_remote_host,
 };
-use crate::send::{ResolvedRecipient, build_outbound_envelope, input, persist_message, summary};
+use crate::send::{
+    RemoteTargetHost, ResolvedRecipient, SendMessageSource, SendRequest, input,
+    persist_send_message, prepare_send_context, summary,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -222,6 +226,8 @@ fn ack_mail_with_runtime_sqlite<
     Ok(FinalizeAckContextOwned {
         actor,
         team,
+        home_dir: request.home_dir,
+        current_dir: request.current_dir,
         request_message_id: request.message_id,
         persisted,
         post_send_config,
@@ -252,6 +258,8 @@ struct SentAckReply {
 struct FinalizeAckContext<'a> {
     actor: &'a AgentName,
     team: &'a TeamName,
+    home_dir: &'a PathBuf,
+    current_dir: &'a PathBuf,
     request_message_id: AtmMessageId,
     persisted: &'a PersistedAckReply,
     post_send_config: Option<crate::config::AtmConfig>,
@@ -261,6 +269,8 @@ struct FinalizeAckContext<'a> {
 struct FinalizeAckContextOwned {
     actor: AgentName,
     team: TeamName,
+    home_dir: PathBuf,
+    current_dir: PathBuf,
     request_message_id: AtmMessageId,
     persisted: PersistedAckReply,
     post_send_config: Option<crate::config::AtmConfig>,
@@ -503,55 +513,50 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let reply_message_id = AtmMessageId::new();
     let reply_target = persisted_source.reply_target.clone();
     let task_id = persisted_source.task_id.clone();
-    let reply_message = build_outbound_envelope(
-        context.actor.clone(),
-        context.team.clone(),
-        reply_text.clone(),
-        summary::build_summary(&reply_text, None),
+    let reply_summary = summary::build_summary(&reply_text, None);
+    let reply_request = SendRequest {
+        home_dir: context.request.home_dir.clone(),
+        current_dir: context.request.current_dir.clone(),
+        caller_identity: context.actor.clone(),
+        caller_team: context.team.clone(),
+        to: format!("{}@{}", reply_target.agent, reply_target.team).parse()?,
+        message_source: SendMessageSource::Inline(reply_text.clone()),
+        summary_override: Some(reply_summary.clone()),
+        requires_ack: ack_intent.requires_ack,
+        task_id: task_id.clone(),
+        parent_message_id: None,
+        acknowledges_message_id: Some(context.request.message_id),
+        thread_mode: None,
+        expires_at: None,
+        source_remote_host: None,
+        remote_host: reply_target
+            .remote_host
+            .as_deref()
+            .map(RemoteTargetHost::parse)
+            .transpose()?,
+        dry_run: false,
+    };
+    let reply_context = prepare_send_context(runtime, &reply_request)?;
+    let persistence = persist_send_message(
+        runtime,
+        &reply_request,
+        &reply_context,
+        &reply_text,
+        &reply_summary,
         reply_message_id,
         ack_timestamp,
-        ack_intent,
-        Some(context.request.message_id),
-        None,
-        None,
-        None,
-        None,
-        persisted_source.reply_target.remote_host.as_deref(),
-    );
-    let reply_inbox_path = runtime.inbox_path(
-        home_dir(context.request),
-        &reply_target.team,
-        &reply_target.agent,
-    )?;
-    let reply_snapshot = match reply_target.remote_host.clone() {
-        Some(remote_host) => crate::delivery_policy::DeliveryRecipientSnapshot::remote_non_claude(
-            reply_target.team.clone(),
-            reply_target.agent.clone(),
-            remote_host,
-        ),
-        None => DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
-            runtime,
-            &reply_target.team,
-            &reply_target.agent,
-        )?,
-    };
-    let persistence = persist_message(
-        runtime,
-        home_dir(context.request),
-        &reply_snapshot,
-        &reply_inbox_path,
-        &reply_message,
-        false,
+        ack_intent.requires_ack,
+        task_id.clone(),
     )?;
 
     Ok(PersistedAckReply::Sent(Box::new(SentAckReply {
         persisted_source,
         reply_target,
-        reply_snapshot,
+        reply_snapshot: reply_context.delivery_snapshot,
         reply_message_id,
         reply_text,
         task_id,
-        reply_inbox_path,
+        reply_inbox_path: reply_context.inbox_path,
         persistence: Box::new(persistence),
     })))
 }
@@ -571,6 +576,8 @@ fn finalize_ack_outcome<
     let context = FinalizeAckContext {
         actor: &owned.actor,
         team: &owned.team,
+        home_dir: &owned.home_dir,
+        current_dir: &owned.current_dir,
         request_message_id: owned.request_message_id,
         persisted: &owned.persisted,
         post_send_config: owned.post_send_config,
@@ -596,7 +603,7 @@ fn finalize_sent_ack_outcome<
         &reply.reply_snapshot,
         &reply.reply_inbox_path,
     )?;
-    let execution = execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), &plan)?;
+    let execution = execute_ack_reply_plan(runtime, context, reply, &plan)?;
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
         team: context.team.clone(),
@@ -651,6 +658,48 @@ fn finalize_sent_ack_outcome<
         reply.task_id.clone(),
     );
     Ok(outcome)
+}
+
+fn execute_ack_reply_plan<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    context: &FinalizeAckContext<'_>,
+    reply: &SentAckReply,
+    plan: &DeliveryPlan,
+) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
+    if reply.reply_target.remote_host.is_some() {
+        return execute_remote_ack_reply_plan(runtime, context, plan, &reply.reply_snapshot);
+    }
+
+    execute_reply_delivery_plan(runtime, context.post_send_config.as_ref(), plan)
+}
+
+fn execute_remote_ack_reply_plan<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    context: &FinalizeAckContext<'_>,
+    plan: &DeliveryPlan,
+    reply_snapshot: &DeliveryRecipientSnapshot,
+) -> Result<crate::delivery_execution::DeliveryExecutionResult, AtmError> {
+    let messages = plan
+        .messages
+        .iter()
+        .map(|message| message.envelope.clone())
+        .collect::<Vec<_>>();
+    runtime.deliver_non_claude_payloads_with_context(
+        reply_snapshot,
+        &messages,
+        Some(NonClaudeOutboundOriginContext {
+            home_dir: context.home_dir.clone(),
+            current_dir: context.current_dir.clone(),
+        }),
+    )?;
+    Ok(crate::delivery_execution::DeliveryExecutionResult {
+        disposition: crate::delivery_execution::DeliveryExecutionDisposition::Delivered,
+        warnings: Vec::new(),
+    })
 }
 
 // Distinct from `crate::delivery_policy::AckReplyStateMachine`, which
@@ -958,6 +1007,7 @@ mod tests {
                     team: recipient.team.clone(),
                     agent: recipient.agent.clone(),
                     remote_host: recipient.remote_host.clone(),
+                    origin: None,
                     recipient_pane_id: recipient.recipient_pane_id.clone(),
                     messages: messages.to_vec(),
                 });
@@ -1031,6 +1081,7 @@ mod tests {
                     team: recipient.team.clone(),
                     agent: recipient.agent.clone(),
                     remote_host: recipient.remote_host.clone(),
+                    origin: None,
                     recipient_pane_id: recipient.recipient_pane_id.clone(),
                     messages: messages.to_vec(),
                 });
@@ -1374,6 +1425,8 @@ mod tests {
         let owned = FinalizeAckContextOwned {
             actor,
             team,
+            home_dir: PathBuf::from("/tmp/home"),
+            current_dir: PathBuf::from("/tmp/current"),
             request_message_id,
             persisted,
             post_send_config: None,
@@ -1503,6 +1556,8 @@ mod tests {
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team: team.clone(),
+                home_dir: PathBuf::from("/tmp/home"),
+                current_dir: PathBuf::from("/tmp/current"),
                 request_message_id,
                 persisted,
                 post_send_config: None,
@@ -1598,6 +1653,8 @@ mod tests {
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
+                home_dir: PathBuf::from("/tmp/home"),
+                current_dir: PathBuf::from("/tmp/current"),
                 request_message_id,
                 persisted,
                 post_send_config: None,
@@ -1701,6 +1758,8 @@ mod tests {
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
+                home_dir: PathBuf::from("/tmp/home"),
+                current_dir: PathBuf::from("/tmp/current"),
                 request_message_id,
                 persisted,
                 post_send_config: None,
@@ -1803,7 +1862,10 @@ mod tests {
         let source_message_id = AtmMessageId::new();
         let source_key = MessageKey::from(source_message_id);
         let runtime = AckRosterRuntime {
-            roster_members: vec![(team.clone(), actor.clone()), (team.clone(), reply_sender.clone())],
+            roster_members: vec![
+                (team.clone(), actor.clone()),
+                (team.clone(), reply_sender.clone()),
+            ],
             inbox_path: tempdir.path().join("reply.jsonl"),
             source_row: boundary::MailStoreMailboxMetadataRow {
                 message_key: source_key.clone(),
@@ -2223,6 +2285,8 @@ mod tests {
             FinalizeAckContextOwned {
                 actor: "sender".parse::<AgentName>().expect("agent"),
                 team,
+                home_dir: PathBuf::from("/tmp/home"),
+                current_dir: PathBuf::from("/tmp/current"),
                 request_message_id,
                 persisted,
                 post_send_config: None,

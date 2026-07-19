@@ -46,13 +46,13 @@ pub(crate) fn build_outbound_envelope(
     envelope
 }
 
-pub(super) struct SendExecutionContext {
+pub(crate) struct SendExecutionContext {
     pub(super) command_config: Option<config::AtmConfig>,
     pub(super) post_send_config: Option<config::AtmConfig>,
     pub(super) recipient: ResolvedRecipient,
     pub(super) canonical_sender: AgentName,
-    pub(super) inbox_path: PathBuf,
-    pub(super) delivery_snapshot: DeliveryRecipientSnapshot,
+    pub(crate) inbox_path: PathBuf,
+    pub(crate) delivery_snapshot: DeliveryRecipientSnapshot,
     pub(super) delivery_family: DeliveryEventFamily,
     pub(super) warnings: Vec<WarningEntry>,
 }
@@ -64,7 +64,7 @@ fn effective_remote_host(request: &SendRequest) -> Option<&str> {
         .or(request.remote_host.as_ref().map(RemoteTargetHost::as_str))
 }
 
-pub(super) fn prepare_send_context<
+pub(crate) fn prepare_send_context<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     runtime: &R,
@@ -95,9 +95,16 @@ pub(super) fn prepare_send_context<
         validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let delivery_policy = DeliveryPolicyCoordinator::new();
-    let delivery_snapshot =
-        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
+    let delivery_snapshot = if let Some(remote_host) = request.remote_host.as_ref() {
+        DeliveryRecipientSnapshot::remote_non_claude(
+            recipient.team.clone(),
+            recipient.agent.clone(),
+            remote_host.as_str().to_string(),
+        )
+    } else {
+        let delivery_policy = DeliveryPolicyCoordinator::new();
+        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?
+    };
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,
         request.thread_mode,
@@ -118,7 +125,7 @@ pub(super) fn prepare_send_context<
     clippy::too_many_arguments,
     reason = "Send persistence needs the explicit request/body/message envelope fields documented in the Y.4 state-machine seam."
 )]
-pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub(crate) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     request: &SendRequest,
     context: &SendExecutionContext,
@@ -138,7 +145,7 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
         message_id,
         timestamp,
         ack_intent,
-        None,
+        request.acknowledges_message_id,
         request.parent_message_id,
         request.thread_mode,
         request.expires_at,

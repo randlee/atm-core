@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
 
+use crate::boundary::NonClaudeOutboundOriginContext;
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -59,6 +60,15 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
+    fn deliver_non_claude_payloads_with_context(
+        &self,
+        recipient: &DeliveryRecipientSnapshot,
+        messages: &[InboxMessage],
+        origin: Option<NonClaudeOutboundOriginContext>,
+    ) -> Result<(), AtmError> {
+        let _ = origin;
+        self.deliver_non_claude_payloads(recipient, messages)
+    }
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -327,6 +337,25 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 team: recipient.team.clone(),
                 agent: recipient.agent.clone(),
                 remote_host: recipient.remote_host.clone(),
+                origin: None,
+                recipient_pane_id: recipient.recipient_pane_id.clone(),
+                messages: messages.to_vec(),
+            })
+            .map(|_| ())
+    }
+
+    fn deliver_non_claude_payloads_with_context(
+        &self,
+        recipient: &DeliveryRecipientSnapshot,
+        messages: &[InboxMessage],
+        origin: Option<NonClaudeOutboundOriginContext>,
+    ) -> Result<(), AtmError> {
+        self.non_claude_outbound
+            .deliver_payloads(crate::boundary::NonClaudeOutboundDeliveryRequest {
+                team: recipient.team.clone(),
+                agent: recipient.agent.clone(),
+                remote_host: recipient.remote_host.clone(),
+                origin,
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             })
@@ -406,6 +435,7 @@ mod tests {
                 team: TeamName::from_validated("test-team"),
                 agent: AgentName::from_validated("recipient"),
                 remote_host: None,
+                origin: None,
                 recipient_pane_id: None,
                 messages: vec![InboxMessage {
                     text: oversized_body,
