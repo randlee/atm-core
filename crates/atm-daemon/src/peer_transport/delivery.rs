@@ -479,13 +479,13 @@ mod tests {
                 true,
             ),
             interface_row(
-                Ipv4Addr::new(192, 168, 128, 82),
-                Ipv4Addr::new(192, 168, 128, 82),
+                Ipv4Addr::new(198, 51, 100, 82),
+                Ipv4Addr::new(198, 51, 100, 82),
                 43101,
                 true,
             ),
         ];
-        let host = parse_send_target("cm5@atm-m5.192.168.128.29", None)
+        let host = parse_send_target("cm5@atm-m5.198.51.100.29", None)
             .expect("parse target")
             .remote_host
             .expect("host");
@@ -521,7 +521,7 @@ mod tests {
         .expect("loopback host");
         let lan_ip = parse_send_target(
             &format!(
-                "{}@{}.192.168.128.82",
+                "{}@{}.198.51.100.82",
                 atm_core::test_support::TEST_SENDER,
                 atm_core::test_support::TEST_TEAM
             ),
