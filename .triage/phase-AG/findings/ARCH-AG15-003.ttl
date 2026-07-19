@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-AG15-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-AG15-003" ;
+  triage:title "Duplicate Bootstrap type definitions between atm-daemon-client and atm-core" ;
+  triage:description "BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapAutoStartOutcome, and BootstrapTraceReport are byte-for-byte duplicate definitions in crates/atm-daemon-client/src/lib.rs (lines 36-70) of types already canonically defined in crates/atm-core/src/doctor/report.rs (lines 65-99). atm-daemon-client already depends on atm-core and already imports atm_core::protocol and atm_core::caller_context, so there is no circular-dependency justification for the duplication. Recommended remediation: delete duplicate definitions and re-export canonical types from atm-core via pub use atm_core::doctor::report::{BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapAutoStartOutcome, BootstrapTraceReport};" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-005" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AG15-003/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AG15-003/s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AG15-003/s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AG15-003/s15/4> ;
+  triage:openOn <urn:atm:triage:worktree/s15/570e27f9> ;
+  triage:promoteTo <urn:atm:triage:worktree/s15/570e27f9> .
+
+<urn:atm:triage:occurrence/ARCH-AG15-003/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)] pub enum BootstrapConnectOutcome { Connected, NotFound, Timeout, Failed, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "570e27f9" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/570e27f9> .
+
+<urn:atm:triage:occurrence/ARCH-AG15-003/s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 45 ;
+  triage:snippet "#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)] pub enum BootstrapLaunchGateOutcome { Launched, Failed, Skipped, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "570e27f9" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/570e27f9> .
+
+<urn:atm:triage:occurrence/ARCH-AG15-003/s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 53 ;
+  triage:snippet "#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)] pub enum BootstrapAutoStartOutcome { AutoStarted, Failed, Skipped, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "570e27f9" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/570e27f9> .
+
+<urn:atm:triage:occurrence/ARCH-AG15-003/s15/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 60 ;
+  triage:snippet "#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)] pub struct BootstrapTraceReport { daemon_connect, daemon_launch_gate, daemon_auto_start, connect_detail, launch_gate_detail, auto_start_detail, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "570e27f9" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/570e27f9> .
+
+<urn:atm:triage:worktree/s15/570e27f9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s15-othermac-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
+  triage:headSha "570e27f9" ;
+  triage:orderIndex 15 .
