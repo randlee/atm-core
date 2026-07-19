@@ -34,6 +34,8 @@ Phase `AG` therefore becomes:
 - secured transport implementation (`AG.10`)
 - corrective remote-target routing and revalidation ladder after the reviewed
   AG.6-AG.10 line (`AG.11` through `AG.17`)
+- post-AG.15 ruthless-boundary cleanup and cross-host unification ladder
+  (`AG.18` through `AG.25`)
 
 ## Historical Input And Namespace Rule
 
@@ -350,8 +352,10 @@ These details are recorded in:
 The reviewed AG.6-AG.10 sprint docs remain authoritative historical planning
 artifacts and are not silently rewritten by the corrective line.
 
-However, once `AG-FIND-005` exists, the authoritative release verdict for
-Phase AG moves to `AG.17`.
+However, once the post-AG.15 ruthless-boundary findings exist, the
+authoritative closeout for the original corrective verdict line remains
+`AG.17`, while the authoritative unification-proof closeout for the remaining
+CROSSHOST-UNIFY line moves to `AG.25`.
 
 That means:
 
@@ -359,8 +363,10 @@ That means:
   corrective line
 - `AG.10` remains the security prerequisite sprint for any transport-security
   claim
-- `AG.17` is the only sprint allowed to declare the final release verdict for
-  the corrective line that includes AG.11 through AG.16
+- `AG.17` remains the historical corrective-line final-verdict sprint for
+  AG.11 through AG.16
+- `AG.25` is the final live-proof sprint for the AG.18 through AG.24
+  unification line
 
 ## Evidence Contract
 
@@ -934,6 +940,132 @@ Verification owner:
 
 - `quality-mgr`
 
+### AG.18 Collapse Compose And DirectDeliver Into One Envelope And Handler
+
+Primary objective:
+
+- delete the duplicate message-semantic envelope/handler split so send and ack
+  use one canonical send request family
+
+Outputs:
+
+- one canonical outbound send envelope
+- one canonical inbound send handler family
+- deletion of the `Compose`/`DirectDeliver` semantic split
+
+Entry gate:
+
+- AG.15 ruthless-boundary review findings are accepted as follow-on scope
+
+### AG.19 Delete Separate Remote-Ack Execution Path
+
+Primary objective:
+
+- make remote ack use the same outbound send path as ordinary send and restore
+  confirmed-delivery-only source-state mutation
+
+Outputs:
+
+- no separate remote-ack execution function
+- source ack state commits only after confirmed remote delivery
+
+Entry gate:
+
+- AG.18 is complete
+
+### AG.20 Move Deferred Replay Policy Out Of Transport
+
+Primary objective:
+
+- reduce peer transport to transport only by removing deferred/replay policy
+  and replay persistence from the transport implementation
+
+Outputs:
+
+- transport returns transport facts only
+- retry/deferred policy is owned above transport
+
+Entry gate:
+
+- AG.19 is complete
+
+### AG.21 Collapse Duplicate Dispatch Routing And Inbound Persistence Paths
+
+Primary objective:
+
+- reduce daemon dispatch to one send decision point and one inbound persistence
+  path
+
+Outputs:
+
+- one daemon send dispatch path
+- one inbound persistence path for send-shaped requests
+
+Entry gate:
+
+- AG.20 is complete
+
+### AG.22 Relocate Host Matching And Endpoint Selection Out Of Transport
+
+Primary objective:
+
+- move host matching, interface selection, and ambiguity policy out of
+  transport into a narrower resolution boundary
+
+Outputs:
+
+- explicit endpoint-resolution boundary
+- transport consumes resolved endpoints only
+
+Entry gate:
+
+- AG.21 is complete
+
+### AG.23 Remove Synthetic Deferred Receipt Construction From Daemon Dispatch
+
+Primary objective:
+
+- delete mailbox-visible deferred receipt synthesis from daemon dispatch
+
+Outputs:
+
+- no dispatch-local deferred receipt persistence helper
+- one shared outcome policy layer outside dispatcher
+
+Entry gate:
+
+- AG.22 is complete
+
+### AG.24 Stop Transport From Mutating Request Shape Before Send
+
+Primary objective:
+
+- preserve the canonical send request shape across transports
+
+Outputs:
+
+- no transport-layer `remote_host` clearing
+- one explicit wire-adapter layer if serialization needs adaptation
+
+Entry gate:
+
+- AG.23 is complete
+
+### AG.25 Live Two Daemon Pair Proof For Unified Cross Host Delivery
+
+Primary objective:
+
+- prove the unified post-AG.18-AG.24 design on real daemon pairs
+
+Outputs:
+
+- localhost, self-IP, and real cross-host proof rows
+- retained evidence that ack follows the same outbound path as send
+
+Entry gate:
+
+- AG.18 through AG.24 are complete
+
 ## Exit Criteria
 
 Phase `AG` is complete only when all of the following are true:
@@ -951,6 +1083,14 @@ Phase `AG` is complete only when all of the following are true:
 - the AG.15 other-Mac smoke lane is complete
 - the AG.16 Windows/macOS smoke lane is complete
 - the AG.17 copied-state and final corrective verdict are complete
+- the AG.18 envelope/handler collapse is complete
+- the AG.19 remote-ack path deletion is complete
+- the AG.20 deferred/replay policy relocation is complete
+- the AG.21 dispatch/inbound persistence collapse is complete
+- the AG.22 host-resolution boundary move is complete
+- the AG.23 deferred-receipt dispatch deletion is complete
+- the AG.24 request-shape preservation work is complete
+- the AG.25 live two-daemon proof lane is complete
 - if secure transport is part of the release claim, AG.10 is complete
 - the copied-state lane is either green or explicitly blocked by a named
   product defect outside operator/setup ambiguity
