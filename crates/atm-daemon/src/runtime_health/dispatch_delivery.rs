@@ -9,7 +9,8 @@ use atm_core::{
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
+        RemoteSendDeliveryClassification, SendCommandOutcome, SendOutcome, SendRequest,
+        SendRequestRoute, classify_remote_send_delivery_outcome,
         execute_outbound_send_with_runtime_and_post_send_emitter,
         persist_remote_delivery_receipt_with_runtime, route_send_request,
     },
@@ -67,12 +68,12 @@ impl DaemonRequestDispatcher {
             )
             .map(ResponseEnvelope::Send),
             SendRequestRoute::Remote(remote_host) => {
-                match self
-                    .service_runtime
-                    .deliver_remote_send_request(request.clone(), remote_host.clone())?
-                {
-                    boundary::RemoteSendDeliveryOutcome::Delivered(response) => Ok(*response),
-                    boundary::RemoteSendDeliveryOutcome::Deferred {
+                match classify_remote_send_delivery_outcome(
+                    self.service_runtime
+                        .deliver_remote_send_request(request.clone(), remote_host.clone())?,
+                ) {
+                    RemoteSendDeliveryClassification::Delivered(response) => Ok(*response),
+                    RemoteSendDeliveryClassification::Deferred {
                         receipt_message_id, ..
                     } => Ok(send_sent_response(build_remote_deferred_outcome(
                         &self.service_runtime,
@@ -81,10 +82,9 @@ impl DaemonRequestDispatcher {
                         receipt_message_id,
                         "ATM deferred remote delivery because the cross-host path is not currently healthy. The daemon will retry this remote send in the background.",
                     )?)),
-                    boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => Err(error),
-                    boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
-                        receipt_message_id,
-                        ..
+                    RemoteSendDeliveryClassification::RejectedTerminal(error) => Err(error),
+                    RemoteSendDeliveryClassification::OutcomeUnknown {
+                        receipt_message_id, ..
                     } => Ok(send_sent_response(build_remote_deferred_outcome(
                         &self.service_runtime,
                         &request,

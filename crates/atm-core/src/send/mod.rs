@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use crate::ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request};
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_policy::{
@@ -14,7 +15,7 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::protocol::SendResponseEnvelope;
-use crate::protocol::{send_acknowledged_envelope, send_sent_envelope};
+use crate::protocol::{ResponseEnvelope, send_acknowledged_envelope, send_sent_envelope};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -319,6 +320,51 @@ impl SendCommandOutcome {
             Self::Deferred => "deferred",
             Self::DryRun => "dry_run",
         }
+    }
+}
+
+#[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "the delivered response is consumed by atm-daemon while atm-core only needs non-terminal classification semantics"
+)]
+pub enum RemoteSendDeliveryClassification {
+    Delivered(Box<ResponseEnvelope>),
+    Deferred {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+    RejectedTerminal(AtmError),
+    OutcomeUnknown {
+        receipt_message_id: AtmMessageId,
+        error: AtmError,
+    },
+}
+
+pub fn classify_remote_send_delivery_outcome(
+    outcome: boundary::RemoteSendDeliveryOutcome,
+) -> RemoteSendDeliveryClassification {
+    match outcome {
+        boundary::RemoteSendDeliveryOutcome::Delivered(response) => {
+            RemoteSendDeliveryClassification::Delivered(response)
+        }
+        boundary::RemoteSendDeliveryOutcome::Deferred {
+            receipt_message_id,
+            error,
+        } => RemoteSendDeliveryClassification::Deferred {
+            receipt_message_id,
+            error,
+        },
+        boundary::RemoteSendDeliveryOutcome::RejectedTerminal(error) => {
+            RemoteSendDeliveryClassification::RejectedTerminal(error)
+        }
+        boundary::RemoteSendDeliveryOutcome::OutcomeUnknown {
+            receipt_message_id,
+            error,
+        } => RemoteSendDeliveryClassification::OutcomeUnknown {
+            receipt_message_id,
+            error,
+        },
     }
 }
 

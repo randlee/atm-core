@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "sprint doc code sample cites stale symbol name execute_outbound_send" ;
+  triage:description "Quality-mgr AG21-QA-1 pass identified stale symbol citation in docs/plans/phase-AG/sprint-AG21.md line 77 deliverables section, which cites execute_outbound_send(dispatcher, request, post_send_emitter) as the retained explicit canonical outbound symbol. The actual retained implementation is execute_outbound_send_with_runtime_and_post_send_emitter(request, observability, runtime, post_send_emitter) in crates/atm-core/src/send/mod.rs:365. This is the EXACT SAME defect already comprehensively captured and dispatched in AG18-QA-006, which covers the stale symbol across AG18/AG19/AG20/AG21 sprint docs. ATM-QA-005 is a duplicate/subsumption of the canonical AG18-QA-006 finding and does not require separate dispatch or reconciliation work." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "documentation-code-mismatch" ;
+  triage:severity "minor" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/191c198b> ;
+  triage:notes "ATM-QA-005 is a SUBSUMPTION/DUPLICATE of the canonical AG18-QA-006 record. The same stale symbol execute_outbound_send appears in the Deliverables section of sprint-AG21.md (line 77). AG18-QA-006 already comprehensively documents this defect across all sprint docs (AG18.md line 269, AG19.md line 103, AG20.md line 269, AG21.md line 77) and is already dispatched in in-flight AG21-FIX-1 work (arch-ctm mid-fix). The dispatch for AG21-FIX-1 includes updating this exact location to the actual implemented symbol execute_outbound_send_with_runtime_and_post_send_emitter. Do not dispatch separate work for ATM-QA-005; it will be resolved as part of the existing AG18-QA-006 fix dispatch. dispatchReady=false because no independent action is needed." .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 77 ;
+  triage:snippet "retain the explicit canonical outbound symbol introduced in AG.18: execute_outbound_send(dispatcher, request, post_send_emitter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/191c198b> .
+
+<urn:atm:triage:worktree/pAG-s21/191c198b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "191c198b" ;
+  triage:orderIndex 4 .
