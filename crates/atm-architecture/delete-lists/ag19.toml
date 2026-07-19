@@ -5,6 +5,7 @@ min_net_crates_loc = -100
 scan_files = [
   "crates/atm-core/src/ack/mod.rs",
   "crates/atm/src/composition.rs",
+  "crates/atm-core/src/delivery_policy.rs",
 ]
 
 allowed_changed_files = [

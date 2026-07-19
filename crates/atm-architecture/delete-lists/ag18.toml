@@ -5,6 +5,7 @@ min_net_crates_loc = -100
 scan_files = [
   "crates/atm-core/src/protocol.rs",
   "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs",
   "crates/atm-daemon/src/non_claude_outbound_runtime.rs",
   "crates/atm-daemon/src/peer_transport/client_helpers.rs",
   "crates/atm-daemon/src/peer_transport/config_helpers.rs",

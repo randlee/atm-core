@@ -20,7 +20,11 @@ scan_files = [
   "crates/atm-daemon/src/peer_transport/tests_transport.rs",
   "crates/atm-daemon/src/peer_transport/types.rs",
   "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/delivery_execution.rs",
   "crates/atm-core/src/delivery_plan.rs",
+  "crates/atm-core/src/send/outcome.rs",
+  "crates/atm-core/src/send/hook.rs",
+  "crates/atm-core/src/ack/mod.rs",
 ]
 
 allowed_changed_files = [
@@ -51,6 +55,13 @@ forbidden_literals = [
   "LogicalMessage",
   "DeliveryTarget",
   "DeliveryPlan",
+  "send_to_endpoint",
+  "peer_read_deadline_error",
+  "peer_write_deadline_error",
+  "peer_flush_error",
+  "peer_closed_before_response_error",
+  "peer_response_decode_error",
+  "peer_response_id_mismatch_error",
 ]
 
 forbidden_regexes = [

@@ -32,6 +32,7 @@ allowed_changed_files = [
 forbidden_literals = [
   "persist_outcome_unknown_request",
   "resume_pending_replay",
+  "resume_startup_replay",
   "final sender-inbox receipt",
   "final delivery/failure receipt lands in sender inbox",
   "sender receipt synthesis",
@@ -41,6 +42,7 @@ forbidden_literals = [
 forbidden_regexes = [
   "persist_outcome_unknown_request\\s*\\(",
   "resume_pending_replay\\s*\\(",
+  "resume_startup_replay\\s*\\(",
   "final sender[- ]inbox receipt",
   "sender[- ]receipt (closure|synthesis|obligation)",
 ]
