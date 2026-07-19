@@ -32,6 +32,7 @@ mod target;
 mod threading_helpers;
 mod warning;
 
+pub(crate) use context::build_outbound_envelope;
 use context::{SendExecutionContext, persist_send_message, prepare_send_context};
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 use outcome::finalize_send_outcome;

@@ -3,6 +3,49 @@ use serde_json::Map;
 use super::*;
 use crate::schema::{AckIntentFields, InboxMessage, set_remote_host};
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Canonical outbound envelope construction needs the full persisted message contract in one place."
+)]
+pub(crate) fn build_outbound_envelope(
+    sender: AgentName,
+    source_team: TeamName,
+    body: String,
+    summary: String,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    ack_intent: AckIntentFields,
+    acknowledges_message_id: Option<AtmMessageId>,
+    parent_message_id: Option<AtmMessageId>,
+    thread_mode: Option<ThreadMode>,
+    expires_at: Option<IsoTimestamp>,
+    task_id: Option<TaskId>,
+    remote_host: Option<&str>,
+) -> InboxMessage {
+    let mut envelope = InboxMessage {
+        from: sender,
+        text: body,
+        timestamp,
+        read: false,
+        source_team: Some(source_team),
+        summary: Some(summary),
+        message_id: Some(message_id),
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
+        acknowledges_message_id,
+        parent_message_id,
+        thread_mode,
+        expires_at,
+        task_id,
+        extra: Map::new(),
+    };
+    if let Some(remote_host) = remote_host {
+        set_remote_host(&mut envelope, remote_host);
+    }
+    envelope
+}
+
 pub(super) struct SendExecutionContext {
     pub(super) command_config: Option<config::AtmConfig>,
     pub(super) post_send_config: Option<config::AtmConfig>,
@@ -87,50 +130,23 @@ pub(super) fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRu
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
-    if request.dry_run {
-        let mut envelope = InboxMessage {
-            from: context.canonical_sender.clone(),
-            text: body.to_string(),
-            timestamp,
-            read: false,
-            source_team: Some(request.caller_team.clone()),
-            summary: Some(summary.to_string()),
-            message_id: Some(message_id),
-            requires_ack: ack_intent.requires_ack,
-            pending_ack_at: ack_intent.pending_ack_at,
-            acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
-            parent_message_id: request.parent_message_id,
-            thread_mode: request.thread_mode,
-            expires_at: request.expires_at,
-            task_id: task_id.clone(),
-            extra: Map::new(),
-        };
-        if let Some(remote_host) = effective_remote_host(request) {
-            set_remote_host(&mut envelope, remote_host);
-        }
-        return Ok(DeliveryPersistenceResult::persisted(envelope));
-    }
-    let mut envelope = InboxMessage {
-        from: context.canonical_sender.clone(),
-        text: body.to_string(),
+    let envelope = build_outbound_envelope(
+        context.canonical_sender.clone(),
+        request.caller_team.clone(),
+        body.to_string(),
+        summary.to_string(),
+        message_id,
         timestamp,
-        read: false,
-        source_team: Some(request.caller_team.clone()),
-        summary: Some(summary.to_string()),
-        message_id: Some(message_id),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: request.parent_message_id,
-        thread_mode: request.thread_mode,
-        expires_at: request.expires_at,
-        task_id: task_id.clone(),
-        extra: Map::new(),
-    };
-    if let Some(remote_host) = effective_remote_host(request) {
-        set_remote_host(&mut envelope, remote_host);
+        ack_intent,
+        None,
+        request.parent_message_id,
+        request.thread_mode,
+        request.expires_at,
+        task_id.clone(),
+        effective_remote_host(request),
+    );
+    if request.dry_run {
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
     persist_message(
         runtime,

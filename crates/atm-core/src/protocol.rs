@@ -143,6 +143,12 @@ impl ReleaseVersion {
     pub fn current() -> Self {
         Self::parse(env!("CARGO_PKG_VERSION")).expect("package version must be semver")
     }
+
+    pub fn is_same_compatibility_line(&self, other: &Self) -> bool {
+        let mut lhs = self.0.split('.');
+        let mut rhs = other.0.split('.');
+        lhs.next() == rhs.next() && lhs.next() == rhs.next()
+    }
 }
 
 impl fmt::Display for ReleaseVersion {

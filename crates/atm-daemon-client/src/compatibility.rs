@@ -58,7 +58,11 @@ impl Connection<Unverified> {
         self,
         daemon_release: ReleaseVersion,
     ) -> Result<Connection<VersionVerified>, AtmError> {
-        if self.preflight.client_release != daemon_release {
+        if !self
+            .preflight
+            .client_release
+            .is_same_compatibility_line(&daemon_release)
+        {
             return Err(AtmError::new_with_code(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
                 AtmErrorKind::DaemonUnavailable,
@@ -68,7 +72,7 @@ impl Connection<Unverified> {
                 ),
             )
             .with_recovery(
-                "Install matching atm and atm-daemon releases; no request was dispatched.",
+                "Install compatible atm and atm-daemon releases from the same supported major/minor line; no request was dispatched.",
             ));
         }
         Ok(Connection {
@@ -136,7 +140,7 @@ pub fn verify_connection_compatibility(
             ),
         )
         .with_recovery(
-            "Install matching atm and atm-daemon releases; no request was dispatched.",
+            "Install compatible atm and atm-daemon releases from the same supported major/minor line; no request was dispatched.",
         )),
     }
 }
@@ -146,6 +150,7 @@ mod tests {
     use super::{CompatibilityPreflight, Connection, ReleaseVersion, Unverified};
     use crate::{MessageKind, RpcEnvelope};
     use atm_core::protocol::RequestEnvelope;
+    use atm_storage::AtmErrorCode;
 
     #[test]
     fn matching_versions_transition_to_verified_connection() {
@@ -157,6 +162,35 @@ mod tests {
         .verify_compatibility(version)
         .expect("compatible");
         assert_eq!(connection.daemon_release().to_string(), "1.3.1");
+    }
+
+    #[test]
+    fn patch_level_skew_within_same_minor_transitions_to_verified_connection() {
+        let client = ReleaseVersion::parse("1.3.1").expect("client version");
+        let daemon = ReleaseVersion::parse("1.3.2").expect("daemon version");
+        let connection = Connection::<Unverified>::new(CompatibilityPreflight {
+            client_release: client,
+            wire_version: 1,
+        })
+        .verify_compatibility(daemon.clone())
+        .expect("same compatibility line should be accepted");
+        assert_eq!(connection.daemon_release().to_string(), daemon.to_string());
+    }
+
+    #[test]
+    fn minor_skew_is_rejected_as_incompatible() {
+        let client = ReleaseVersion::parse("1.3.1").expect("client version");
+        let daemon = ReleaseVersion::parse("1.4.0").expect("daemon version");
+        let result = Connection::<Unverified>::new(CompatibilityPreflight {
+            client_release: client,
+            wire_version: 1,
+        })
+        .verify_compatibility(daemon);
+        let error = match result {
+            Ok(_) => panic!("different compatibility line must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, AtmErrorCode::ClientDaemonVersionIncompatible);
     }
 
     #[test]

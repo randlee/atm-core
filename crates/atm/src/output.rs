@@ -175,10 +175,6 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("{}", render_ack_result_line(outcome));
-        if outcome.reply_disposition.is_suppressed_self_ack() {
-            println!("Suppressed reply text:");
-            println!("{}", outcome.reply_text);
-        }
     }
 
     for warning in &outcome.warnings {
@@ -190,10 +186,6 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
 
 fn render_ack_result_line(outcome: &AckOutcome) -> String {
     match &outcome.reply_disposition {
-        atm_core::ack::AckReplyDisposition::SuppressedSelfAck => format!(
-            "Acknowledged {} for {}@{} and suppressed the self-ack reply",
-            outcome.message_id, outcome.agent, outcome.team
-        ),
         atm_core::ack::AckReplyDisposition::Sent {
             reply_message_id,
             reply_target,
@@ -946,9 +938,7 @@ mod tests {
     use atm_runtime::PeerSecurityMode;
     use serde_json::json;
 
-    use super::{
-        render_ack_result_line, render_bootstrap_trace_section, render_cross_host_section,
-    };
+    use super::{render_bootstrap_trace_section, render_cross_host_section};
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -967,27 +957,6 @@ mod tests {
         assert!(rendered.contains("Auto-start: auto_started"));
         assert!(rendered.contains("Connect detail: connect detail"));
         assert!(rendered.contains("Auto-start detail: auto-start detail"));
-    }
-
-    #[test]
-    fn ack_output_renders_suppressed_self_ack_human_line() {
-        let outcome: AckOutcome = serde_json::from_value(json!({
-            "action": "ack",
-            "team": "test-team",
-            "agent": "sender-a",
-            "message_id": "01KX5TEST00000000000000001",
-            "task_id": null,
-            "reply_disposition": {
-                "kind": "suppressed_self_ack"
-            },
-            "reply_text": "already on it",
-            "warnings": []
-        }))
-        .expect("ack outcome");
-
-        let rendered = render_ack_result_line(&outcome);
-        assert!(rendered.contains("suppressed the self-ack reply"));
-        assert!(rendered.contains("01KX5TEST00000000000000001"));
     }
 
     #[test]

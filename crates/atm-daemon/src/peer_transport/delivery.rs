@@ -324,14 +324,24 @@ fn resolve_remote_port_for_host(
         .into_iter()
         .filter(|row| row.enabled)
         .collect::<Vec<_>>();
-    let enabled_ports = enabled_rows
+    let target_is_loopback = remote_host_targets_loopback(remote_host);
+    let scoped_rows = enabled_rows
+        .iter()
+        .filter(|row| row.bind_addr.is_loopback() == target_is_loopback)
+        .collect::<Vec<_>>();
+    let candidate_rows = if scoped_rows.is_empty() {
+        enabled_rows.iter().collect::<Vec<_>>()
+    } else {
+        scoped_rows
+    };
+    let enabled_ports = candidate_rows
         .iter()
         .map(|row| row.port)
         .collect::<BTreeSet<_>>();
     match enabled_ports.len() {
         1 => Ok((
             *enabled_ports.iter().next().expect("one enabled port"),
-            interface_family_preference(&enabled_rows),
+            interface_family_preference_refs(&candidate_rows),
         )),
         0 => bound_addr.map(|addr| (addr.port(), Some(addr.is_ipv4()))).ok_or_else(|| {
             CrossHostDeliveryInfraError::RuntimeUnavailable(
@@ -345,14 +355,14 @@ fn resolve_remote_port_for_host(
         }),
         _ => {
             if let Ok(ip) = remote_host.as_str().parse::<IpAddr>() {
-                let matching_ports = enabled_rows
+                let matching_ports = candidate_rows
                     .iter()
                     .filter(|row| row.bind_addr == ip || row.advertise_addr == ip)
                     .map(|row| row.port)
                     .collect::<BTreeSet<_>>();
                 if matching_ports.len() == 1 {
-                    let matching_rows = enabled_rows
-                        .iter()
+                    let matching_rows = candidate_rows
+                        .into_iter()
                         .filter(|row| row.bind_addr == ip || row.advertise_addr == ip)
                         .collect::<Vec<_>>();
                     return Ok((
@@ -373,8 +383,14 @@ fn resolve_remote_port_for_host(
     }
 }
 
-fn interface_family_preference(rows: &[PeerInterfaceRow]) -> Option<bool> {
-    interface_family_preference_refs(&rows.iter().collect::<Vec<_>>())
+fn remote_host_targets_loopback(remote_host: &RemoteTargetHost) -> bool {
+    if remote_host.as_str().eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    remote_host
+        .as_str()
+        .parse::<IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn interface_family_preference_refs(rows: &[&PeerInterfaceRow]) -> Option<bool> {
@@ -391,7 +407,9 @@ fn interface_family_preference_refs(rows: &[&PeerInterfaceRow]) -> Option<bool> 
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_remote_port_for_host, select_resolved_remote_endpoint};
+    use super::{
+        remote_host_targets_loopback, resolve_remote_port_for_host, select_resolved_remote_endpoint,
+    };
     use atm_core::send::parse_send_target;
     use atm_core::types::IsoTimestamp;
     use atm_storage::PeerInterfaceKind;
@@ -493,5 +511,51 @@ mod tests {
             resolve_remote_port_for_host(rows, None, &host).expect("localhost port");
         assert_eq!(port, 43101);
         assert_eq!(family, Some(true));
+    }
+
+    #[test]
+    fn resolve_remote_port_ignores_loopback_port_for_non_loopback_target() {
+        let rows = vec![
+            interface_row(
+                Ipv4Addr::new(127, 0, 0, 1),
+                Ipv4Addr::new(127, 0, 0, 1),
+                43145,
+                true,
+            ),
+            interface_row(
+                Ipv4Addr::new(192, 168, 128, 82),
+                Ipv4Addr::new(192, 168, 128, 82),
+                43101,
+                true,
+            ),
+        ];
+        let host = parse_send_target("cm5@atm-m5.192.168.128.29", None)
+            .expect("parse target")
+            .remote_host
+            .expect("host");
+        let (port, family) =
+            resolve_remote_port_for_host(rows, None, &host).expect("lan host port");
+        assert_eq!(port, 43101);
+        assert_eq!(family, Some(true));
+    }
+
+    #[test]
+    fn remote_host_loopback_detection_matches_localhost_and_loopback_ip() {
+        let localhost = parse_send_target("arch-ctm@atm-dev.localhost", None)
+            .expect("localhost target")
+            .remote_host
+            .expect("localhost host");
+        let loopback_ip = parse_send_target("arch-ctm@atm-dev.127.0.0.1", None)
+            .expect("loopback target")
+            .remote_host
+            .expect("loopback host");
+        let lan_ip = parse_send_target("arch-ctm@atm-dev.192.168.128.82", None)
+            .expect("lan target")
+            .remote_host
+            .expect("lan host");
+
+        assert!(remote_host_targets_loopback(&localhost));
+        assert!(remote_host_targets_loopback(&loopback_ip));
+        assert!(!remote_host_targets_loopback(&lan_ip));
     }
 }

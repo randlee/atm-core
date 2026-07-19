@@ -82,6 +82,19 @@ impl DeliveryRecipientSnapshot {
             roster_backed: true,
         }
     }
+
+    pub(crate) fn remote_non_claude(team: TeamName, agent: AgentName, remote_host: String) -> Self {
+        Self {
+            agent,
+            team,
+            remote_host: Some(remote_host),
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
+            roster_backed: false,
+        }
+    }
 }
 
 #[expect(

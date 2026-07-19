@@ -129,7 +129,9 @@ impl DaemonRequestDispatcher {
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
         if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
-            && preflight.client_release == daemon_release
+            && preflight
+                .client_release
+                .is_same_compatibility_line(&daemon_release)
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });
         }
