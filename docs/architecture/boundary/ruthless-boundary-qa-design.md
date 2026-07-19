@@ -5,6 +5,10 @@
 Its job is to:
 
 - find active boundary violations
+- require justification for why code exists
+- flag duplicated code and duplicated decisions
+- flag paths that can be collapsed into one retained implementation
+- flag code with no clear support from requirements, ADRs, or boundary rules
 - find places where boundaries are wider than necessary
 - find repeated leak patterns that need mechanical enforcement
 
@@ -15,6 +19,7 @@ agent.
 
 The reviewer should apply stable rules:
 
+- every meaningful code path must have a reason to exist
 - one owner per decision
 - one production path per behavior
 - transport moves bytes only
@@ -36,6 +41,14 @@ The reviewer should apply stable rules:
 ## Scope rule
 
 Use stable architectural rules as the source of truth.
+
+The reviewer must not assume code is valid merely because it exists.
+
+For every significant path under review, the reviewer should ask:
+
+- what requirement, ADR, or boundary rule requires this code?
+- does another path already implement the same behavior?
+- can this path be deleted or collapsed?
 
 Do not anchor the review on:
 

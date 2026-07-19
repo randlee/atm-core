@@ -11,6 +11,11 @@ Every important decision has exactly one owner.
 If two modules can independently answer the same architectural question, the
 boundary is already too wide.
 
+Every meaningful production code path must also have a clear reason to exist.
+
+If no requirement, ADR, or boundary rule justifies a path, that path is
+presumed unnecessary until proven otherwise.
+
 Examples:
 
 - local vs cross-host routing
@@ -24,6 +29,9 @@ Examples:
 
 Flag a finding when any of these are true:
 
+- code exists with no clear retained justification
+- the same behavior is implemented in more than one place
+- two paths could be collapsed into one retained implementation
 - the same decision logic is implemented in more than one place
 - a caller receives raw inputs and re-decides a fact instead of consuming an
   already-resolved result
@@ -38,15 +46,17 @@ Flag a finding when any of these are true:
 Prioritize findings in this order:
 
 1. duplicate production paths
-2. concrete implementation leakage above a trait or module boundary
-3. visibility wider than needed
-4. missing mechanical enforcement for a repeated leak pattern
-5. stale docs or stale lint policy that no longer match the code
+2. unjustified code with no clear retained requirement
+3. concrete implementation leakage above a trait or module boundary
+4. visibility wider than needed
+5. missing mechanical enforcement for a repeated leak pattern
+6. stale docs or stale lint policy that no longer match the code
 
 ## Mandatory design constraints
 
 - one owner per decision
 - one production path per behavior
+- every retained path must have explicit justification
 - narrowest trait surface that works
 - narrowest visibility that works
 - no backend knowledge above the backend boundary
