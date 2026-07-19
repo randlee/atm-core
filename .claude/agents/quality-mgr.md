@@ -105,7 +105,9 @@ TODO-specific rule:
 6. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
-   - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2` for QA-1, docs-only plan review, and phase-ending review only
+   - `ruthless-boundary-qa` from `.claude/skills/codex-orchestration/ruthless-boundary-qa-assignment.json.j2`
+     on every sprint QA round for the near term, plus docs-only plan review
+     and phase-ending review
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
@@ -145,12 +147,18 @@ For implementation QA-1 in this Rust repo:
 For QA-2 and later rechecks of implementation work:
 - always run `req-qa`
 - always run `arch-qa`
+- always run `ruthless-boundary-qa`
 - always run `rust-qa-agent`
-- do not run `ruthless-boundary-qa`
 - do not run `rust-best-practices-agent`
 - do not run `rust-service-hardening-agent`
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
+
+Boundary-review deployment rule:
+- for the near term, deploy `ruthless-boundary-qa` on every sprint QA round
+- keep it on docs-only plan review and phase-ending review
+- only omit it if team-lead explicitly narrows the review set for a specific
+  task
 
 For phase-ending QA:
 - always run `req-qa`

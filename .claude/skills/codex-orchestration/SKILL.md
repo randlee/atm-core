@@ -72,12 +72,16 @@ Before starting a sprint:
    - `rust-best-practices-agent`
    - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-7. QA-2 and later rounds must omit `ruthless-boundary-qa`,
-   `rust-best-practices-agent`, and `rust-service-hardening-agent`. All
+   - for the near term, `ruthless-boundary-qa` stays enabled on every sprint
+     QA round, plus docs-only plan review and phase-ending review
+7. QA-2 and later rounds must omit `rust-best-practices-agent` and
+   `rust-service-hardening-agent`. All
    first-pass findings from those reviewers must be fixed before merge —
    merge gate is 0B+0I+0m with no exceptions and no backlog deferral. QA-1
    findings route back to `arch-ctm` via `fix-assignment.xml.j2` before
    QA-2, following the standard triage-and-fix path.
+   `ruthless-boundary-qa` remains part of that loop unless team-lead
+   explicitly narrows the reviewer set for a specific task.
 8. If QA passes and CI is green, merge may proceed.
 9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
