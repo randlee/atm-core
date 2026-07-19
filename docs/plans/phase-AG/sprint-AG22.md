@@ -25,6 +25,10 @@ estimated_scope: medium
 Move host matching, loopback scoping, interface-port selection, and ambiguity
 policy out of the transport implementation into a narrower resolution boundary.
 
+All line citations in this sprint are pre-ladder baseline references and must
+be re-resolved against the actual branch tip immediately before execution; run
+the existing `rg -n ...` validation first as the anti-staleness check.
+
 ## Hard Dependencies
 
 - AG.21 merged

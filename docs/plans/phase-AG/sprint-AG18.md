@@ -46,20 +46,20 @@ travel as one canonical request envelope through one handler family.
 
 ## Specific Deletions Required
 
-- `crates/atm-core/src/protocol.rs:40-57`
+- `crates/atm-core/src/protocol.rs:30-37`
   - delete the `SendRequestEnvelope::{Compose,Acknowledge}` request split
-- `crates/atm-core/src/protocol.rs:329-401`
+- `crates/atm-core/src/protocol.rs:314-324`
   - delete split request/response message kinds:
     `SendComposeRequest`, `SendAcknowledgeRequest`,
     `SendSentResponse`, `SendAcknowledgedResponse`
-- `crates/atm-core/src/protocol.rs:485-525`
+- `crates/atm-core/src/protocol.rs:504-510`
   - delete split frame decoding and nested payload selection keyed by compose vs
     acknowledge
-- `crates/atm-core/src/protocol.rs:759-780`
+- `crates/atm-core/src/protocol.rs:743-761`
   - delete split request/response message-kind selection logic
 - `crates/atm-daemon/src/runtime_health.rs`
   - delete the top-level send-vs-ack semantic fork in daemon dispatch
-- `crates/atm/src/composition.rs:273-306`
+- `crates/atm/src/composition.rs:293-319`
   - delete dual CLI request construction paths for compose vs acknowledge
 - `crates/atm-graft/src/lib.rs:227-247`
   - delete dual graft request construction paths for compose vs acknowledge
@@ -70,11 +70,8 @@ travel as one canonical request envelope through one handler family.
   - remove compose-only peer-origin annotation logic; inbound annotation must
     apply to the single retained send-shaped request
 - test surfaces to rewrite after deletion:
-  - `crates/atm-daemon/src/tests/runtime_root/dispatch.rs:28-45,84-100,137-153`
-  - `crates/atm-daemon/src/tests/runtime_root/local_ipc.rs:85,222,415,467`
-  - `crates/atm-daemon/src/tests/runtime_root/loopback.rs:71,190,272,371,422,552`
-  - `crates/atm-daemon/src/tests/runtime_root/self_ip.rs:73,185,237,370,410,500,615`
-  - `crates/atm-daemon/src/tests/runtime_root/cross_host.rs:633,714`
+  - `crates/atm-daemon/src/tests/runtime_root.rs:76-76,129-129,180-180`
+  - `crates/atm-daemon/src/tests/runtime_root.rs:255-255,333-335,378-378,472-476`
   - `crates/atm-graft/src/lib.rs:605-661`
 
 ## Exact Keep / Delete Decisions
@@ -97,9 +94,9 @@ travel as one canonical request envelope through one handler family.
   - one CLI send-shaped request entry built from canonical `SendRequest`
   - one graft send-shaped request entry built from canonical `SendRequest`
 - delete:
-  - `crates/atm/src/composition.rs:273-299`
+  - `crates/atm/src/composition.rs:293-293`
     - compose-only caller path
-  - `crates/atm/src/composition.rs:302-315`
+  - `crates/atm/src/composition.rs:316-319`
     - acknowledge-only caller path
   - `crates/atm-graft/src/lib.rs:227-233`
     - compose-only graft caller path
@@ -112,36 +109,36 @@ travel as one canonical request envelope through one handler family.
   - one send-shaped request frame kind
   - one send-shaped response frame kind
 - delete:
-  - `crates/atm-core/src/protocol.rs:42-45`
+  - `crates/atm-core/src/protocol.rs:30-37`
     - `SendRequestEnvelope::{Compose,Acknowledge}`
-  - `crates/atm-core/src/protocol.rs:49-52`
+  - `crates/atm-core/src/protocol.rs:37-37`
     - `SendResponseEnvelope::{Sent,Acknowledged}`
-  - `crates/atm-core/src/protocol.rs:332-342`
+  - `crates/atm-core/src/protocol.rs:314-324`
     - `SendComposeRequest`
     - `SendAcknowledgeRequest`
     - `SendSentResponse`
     - `SendAcknowledgedResponse`
-  - `crates/atm-core/src/protocol.rs:361-369`
+  - `crates/atm-core/src/protocol.rs:343-344`
     - split request-kind classification
-  - `crates/atm-core/src/protocol.rs:383-401`
+  - `crates/atm-core/src/protocol.rs:365-375`
     - split numeric message-kind decoding
-  - `crates/atm-core/src/protocol.rs:485-497`
+  - `crates/atm-core/src/protocol.rs:504-506`
     - split request decode branch
-  - `crates/atm-core/src/protocol.rs:521-525`
+  - `crates/atm-core/src/protocol.rs:504-506`
     - split nested payload selection for compose vs acknowledge
-  - `crates/atm-core/src/protocol.rs:759-780`
+  - `crates/atm-core/src/protocol.rs:743-761`
     - split request/response message-kind selection
-  - `crates/atm-core/src/protocol.rs:1093-1114`
+  - `crates/atm-core/src/protocol.rs:1222-1243`
     - compose-shaped protocol round-trip test assumptions
 
 ### Supporting types and staged removal
 
 - remove in AG.18 if the call graph can be collapsed in one patch:
-  - `crates/atm-core/src/protocol.rs:42-45`
+  - `crates/atm-core/src/protocol.rs:30-37`
     - `SendRequestEnvelope`
-  - `crates/atm-core/src/protocol.rs:49-52`
+  - `crates/atm-core/src/protocol.rs:37-37`
     - `SendResponseEnvelope`
-  - `crates/atm-core/src/protocol.rs:331-350`
+  - `crates/atm-core/src/protocol.rs:314-324`
     - split `MessageKind` variants for compose/ack and sent/acknowledged
   - `crates/atm-daemon/src/runtime_health.rs`
     - `dispatch_compose_send(...)`
@@ -224,11 +221,8 @@ travel as one canonical request envelope through one handler family.
   - any test asserting `SendRequestEnvelope::Acknowledge` is a separate
     required semantic path
   - specifically:
-    - `crates/atm-daemon/src/tests/runtime_root/dispatch.rs:29-45,84-100,137-153`
-    - `crates/atm-daemon/src/tests/runtime_root/local_ipc.rs:85,222,415,467`
-    - `crates/atm-daemon/src/tests/runtime_root/loopback.rs:71,190,272,371,422,552`
-    - `crates/atm-daemon/src/tests/runtime_root/self_ip.rs:73,185,237,370,410,500,615`
-    - `crates/atm-daemon/src/tests/runtime_root/cross_host.rs:633,714`
+    - `crates/atm-daemon/src/tests/runtime_root.rs:76-76,129-129,180-180`
+    - `crates/atm-daemon/src/tests/runtime_root.rs:255-255,333-335,378-378,472-476`
     - `crates/atm-graft/src/lib.rs:605-661`
     - `crates/atm-daemon/src/tests_post_send_graft_warning.rs:123,160,184,258`
     - `crates/atm-daemon/src/peer_transport/tests/harness.rs:67,126,248,320,375,511,670,878`

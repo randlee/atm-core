@@ -26,6 +26,10 @@ Delete mailbox-visible deferred-receipt synthesis from daemon dispatch so the
 dispatcher returns delivery facts rather than creating semantic receipt
 messages itself.
 
+All line citations in this sprint are pre-ladder baseline references and must
+be re-resolved against the actual branch tip immediately before execution; run
+the existing `rg -n ...` validation first as the anti-staleness check.
+
 ## Hard Dependencies
 
 - AG.22 merged

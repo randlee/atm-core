@@ -2,6 +2,7 @@
 id: AG.24
 title: Stop Transport From Mutating Request Shape Before Send
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s24-preserve-request-shape
 worktree: ../atm-core-worktrees/feature/pAG-s24-preserve-request-shape
 target: develop
@@ -24,6 +25,10 @@ estimated_scope: small
 Preserve one canonical send-shaped request/response model across transports and
 delete the split wire families that still force compose-vs-ack distinctions
 into protocol, transport, and test code.
+
+All line citations in this sprint are pre-ladder baseline references and must
+be re-resolved against the actual branch tip immediately before execution; run
+the existing `rg -n ...` validation first as the anti-staleness check.
 
 ## Hard Dependencies
 

@@ -2,6 +2,7 @@
 id: AG.25
 title: Live Two Daemon Pair Proof For Unified Cross Host Delivery
 status: complete
+execution_status: not_started  # plan doc is complete/ready-for-review; code has not landed on any feature/pAG-sN branch yet
 branch: feature/pAG-s25-live-two-daemon-proof
 worktree: ../atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof
 target: develop
