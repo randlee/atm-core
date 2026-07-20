@@ -303,12 +303,6 @@ pub struct SendRequest {
     pub dry_run: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SendRequestRoute {
-    Local,
-    Remote(RemoteTargetHost),
-}
-
 impl SendRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -374,17 +368,9 @@ impl SendRequest {
     }
 }
 
-#[doc(hidden)]
-pub fn route_send_request(request: &SendRequest) -> SendRequestRoute {
-    match request.remote_host.clone() {
-        Some(remote_host) => SendRequestRoute::Remote(remote_host),
-        None => SendRequestRoute::Local,
-    }
-}
-
 /// Resolve an acknowledgement's recipient while retaining the sole outbound
-/// payload shape. Local and remote delivery continue through
-/// [`route_send_request`] after this preparation step.
+/// payload shape. The daemon makes the single local-or-remote routing decision
+/// after this preparation step.
 pub fn resolve_acknowledgement_request(
     runtime: &LocalServiceRuntime,
     request: SendRequest,
@@ -410,20 +396,15 @@ pub fn resolve_acknowledgement_request(
     }
     let (recipient, recipient_team, remote_host) =
         resolve_ack_recipient(runtime, &source.envelope, &actor, &team)?;
-    let body = acknowledgement_body(request.message_source.clone())?;
-    let mut resolved = SendRequest::new(
-        request.home_dir,
-        request.current_dir,
-        actor,
-        &format!("{recipient}@{recipient_team}"),
-        team,
-        SendMessageSource::Inline(body.clone()),
-        Some(summary::build_summary(&body, None)),
-        false,
-        source.envelope.task_id.clone(),
-        false,
-    )?;
-    resolved.acknowledges_message_id = Some(message_id);
+    // Keep acknowledgement requests on the canonical send shape.  The only
+    // send-specific data that resolution changes is its destination and task
+    // context; rebuilding a second request here would create an ack-only
+    // payload path.
+    let mut resolved = request;
+    resolved.caller_identity = actor;
+    resolved.caller_team = team;
+    resolved.to = format!("{recipient}@{recipient_team}").parse()?;
+    resolved.task_id = source.envelope.task_id.clone();
     resolved.remote_host = remote_host
         .map(|host| RemoteTargetHost::parse(&host))
         .transpose()?;
@@ -490,19 +471,6 @@ fn resolve_ack_recipient(
         return Err(AtmError::agent_not_found(&recipient, &recipient_team));
     }
     Ok((recipient, recipient_team, remote_host))
-}
-
-fn acknowledgement_body(source: SendMessageSource) -> Result<String, AtmError> {
-    match source {
-        SendMessageSource::Inline(body)
-        | SendMessageSource::File {
-            message: Some(body),
-            ..
-        } => Ok(body),
-        SendMessageSource::File { message: None, .. } => Err(AtmError::validation(
-            "ack reply body was not materialized".to_string(),
-        )),
-    }
 }
 
 /// Result of sending one ATM mailbox message.

@@ -9,10 +9,10 @@ use atm_core::{
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
+        SendCommandOutcome, SendOutcome, SendRequest,
         finalize_acknowledgement_after_confirmed_send,
         persist_remote_delivery_receipt_with_runtime, resolve_acknowledgement_request,
-        route_send_request, send_mail_with_runtime_and_post_send_emitter,
+        send_mail_with_runtime_and_post_send_emitter,
     },
 };
 
@@ -64,8 +64,8 @@ impl DaemonRequestDispatcher {
         } else {
             request
         };
-        let mut response = match route_send_request(&request) {
-            SendRequestRoute::Local => {
+        let mut response = match request.remote_host.clone() {
+            None => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
                     request.clone(),
                     self.observability.as_ref(),
@@ -74,7 +74,7 @@ impl DaemonRequestDispatcher {
                 )?;
                 Ok(ResponseEnvelope::Send(outcome))
             }
-            SendRequestRoute::Remote(remote_host) => {
+            Some(remote_host) => {
                 match self
                     .service_runtime
                     .deliver_remote_send_request(request.clone(), remote_host.clone())?

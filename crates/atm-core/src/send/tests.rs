@@ -31,7 +31,7 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 
 fn message(
     from: &str,
@@ -103,6 +103,7 @@ fn assert_recovered_payload_texts(
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
+    recipient_pane_id: Option<PaneId>,
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
@@ -142,11 +143,17 @@ impl TestRuntime {
         Self {
             commit_error_message,
             recipient_harness,
+            recipient_pane_id: None,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
         }
+    }
+
+    pub(super) fn with_recipient_pane_id(mut self, pane_id: PaneId) -> Self {
+        self.recipient_pane_id = Some(pane_id);
+        self
     }
 }
 
@@ -247,7 +254,7 @@ impl RetainedServiceRuntime for TestRuntime {
             },
             agent_type: crate::schema::AgentType::default(),
             model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
+            recipient_pane_id: self.recipient_pane_id.clone(),
             metadata_json: Map::new(),
         }))
     }
@@ -269,7 +276,7 @@ impl RetainedServiceRuntime for TestRuntime {
             },
             agent_type: crate::schema::AgentType::default(),
             model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
+            recipient_pane_id: self.recipient_pane_id.clone(),
             metadata_json: Map::new(),
         }])
     }
@@ -507,9 +514,7 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
     let plan = build_send_delivery_plan(&context, false, false, &persistence).expect("plan");
-    let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
-
-    assert!(execution.warnings.is_empty());
+    execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 }
 
 #[test]
@@ -563,14 +568,14 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         .expect("non-claude plan");
 
     assert_eq!(claude_plan.messages, non_claude_plan.messages);
-    assert!(matches!(
-        claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
-    assert!(matches!(
-        non_claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
+    assert_eq!(
+        claude_plan.recipient_snapshot.harness,
+        DeliveryHarnessPath::ClaudeCode
+    );
+    assert_eq!(
+        non_claude_plan.recipient_snapshot.harness,
+        DeliveryHarnessPath::NonClaude
+    );
 }
 
 #[test]
@@ -681,7 +686,9 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
 #[test]
 #[serial_test::serial(env)]
 fn acknowledgement_send_marks_post_send_delivery_as_acknowledgement() {
-    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let pane_id = PaneId::from_cli("%19").expect("pane id");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
+        .with_recipient_pane_id(pane_id.clone());
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let home_dir = tempdir.path().join("home");
@@ -702,6 +709,14 @@ fn acknowledgement_send_marks_post_send_delivery_as_acknowledgement() {
     let emitted = post_send_emitter.emitted();
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].event.is_ack);
+    match &emitted[0].target {
+        PostSendBuiltInTarget::LocalTmux(target) => {
+            assert_eq!(target.pane_id, pane_id);
+            assert!(target.rendered_nudge.contains("<atm kind=\"ack\""));
+            assert!(target.rendered_nudge.contains("task-id=\"task-123\""));
+        }
+        other => panic!("expected LocalTmux acknowledgement nudge, got {other:?}"),
+    }
 }
 
 #[test]

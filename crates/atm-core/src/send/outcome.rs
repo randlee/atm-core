@@ -64,7 +64,7 @@ pub(super) fn finalize_send_outcome<
             &post_send_messages,
         );
         let plan = build_send_delivery_plan(context, requires_ack, is_ack, &persistence)?;
-        let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
+        execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
             observability,
             DeliveryTransitionContext {
@@ -76,9 +76,7 @@ pub(super) fn finalize_send_outcome<
                 task_id: task_id.clone(),
             },
             &plan,
-            &execution,
         )?;
-        outcome.warnings.extend(execution.warnings);
     }
     emit_send_command_event(
         observability,
@@ -133,12 +131,8 @@ pub(super) fn build_send_delivery_plan(
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
-        crate::delivery_plan::DeliveryPlanKind::Send,
         persistence.disposition,
-        crate::delivery_plan::delivery_target_for_snapshot(
-            &context.inbox_path,
-            &context.delivery_snapshot,
-        ),
+        context.delivery_snapshot.clone(),
         context.recipient.clone(),
         logical_messages_from_persistence(persistence, requires_ack, is_ack).map_err(|error| {
             AtmError::mailbox_write(error.to_string()).with_recovery(
