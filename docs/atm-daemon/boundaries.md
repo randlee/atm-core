@@ -1,5 +1,9 @@
 # ATM-Daemon Boundary Inventory
 
+> **Phase AI supersession notice:** the daemon consumes storage traits and may
+> not acquire a SQLite/replay boundary through `atm-runtime` or another
+> indirection. ADR-036 is the governing crate-topology decision.
+
 This document captures runtime-owned concrete adapters established in Phase R
 and tightened for the Phase S cross-platform daemon host line.
 

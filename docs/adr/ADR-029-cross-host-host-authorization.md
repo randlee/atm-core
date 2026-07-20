@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-029 |
-| Status | Proposed |
+| Status | Superseded by ADR-034 |
 | Scope | Repository-wide |
 | Deciders | ATM maintainers |
 | Relates to | ADR-028, Phase AG, AG-FIND-004 |
@@ -33,4 +33,5 @@ The policy must define:
   exceptions
 - future transport security can layer on top of this authorization surface but
   does not replace the need for the explicit host policy
-- AG.5 owns the implementation closure for this ADR
+- This decision is retained as historical context. ADR-034 replaces hostname
+  matching with exact peer identity plus pinned certificate fingerprint.

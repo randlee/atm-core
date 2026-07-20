@@ -1,5 +1,11 @@
 # ATM-Daemon Crate Architecture
 
+> **Phase AI supersession notice:** the planned daemon has one REST router,
+> reached through HTTP/UDS locally and HTTPS/TCP remotely. Named pipes, custom
+> ATM frames, replay/retry runtime state, and separate peer handling are not
+> accepted architecture for new work; ADR-033 through ADR-036 govern the
+> migration.
+
 ## 1. Purpose
 
 This document defines the `atm-daemon` crate architectural boundary.

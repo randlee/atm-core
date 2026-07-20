@@ -1,5 +1,10 @@
 # ATM-Core Boundary Inventory
 
+> **Phase AI supersession notice:** storage contracts remain backend-neutral.
+> ADR-036 retires `RemoteReplayStore`, `RuntimeStorageFinalizer`, and any
+> daemon-specific persistence trait; retained boundary records must not be used
+> to recreate them.
+
 This document is the initial Phase R boundary inventory for `atm-core`.
 
 Contract-owner records intentionally use:

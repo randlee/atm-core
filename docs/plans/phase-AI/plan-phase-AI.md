@@ -1,0 +1,102 @@
+---
+title: Phase AI Plan — HTTP daemon and minimal cross-host transport
+status: proposed
+branch: plan/phase-ai-planning
+worktree: ../atm-core-worktrees/plan/phase-ai-planning
+target: integrate/phase-AI
+---
+
+# Phase AI — HTTP daemon and minimal cross-host transport
+
+## Goal
+
+Provide one production-ready daemon API: HTTP over UDS for every local client
+and HTTPS over TCP for an authenticated remote daemon. Every ingress reaches
+the same read/write handlers. Cross-host code is transport-only.
+
+## Accepted design
+
+| Concern | Decision |
+| --- | --- |
+| Local client transport | HTTP over UDS on Unix and Windows AF_UNIX; no named pipes |
+| Remote transport | HTTPS/TCP to the same daemon router |
+| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
+| Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
+| Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
+| Host routing | One post-write router; local nudge for current host, HTTPS for another host |
+| Security | SQLite-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint |
+| Delivery state | No outbox, replay store, retry queue, deferred receipt, or remote ack state |
+| Idempotency | Immutable existing message ULID; storage accepts duplicate identity idempotently |
+
+The detailed decisions are ADR-032 through ADR-036. ADR-028 through ADR-031
+are historical and superseded.
+
+## Baseline and branch policy
+
+`integrate/phase-AI` starts from `develop`. AI.1 is
+`feature/pAI-1-daemon-preag-reset` (PR #592), a clean squash of the reviewed
+deletion baseline. The superseded `fix/daemon-pre-ag-deletion-reset` branch is
+not a Phase AI target. AI.1 may retain only its singleton/local-IPC baseline
+and deletion work; its Phase AG plans, generated gate material, and unrelated
+triage changes are not a Phase AI baseline.
+
+The reset branch is an input, not an authority: every AI.1 deletion must be
+validated against fresh `integrate/phase-AI` source and documented here.
+
+## Non-negotiable architecture checks
+
+Each sprint extends and runs the following checks against its own merge base:
+
+1. **One ingress:** exactly one production write handler and one storage write
+   call path; no Compose/DirectDeliver or separate ack sender may remain.
+2. **One router:** only the post-write router may inspect destination host or
+   choose UDS-local versus HTTPS-remote delivery.
+3. **Transport-only remote adapter:** HTTPS adapter code may authenticate,
+   encode/decode HTTP, connect/listen, and call the router. It may not depend
+   on SQLite, mailbox mutation, acknowledgement state, nudge sinks, replay,
+   receipt, or retry types.
+4. **Storage boundary:** HTTP/HTTPS/UDS adapters may not use rusqlite or schema
+   types; only the sealed storage trait reaches SQLite.
+5. **No retired parallel protocol:** source and dependency checks reject the
+   custom ATM frame codec and Windows named-pipe support after AI.4. Structural
+   tests verify the retained router/handler graph, so identifier renaming cannot
+   satisfy the gate.
+
+Every sprint reports its gate output, changed symbols, required deletions, and
+net LOC. A deletion sprint cannot close with a retained target under another
+name.
+
+## Sprint sequence
+
+| Sprint | Branch | Single closure |
+| --- | --- | --- |
+| AI.1 | `feature/pAI-1-daemon-preag-reset` | Rebased minimal singleton/local daemon baseline; peer/replay subsystem is actually gone |
+| AI.2 | `feature/pAI-s2-storage-topology` | SQLite is confined to its backend; runtime replay/finalizer escape hatches are gone |
+| AI.3 | `feature/pAI-s3-error-contract-foundation` | One serializable `AtmError` and no protocol error envelope/kind hierarchy |
+| AI.4 | `feature/pAI-s4-error-consumer-migration` | All error producers/consumers use the unified contract; direct-construction gate active |
+| AI.5 | `feature/pAI-s5-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; named pipes/custom frames removed |
+| AI.6 | `feature/pAI-s6-canonical-write-path` | CLI, graft, local UDS, and ack use one canonical write handler and post-write router |
+| AI.7 | `feature/pAI-s7-crosshost-control-plane` | SQLite/CLI interface, certificate, and exact peer-trust control plane |
+| AI.8 | `feature/pAI-s8-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with no cross-host state subsystem |
+| AI.9 | `feature/pAI-s9-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
+
+Each sprint merges forward to the next sprint branch before the next sprint
+starts. Findings are fixed on their owning sprint before forward merge.
+
+## Verification matrix
+
+| Layer | Required proof |
+| --- | --- |
+| Unit | error serialization; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
+| Integration | UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
+| Smoke | localhost UDS; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows UDS and peer participation |
+| Regression | `just lint`, `just test`, architecture checks, no named-pipe/custom-frame/peer-replay source remains |
+
+## Explicit non-goals
+
+- remote replay, background retry, deferred delivery receipts, or a durable
+  cross-host outbox;
+- named-pipe support or fallback;
+- a separate remote daemon, separate ack protocol, or cross-host mailbox
+  handler;
+- inventing a third public verb before a concrete adapter need exists.

@@ -1,5 +1,9 @@
 # `atm-runtime` Architecture
 
+> **Phase AI supersession notice:** ADR-036 reduces this crate to thin
+> backend-neutral composition. The older replay-store, runtime finalizer, and
+> SQLite-observability bridge text below is historical and must not be extended.
+
 ## Role
 
 `atm-runtime` is the concrete composition root introduced by `Phase AA`.

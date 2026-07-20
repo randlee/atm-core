@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-031 |
-| Status | Proposed |
+| Status | Superseded by ADR-034 and ADR-035 |
 | Scope | Repository-wide |
 | Deciders | ATM maintainers |
 | Relates to | ADR-003, ADR-028, ADR-029, ADR-030, AG-FIND-005, Phase AG |
@@ -26,7 +26,7 @@ The user-approved correction is intentionally narrow:
 - host-routing logic must stop at one typed boundary so socket logic does not
   leak through general send/runtime code
 
-## Decision
+## Historical decision
 
 ATM will support exactly two operator-facing remote-send forms:
 
@@ -168,7 +168,13 @@ Boundary rule:
 - socket and transport implementation details stay behind the cross-host
   delivery boundary and its storage/config boundaries
 
-## Consequences
+## Supersession
+
+The retry, durable deferred-delivery, receipt, and per-host state described
+above are not part of the approved design. ADR-034 and ADR-035 replace this
+decision with a transport-only HTTPS adapter and one canonical write path.
+
+## Historical consequences
 
 - AG.11 owns the typed remote-target contract and production wiring proof
 - AG.12 and AG.13 prove that localhost and self-IP use the ordinary remote-host

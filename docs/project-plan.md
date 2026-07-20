@@ -949,28 +949,20 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI Daemon Reset And Cross-Host Restart Baseline
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [PLANNED]
 
-Status summary:
-- The Phase AG cross-host ladder (`AG.16`-`AG.25`) was ruled an over-engineered
-  dead end.
-- `integrate/phase-AI` (off `develop`) is the Phase AI integration line.
-- `AI.1` (`DAEMON-PREAG-RESET-1`) resets the daemon to a local-IPC-only
-  singleton by deleting the entire cross-host/peer-transport subsystem
-  (`peer_transport`, `claude_compat`, `boundary_adapters`,
-  `direct_boundaries`, the `SourceIngress`/`ProjectionExport` boundary
-  contracts, and their `replay_store`/config-layer supporting code), carried
-  forward as one clean squash commit from `fix/daemon-pre-ag-deletion-reset`
-  (PR #590, superseded) rather than replaying its 5 QA-fix-round commits.
-- Later Phase AI sprints plan any future cross-host restart from this reset
-  baseline; the `plan/phase-ai-planning` worktree carries that forward
-  planning work.
+Planning branch: `plan/phase-ai-planning`
+Integration branch: `integrate/phase-AI`
 
-Branch-routing note:
-- `integrate/phase-AI` is the phase integration line; sprint branches PR into
-  it, not into `develop`.
-- `AI.1`: `feature/pAI-1-daemon-preag-reset` (PR #592) supersedes PR #590.
-- Sprint doc: `docs/plans/phase-ai/sprint-ai-1.md`.
+AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
+baseline. It retains only the local-IPC singleton while deleting peer transport,
+replay/store support, and retired boundary adapters. It supersedes the abandoned
+PR #590 line. AI.2 onward rebuild from that baseline: HTTP over UDS replaces the
+custom local frame protocol, and the same router later serves authenticated
+HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
+send/ack paths, or cross-host-specific mailbox logic.
+
+Authoritative plan: [Phase AI plan](./plans/phase-AI/plan-phase-AI.md).
 
 ## Publishing Improvements
 
