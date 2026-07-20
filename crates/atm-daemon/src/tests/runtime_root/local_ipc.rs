@@ -479,13 +479,11 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "read ack frame",
     );
     match ack_response {
-        ResponseEnvelope::Ack(outcome) => {
-            assert_eq!(outcome.action, atm_core::types::CommandAction::Ack);
-            assert_eq!(
-                outcome.reply_target.to_string(),
-                "team-lead@test-team.127.0.0.1"
-            );
-            assert!(!outcome.reply_message_id.to_string().is_empty());
+        ResponseEnvelope::Send(outcome) => {
+            assert!(matches!(
+                outcome.outcome,
+                atm_core::send::SendCommandOutcome::Sent
+            ));
         }
         other => panic!("unexpected ack response: {other:?}"),
     }

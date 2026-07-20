@@ -203,7 +203,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         .expect("ack response");
 
     let ack_outcome = match ack_response {
-        ResponseEnvelope::Ack(outcome) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
     assert_eq!(ack_outcome.warnings.len(), 1);

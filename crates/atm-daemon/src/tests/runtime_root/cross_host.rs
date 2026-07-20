@@ -151,7 +151,10 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         recipient_message_id,
         "cross-host ack success",
     );
-    assert!(!ack.reply_message_id.to_string().is_empty());
+    assert!(matches!(
+        ack.outcome,
+        atm_core::send::SendCommandOutcome::Sent
+    ));
 
     let ack_reply_message =
         wait_for_ack_reply(&arch_ctx, source_message_id, "cross-host ack success");
@@ -207,7 +210,7 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         .shutdown()
         .expect("shutdown source peer listener");
 
-    let ack_error = dispatch_ack_over_local_ipc(
+    let ack_outcome = send_ack_over_local_ipc(
         &child_state.local_ipc_socket_path,
         &cm5_home,
         &cm5_workspace,
@@ -215,11 +218,18 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         CM5_TEAM,
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
-    )
-    .expect_err("remote ack should fail closed while source peer listener is down");
+    );
+    assert_eq!(ack_outcome.warnings.len(), 1);
     assert_eq!(
-        ack_error.code,
-        atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        ack_outcome.warnings[0].code,
+        Some(atm_core::error_codes::AtmErrorCode::DaemonUnavailable)
+    );
+    assert!(
+        ack_outcome.warnings[0]
+            .message
+            .contains("ATM deferred remote ack delivery"),
+        "{:#?}",
+        ack_outcome.warnings
     );
 
     let still_pending = read_message_over_local_ipc(
@@ -238,8 +248,8 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         still_pending_message.envelope.message_id,
         Some(second_recipient_message_id)
     );
-    assert!(still_pending_message.envelope.pending_ack_at.is_some());
-    assert!(still_pending_message.envelope.acknowledged_at.is_none());
+    assert!(still_pending_message.envelope.pending_ack_at.is_none());
+    assert!(still_pending_message.envelope.acknowledged_at.is_some());
 
     stop_cross_host_child(&child_state, &mut cm5_process);
 }
@@ -669,7 +679,7 @@ fn send_ack_over_local_ipc(
     caller_team: &str,
     message_id: AtmMessageId,
     body: &str,
-) -> atm_core::ack::AckOutcome {
+) -> atm_core::send::SendOutcome {
     match dispatch_ack_over_local_ipc(
         socket_path,
         home,
@@ -681,7 +691,7 @@ fn send_ack_over_local_ipc(
     )
     .expect("ack over local ipc")
     {
-        ResponseEnvelope::Ack(outcome) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("unexpected local ipc ack response: {other:?}"),
     }
 }

@@ -295,10 +295,11 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        let ack_request = request.clone();
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {
-            ResponseEnvelope::Ack(outcome) => {
+            ResponseEnvelope::Send(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),
@@ -313,7 +314,7 @@ impl<'a> CliComposition<'a> {
                     error_code: None,
                     error_message: None,
                 });
-                Ok(outcome)
+                Ok(AckOutcome::from_send_outcome(outcome, &ack_request))
             }
             other => Err(unexpected_response("ack", other)),
         }

@@ -1,7 +1,7 @@
 use crate::config::AtmConfig;
 use crate::delivery_plan::{DeliveryPlan, LogicalMessage};
 use crate::delivery_policy::{
-    persisted_success_transition_names, sqlite_failure_transition_names, DeliveryEventFamily,
+    DeliveryEventFamily, persisted_success_transition_names, sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
@@ -114,8 +114,8 @@ mod tests {
     use serde_json::Map;
 
     use super::{
-        emit_delivery_plan_transitions, execute_delivery_plan, DeliveryTransitionContext,
-        NonClaudeOutboundDeliveryWriter,
+        DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions,
+        execute_delivery_plan,
     };
     use crate::delivery_plan::{DeliveryPlan, DeliveryPlanKind, DeliveryTarget, LogicalMessage};
     use crate::delivery_policy::{
