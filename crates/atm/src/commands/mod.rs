@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 pub mod ack;
 pub(crate) mod caller_context;
@@ -31,6 +31,35 @@ pub use send::SendCommand;
 pub use teams::TeamsCommand;
 
 use crate::observability::CliObservability;
+
+/// Output format for the hidden maintainer CLI-surface dump command.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum CliSurfaceFormat {
+    Json,
+    Markdown,
+}
+
+impl CliSurfaceFormat {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Markdown => "markdown",
+        }
+    }
+}
+
+/// Emit the live clap command tree for maintainers and the structural CLI gate.
+#[derive(Debug, clap::Args)]
+pub(crate) struct DumpCliSurfaceCommand {
+    #[arg(long, value_enum)]
+    format: CliSurfaceFormat,
+}
+
+impl DumpCliSurfaceCommand {
+    fn run(self, _observability: &CliObservability) -> Result<()> {
+        crate::dump_cli_surface(self.format.as_str()).map_err(Into::into)
+    }
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -77,6 +106,8 @@ enum Command {
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
+    #[command(name = "__dump-cli-surface", hide = true)]
+    DumpCliSurface(DumpCliSurfaceCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
 }
@@ -94,6 +125,7 @@ impl Command {
             Self::Doctor(command) => command.run(observability),
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability),
+            Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
         }
