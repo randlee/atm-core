@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-101-STALE-ACKOUTCOME-DOC>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-101-STALE-ACKOUTCOME-DOC" ;
+  triage:title "requirements.md still documents nested reply_disposition.kind JSON contract" ;
+  triage:description "docs/requirements.md:1654-1662 still documents AckOutcome's JSON contract as a nested reply_disposition.kind object (\"sent\" | \"suppressed_self_ack\"). Shipped AckOutcome (ack/mod.rs:31-43) is flat (reply_message_id/reply_target, no disposition field, no suppressed_self_ack path possible anymore). CLI output test (atm/src/output.rs:962-979) asserts the flat shape. Requirements baseline was not updated to match the shipped wire contract." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/requirements.md AckOutcome section" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-101/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-101/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-101/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1654 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` with `reply_message_id` and `reply_target` when a reply\n    message was emitted\n  - `kind = \"suppressed_self_ack\"` when the historical pending-ack message was\n    self-addressed and no reply message was emitted" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1654 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` with `reply_message_id` and `reply_target` when a reply\n    message was emitted\n  - `kind = \"suppressed_self_ack\"` when the historical pending-ack message was\n    self-addressed and no reply message was emitted" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1654 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` with `reply_message_id` and `reply_target` when a reply\n    message was emitted\n  - `kind = \"suppressed_self_ack\"` when the historical pending-ack message was\n    self-addressed and no reply message was emitted" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 2 .

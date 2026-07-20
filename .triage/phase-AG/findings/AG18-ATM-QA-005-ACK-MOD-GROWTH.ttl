@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-ATM-QA-005-ACK-MOD-GROWTH>
+  a triage:Finding ;
+  triage:findingId "AG18-ATM-QA-005-ACK-MOD-GROWTH" ;
+  triage:title "ack/mod.rs grew ~+771 net lines with no completion-record justification" ;
+  triage:description "crates/atm-core/src/ack/mod.rs grew ~+661 net lines (1020 insertions, 359 deletions; diff context spans ~1379 lines) against the Hard Merge Gate's 'every added line scrutinized for absolute necessity' requirement, with no completion-record justification for the growth. pAG-s18 introduces new ack handler logic supporting envelope unification; pAG-s19 later collapses ack into canonical send route via refactoring, eliminating this growth." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "merge-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T23:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-005-ACK-MOD-GROWTH/pAG-s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-ag/345da805> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:notes "INITIAL_PASS: Growth manifests in pAG-s18 (1b25b36c) via new ack handler functions supporting envelope unification work. File size: develop=2008 lines, pAG-s18=2669 lines (+661 net LOC). Hard Merge Gate requires completion-record justification for all additions; none present per QA verdict. pAG-s19 (4500cf31) fixes growth by collapsing ack module into canonical send route (commit f792d816 removes 2080 lines, adds 262 = -1818 net). Final file size in pAG-s19: 750 lines (below baseline). Once pAG-s19 merges to integrate/phase-AG, finding closes on all branches. Severity: IMPORTANT (not BLOCKING) as sub-component of broader Hard Merge Gate AG18-QA-LOC-001. Promotion candidate: pAG-s19 (already fixed). Occurrence recorded on open branches only." .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-005-ACK-MOD-GROWTH/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub fn prepare_ack_send_request(...), pub fn ack_request_from_send_request(...), and supporting ack handler refactoring; git diff --stat develop: +1020 insertions, -359 deletions = +661 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-005-ACK-MOD-GROWTH/integrate-phase-ag/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "unjustified LOC growth from pAG-s18 merge; same content as pAG-s18 (1b25b36c); file size 2669 lines" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ag/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-phase-ag/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 .

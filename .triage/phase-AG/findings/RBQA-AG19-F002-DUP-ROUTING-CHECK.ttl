@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AG19-F002-DUP-ROUTING-CHECK>
+  a triage:Finding ;
+  triage:findingId "RBQA-AG19-F002-DUP-ROUTING-CHECK" ;
+  triage:title "reject_remote_core_ack re-decides local-vs-remote via raw check instead of shared classifier" ;
+  triage:description "reject_remote_core_ack re-decides local-vs-remote via a raw `remote_host.is_some()` check instead of the shared `route_send_request` classifier -- second place answering the same routing question." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:pattern "duplicate-routing-decision" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F002-DUP-ROUTING-CHECK/AG19/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F002-DUP-ROUTING-CHECK/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:snippet "reject_remote_core_ack re-decides local-vs-remote via raw remote_host.is_some() check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:worktree/AG19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 19 .

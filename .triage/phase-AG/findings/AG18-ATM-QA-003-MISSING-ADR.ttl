@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-ATM-QA-003-MISSING-ADR>
+  a triage:Finding ;
+  triage:findingId "AG18-ATM-QA-003-MISSING-ADR" ;
+  triage:title "Missing requirements/ADR deliverable for canonical send envelope/handler" ;
+  triage:description "Neither docs/requirements.md nor any docs/adr/ entry names the single canonical send envelope/handler family (SendRequestEnvelope/SendComposeRequest/SendAcknowledgeRequest collapse), despite this being an explicit Deliverable and Acceptance Criterion (sprint-AG18.md:263, 325-326)." ;
+  triage:phaseId "phase-AG" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md, docs/adr/" ;
+  triage:line 0 ;
+  triage:snippet "missing canonical send envelope/handler documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md, docs/adr/" ;
+  triage:line 0 ;
+  triage:snippet "missing canonical send envelope/handler documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-003-MISSING-ADR/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md, docs/adr/" ;
+  triage:line 0 ;
+  triage:snippet "missing canonical send envelope/handler documentation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 .

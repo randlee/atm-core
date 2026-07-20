@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AG19-F001-DUP-ACK-WRAPPER>
+  a triage:Finding ;
+  triage:findingId "RBQA-AG19-F001-DUP-ACK-WRAPPER" ;
+  triage:title "Unused public ack-orchestration wrapper duplicates production dispatch's inline sequence" ;
+  triage:description "atm-core exposes a complete, public ack-orchestration wrapper (ack_mail_with_runtime_and_post_send_emitter, ack/mod.rs:140-155) with zero production callers (only called from tests). The actual production entry point (DaemonRequestDispatcher::dispatch_send, dispatch_delivery.rs:67-83) hand-rolls the identical prepare/send/finalize sequence inline instead of calling it. One level above the now-unified low-level send call, there are still two owners of the same orchestration shape." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F001-DUP-ACK-WRAPPER/AG19/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F001-DUP-ACK-WRAPPER/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 67 ;
+  triage:snippet "dispatch_send hand-rolls: prepare_ack_reply -> dispatch_outbound_send -> finalize_ack_after_send; wrapper at ack/mod.rs:140-155 provides identical orchestration but is unused in production" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:worktree/AG18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/phase-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 99 .

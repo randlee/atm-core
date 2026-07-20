@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-ATM-QA-004-STALE-ICD>
+  a triage:Finding ;
+  triage:findingId "AG18-ATM-QA-004-STALE-ICD" ;
+  triage:title "Stale/self-contradicting wire-contract doc" ;
+  triage:description "docs/atm-daemon/protocol-icd.md:232-233,270-271,333-334,383-386,475-476 still documents the deleted two-packet-kind split (0x0001 send_compose_request / 0x0002 send_acknowledge_request). project-plan.md designates this doc authoritative for the daemon wire contract; it is now factually wrong about the shipped protocol." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:triagedAt "2026-07-19T18:04:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 232 ;
+  triage:snippet "- `0x0001` `send_compose_request` / - `0x0002` `send_acknowledge_request` (lines 232-233), lines 270-271, 333-334, 383-386, 475-476" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 232 ;
+  triage:snippet "- `0x0001` `send_compose_request` / - `0x0002` `send_acknowledge_request` (lines 232-233), lines 270-271, 333-334, 383-386, 475-476" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-004-STALE-ICD/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 232 ;
+  triage:snippet "- `0x0001` `send_compose_request` / - `0x0002` `send_acknowledge_request` (lines 232-233), lines 270-271, 333-334, 383-386, 475-476" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/345da805> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE>
+  a triage:Finding ;
+  triage:findingId "RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE" ;
+  triage:title "Client-side ack request/dispatch sequence duplicated verbatim in two crates" ;
+  triage:description "Client-side ack request/dispatch sequence duplicated verbatim in atm-graft/src/lib.rs:239-246 and atm/src/composition.rs:297-320." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "duplicate-client-code" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE/AG19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE/AG19/2> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 239 ;
+  triage:snippet "Client-side ack request/dispatch sequence lines 239-246" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F003-DUP-ACK-DISPATCH-SEQUENCE/AG19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 297 ;
+  triage:snippet "Client-side ack request/dispatch sequence lines 297-320" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:worktree/AG19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 19 .
