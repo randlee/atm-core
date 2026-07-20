@@ -131,7 +131,11 @@ fn parse_send_target_impl(
 ) -> Result<ParsedSendTarget, AtmError> {
     let trimmed = raw_target.trim();
     if trimmed.is_empty() {
-        return Err(AtmError::address_parse("agent name must not be empty"));
+        return Err(
+            AtmError::address_parse("agent name must not be empty").with_recovery(
+                "Provide an agent name, optionally qualified as `<agent>@<team>` or `<agent>@<team>.<host>`.",
+            ),
+        );
     }
 
     let Some((raw_agent, raw_team_or_remote)) = trimmed.split_once('@') else {
