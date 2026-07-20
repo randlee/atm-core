@@ -13,4 +13,5 @@ publish = false
 cargo_metadata.workspace = true
 regex = "1"
 serde.workspace = true
+syn = { version = "2", features = ["full"] }
 toml = "0.8"
