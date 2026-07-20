@@ -60,14 +60,44 @@ done
 git rev-parse --verify "$BASE" >/dev/null 2>&1 || fail "missing base ref: $BASE"
 git rev-parse --verify "$HEAD_REF" >/dev/null 2>&1 || fail "missing head ref: $HEAD_REF"
 
+manifest_path="crates/atm-architecture/delete-lists/$(tr '[:upper:]' '[:lower:]' <<<"$SPRINT" | tr -d '.').toml"
+boundary_test_path="crates/atm-architecture/tests/boundary_enforcement.rs"
+gate_base="$BASE"
+
+# A deletion sprint may introduce or strengthen its own immutable manifest, but
+# that work must be a dedicated bootstrap commit before the gated product diff.
+# Treating it as ordinary sprint work would let a PR weaken its own guard after
+# changing product code.  The bootstrap commit may touch only the active
+# manifest and the enforcement test; later changes to either file fail closed.
+gate_seed_commits=()
+while IFS= read -r commit; do
+  [[ -n "$commit" ]] && gate_seed_commits+=("$commit")
+done < <(git rev-list --reverse "$BASE..$HEAD_REF" -- "$manifest_path" "$boundary_test_path")
+if [[ ${#gate_seed_commits[@]} -gt 0 ]]; then
+  gate_seed="${gate_seed_commits[0]}"
+  seed_files=()
+  while IFS= read -r file; do
+    [[ -n "$file" ]] && seed_files+=("$file")
+  done < <(git diff-tree --no-commit-id --name-only -r "$gate_seed")
+  for file in "${seed_files[@]}"; do
+    case "$file" in
+      "$manifest_path"|"$boundary_test_path") ;;
+      *) fail "$SPRINT: gate bootstrap commit $gate_seed changed non-gate file $file" ;;
+    esac
+  done
+  [[ ${#gate_seed_commits[@]} -eq 1 ]] || fail "$SPRINT: gate files changed after bootstrap commit $gate_seed"
+  gate_base="$gate_seed"
+  info "using dedicated gate bootstrap $gate_seed; product diff begins after it"
+fi
+
 info "running delete-list denylist gate"
 ATM_ARCH_ACTIVE_SPRINT="$SPRINT" \
 cargo test -p atm-architecture --test boundary_enforcement \
   ag_delete_lists_must_have_no_forbidden_symbols_or_workaround_paths
 
-info "running active sprint diff gate for sprint=$SPRINT base=$BASE head=$HEAD_REF"
+info "running active sprint diff gate for sprint=$SPRINT base=$gate_base head=$HEAD_REF"
 ATM_ARCH_ACTIVE_SPRINT="$SPRINT" \
-ATM_ARCH_DIFF_BASE="$BASE" \
+ATM_ARCH_DIFF_BASE="$gate_base" \
 ATM_ARCH_DIFF_HEAD="$HEAD_REF" \
 ATM_ARCH_ALLOW_GATE_CHANGES="$ALLOW_GATE_CHANGES" \
 cargo test -p atm-architecture --test boundary_enforcement \
