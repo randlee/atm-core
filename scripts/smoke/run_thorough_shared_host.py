@@ -426,8 +426,10 @@ def main() -> int:
             and all(input_bodies_ok)
             and shared_read_ack_a["read"].get("selected_message_id") == shared_message_id_a
             and shared_read_ack_b["read"].get("selected_message_id") == shared_message_id_b
-            and shared_read_ack_a["ack"].get("message_id") == shared_message_id_a
-            and shared_read_ack_b["ack"].get("message_id") == shared_message_id_b
+            and shared_read_ack_a["ack"].get("outcome") == "sent"
+            and shared_read_ack_b["ack"].get("outcome") == "sent"
+            and shared_read_ack_a["ack"].get("message_id") != shared_message_id_a
+            and shared_read_ack_b["ack"].get("message_id") != shared_message_id_b
             and shared_message_id_b not in shared_records_a
             and shared_message_id_a not in shared_records_b
             and isinstance(shared_log_snapshot_a.get("records"), list)

@@ -684,15 +684,6 @@ where
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
-        Err(source) if accept_error_is_retryable(&source) => {
-            tracing::debug!(
-                subsystem = "local_ipc_transport",
-                action = "accept",
-                error_kind = ?source.kind(),
-                "daemon local IPC accept was interrupted; retaining listener"
-            );
-            Ok(AcceptLoopOutcome::Continue)
-        }
         Err(source) => {
             context.observability.emit_or_warn(
                 "accept_loop",
@@ -710,10 +701,6 @@ where
             ))))
         }
     }
-}
-
-fn accept_error_is_retryable(error: &std::io::Error) -> bool {
-    matches!(error.kind(), std::io::ErrorKind::Interrupted)
 }
 
 fn handle_accepted_stream<'scope, ReloadRuntimeView>(
@@ -868,16 +855,6 @@ mod tests {
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared
         );
         assert!(endpoint.parent().expect("parent").exists());
-    }
-
-    #[test]
-    fn interrupted_local_ipc_accept_is_retryable_but_terminal_errors_are_not() {
-        assert!(accept_error_is_retryable(&std::io::Error::from(
-            std::io::ErrorKind::Interrupted
-        )));
-        assert!(!accept_error_is_retryable(&std::io::Error::from(
-            std::io::ErrorKind::ConnectionAborted
-        )));
     }
 
     #[cfg(windows)]
