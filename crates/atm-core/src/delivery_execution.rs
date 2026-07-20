@@ -199,10 +199,12 @@ mod tests {
         LogicalMessage::new(
             InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TeamName::from_validated(TEST_TEAM)),
+                destination_chat_id: None,
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,

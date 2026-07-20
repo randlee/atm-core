@@ -134,7 +134,7 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
         shutdown_started.elapsed() <= Duration::from_secs(1),
         "accept error path should remain bounded",
     );
-    assert!(error.message.contains("accept error") || error.message.contains("accepting"));
+    assert!(error.message().contains("accept error") || error.message().contains("accepting"));
     observability
         .wait_for_message_contains(
             "injected daemon local IPC accept error for test",
@@ -195,8 +195,8 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
         );
         match response {
             ResponseEnvelope::Error(error) => {
-                assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-                assert!(error.message.contains("shutting down"));
+                assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+                assert!(error.message().contains("shutting down"));
             }
             other => panic!("unexpected shutdown response: {other:?}"),
         }

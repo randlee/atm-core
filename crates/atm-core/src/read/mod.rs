@@ -1205,10 +1205,12 @@ mod tests {
     ) -> InboxMessage {
         InboxMessage {
             from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp,
             read,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: false,
@@ -1449,10 +1451,12 @@ mod tests {
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
             requires_ack: false,
@@ -1553,7 +1557,7 @@ mod tests {
         )
         .expect_err("invalid target");
 
-        assert!(error.message.contains("agent name"));
+        assert!(error.message().contains("agent name"));
     }
 
     #[test]
@@ -1921,10 +1925,13 @@ mod tests {
         .expect_err("cross-agent owner-only read must fail");
 
         assert!(
-            error.code == crate::error_codes::AtmErrorCode::MessageValidationFailed,
+            error.code() == crate::error_codes::AtmErrorCode::MessageValidationFailed,
             "{error:?}"
         );
-        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+        assert!(
+            error.message().contains("owner-only `atm read`"),
+            "{error:?}"
+        );
     }
 
     #[test]
@@ -1949,8 +1956,11 @@ mod tests {
         )
         .expect_err("peek with explicit missing roster target must fail");
 
-        assert_eq!(error.code, crate::error_codes::AtmErrorCode::AgentNotFound);
-        assert!(error.message.contains("recipient"), "{error:?}");
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::AgentNotFound
+        );
+        assert!(error.message().contains("recipient"), "{error:?}");
     }
 
     #[test]
@@ -1994,9 +2004,9 @@ mod tests {
             .expect_err("durable reload failure should surface");
 
         assert!(
-            error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed,
+            error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed,
             "{error:?}"
         );
-        assert!(error.message.contains("simulated durable reload failure"));
+        assert!(error.message().contains("simulated durable reload failure"));
     }
 }

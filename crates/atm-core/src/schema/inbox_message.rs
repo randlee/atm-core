@@ -205,6 +205,7 @@ mod tests {
         // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -213,6 +214,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: true,
@@ -355,6 +357,7 @@ mod tests {
     fn shared_inbox_write_keeps_only_approved_immutable_fields() {
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -363,6 +366,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: true,
@@ -401,6 +405,7 @@ mod tests {
         // survive to_shared_inbox_value when they carry non-None values.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "threaded message".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -409,6 +414,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -440,6 +446,7 @@ mod tests {
         // shared inbox export even when the envelope carries a non-None value.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "expiring message".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -448,6 +455,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -482,6 +490,7 @@ mod tests {
         );
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "ack reply".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -490,6 +499,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("ack reply".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -514,6 +524,7 @@ mod tests {
         let message_id = AtmMessageId::new();
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -522,6 +533,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("oversized".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -557,6 +569,7 @@ mod tests {
         let text = "x".repeat(32);
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: text.clone(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -565,6 +578,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("exact-cap".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -595,6 +609,7 @@ mod tests {
         let text = "x".repeat(32);
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text,
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -603,6 +618,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("above-cap".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -634,6 +650,7 @@ mod tests {
     fn shared_inbox_write_keeps_full_body_for_claude_native_messages() {
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -642,6 +659,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: Some("native".into()),
             message_id: None,
             requires_ack: false,
@@ -678,6 +696,7 @@ mod tests {
         );
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -686,6 +705,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,

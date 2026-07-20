@@ -340,7 +340,7 @@ mod tests {
                 "the deliberate shutdown drain must surface a panicked dispatch worker as fatal",
             );
         assert!(
-            error.message.contains("daemon dispatch thread panicked"),
+            error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
         );
     }

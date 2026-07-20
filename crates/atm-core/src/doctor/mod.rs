@@ -491,11 +491,11 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = Some(error.message.clone());
+    let remediation = Some(error.message().to_owned());
     findings.push(DoctorFinding {
         severity,
-        code: error.code,
-        message: error.message,
+        code: error.code(),
+        message: error.into_message(),
         remediation,
     });
 }

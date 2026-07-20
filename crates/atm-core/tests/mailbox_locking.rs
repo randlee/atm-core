@@ -541,7 +541,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     for (label, op) in [
         (
             "read",
-            CommandOp::Read(read_request, Arc::clone(&observability)),
+            CommandOp::Read(Box::new(read_request), Arc::clone(&observability)),
         ),
         (
             "clear",
@@ -554,7 +554,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
             barrier.wait();
             let result = match op {
                 CommandOp::Read(request, observability) => {
-                    read_mail(request, observability.as_ref()).map(|_| ())
+                    read_mail(*request, observability.as_ref()).map(|_| ())
                 }
                 CommandOp::Clear(request, observability) => {
                     clear_mail(request, observability.as_ref()).map(|_| ())
@@ -605,7 +605,7 @@ fn send_times_out_under_bounded_lock_contention() {
         .expect_err("timeout");
     join.join().expect("join send thread");
 
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
 }
 
 #[test]
@@ -1144,7 +1144,7 @@ fn send_ignores_retired_file_lock_faults_on_sqlite_path() {
 }
 
 enum CommandOp {
-    Read(ReadQuery, Arc<NullObservability>),
+    Read(Box<ReadQuery>, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
 }
 
@@ -1528,10 +1528,12 @@ fn pending_ack_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: true,
@@ -1558,10 +1560,12 @@ fn read_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,
@@ -1588,10 +1592,12 @@ fn unread_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: false,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,

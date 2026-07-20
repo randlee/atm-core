@@ -94,12 +94,12 @@ pub(crate) fn emit_post_send_effects<R>(
             && let Err(error) = append_notification_log(&notification_event(&event))
         {
             warnings.push(WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: notification delivery failed for {}@{}: {error}",
                     recipient.agent, recipient.team
                 ),
-                Some(error.message.clone()),
+                Some(error.message().to_owned()),
             ));
         }
     }
@@ -239,7 +239,7 @@ where
             Ok(row) => row,
             Err(error) => {
                 warn!(
-                    code = %error.code,
+                    code = %error.code(),
                     recipient = %event.recipient,
                     recipient_team = %event.recipient_team,
                     message_id = %event.message_id,
@@ -255,7 +255,7 @@ where
             Ok(rendered) => rendered,
             Err(error) => {
                 warn!(
-                    code = %error.code,
+                    code = %error.code(),
                     recipient = %event.recipient,
                     recipient_team = %event.recipient_team,
                     message_id = %event.message_id,
@@ -663,12 +663,16 @@ fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathB
 
 fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
     WarningEntry::with_code(
-        error.code,
+        error.code(),
         format!(
             "warning: {prefix} for {}@{} message {} ({}): {}.",
-            event.recipient, event.recipient_team, event.message_id, error.code, error.message
+            event.recipient,
+            event.recipient_team,
+            event.message_id,
+            error.code(),
+            error.message()
         ),
-        Some(error.message.clone()),
+        Some(error.message().to_owned()),
     )
 }
 
@@ -1224,10 +1228,12 @@ mod tests {
         LogicalMessage::new(
             InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TeamName::from_validated("test-team")),
+                destination_chat_id: None,
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: ack_intent.requires_ack,

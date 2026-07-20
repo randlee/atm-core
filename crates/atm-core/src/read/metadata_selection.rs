@@ -57,6 +57,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: row.from_agent.clone(),
+                source_chat_id: None,
                 // Metadata rows intentionally do not carry durable message body
                 // text. AD.20 keeps this projection empty so later contains
                 // evaluation cannot accidentally treat summary-only data as the
@@ -65,6 +66,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
                 timestamp: row.message_at,
                 read: row.read,
                 source_team: None,
+                destination_chat_id: None,
                 summary: row.summary.clone(),
                 message_id: row.message_id,
                 requires_ack: row.requires_ack,

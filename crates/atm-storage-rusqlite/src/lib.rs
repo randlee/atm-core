@@ -802,10 +802,12 @@ mod tests {
             message_key: MessageKey::new(key).expect("key"),
             envelope: MessageEnvelope {
                 from: agent,
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,
@@ -913,7 +915,7 @@ mod tests {
             .message_store()
             .load_message(&MessageKey::new("atm:test-invalid-team").expect("key"))
             .expect_err("invalid team should fail");
-        assert!(error.message.contains("failed to parse sqlite team"));
+        assert!(error.message().contains("failed to parse sqlite team"));
     }
 
     #[test]
@@ -949,7 +951,7 @@ mod tests {
             .expect_err("invalid task id should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse sqlite mailbox metadata task_id")
         );
     }
@@ -987,7 +989,7 @@ mod tests {
             .expect_err("invalid model should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse canonical team-roster model")
         );
     }

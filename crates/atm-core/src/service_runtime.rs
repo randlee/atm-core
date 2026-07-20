@@ -333,10 +333,12 @@ mod tests {
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -398,9 +400,9 @@ mod tests {
         )
         .expect_err("oversized non-claude payload must fail");
 
-        assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
-        assert!(error.message.contains("exceeded"));
-        assert!(error.message.contains("Recovery:"));
+        assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(error.message().contains("exceeded"));
+        assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
     }
 }

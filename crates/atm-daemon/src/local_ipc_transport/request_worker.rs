@@ -99,7 +99,7 @@ pub(super) fn handle_connection(
                         "same-host peer disconnected before the daemon response frame completed",
                     )
                     .with_connection_failure(DaemonConnectionFailureFields {
-                        code: error.code,
+                        code: error.code(),
                         request_id: Some(request_id),
                         classification,
                     })
@@ -194,10 +194,10 @@ fn decode_request_frame(
 }
 
 pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailureClassification {
-    if error.code == AtmErrorCode::MessageValidationFailed {
+    if error.code() == AtmErrorCode::MessageValidationFailed {
         return ConnectionFailureClassification::MalformedRequest;
     }
-    let haystacks = [error.message.to_ascii_lowercase()];
+    let haystacks = [error.message().to_ascii_lowercase()];
     if haystacks.iter().any(|value| {
         value.contains("broken pipe")
             || value.contains("connection reset")
@@ -208,7 +208,7 @@ pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailure
         return ConnectionFailureClassification::ExpectedPeerDisconnect;
     }
     if matches!(
-        error.code,
+        error.code(),
         AtmErrorCode::DaemonUnavailable | AtmErrorCode::WaitTimeout
     ) {
         return ConnectionFailureClassification::TransportFailure;
@@ -228,10 +228,10 @@ pub(super) fn emit_connection_failure_event(
             .event(
                 "connection_worker",
                 classification.as_str(),
-                error.message.clone(),
+                error.message().to_owned(),
             )
             .with_connection_failure(DaemonConnectionFailureFields {
-                code: error.code,
+                code: error.code(),
                 request_id,
                 classification,
             })
@@ -491,19 +491,19 @@ mod tests {
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
         let response = dispatch_timeout_response(RequestExecutionRisk::SideEffecting);
-        let ResponseEnvelope::Error(AtmError { code, .. }) = response else {
+        let ResponseEnvelope::Error(error) = response else {
             panic!("expected error envelope");
         };
-        assert_eq!(code, AtmErrorCode::DaemonMayHaveExecuted);
+        assert_eq!(error.code(), AtmErrorCode::DaemonMayHaveExecuted);
     }
 
     #[test]
     fn read_only_timeout_returns_retryable_daemon_unavailable_code() {
         let response = dispatch_timeout_response(RequestExecutionRisk::ReadOnly);
-        let ResponseEnvelope::Error(AtmError { code, .. }) = response else {
+        let ResponseEnvelope::Error(error) = response else {
             panic!("expected error envelope");
         };
-        assert_eq!(code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
     }
 
     #[test]

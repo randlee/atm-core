@@ -186,12 +186,14 @@ fn ack_mail_with_runtime_sqlite<
             Err(error) => (
                 None,
                 vec![crate::send::WarningEntry::with_code(
-                    error.code,
+                    error.code(),
                     format!(
                         "warning: post-send hook config lookup failed for {}@{}: {}.",
-                        actor, team, error.message
+                        actor,
+                        team,
+                        error.message()
                     ),
-                    Some(error.message.clone()),
+                    Some(error.message().to_owned()),
                 )],
             ),
         };
@@ -465,10 +467,12 @@ fn persist_sent_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let reply_message_id = AtmMessageId::new();
     let reply_message = InboxMessage {
         from: context.actor.clone(),
+        source_chat_id: None,
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
         source_team: Some(context.team.clone()),
+        destination_chat_id: None,
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         requires_ack: ack_intent.requires_ack,
@@ -1238,10 +1242,12 @@ mod tests {
         let ack_intent = AckIntentFields::not_required();
         InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: ack_intent.requires_ack,
@@ -1332,10 +1338,12 @@ mod tests {
         let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: reply_text.clone(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(team.clone()),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(reply_message_id),
             requires_ack: ack_intent.requires_ack,
@@ -1452,10 +1460,12 @@ mod tests {
         let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: reply_text.clone(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(team.clone()),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(reply_message_id),
             requires_ack: ack_intent.requires_ack,
@@ -1546,10 +1556,12 @@ mod tests {
         let ack_intent = AckIntentFields::not_required();
         let reply_message = InboxMessage {
             from: "sender".parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: reply_text.clone(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(team.clone()),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(reply_message_id),
             requires_ack: ack_intent.requires_ack,
@@ -1657,10 +1669,12 @@ mod tests {
                     let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
                     InboxMessage {
                         from: TEST_SENDER.parse().expect("agent"),
+                        source_chat_id: None,
                         text: "source".to_string(),
                         timestamp: IsoTimestamp::now(),
                         read: false,
                         source_team: Some(TEST_TEAM.parse().expect("team")),
+                        destination_chat_id: None,
                         summary: Some("summary".to_string()),
                         message_id: Some(AtmMessageId::new()),
                         requires_ack: ack_intent.requires_ack,
@@ -1694,7 +1708,7 @@ mod tests {
         .expect_err("missing ATM roster member should fail");
 
         assert!(
-            error.code == crate::error_codes::AtmErrorCode::AgentNotFound,
+            error.code() == crate::error_codes::AtmErrorCode::AgentNotFound,
             "{error:?}"
         );
     }
@@ -1734,10 +1748,12 @@ mod tests {
                     let ack_intent = AckIntentFields::required_pending(IsoTimestamp::now());
                     InboxMessage {
                         from: actor.clone(),
+                        source_chat_id: None,
                         text: "source".to_string(),
                         timestamp: IsoTimestamp::now(),
                         read: false,
                         source_team: Some(team.clone()),
+                        destination_chat_id: None,
                         summary: Some("summary".to_string()),
                         message_id: Some(source_message_id),
                         requires_ack: ack_intent.requires_ack,
@@ -1802,10 +1818,12 @@ mod tests {
             message_key: source_key.clone(),
             envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("agent"),
+                source_chat_id: None,
                 text: "source".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(team.clone()),
+                destination_chat_id: None,
                 summary: Some("summary".to_string()),
                 message_id: Some(source_message_id),
                 requires_ack: pending_ack.requires_ack,
@@ -1825,10 +1843,12 @@ mod tests {
             message_key: source_key.clone(),
             envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("agent"),
+                source_chat_id: None,
                 text: "source".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: true,
                 source_team: Some(team.clone()),
+                destination_chat_id: None,
                 summary: Some("summary".to_string()),
                 message_id: Some(source_message_id),
                 requires_ack: true,
@@ -1878,7 +1898,10 @@ mod tests {
         )
         .expect_err("stale pending metadata should be rejected after commit-time reload");
 
-        assert!(error.message.contains("already acknowledged"), "{error:?}");
+        assert!(
+            error.message().contains("already acknowledged"),
+            "{error:?}"
+        );
         assert!(
             runtime
                 .persisted_states
@@ -1933,10 +1956,12 @@ mod tests {
                 message_key: source_key,
                 envelope: InboxMessage {
                     from: AgentName::from_validated(TEST_SENDER),
+                    source_chat_id: None,
                     text: "source".to_string(),
                     timestamp: IsoTimestamp::now(),
                     read: false,
                     source_team: Some(TeamName::from_validated(TEST_TEAM)),
+                    destination_chat_id: None,
                     summary: Some("summary".to_string()),
                     message_id: Some(source_message_id),
                     requires_ack: ack_intent.requires_ack,

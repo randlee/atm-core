@@ -126,7 +126,7 @@ pub(crate) fn resolve_command_runtime_context(
 fn log_runtime_root_failure(command: &'static str, error: &AtmError) {
     tracing::error!(
         command,
-        error_code = %error.code.as_str(),
+        error_code = %error.code().as_str(),
         error = %error,
         "raw cli runtime-root failure"
     );
@@ -1013,10 +1013,12 @@ mod tests {
         fn message(&self, text: &str, read: bool) -> InboxMessage {
             InboxMessage {
                 from: TEST_LEAD.parse().expect("lead"),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: Utc::now().into(),
                 read,
                 source_team: Some(TEST_TEAM.parse().expect("team")),
+                destination_chat_id: None,
                 summary: None,
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,
@@ -1062,11 +1064,11 @@ mod tests {
             .expect_err("protocol error");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -1109,7 +1111,7 @@ mod tests {
             .expect_err("self-addressed send must fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
         );
         assert!(fixture.inbox_contents(TEST_SENDER).is_empty());
@@ -1150,7 +1152,7 @@ mod tests {
         for (label, result) in [("first", &first), ("second", &second)] {
             if let Err(error) = result {
                 assert_eq!(
-                    error.code,
+                    error.code(),
                     atm_core::error_codes::AtmErrorCode::MailboxLockTimeout,
                     "{label} response: {result:?}"
                 );
@@ -1337,7 +1339,7 @@ mod tests {
             .send(fixture.send_request_to(&self_address, "hello self"))
             .expect_err("self-addressed send must fail");
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
         );
     }
@@ -1402,7 +1404,10 @@ mod tests {
             .expect_err("cross-agent loopback read must fail");
 
         assert!(error.is_validation(), "{error:?}");
-        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+        assert!(
+            error.message().contains("owner-only `atm read`"),
+            "{error:?}"
+        );
     }
 
     #[test]
@@ -1505,7 +1510,7 @@ mod tests {
             .expect_err("bootstrap should fail when daemon auto-start cannot launch");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("daemon binary is missing"));
@@ -1737,7 +1742,7 @@ mod tests {
         let error = result.expect_err("missing ATM_HOME/home should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
         );
         assert!(logs.contains("raw cli runtime-root failure"));
@@ -1780,7 +1785,7 @@ mod tests {
         let error = result.expect_err("conflicting daemon socket override should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::SocketOverrideForbidden
         );
         assert!(logs.contains("raw cli runtime-root failure"));
@@ -1796,7 +1801,7 @@ mod tests {
             resolve_command_runtime_context("send").expect_err("missing ATM_HOME should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
         );
     }
@@ -1850,7 +1855,7 @@ mod tests {
         .expect_err("invalid daemon socket override should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::SocketOverrideForbidden
         );
     }
@@ -1873,7 +1878,7 @@ mod tests {
         let error = LaunchGateGuard::rejected_error(&socket_path);
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
         );
     }
@@ -1902,7 +1907,7 @@ mod tests {
             .expect_err("timeout should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonLaunchGateRejected
         );
     }
@@ -1948,7 +1953,7 @@ mod tests {
             .expect_err("spawn should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonAutoStartFailed
         );
     }
