@@ -184,15 +184,15 @@ Requirement ID:
 
 Required rules:
 - `atm` owns `--stdin` as a CLI-only input source and must consume it before
-  daemon bootstrap and before request dispatch over the same-host RPC surface
+  daemon bootstrap and before request dispatch over the same-host HTTP API
 - a daemon-bound send request may encode only durable inline bytes or the
   retained `--file` reference contract; it must never encode a `stdin`
   instruction for the daemon to resolve later
 - invalid `--stdin` input (empty, whitespace-only, oversized, unreadable, or
   non-UTF-8) must fail at the CLI boundary with the typed ATM error returned by
   `atm-core`
-- invalid `--stdin` input must not start a daemon and must not dispatch any
-  request over `AtmProtocol` or `ClientTransport`
+- invalid `--stdin` input must not start a daemon and must not dispatch a
+  `DaemonApiClient` request
 
 ## 4. Command Ownership
 
@@ -306,7 +306,7 @@ Required Phase R rules:
   - it must not require a compile-time dependency on `atm-runtime`,
     `atm-storage-rusqlite`, or other concrete backend composition crates
 - compatibility between first-party thin clients and the primary `atm` install
-  is governed by the documented same-host RPC surface rather than lockstep
+  is governed by the documented same-host HTTP API rather than lockstep
   crate-version equality
 - `atm doctor` remains a CLI command, but its production runtime checks may
   query daemon state through the runtime boundary

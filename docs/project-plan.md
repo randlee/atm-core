@@ -962,7 +962,7 @@ custom local frame protocol, and the same router later serves authenticated
 HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
 send/ack paths, or cross-host-specific mailbox logic.
 
-Authoritative plan: [Phase AI plan](./plans/phase-AI/plan-phase-AI.md).
+Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
 ## Publishing Improvements
 

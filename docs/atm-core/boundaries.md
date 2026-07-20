@@ -4,6 +4,12 @@
 > ADR-036 retires `RemoteReplayStore`, `RuntimeStorageFinalizer`, and any
 > daemon-specific persistence trait; retained boundary records must not be used
 > to recreate them.
+>
+> **Phase AI transport supersession:** `AtmProtocol`, `ClientTransport`,
+> `ServerTransport`, and `RequestDispatcher` describe the retired custom-frame
+> line until AI.6. The accepted target is ADR-033's HTTP router over UDS/HTTPS,
+> with transport-neutral requests and one canonical write handler; these legacy
+> records must not be extended or used to add a parallel route.
 
 This document is the initial Phase R boundary inventory for `atm-core`.
 
@@ -19,15 +25,15 @@ concrete adapter in this crate.
 Test doubles planned; not yet landed. Until they exist, `allowed_test_double_paths`
 remains empty for the `atm-core` contract-owner records below.
 
-## AtmProtocol
+## AtmProtocol (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/atm-protocol.toml](../../boundaries/atm-core/atm-protocol.toml)
 
 
 Purpose:
-- Owns the shared ATM request/response contract used by local CLI, daemon, and
-  thin extension clients.
+- Historically owned the custom framed request/response contract. AI.6 retires
+  it in favor of ADR-033's HTTP/OpenAPI request contract.
 
 Notes:
 - The canonical request/response family now includes:
@@ -43,14 +49,16 @@ Notes:
   retained-runtime test harness seam; it is not a production consumer
   boundary.
 
-## ClientTransport
+## ClientTransport (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/client-transport.toml](../../boundaries/atm-core/client-transport.toml)
 
 
 Purpose:
-- Owns the outbound ATM request path from thin clients into a server/runtime.
+- Historically owned the outbound custom-frame client path. AI.6 replaces it
+  with one HTTP/UDS `DaemonApiClient` adapter used by CLI, graft, Python, and
+  in-process contract tests.
 
 Notes:
 - The public workflow surface above this boundary should stay centered on send
@@ -98,26 +106,29 @@ Notes:
 - on the earlier compatibility line, this closed the missing watch/reconcile
   boundary gap in the initial Phase R set.
 
-## ServerTransport
+## ServerTransport (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/server-transport.toml](../../boundaries/atm-core/server-transport.toml)
 
 
 Purpose:
-- Owns inbound ATM request serving and response framing for runtime hosts.
+- Historically owned inbound custom-frame serving. AI.6 replaces it with an
+  HTTP adapter that only translates HTTP and calls `ApiRouter`.
 
 Notes:
 - Listener/runtime code should remain thin and dispatch through RequestDispatcher.
 
-## RequestDispatcher
+## RequestDispatcher (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/request-dispatcher.toml](../../boundaries/atm-core/request-dispatcher.toml)
 
 
 Purpose:
-- Owns routing of typed protocol requests to the correct service handlers.
+- Historically routed custom-frame protocol requests. AI.6 replaces it with
+  `ApiRouter`, which selects a shared typed handler and does not own storage,
+  host routing, or nudges.
 
 Notes:
 - Transport-specific listeners should not embed request-family logic.

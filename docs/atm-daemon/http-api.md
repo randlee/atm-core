@@ -9,11 +9,13 @@
 
 ## Transport and handler rule
 
-The same REST router serves HTTP over local UDS and HTTPS over TCP. Transport
-authentication establishes an `AuthenticatedCaller` request context; clients
-cannot choose another identity through a request field, header, or query
-parameter. The router maps resources to shared application handlers only. It
-does not touch SQLite, choose a host, or emit nudges.
+The same REST router serves HTTP over local UDS and HTTPS over TCP. A local
+client supplies the structured caller address in the canonical write request;
+the shared handler validates it under the local caller/roster policy. HTTPS
+authentication establishes the peer identity for transport authorization and
+never rewrites that caller address. The router maps resources to shared
+application handlers only. It does not touch SQLite, choose a host, or emit
+nudges.
 
 Every message projection uses structured `from` and `to` addresses. Each has
 `agent`, optional `chat_id`, `team`, and optional `host`. Storage keeps the
@@ -52,7 +54,7 @@ filters. `agent=hendrix` searches that base agent across every chat identity;
 selected participant direction when a direction is requested, otherwise to
 either message participant. They do not alter the authenticated caller.
 
-`POST /message/{message-id}/ack` constructs the same `WriteRequest` used by
+`POST /v1/atm/message/{message-id}/ack` constructs the same `WriteRequest` used by
 `POST /messages`, with only `acknowledges_message_id` populated. The receiver's
 canonical write handler owns both persistence and acknowledgement mutation.
 It carries the message's full chat-qualified source address as the reply

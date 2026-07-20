@@ -45,9 +45,10 @@ The canonical `AgentAddress`/participant type owns parsing, rendering,
 validation, equality, and storage projection. Agent and team segments remain
 restricted to letters, digits, `_`, and `-`; `.` and `:` remain reserved
 address delimiters. Chat IDs use the same safe segment alphabet so an address
-has one unambiguous grammar. Phase AI imports the completed Phase AG central
-validator, `atm_storage::validate_path_segment`, from commit `924861da`; it
-does not reimplement validation in the CLI, graft, HTTP, or Python binding.
+has one unambiguous grammar. AI.1's baseline already contains the completed
+Phase AG central validator, `atm_storage::validate_path_segment`; Phase AI
+extends that one validator and does not reimplement validation in the CLI,
+graft, HTTP, or Python binding.
 
 Every persisted message has nullable `source_chat_id` and
 `destination_chat_id` columns beside its existing source/destination agent,

@@ -15,9 +15,9 @@ daemon traffic lacked a durable functional trust gate. The product needs a
 pre-security authorization layer before mailbox mutation so real host-pair
 validation can close meaningfully.
 
-## Decision
+## Historical proposal (retired)
 
-ATM will use a SQLite-backed deny-by-default exact-host allowlist as the
+Phase AG proposed a SQLite-backed deny-by-default exact-host allowlist as the
 functional inbound authorization surface for cross-host daemon traffic.
 
 The policy must define:

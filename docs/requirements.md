@@ -16,8 +16,8 @@ The product is a local command-line tool named `atm`.
 
 The current target architecture uses a tightly-bounded singleton daemon runtime
 for same-host local IPC, mail routing, and native-agent notification. ATM
-command behavior remains the user-facing surface; cross-host TCP/TLS transport
-is superseded.
+command behavior remains the user-facing surface. The prior custom cross-host
+transport is superseded; Phase AI defines the replacement HTTPS/TCP adapter.
 
 Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original
@@ -310,7 +310,7 @@ Satisfied by:
 - singleton daemon runtime
 - Phase AI target daemon API: HTTP over local UDS and HTTPS over TCP for remote
   peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
-  HTTP target becomes live only through the ordered AI.5+ migration.
+  local HTTP target becomes live in AI.6 and the remote HTTPS target in AI.9.
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - caller identity resolution through explicit CLI override or invoking-shell
@@ -3602,7 +3602,7 @@ mail correctness.
     closed with typed backpressure instead of silently buffering unbounded
     plugin traffic
 
-- `REQ-CORE-TRANSPORT-002` After AI.8, cross-host traffic must be daemon-to-daemon HTTPS
+- `REQ-CORE-TRANSPORT-002` After AI.9, cross-host traffic must be daemon-to-daemon HTTPS
   only.
 
   Required behavior:
@@ -3624,17 +3624,21 @@ mail correctness.
     - `atm send <agent>@<team> --host <host> ...`
   - those two forms are logically equivalent and must normalize into one typed
     request field for the remote host
-  - the inline form splits on the final `.` after `@`
+  - because team names cannot contain `.`, the inline form splits at the first
+    `.` after `@`; the remainder is the host and may be a DNS name or IP
+    address containing additional periods
   - mixed inline-host plus `--host` input is rejected instead of silently
     preferring one source
-  - one post-write router selects local nudge for an empty/current destination
-    host and the HTTPS adapter for another destination host
-  - sender-side daemons must not write a remote recipient into their local
-    mailbox and must not maintain a separate remote-delivery queue
+  - one post-write router selects local nudge for an empty destination host and
+    the HTTPS adapter for every present destination host, including `localhost`
+    and the daemon's own advertised or bound IP address
+  - the canonical local write may persist the sender's immutable outbound
+    message record before post-write routing, but it must not create a local
+    recipient-inbox row for a remote recipient or any remote-delivery queue
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
-  peer-trust configuration must use durable daemon-owned SQLite state rather
-  than environment variables.
+  peer-trust configuration must use durable storage-backed state rather than
+  environment variables. SQLite is the initial backend behind that trait.
 
   Required behavior:
   - the daemon reads enabled bind/advertise interfaces, certificate identity,
@@ -3682,7 +3686,13 @@ mail correctness.
 
   Required behavior:
   - local admission alone is not remote success
-  - a failed HTTPS request leaves the prior local message state unchanged
+  - a failed HTTPS request may leave the already-persisted immutable local
+    sender record, but creates no remote recipient row, delivery receipt,
+    retry state, or sender-side acknowledgement mutation
+  - the receiving daemon validates the recipient against its own local roster
+    in the shared write handler; it never reads or preflights the sender host's
+    roster. A remote rejection returns the ordinary `AtmError` response and
+    leaves receiver mailbox state unchanged
   - acknowledgement is an ordinary canonical write with
     `acknowledges_message_id` populated; its state transition occurs only in
     the receiver's shared write handler

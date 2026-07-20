@@ -22,11 +22,13 @@ The only cross-host transport responsibilities are:
 4. hand an accepted inbound request to the common router.
 
 Interface bindings, local certificate identity, and peer trust records are
-SQLite-backed configuration managed by CLI. Environment variables are not an
-operator configuration surface. Peer trust is exact host identity plus pinned
-certificate fingerprint; adding or replacing a trust record requires explicit
-operator confirmation. The initial certificate may be self-signed and generated
-on demand. Unauthenticated or untrusted TLS peers are rejected before routing.
+durable configuration behind the storage trait, managed by CLI. SQLite is the
+initial backend; neither the HTTPS adapter nor daemon runtime imports SQLite
+types. Environment variables are not an operator configuration surface. Peer
+trust is exact host identity plus pinned certificate fingerprint; adding or
+replacing a trust record requires explicit operator confirmation. The initial
+certificate may be self-signed and generated on demand. Unauthenticated or
+untrusted TLS peers are rejected before routing.
 
 The daemon has no cross-host outbox, replay store, retry state, receipt
 synthesis, per-host acknowledgement state, or duplicate-delivery subsystem.
@@ -36,9 +38,10 @@ the same message identity idempotently on either host.
 ## Consequences
 
 An unavailable remote peer returns a normal transport error for that write
-attempt. It does not mutate a local remote-message state machine. Operators may
-retry by issuing the same immutable message identity through the ordinary write
-path.
+attempt. The canonical local write may already have stored the sender's
+immutable outbound record, but it creates no recipient-inbox row, remote state
+machine, receipt, or retry state. Operators may retry the same immutable
+message identity through the ordinary write path.
 
 ADR-028, ADR-029, ADR-030, and ADR-031 are superseded by this integrated
 interface, trust, TLS, and transport decision.

@@ -166,7 +166,7 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
   policy for HTTP(S), store busy timeout, ingest batch, and doctor query
   operations. Satisfies:
-  `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
+  `REQ-CORE-TRANSPORT-005`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
   must remain tracked by runtime drain ownership until it finishes or is
   cancelled; detached untracked request execution is forbidden. Satisfies:
@@ -417,21 +417,10 @@ Required runtime rules:
   ownership transfer
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
-- same-host local IPC must use the ATM frame contract defined by
-  `docs/atm-daemon/protocol-icd.md`
-- the governing ICD owns the exact `magic`, `version`, `flags`,
-  `request_id`, `payload_length`, `message_kind`, and public packet-payload
-  mapping contract
-- same-host local IPC must expose one logical endpoint contract and same-user
-  access-control policy across Unix and Windows instead of leaking socket-path
-  or named-pipe details above the adapter line
-- `message_kind` must be available before payload decode so transport handlers
-  can switch on packet type before touching payload JSON
-- explicit frame-length delimiting is required; connection shutdown/EOF is not
-  the request boundary contract
-- invalid header, partial frame, timeout, oversize payload, or decode failure
-  must fail the connection rather than triggering best-effort mid-stream
-  resynchronization
+- **Historical local-frame contract:** the retired ATM frame ICD, its header
+  fields, frame decoder, and named-pipe mapping are not accepted runtime
+  behavior. Phase AI replaces them with the HTTP/UDS contract in
+  `REQ-DAEMON-TRANSPORT-001`, `005`, `006`, and `008`.
 - daemon-private runtime control must be partitioned into explicit ownership
   modules for these accepted runtime partitions:
   - singleton ownership
@@ -456,11 +445,8 @@ Required runtime rules:
   supported operating system; compile-only support or typed unsupported-path
   stubs are not a releasable end state
 - the same-host transport boundary must remain platform-neutral above the
-  adapter layer:
-  - Unix may use Unix domain sockets
-  - Windows may use named-pipe-backed local IPC
-  - caller-visible runtime code above the transport adapter must not depend on
-    Unix-only stream or listener types
+  adapter layer: Unix and Windows use AF_UNIX HTTP; caller-visible runtime
+  code must not depend on platform socket-path or listener types
 - platform cfg is allowed only inside owned daemon adapter modules; composition,
   dispatcher, health, and runtime-lane code must not embed transport-
   or control-source-specific OS branching

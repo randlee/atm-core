@@ -18,6 +18,36 @@ target: integrate/phase-AI
 3. Surface safe configured/bound/trust state in `atm doctor`.
 4. Forbid environment-controlled peer address, bind address, or trust state.
 
+## Contract
+
+```rust
+pub struct HttpsInterface {
+    pub bind_addr: SocketAddr,
+    pub advertise_host: HostName,
+    pub enabled: bool,
+}
+
+pub struct LocalCertificate {
+    pub fingerprint: CertificateFingerprint,
+    pub private_key_ref: PrivateKeyRef,
+}
+
+pub struct TrustedPeer {
+    pub host: HostName,
+    pub fingerprint: CertificateFingerprint,
+    pub enabled: bool,
+}
+
+pub trait PeerConfigStore: Send + Sync {
+    fn enabled_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
+    fn local_certificate(&self) -> Result<LocalCertificate, AtmError>;
+    fn trusted_peer(&self, host: &HostName) -> Result<TrustedPeer, AtmError>;
+}
+```
+
+This trait is configuration-only. It contains no delivery status, retry, or
+mailbox state and is implemented by the selected storage backend.
+
 ## Acceptance criteria
 
 - No enabled interface means no HTTPS listener.
@@ -26,6 +56,11 @@ target: integrate/phase-AI
 - Configuration is behind the storage trait; HTTP/HTTPS adapters do not use
   rusqlite types.
 - Doctor never exposes private key material.
+
+## Non-closure
+
+AI.8 closes durable configuration and its operator surface only. HTTPS bind,
+accept, and outbound delivery are AI.9 work and must not be implemented here.
 
 ## Required validation
 

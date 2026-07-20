@@ -19,9 +19,33 @@ target: integrate/phase-AI
 3. Replace the current custom local framing/client codec with HTTP over UDS.
    The same UDS contract must run on Unix and Windows AF_UNIX.
 4. Delete Windows named-pipe mapping/fallback and the custom ATM frame codec
-   after all retained operations are represented by the REST contract.
+   after all retained operations are represented by the REST contract. The
+   deletion inventory includes the `AtmProtocol`, `ClientTransport`,
+   `ServerTransport`, and `RequestDispatcher` frame-boundary records, their
+   codec implementations, and `docs/atm-daemon/protocol-icd.md`; retain none
+   under a new name or fallback feature.
 5. Embed/publish the OpenAPI JSON through `atm api spec` and contract-test it
    against router requests/responses.
+
+## Contract
+
+```rust
+pub enum ApiRequest {
+    Messages(MessageQuery),
+    Write(WriteRequest),
+    Message(MessageId),
+    Clear(MessageId),
+    Doctor,
+    Teams(TeamRequest),
+}
+
+pub trait ApiRouter: Send + Sync {
+    fn route(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+}
+```
+
+The UDS adapter translates HTTP to/from `ApiRequest` and calls `ApiRouter`; it
+does not own a storage, nudge, acknowledgement, or routing branch.
 
 ## Acceptance criteria
 
@@ -31,6 +55,12 @@ target: integrate/phase-AI
 - No source/dependency reference to named pipes or the retired custom frame
   protocol remains.
 - Router tests prove adapters cannot reach storage or post-send boundaries.
+
+## Non-closure
+
+AI.6 supplies the one HTTP/UDS ingress and routes each operation to the
+retained handler surface. AI.7 alone consolidates write semantics; AI.6 must
+not introduce a temporary second write handler.
 
 ## Required validation
 

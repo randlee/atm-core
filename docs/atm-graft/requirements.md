@@ -4,18 +4,22 @@
 
 This document defines the `atm-graft` crate requirements.
 
-The `atm-graft` crate owns the embedded Rust host-agent integration surface for
-the post-Phase-S daemon/runtime line. Product behavior remains defined in
+The `atm-graft` crate owns the embedded Rust host-agent integration surface.
+Product behavior remains defined in
 [`../requirements.md`](../requirements.md). `atm-graft` must satisfy those
 product requirements without re-owning `atm-core` service semantics,
 `atm-daemon` runtime behavior, or `atm-rusqlite` durability.
+
+Phase AI replaces the legacy same-host framed client with ADR-033's HTTP/UDS
+`DaemonApiClient`. Graft is one client of that API; it must not preserve a
+graft-specific protocol, frame codec, write path, or chat-address parser.
 
 ## 2. Ownership
 
 `atm-graft` owns:
 
 - same-host daemon-client integration for linked Rust host-agent executables
-- graft-session activation and lifecycle
+- graft lifecycle activation and lifecycle
 - automatic graft-backed post-send receipt when graft mode is active
 - automatic between-tool-call nudge injection bridge for the embedding host
 - host wake/event signaling when a new nudge arrives while the host is idle
@@ -31,7 +35,7 @@ product requirements without re-owning `atm-core` service semantics,
 - direct ownership of ATM semantic types that already belong to `atm-core`
 - forced interruption of a running tool call inside the host executable
 - runtime/storage composition ownership
-- shared daemon packet families for receiver-private session or stream behavior
+- shared daemon packet families for receiver-private lifecycle or stream behavior
 
 ## 3. Requirement Namespace
 
@@ -82,7 +86,7 @@ The `atm-graft` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-daemon/requirements.md`](../atm-daemon/requirements.md)
 - [`../atm-daemon/architecture.md`](../atm-daemon/architecture.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 5. Phase U Embedded-Graft Rules
 
@@ -100,6 +104,9 @@ Required rules:
   `atm_core::load_atm_config`; it must not privately reparse `.atm.toml`
 - if graft mode is active, runtime identity comes from `ATM_IDENTITY`; graft
   mode must not invent a separate identity source
+- a caller chat-id, when present, is part of the explicit ADR-037
+  `AgentAddress`; `GraftSession` is host-local lifecycle state and must not be
+  serialized as a daemon session or substitute for `ChatId`
 - if graft mode is active, `ATM_IDENTITY` and `ATM_TEAM` resolve successfully,
   and the standard same-host daemon endpoint can be derived from ATM-owned
   config/environment inputs, `atm-graft` may attempt the standard supervised
@@ -161,8 +168,8 @@ Required rules:
   - `HostNudgeInjector`
   - `GraftObservability`
 - the shared `atm-core` public contract for that surface is:
-  - existing shared transport and protocol DTOs for unary `send` / `read` /
-    `ack`
+  - `DaemonApiClient` plus canonical `AgentAddress`/`WriteRequest` DTOs for
+    unary `send` / `read` / `ack`
   - no graft-specific public trait family unless the shared boundary proves
     insufficient
 - the standard convenience `GraftClient::connect()` path must reuse the same
@@ -174,7 +181,7 @@ Required rules:
   dependency on `atm-runtime`, `atm-storage-rusqlite`, or other concrete
   storage backends
 - `atm-graft` compatibility with the primary `atm` install is defined by the
-  documented same-host RPC surface, not by a requirement that both crates ship
+  documented same-host HTTP API, not by a requirement that both crates ship
   in lockstep versions
 - any hook-facing command that renders insertion-ready nudge text belongs on
   the `atm` CLI surface and must call the same daemon API used by `atm-graft`,

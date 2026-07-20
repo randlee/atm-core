@@ -302,7 +302,7 @@ only in these daemon-owned areas:
 
 1. Same-host local IPC transport
    - Unix: Unix domain socket
-   - Windows: named-pipe-backed local IPC
+   - Windows: AF_UNIX HTTP local IPC
 2. Runtime lifecycle-control source
    - Unix: signal-based control source
    - Windows: console or service-control source
@@ -322,10 +322,12 @@ If a code path needs additional platform branching outside the three areas
 above, the architecture docs and boundary inventory must be updated before the
 implementation is accepted.
 
-## 3.0.2 Shared Frame Contract
+## 3.0.2 Historical Shared Frame Contract
 
-The daemon host shell must use the shared ATM frame contract defined in
-[`protocol-icd.md`](./protocol-icd.md).
+Through AI.5, the daemon host shell uses the shared ATM frame contract defined
+in [`protocol-icd.md`](./protocol-icd.md). AI.6 retires it for ADR-033's
+HTTP-over-UDS contract; the frame contract must not be extended or preserved as
+a fallback.
 
 That includes:
 - one fixed ATM frame header
