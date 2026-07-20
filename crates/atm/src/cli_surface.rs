@@ -9,18 +9,17 @@
 //! `crate::commands` is immediately visible to both outputs the next time
 //! they are regenerated.
 //!
-//! This module backs two maintainer-facing tools, both driven by the hidden
-//! `ATM_CLI_SURFACE_DUMP` environment variable checked early in
-//! [`crate::run`], before any normal argument parsing occurs:
+//! This module backs two maintainer-facing tools through the hidden parsed
+//! `atm __dump-cli-surface --format <json|markdown>` subcommand:
 //!
-//! - `ATM_CLI_SURFACE_DUMP=json` prints [`command_surface_json`] output,
+//! - `atm __dump-cli-surface --format json` prints [`command_surface_json`] output,
 //!   consumed by `crates/atm/tests/cli_surface.rs` and used to regenerate
 //!   `crates/atm/tests/cli_surface_baseline.json`.
-//! - `ATM_CLI_SURFACE_DUMP=markdown` prints [`command_surface_markdown`]
+//! - `atm __dump-cli-surface --format markdown` prints [`command_surface_markdown`]
 //!   output, used to regenerate the version-suffixed `docs/atm/cli-reference-<version>.md`.
 //!
-//! Neither mode is a documented `atm` subcommand or flag; both are
-//! test/tooling seams only, invoked out-of-band by
+//! The command is hidden from normal help but still uses the normal parse,
+//! tracing, and observability bootstrap path. It is invoked by
 //! `crates/atm/examples/gen_cli_docs.rs` and the CLI-surface diff test.
 
 use clap::{Arg, Command};

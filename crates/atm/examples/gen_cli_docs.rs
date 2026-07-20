@@ -3,18 +3,17 @@
 //!
 //! `crates/atm` ships only a `[[bin]]` target (no library), so this example
 //! cannot import `commands::Cli` directly. Instead it builds (if needed) and
-//! shells out to the sibling `atm` binary with the hidden
-//! `ATM_CLI_SURFACE_DUMP` environment variable (see
-//! `crates/atm/src/cli_surface.rs` and `crates/atm/src/main.rs`), which walks
-//! the live `clap::Command` tree in-process and prints canonical output
-//! before any normal argument parsing occurs. This keeps a single source of
-//! truth for the walk/render logic — this example is just a thin driver that
-//! writes the two outputs to disk.
+//! shells out to the sibling `atm` binary with the hidden parsed
+//! `__dump-cli-surface` subcommand (see `crates/atm/src/cli_surface.rs` and
+//! `crates/atm/src/main.rs`), which walks the live `clap::Command` tree and
+//! prints canonical output through the normal CLI bootstrap path. This keeps a
+//! single source of truth for the walk/render logic — this example is just a
+//! thin driver that writes the two outputs to disk.
 //!
 //! # Usage
 //!
 //! ```text
-//! cargo run -p agent-team-mail --example gen_cli_docs
+//! cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs
 //! ```
 //!
 //! This regenerates:
@@ -72,7 +71,7 @@ fn ensure_atm_binary_built() -> PathBuf {
         .file_name()
         .is_some_and(|name| name == "release");
     let mut build = Command::new(env!("CARGO"));
-    build.args(["build", "--bin", "atm"]);
+    build.args(["build", "--bin", "atm", "--features", "cli-surface-dump"]);
     if release {
         build.arg("--release");
     }
@@ -92,7 +91,7 @@ fn ensure_atm_binary_built() -> PathBuf {
 
 fn dump(atm_bin: &Path, mode: &str) -> String {
     let output = Command::new(atm_bin)
-        .env("ATM_CLI_SURFACE_DUMP", mode)
+        .args(["__dump-cli-surface", "--format", mode])
         .output()
         .unwrap_or_else(|error| panic!("failed to run {} ({mode}): {error}", atm_bin.display()));
     assert!(
