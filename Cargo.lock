@@ -176,6 +176,7 @@ dependencies = [
  "cargo_metadata",
  "regex",
  "serde",
+ "syn",
  "toml",
 ]
 

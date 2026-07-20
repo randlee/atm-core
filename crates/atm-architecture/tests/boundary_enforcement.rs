@@ -13,6 +13,7 @@ use std::{
 use cargo_metadata::{DependencyKind, MetadataCommand};
 use regex::Regex;
 use serde::Deserialize;
+use syn::Item;
 
 const ACTIVE_SPRINT_ENV: &str = "ATM_ARCH_ACTIVE_SPRINT";
 const DIFF_BASE_ENV: &str = "ATM_ARCH_DIFF_BASE";
@@ -335,9 +336,10 @@ fn scan_manifest_file(manifest: &SprintDeleteManifest, relative_path: &str) -> V
         Ok(contents) => contents,
         Err(error) => {
             return vec![format!(
-                "{} ({}): scan_files entry not found -- likely stale after a file move; update the manifest: {} ({error})",
+                "{} ({}): manifest scan path `{}` is unavailable at {}; resolve the manifest before this gate can pass: {error}",
                 manifest.sprint,
                 manifest.description,
+                relative_path,
                 path.display(),
             )];
         }
@@ -369,7 +371,102 @@ fn scan_manifest_file(manifest: &SprintDeleteManifest, relative_path: &str) -> V
         }
     }
 
+    match forbidden_type_definitions_in_source(&contents, &manifest.forbidden_type_definitions) {
+        Ok(definitions) => {
+            for definition in definitions {
+                violations.push(format!(
+                    "{} ({}): forbidden type definition `{}` present in {}",
+                    manifest.sprint, manifest.description, definition, relative_path
+                ));
+            }
+        }
+        Err(error) => violations.push(format!(
+            "{} ({}): failed to parse Rust source {} for forbidden type definitions: {error}",
+            manifest.sprint, manifest.description, relative_path
+        )),
+    }
+
     violations
+}
+
+fn forbidden_type_definitions_in_source(
+    source: &str,
+    forbidden_names: &[String],
+) -> Result<Vec<String>, syn::Error> {
+    if forbidden_names.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let file = syn::parse_file(source)?;
+    let forbidden_names = forbidden_names
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let mut definitions = Vec::new();
+    collect_forbidden_type_definitions(&file.items, &forbidden_names, &mut definitions);
+    Ok(definitions)
+}
+
+fn collect_forbidden_type_definitions(
+    items: &[Item],
+    forbidden_names: &BTreeSet<&str>,
+    definitions: &mut Vec<String>,
+) {
+    for item in items {
+        let definition = match item {
+            Item::Struct(item) => Some(("struct", &item.ident)),
+            Item::Enum(item) => Some(("enum", &item.ident)),
+            Item::Union(item) => Some(("union", &item.ident)),
+            Item::Trait(item) => Some(("trait", &item.ident)),
+            Item::Type(item) => Some(("type", &item.ident)),
+            Item::Mod(item) => {
+                if let Some((_, nested_items)) = &item.content {
+                    collect_forbidden_type_definitions(nested_items, forbidden_names, definitions);
+                }
+                None
+            }
+            _ => None,
+        };
+
+        if let Some((kind, ident)) = definition {
+            let name = ident.to_string();
+            if forbidden_names.contains(name.as_str()) {
+                definitions.push(format!("{kind} {ident}"));
+            }
+        }
+    }
+}
+
+#[test]
+fn forbidden_type_definition_gate_uses_rust_ast_not_comments_or_strings() {
+    let source = r#"
+        // RemovedType should not be matched here.
+        const EXAMPLE: &str = "RemovedType";
+        struct RemovedType;
+    "#;
+    let definitions = forbidden_type_definitions_in_source(source, &["RemovedType".to_string()])
+        .expect("fixture must parse as Rust");
+
+    assert_eq!(definitions, vec!["struct RemovedType".to_string()]);
+}
+
+#[test]
+fn delete_manifest_missing_scan_path_fails_closed_with_a_gate_violation() {
+    let manifest = SprintDeleteManifest {
+        sprint: "AG.fixture".to_string(),
+        description: "missing-path fixture".to_string(),
+        scan_files: Vec::new(),
+        allowed_changed_files: Vec::new(),
+        min_net_crates_loc: 0,
+        forbidden_type_definitions: Vec::new(),
+        forbidden_literals: Vec::new(),
+        forbidden_regexes: Vec::new(),
+    };
+
+    let violations = scan_manifest_file(&manifest, "missing/delete-list-scan-target.rs");
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("manifest scan path"));
+    assert!(violations[0].contains("resolve the manifest before this gate can pass"));
 }
 
 fn validate_manifest_diff_gate(
@@ -527,6 +624,8 @@ struct SprintDeleteManifest {
     allowed_changed_files: Vec<String>,
     min_net_crates_loc: isize,
     #[serde(default)]
+    forbidden_type_definitions: Vec<String>,
+    #[serde(default)]
     forbidden_literals: Vec<String>,
     #[serde(default)]
     forbidden_regexes: Vec<String>,
@@ -548,6 +647,7 @@ fn delete_list_gate_scopes_to_the_active_sprint() {
             scan_files: Vec::new(),
             allowed_changed_files: Vec::new(),
             min_net_crates_loc: -1,
+            forbidden_type_definitions: Vec::new(),
             forbidden_literals: Vec::new(),
             forbidden_regexes: Vec::new(),
         },
@@ -557,6 +657,7 @@ fn delete_list_gate_scopes_to_the_active_sprint() {
             scan_files: Vec::new(),
             allowed_changed_files: Vec::new(),
             min_net_crates_loc: -1,
+            forbidden_type_definitions: Vec::new(),
             forbidden_literals: Vec::new(),
             forbidden_regexes: Vec::new(),
         },
@@ -595,6 +696,7 @@ fn diff_gate_rejects_out_of_scope_and_positive_loc_growth() {
         scan_files: Vec::new(),
         allowed_changed_files: vec!["crates/atm-core/src/protocol.rs".to_string()],
         min_net_crates_loc: -100,
+        forbidden_type_definitions: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     };
@@ -618,17 +720,13 @@ fn diff_gate_rejects_out_of_scope_and_positive_loc_growth() {
     ];
 
     let violations = validate_manifest_diff_gate(&manifest, &changed_files, &numstat, false);
-    assert!(
-        violations
-            .iter()
-            .any(|v| v.contains("outside the sprint allowlist"))
-    );
+    assert!(violations
+        .iter()
+        .any(|v| v.contains("outside the sprint allowlist")));
     assert!(violations.iter().any(|v| v.contains("forbidden gate edit")));
-    assert!(
-        violations
-            .iter()
-            .any(|v| v.contains("net crates/ LOC delta"))
-    );
+    assert!(violations
+        .iter()
+        .any(|v| v.contains("net crates/ LOC delta")));
 }
 
 #[test]
@@ -642,6 +740,7 @@ fn diff_gate_accepts_negative_loc_within_allowlist() {
             "crates/atm/src/composition.rs".to_string(),
         ],
         min_net_crates_loc: -100,
+        forbidden_type_definitions: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     };

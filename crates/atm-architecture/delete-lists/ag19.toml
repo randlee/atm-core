@@ -13,6 +13,12 @@ allowed_changed_files = [
   "crates/atm/src/composition.rs",
 ]
 
+forbidden_type_definitions = [
+  "AckReplyStateMachine",
+  "AckReplyDisposition",
+  "FinalizeAckContext",
+]
+
 forbidden_literals = [
   "execute_remote_ack_reply_plan",
   "AckReplyStateMachine",
