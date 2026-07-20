@@ -686,12 +686,10 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");
             assert_eq!(outcome.receipt_message_id, Some(outcome.message_id));
-            assert!(
-                outcome
-                    .summary
-                    .as_deref()
-                    .is_some_and(|summary| summary.contains("deferred remote delivery"))
-            );
+            assert!(outcome
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.contains("deferred remote delivery")));
             outcome.message_id
         }
         other => panic!("unexpected deferred response: {other:?}"),

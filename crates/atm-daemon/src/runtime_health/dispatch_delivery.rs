@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
     ack::{ack_request_from_send_request, finalize_ack_after_send, prepare_ack_reply},
     boundary,
     clear::clear_mail_with_runtime,
@@ -11,10 +10,11 @@ use atm_core::{
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
         persist_remote_delivery_receipt_with_runtime, route_send_request,
-        send_mail_with_runtime_and_post_send_emitter,
+        send_mail_with_runtime_and_post_send_emitter, SendCommandOutcome, SendOutcome, SendRequest,
+        SendRequestRoute,
     },
+    RequestEnvelope, ResponseEnvelope,
 };
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};

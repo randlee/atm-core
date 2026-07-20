@@ -595,10 +595,12 @@ mod tests {
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
-        let transport = Arc::new(FakeClientTransport::new(Box::new(
-            |request| match request {
-                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => {
-                    Ok(CoreResponseEnvelope::Send(SendOutcome {
+        let transport =
+            Arc::new(FakeClientTransport::new(Box::new(|request| {
+                match request {
+                CoreRequestEnvelope::Send(request)
+                    if request.acknowledges_message_id.is_none() => Ok(
+                    CoreResponseEnvelope::Send(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated(TEST_LEAD),
@@ -612,8 +614,8 @@ mod tests {
                         message: None,
                         warnings: Vec::new(),
                         dry_run: false,
-                    }))
-                }
+                    }),
+                ),
                 CoreRequestEnvelope::Peek(_) => {
                     Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
                         action: CommandAction::Peek,
@@ -652,8 +654,9 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_some() => {
-                    Ok(CoreResponseEnvelope::Ack(
+                CoreRequestEnvelope::Send(request)
+                    if request.acknowledges_message_id.is_some() => Ok(
+                    CoreResponseEnvelope::Ack(
                         serde_json::from_value(json!({
                             "action": "ack",
                             "team": TEST_TEAM,
@@ -666,11 +669,11 @@ mod tests {
                             "warnings": [],
                         }))
                         .expect("ack outcome"),
-                    ))
-                }
+                    ),
+                ),
                 other => panic!("unexpected request: {other:?}"),
-            },
-        )));
+                }
+            })));
         let client = GraftClient::from_transport(transport);
 
         let send_request = SendRequest::new(

@@ -3,15 +3,15 @@ use std::path::PathBuf;
 use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::error::AtmError;
-use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use crate::observability::{action_name, outcome_label, CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{AtmMessageId, InboxMessage, remote_host as message_remote_host};
+use crate::schema::{remote_host as message_remote_host, AtmMessageId, InboxMessage};
 use crate::send::{
-    RemoteTargetHost, SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest, input,
-    send_mail_with_runtime, send_mail_with_runtime_and_post_send_emitter, summary,
+    input, send_mail_with_runtime, send_mail_with_runtime_and_post_send_emitter, summary,
+    RemoteTargetHost, SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
+use crate::service_runtime_store::{default_runtime, RetainedMailboxRuntime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -570,8 +570,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::{
-        PreparedAckReply, ReplyTarget, canonical_sender_identity,
-        finalize_ack_after_send_with_runtime, resolve_reply_target,
+        canonical_sender_identity, finalize_ack_after_send_with_runtime, resolve_reply_target,
+        PreparedAckReply, ReplyTarget,
     };
     use crate::boundary::{MailMessageState, Message, MessageKey};
     use crate::error::AtmError;

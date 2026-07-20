@@ -376,7 +376,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 #[cfg(test)]
 mod tests {
     use super::{
-        LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES, append_notification_log_at_path,
+        append_notification_log_at_path, LocalFileNonClaudeOutbound, MAX_NON_CLAUDE_PAYLOAD_BYTES,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
