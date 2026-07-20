@@ -12,13 +12,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/peer_transport/replay_persistence.rs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-20T05:11:33Z" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> ;
-  triage:notes "NARROWED to test-gap-only per AG19-FIX-1-QA-RECHECK-2 at ef699b64: the code fix has landed -- complete_replay_record now calls finalize_acknowledgement_after_confirmed_delivery when the replayed record carries acknowledges_message_id, closing the original stuck-PendingAck defect. STILL OPEN only because no regression test proves replay eventually clears pending_ack_at for a deferred/replayed ack. Confirmed independently by req-qa, arch-qa, rust-service-hardening-agent." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:notes "FIXED at d50e7c92 per AG19-FIX-3-QA-RECHECK-1 (quality-mgr): complete_replay_record calls finalize_acknowledgement_after_confirmed_delivery when the replayed record carries acknowledges_message_id, closing the original stuck-PendingAck defect. Proven end-to-end by cross_host.rs's restart+replay integration test (cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending), personally verified by quality-mgr reading the test directly: it forces a Deferred ack, confirms pending_ack_at.is_some(), restarts the dispatcher, and polls until pending_ack_at.is_none() && acknowledged_at.is_some(). rust-qa-agent's narrower QA-001 concern (peer_transport unit tests only) was dismissed as an incomplete search that missed this daemon-level integration test." .
 
 <urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/2>
   a triage:Occurrence ;
@@ -26,15 +26,22 @@
   triage:line 155 ;
   triage:lineEnd 178 ;
   triage:snippet "complete_replay_record now calls finalize_acknowledgement_after_confirmed_delivery for record.request.acknowledges_message_id, but no regression test proves replay clears pending_ack_at" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "ef699b64" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> .
+  triage:headSha "d50e7c92" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/d50e7c92> .
 
 <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
   triage:headSha "ef699b64" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAG-s19/d50e7c92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "d50e7c92" ;
   triage:orderIndex 0 .

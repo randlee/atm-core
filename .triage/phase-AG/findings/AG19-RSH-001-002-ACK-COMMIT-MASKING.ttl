@@ -20,15 +20,14 @@
   triage:severity "Critical" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2> ;
-  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
-  triage:notes "AG19-FIX-1-QA-RECHECK-1 verdict splits this: RSH-001 (masking) FIXED -- finalize_acknowledgement_after_confirmed_send (send/mod.rs:60-83) now pushes a WarningEntry on local-commit failure instead of masking a delivered reply as failed, outcome.outcome stays Sent, surfaced via output.rs. RECONFIRMED unregressed by AG19-FIX-1-QA-RECHECK-2 (req-qa + arch-qa) at ef699b64. RSH-002 (retry idempotency) STILL OPEN at ef699b64 per AG19-FIX-1-QA-RECHECK-2: dispatched again in AG19-FIX-1 required_fixes item 3, but arch-ctm's ef699b64 push did not add an idempotency key/guard; a retried atm ack after a local-commit-failure warning can still emit a second real reply." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:notes "RSH-001 FIXED (unregressed since ef699b64). RSH-002 FIXED at d50e7c92 per AG19-FIX-3-QA-RECHECK-1 (quality-mgr): send/persistence.rs's existing_acknowledgement_reply lookup prevents a duplicate reply on retry, independent of prior local-commit outcome. Real regression test cross_host.rs::retrying_a_delivered_acknowledgement_cannot_create_a_second_reply, confirmed passing live by rust-qa-agent. Confirmed by req-qa, rust-qa-agent, arch-qa." .
 
 # Occurrence 1: RSH-001 - commit_ack_mutation failure masks successful delivery -- FIXED at dc05145b
 <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1>
@@ -56,11 +55,11 @@
   triage:line 65 ;
   triage:snippet "dispatch_send has no idempotency key check before re-dispatching a retried ack SendRequest" ;
   triage:description "STILL OPEN. A caller retrying atm ack after RSH-001's warning (per the warning's own advice text) will re-resolve and re-dispatch a brand-new SendRequest with the same reply body, creating a duplicate visible reply. The only added guard checks PendingAck state, which does not stop a second send from occurring." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "ef699b64" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
+  triage:headSha "d50e7c92" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/d50e7c92> .
 
 # Worktree snapshot: feature/pAG-s19-delete-remote-ack-path
 <urn:atm:triage:worktree/pAG-s19/ef699b64>
@@ -68,4 +67,12 @@
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
   triage:headSha "ef699b64" ;
+  triage:orderIndex 0 .
+
+# Worktree snapshot: feature/pAG-s19-delete-remote-ack-path @ d50e7c92 (AG19-FIX-3)
+<urn:atm:triage:worktree/pAG-s19/d50e7c92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "d50e7c92" ;
   triage:orderIndex 0 .

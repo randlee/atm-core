@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-GATE-REGRESSION-AG19-R3>
+  a triage:Finding ;
+  triage:findingId "CI-GATE-REGRESSION-AG19-R3" ;
+  triage:title "AG deletion gate CI check fails at d50e7c92 -- allowlist violation and LOC floor violation, both caused by AG19-FIX-3's legitimate additive fix work" ;
+  triage:description "quality-mgr (AG19-FIX-3-QA-RECHECK-1, Blocking, CI-verified live): the AG deletion gate CI check (active_sprint_diff_gate_must_hold_when_configured, crates/atm-architecture/tests/boundary_enforcement.rs:193) fails at d50e7c92 with two independent failures. (1) Allowlist violation: 4 changed files are outside ag19.toml's allowed_changed_files -- crates/atm-core/src/send/delivery_persistence.rs, crates/atm-core/src/send/outcome.rs, crates/atm-core/src/send/persistence.rs, docs/atm-daemon/protocol-icd.md -- exactly the files this fix round used to close RSH-002, AG19-RBQA-R2-F001 (partial), and ATM-QA-AG19-R2-004. (2) LOC floor violation: net crates/ LOC delta is now -26, below ag19.toml's required -100 floor; the fix round's additive changes (idempotency guard, existing_acknowledgement_reply lookup, new regression tests) pushed the sprint's own net-deletion requirement out of compliance. Verified via gh run view 29719740937 --log. NO GAMING DETECTED -- this is a side effect of legitimate additive fix work, not an evasion attempt; none of the 4 delegated background reviewers caught this because none had live Bash/CI access to re-run the gate script (arch-qa explicitly flagged this gap)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI-GATE" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "ag19.toml allowed_changed_files + net crates/ LOC delta vs sprint floor" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-GATE-REGRESSION-AG19-R3/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/d50e7c92> ;
+  triage:notes "Newly discovered by AG19-FIX-3-QA-RECHECK-1 (quality-mgr, independently re-ran scripts/check-ag-sprint-gates.sh / boundary_enforcement.rs live via Bash). Not waivable per standing merge-gate policy. Required fix, either or both: (1) add the 4 newly-touched files to ag19.toml's allowed_changed_files; (2) restore net crates/ LOC to at least -100 via additional legitimate deletion elsewhere in sprint scope. Both the allowlist and the LOC floor must pass before merge." .
+
+<urn:atm:triage:occurrence/CI-GATE-REGRESSION-AG19-R3/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/delete-lists/ag19.toml" ;
+  triage:line 0 ;
+  triage:snippet "allowed_changed_files missing send/delivery_persistence.rs, send/outcome.rs, send/persistence.rs, docs/atm-daemon/protocol-icd.md; net crates/ LOC delta -26 vs required -100 floor" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "d50e7c92" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/d50e7c92> .
+
+<urn:atm:triage:worktree/pAG-s19/d50e7c92>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "d50e7c92" ;
+  triage:orderIndex 0 .
