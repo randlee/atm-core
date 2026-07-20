@@ -6,10 +6,6 @@ use atm_core::graft::{
     read_graft_post_send_message, write_graft_post_send_message,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-// AG.18 migration: each test below must move to canonical unified send outcomes before this
-// legacy response type is deleted.
-#[allow(deprecated)]
-use atm_core::protocol::SendResponseEnvelope;
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -144,8 +140,6 @@ fn canonical_send_request(
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
@@ -162,7 +156,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         .expect("send response");
 
     let outcome = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
     assert_eq!(outcome.warnings.len(), 1);
@@ -175,8 +169,6 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: derive the ack result receive-side from the canonical unified send outcome.
-#[allow(deprecated)]
 fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
@@ -192,7 +184,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         ))
         .expect("source send response");
     let source_message_id = match source_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
+        ResponseEnvelope::Send(outcome) => outcome.message_id,
         other => panic!("expected send response, got {other:?}"),
     };
 
@@ -211,7 +203,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         .expect("ack response");
 
     let ack_outcome = match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        ResponseEnvelope::Ack(outcome) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
     assert_eq!(ack_outcome.warnings.len(), 1);
@@ -224,8 +216,6 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
     write_graft_enabled_config(&workspace_dir);
@@ -285,7 +275,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ))
         .expect("send response");
     let response = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
 

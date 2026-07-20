@@ -2,8 +2,6 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
     install_retained_runtime_factory();
     let self_ip = discover_non_loopback_ipv4_for_test();
@@ -70,7 +68,7 @@ fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+    let ResponseEnvelope::Send(outcome) = response else {
         panic!("expected send response");
     };
     assert_eq!(outcome.agent.as_str(), "qa-a");
@@ -115,8 +113,6 @@ fn dispatcher_self_ip_send_round_trips_through_peer_listener_into_self_inbox() {
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() {
     install_retained_runtime_factory();
     let self_ip = discover_non_loopback_ipv4_for_test();
@@ -178,7 +174,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+    let ResponseEnvelope::Send(outcome) = response else {
         panic!("expected send response");
     };
     assert_eq!(outcome.agent.as_str(), "qa-a");
@@ -235,7 +231,7 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
             "ack from secure self ip",
         ))
         .expect("ack over secure self ip");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
+    let ResponseEnvelope::Ack(outcome) = ack else {
         panic!("expected ack response");
     };
     assert!(matches!(
@@ -294,8 +290,6 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: derive the ack result receive-side from the canonical unified send outcome.
-#[allow(deprecated)]
 fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
     install_retained_runtime_factory();
     let self_ip = discover_non_loopback_ipv4_for_test();
@@ -357,7 +351,7 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure self-ip send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) = response else {
+    let ResponseEnvelope::Send(_) = response else {
         panic!("expected send response");
     };
 
@@ -437,8 +431,6 @@ fn dispatcher_secure_self_ip_failed_ack_keeps_source_pending() {
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_self_ip_without_listener_fails_closed_without_mailbox_mutation() {
     install_retained_runtime_factory();
     let self_ip = discover_non_loopback_ipv4_for_test();

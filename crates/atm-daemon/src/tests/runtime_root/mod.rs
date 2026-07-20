@@ -6,10 +6,6 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, next_request_id,
 };
-// AG.18 migration: runtime-root test modules must use canonical unified send outcomes before this
-// legacy fixture import is deleted.
-#[allow(deprecated)]
-use atm_core::protocol::SendResponseEnvelope;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
@@ -28,7 +24,6 @@ use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
 
-// AG.18 migration: runtime-root submodules must assert the canonical send response after legacy tagged responses are deleted.
 mod cross_host;
 mod dispatch;
 mod local_ipc;

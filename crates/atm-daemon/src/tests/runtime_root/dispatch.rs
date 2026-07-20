@@ -2,8 +2,6 @@ use super::*;
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert the canonical unified send outcome, then delete legacy matching.
-#[allow(deprecated)]
 fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -38,7 +36,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
             false,
         ))))
         .expect("dispatch send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = &response else {
+    let ResponseEnvelope::Send(outcome) = &response else {
         panic!("expected send response, got {response:?}");
     };
     assert_eq!(outcome.outcome.as_str(), "sent");

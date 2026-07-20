@@ -1,6 +1,6 @@
 use super::*;
 use atm_core::boundary::RequestDispatcher;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -606,8 +606,6 @@ fn write_team_config_for(home_dir: &std::path::Path, team: &str, members: &[&str
     .expect("write team config");
 }
 
-// AG.18 migration: decode the canonical unified send outcome, then delete legacy response matching.
-#[allow(deprecated)]
 fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
     let mut request = SendRequest::new(
         caller.home.to_path_buf(),
@@ -633,7 +631,7 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("send request should succeed")
     {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("unexpected send response: {other:?}"),
     }
 }
@@ -675,8 +673,6 @@ fn read_message_over_local_ipc(
     }
 }
 
-// AG.18 migration: derive the receive-side ack outcome from the canonical unified send outcome.
-#[allow(deprecated)]
 fn send_ack_over_local_ipc(
     socket_path: &std::path::Path,
     home: &std::path::Path,
@@ -697,7 +693,7 @@ fn send_ack_over_local_ipc(
     )
     .expect("ack over local ipc")
     {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        ResponseEnvelope::Ack(outcome) => outcome,
         other => panic!("unexpected local ipc ack response: {other:?}"),
     }
 }

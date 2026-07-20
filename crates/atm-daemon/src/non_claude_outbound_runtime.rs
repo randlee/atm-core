@@ -229,28 +229,25 @@ mod tests {
             remote_host: RemoteTargetHost,
             _deferred_receipt_message_id: AtmMessageId,
         ) -> Result<SendOutcome, CrossHostDeliveryInfraError> {
-            // AG.18 migration: construct the canonical send response instead of the legacy Sent variant.
             self.requests
                 .lock()
                 .expect("requests")
                 .push((remote_host.as_str().to_string(), request));
-            let response = atm_core::ResponseEnvelope::Send(
-                atm_core::protocol::SendResponseEnvelope::Sent(atm_core::send::SendOutcome {
-                    action: atm_core::types::CommandAction::Send,
-                    team: atm_core::types::TeamName::from_validated(TEST_TEAM),
-                    agent: atm_core::types::AgentName::from_validated("recipient"),
-                    sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
-                    outcome: atm_core::send::SendCommandOutcome::Sent,
-                    message_id: AtmMessageId::new(),
-                    receipt_message_id: None,
-                    requires_ack: false,
-                    task_id: None,
-                    summary: None,
-                    message: None,
-                    warnings: Vec::new(),
-                    dry_run: false,
-                }),
-            );
+            let response = atm_core::ResponseEnvelope::Send(atm_core::send::SendOutcome {
+                action: atm_core::types::CommandAction::Send,
+                team: atm_core::types::TeamName::from_validated(TEST_TEAM),
+                agent: atm_core::types::AgentName::from_validated("recipient"),
+                sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
+                outcome: atm_core::send::SendCommandOutcome::Sent,
+                message_id: AtmMessageId::new(),
+                receipt_message_id: None,
+                requires_ack: false,
+                task_id: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            });
             Ok(SendOutcome::Delivered(Box::new(response)))
         }
     }
@@ -343,9 +340,6 @@ mod tests {
     }
 
     #[test]
-    // AG.18 migration: replace this legacy remote-response fixture with the canonical unified
-    // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
-    #[allow(deprecated)]
     fn daemon_remote_send_router_routes_remote_host_requests_through_cross_host_delivery() {
         let cross_host_delivery = Arc::new(RecordingCrossHostDelivery::default());
         let runtime = DaemonRemoteSendRouter::new(cross_host_delivery.clone());

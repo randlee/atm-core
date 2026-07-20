@@ -1012,9 +1012,6 @@ mod tests {
             Ok(())
         }
 
-        // AG.18 migration: replace this legacy test response fixture with the canonical unified
-        // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
-        #[allow(deprecated)]
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,
@@ -1070,23 +1067,21 @@ mod tests {
                 });
             }
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
-                Box::new(crate::ResponseEnvelope::Send(
-                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
-                        action: CommandAction::Send,
-                        team: TeamName::from_validated(TEST_TEAM),
-                        agent: AgentName::from_validated("recipient"),
-                        sender: AgentName::from_validated(TEST_SENDER),
-                        outcome: crate::send::SendCommandOutcome::Sent,
-                        message_id: AtmMessageId::new(),
-                        receipt_message_id: None,
-                        requires_ack: false,
-                        task_id: None,
-                        summary: None,
-                        message: None,
-                        warnings: Vec::new(),
-                        dry_run: false,
-                    }),
-                )),
+                Box::new(crate::ResponseEnvelope::Send(crate::send::SendOutcome {
+                    action: CommandAction::Send,
+                    team: TeamName::from_validated(TEST_TEAM),
+                    agent: AgentName::from_validated("recipient"),
+                    sender: AgentName::from_validated(TEST_SENDER),
+                    outcome: crate::send::SendCommandOutcome::Sent,
+                    message_id: AtmMessageId::new(),
+                    receipt_message_id: None,
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                })),
             ))
         }
 
@@ -1164,9 +1159,6 @@ mod tests {
             Ok(())
         }
 
-        // AG.18 migration: replace this legacy test response fixture with the canonical unified
-        // send outcome, then delete `SendResponseEnvelope::Sent/Acknowledged` matching.
-        #[allow(deprecated)]
         fn deliver_remote_send_request(
             &self,
             request: SendRequest,
@@ -1177,23 +1169,21 @@ mod tests {
                 .expect("remote send requests")
                 .push(request);
             Ok(crate::boundary::RemoteSendDeliveryOutcome::Delivered(
-                Box::new(crate::ResponseEnvelope::Send(
-                    crate::protocol::SendResponseEnvelope::Sent(crate::send::SendOutcome {
-                        action: CommandAction::Send,
-                        team: TeamName::from_validated(TEST_TEAM),
-                        agent: AgentName::from_validated("recipient"),
-                        sender: AgentName::from_validated(TEST_SENDER),
-                        outcome: crate::send::SendCommandOutcome::Sent,
-                        message_id: AtmMessageId::new(),
-                        receipt_message_id: None,
-                        requires_ack: false,
-                        task_id: None,
-                        summary: None,
-                        message: None,
-                        warnings: Vec::new(),
-                        dry_run: false,
-                    }),
-                )),
+                Box::new(crate::ResponseEnvelope::Send(crate::send::SendOutcome {
+                    action: CommandAction::Send,
+                    team: TeamName::from_validated(TEST_TEAM),
+                    agent: AgentName::from_validated("recipient"),
+                    sender: AgentName::from_validated(TEST_SENDER),
+                    outcome: crate::send::SendCommandOutcome::Sent,
+                    message_id: AtmMessageId::new(),
+                    receipt_message_id: None,
+                    requires_ack: false,
+                    task_id: None,
+                    summary: None,
+                    message: None,
+                    warnings: Vec::new(),
+                    dry_run: false,
+                })),
             ))
         }
 

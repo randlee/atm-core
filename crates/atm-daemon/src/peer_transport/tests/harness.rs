@@ -1,6 +1,5 @@
 use super::*;
 
-// AG.18 migration: harness send expectations must decode the canonical send response.
 fn canonical_ack_request(
     home_dir: &std::path::Path,
     current_dir: &std::path::Path,
@@ -55,8 +54,6 @@ fn canonical_send_request(
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
-#[allow(deprecated)]
 fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -130,7 +127,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         ))
         .expect("authorized send should succeed");
     match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.requires_ack);
         }
@@ -181,7 +178,7 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         ))
         .expect("authorized ack should succeed");
     match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.warnings.is_empty());
             assert!(!outcome.requires_ack);
@@ -230,8 +227,6 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
-#[allow(deprecated)]
 fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -302,7 +297,7 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
         ))
         .expect("send should still succeed");
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert_eq!(outcome.warnings.len(), 1);
             assert_eq!(
@@ -321,8 +316,6 @@ fn local_peer_listener_harness_preserves_sent_outcome_when_post_send_degrades() 
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
-#[allow(deprecated)]
 fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_delivers_on_retry() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -418,7 +411,7 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
         ))
         .expect("send should succeed after listener startup");
     match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.warnings.is_empty());
         }
@@ -466,8 +459,6 @@ fn local_peer_listener_harness_recovers_after_transient_connect_failure_and_deli
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
-#[allow(deprecated)]
 fn localhost_remote_target_notification_degradation_is_classified_without_failing_delivery() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -538,7 +529,7 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
         .dispatch(RequestEnvelope::Send(request))
         .expect("remote-target send should still succeed");
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert_eq!(outcome.warnings.len(), 1);
             assert_eq!(
@@ -589,8 +580,6 @@ fn localhost_remote_target_notification_degradation_is_classified_without_failin
 
 #[test]
 #[serial_test::serial(env)]
-// AG.18 migration: assert canonical unified outcomes, then delete legacy response matching.
-#[allow(deprecated)]
 fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable() {
     let _guard = install_shared_lifecycle_reset_guard();
     install_retained_runtime_factory();
@@ -695,7 +684,7 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         .dispatch(RequestEnvelope::Send(request))
         .expect("initial remote-target send should defer");
     let receipt_message_id = match deferred {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");
             assert_eq!(outcome.receipt_message_id, Some(outcome.message_id));
             assert!(
