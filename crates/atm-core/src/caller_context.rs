@@ -136,7 +136,7 @@ fn parse_identity(raw: String) -> Result<AgentName, AtmError> {
 
     trimmed
         .parse::<AgentName>()
-        .map_err(|error| AtmError::identity_invalid(error.message()))
+        .map_err(|error| AtmError::identity_invalid(error.detail()))
 }
 
 fn parse_team(raw: String) -> Result<TeamName, AtmError> {
@@ -149,7 +149,7 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 
     trimmed
         .parse::<TeamName>()
-        .map_err(|error| AtmError::team_invalid(error.message()))
+        .map_err(|error| AtmError::team_invalid(error.detail()))
 }
 
 #[cfg(test)]

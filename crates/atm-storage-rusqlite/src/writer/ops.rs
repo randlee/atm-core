@@ -115,12 +115,8 @@ fn execute_upsert_message(
             crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
         })?
         == 1;
-    let timestamps = InitialStateTimestamps {
-        pending_ack_at,
-        acknowledged_at,
-        expires_at,
-        recorded_at,
-    };
+    let timestamps =
+        initial_state_timestamps(pending_ack_at, acknowledged_at, expires_at, recorded_at);
     insert_initial_message_state(connection, cache, target, record, timestamps)?;
 
     Ok(WriteOpResult::UpsertMessage { inserted })
@@ -131,6 +127,20 @@ struct InitialStateTimestamps {
     acknowledged_at: Option<String>,
     expires_at: Option<String>,
     recorded_at: String,
+}
+
+fn initial_state_timestamps(
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+    recorded_at: String,
+) -> InitialStateTimestamps {
+    InitialStateTimestamps {
+        pending_ack_at,
+        acknowledged_at,
+        expires_at,
+        recorded_at,
+    }
 }
 
 fn insert_initial_message_state(

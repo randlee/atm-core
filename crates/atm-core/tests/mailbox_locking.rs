@@ -541,7 +541,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
     for (label, op) in [
         (
             "read",
-            CommandOp::Read(read_request, Arc::clone(&observability)),
+            CommandOp::Read(Box::new(read_request), Arc::clone(&observability)),
         ),
         (
             "clear",
@@ -554,7 +554,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
             barrier.wait();
             let result = match op {
                 CommandOp::Read(request, observability) => {
-                    read_mail(request, observability.as_ref()).map(|_| ())
+                    read_mail(*request, observability.as_ref()).map(|_| ())
                 }
                 CommandOp::Clear(request, observability) => {
                     clear_mail(request, observability.as_ref()).map(|_| ())
@@ -1144,7 +1144,7 @@ fn send_ignores_retired_file_lock_faults_on_sqlite_path() {
 }
 
 enum CommandOp {
-    Read(ReadQuery, Arc<NullObservability>),
+    Read(Box<ReadQuery>, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
 }
 

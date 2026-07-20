@@ -10,8 +10,11 @@ use crate::types::{AgentIdentity, AgentName, ChatId, HostName, TeamName};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
     pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chat_id: Option<ChatId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<HostName>,
 }
 
@@ -130,19 +133,19 @@ mod tests {
 
     #[test]
     fn parses_and_renders_chat_qualified_addresses() {
-        let parsed = AgentAddress::from_str("omega-prime:1234@atm-dev.localhost")
-            .expect("chat-qualified address");
+        let address = format!("omega-prime:1234@{TEST_TEAM}.localhost");
+        let parsed = AgentAddress::from_str(&address).expect("chat-qualified address");
         assert_eq!(parsed.agent, AgentName::from_validated("omega-prime"));
         assert_eq!(
             parsed.chat_id,
             Some("1234".parse::<ChatId>().expect("chat id"))
         );
-        assert_eq!(parsed.team, Some(TeamName::from_validated("atm-dev")));
+        assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
         assert_eq!(
             parsed.host,
             Some("localhost".parse::<HostName>().expect("host"))
         );
-        assert_eq!(parsed.to_string(), "omega-prime:1234@atm-dev.localhost");
+        assert_eq!(parsed.to_string(), address);
     }
 
     #[test]
