@@ -31,18 +31,29 @@ pub(super) fn finalize_send_outcome<
     } else {
         SendCommandOutcome::Sent
     };
+    let effective_message_id = persistence
+        .original_message
+        .message_id
+        .unwrap_or(message_id);
     let mut outcome = build_send_outcome(
         context,
         body,
         summary,
-        message_id,
+        effective_message_id,
         requires_ack,
         task_id.clone(),
         command_outcome,
         &persistence,
     );
-    if !request.dry_run {
-        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+    if !request.dry_run
+        && !matches!(
+            persistence.disposition,
+            DeliveryPersistenceDisposition::AlreadyPersisted
+        )
+    {
+        let is_ack = request.acknowledges_message_id.is_some();
+        let post_send_messages =
+            post_send_messages_from_persistence(&persistence, requires_ack, is_ack)?;
         hook::emit_post_send_effects(
             runtime,
             &mut outcome.warnings,
@@ -52,7 +63,7 @@ pub(super) fn finalize_send_outcome<
             &context.delivery_snapshot,
             &post_send_messages,
         );
-        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
+        let plan = build_send_delivery_plan(context, requires_ack, is_ack, &persistence)?;
         let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
             observability,
@@ -61,7 +72,7 @@ pub(super) fn finalize_send_outcome<
                 team: &context.recipient.team,
                 agent: &context.recipient.agent,
                 sender: &context.canonical_sender,
-                message_id,
+                message_id: effective_message_id,
                 task_id: task_id.clone(),
             },
             &plan,
@@ -118,6 +129,7 @@ fn build_send_outcome(
 pub(super) fn build_send_delivery_plan(
     context: &SendExecutionContext,
     requires_ack: bool,
+    is_ack: bool,
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
@@ -128,7 +140,7 @@ pub(super) fn build_send_delivery_plan(
             &context.delivery_snapshot,
         ),
         context.recipient.clone(),
-        logical_messages_from_persistence(persistence, requires_ack, false).map_err(|error| {
+        logical_messages_from_persistence(persistence, requires_ack, is_ack).map_err(|error| {
             AtmError::mailbox_write(error.to_string()).with_recovery(
                 "Repair the persisted delivery record shape before retrying delivery-plan execution.",
             )
@@ -140,11 +152,12 @@ pub(super) fn build_send_delivery_plan(
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
+    is_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
     crate::delivery_plan::LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
-        false,
+        is_ack,
     )
     .map(|message| vec![message])
     .map_err(|error| {

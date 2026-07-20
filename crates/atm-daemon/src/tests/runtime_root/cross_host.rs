@@ -262,6 +262,57 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     assert!(still_pending_message.envelope.pending_ack_at.is_some());
     assert!(still_pending_message.envelope.acknowledged_at.is_none());
 
+    let restarted_arch = start_cross_host_dispatcher(&arch_home, &arch_db, self_ip, arch_port);
+    wait_for_peer_listener(
+        restarted_arch
+            .peer_transport
+            .bound_addr_for_test()
+            .expect("restarted arch bound addr"),
+    );
+    let started = std::time::Instant::now();
+    loop {
+        let replayed = read_message_over_local_ipc(
+            &child_state.local_ipc_socket_path,
+            &cm5_home,
+            &cm5_workspace,
+            CM5,
+            CM5_TEAM,
+            ReadSelection::All,
+            Some(second_recipient_message_id),
+        );
+        let replayed_acknowledgement = replayed.message.is_some_and(|message| {
+            message.envelope.pending_ack_at.is_none() && message.envelope.acknowledged_at.is_some()
+        });
+        if replayed_acknowledgement {
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "replayed acknowledgement did not clear pending ack state within the bounded retry window"
+        );
+        std::thread::park_timeout(Duration::from_millis(25));
+    }
+    let restarted_ctx = CallerContext::new(
+        &restarted_arch.dispatcher,
+        &arch_home,
+        &arch_workspace,
+        ARCH,
+        ARCH_TEAM,
+    );
+    let replayed_reply = wait_for_ack_reply(
+        &restarted_ctx,
+        second_send.message_id,
+        "cross-host ack should fail while source peer listener is down",
+    );
+    assert_eq!(
+        replayed_reply.acknowledges_message_id,
+        Some(second_send.message_id)
+    );
+    restarted_arch
+        .peer_transport
+        .shutdown()
+        .expect("shutdown restarted source peer listener");
+
     stop_cross_host_child(&child_state, &mut cm5_process);
 }
 
@@ -396,6 +447,12 @@ fn run_cross_host_child_process(state: CrossHostChildState) {
         state.bind_ip,
         state.bind_port,
     );
+    // Mirror the production composition: deferred remote delivery is resumed by
+    // the daemon-owned background lane, not by a separate acknowledgement path.
+    let replay_worker = harness
+        .peer_transport
+        .start_replay_resume_worker()
+        .expect("start child replay worker");
     let dispatch_for_runtime: Arc<dyn RequestDispatcher + Send + Sync> = harness.dispatcher.clone();
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
@@ -440,6 +497,11 @@ fn run_cross_host_child_process(state: CrossHostChildState) {
             },
         )
         .expect("serve child local ipc runtime");
+    let _ = replay_worker.stop_tx.send(());
+    replay_worker
+        .join_handle
+        .join()
+        .expect("join child replay worker");
     harness
         .peer_transport
         .shutdown()

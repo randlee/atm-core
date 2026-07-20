@@ -506,7 +506,7 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
         warnings: Vec::new(),
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
-    let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
+    let plan = build_send_delivery_plan(&context, false, false, &persistence).expect("plan");
     let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 
     assert!(execution.warnings.is_empty());
@@ -554,12 +554,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         warnings: Vec::new(),
     };
     let claude_plan =
-        build_send_delivery_plan(&base_context, false, &persistence).expect("claude plan");
+        build_send_delivery_plan(&base_context, false, false, &persistence).expect("claude plan");
     let non_claude_context = SendExecutionContext {
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
         ..base_context
     };
-    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, &persistence)
+    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, false, &persistence)
         .expect("non-claude plan");
 
     assert_eq!(claude_plan.messages, non_claude_plan.messages);
@@ -676,6 +676,32 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
         }
         other => panic!("expected graft post-send target, got {other:?}"),
     }
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn acknowledgement_send_marks_post_send_delivery_as_acknowledgement() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let home_dir = tempdir.path().join("home");
+    let _env = install_home_env(&home_dir);
+    let post_send_emitter = RecordingPostSendEmitter::succeed();
+    let mut request = send_request(tempdir.path());
+    request.acknowledges_message_id = Some(AtmMessageId::new());
+
+    let outcome = super::send_mail_with_runtime_impl(
+        request,
+        &observability,
+        &runtime,
+        Some(&post_send_emitter),
+    )
+    .expect("acknowledgement send outcome");
+
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    assert!(emitted[0].event.is_ack);
 }
 
 #[test]

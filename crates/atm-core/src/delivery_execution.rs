@@ -86,7 +86,8 @@ pub(crate) fn emit_delivery_plan_transitions(
         DeliveryPersistenceDisposition::SqliteFailedRecovered => {
             sqlite_failure_transition_names(plan.delivery_target.harness_path()).to_vec()
         }
-        DeliveryPersistenceDisposition::Persisted => {
+        DeliveryPersistenceDisposition::Persisted
+        | DeliveryPersistenceDisposition::AlreadyPersisted => {
             persisted_success_transition_names(context.family, plan.delivery_target.harness_path())
         }
     };

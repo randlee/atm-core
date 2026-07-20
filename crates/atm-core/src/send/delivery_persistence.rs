@@ -5,6 +5,7 @@ use super::WarningEntry;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPersistenceDisposition {
     Persisted,
+    AlreadyPersisted,
     SqliteFailedRecovered,
 }
 
@@ -20,6 +21,15 @@ impl DeliveryPersistenceResult {
     pub(crate) fn persisted(original_message: InboxMessage) -> Self {
         Self {
             disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        }
+    }
+
+    pub(crate) fn already_persisted(original_message: InboxMessage) -> Self {
+        Self {
+            disposition: DeliveryPersistenceDisposition::AlreadyPersisted,
             original_message,
             companion_message: None,
             warnings: Vec::new(),

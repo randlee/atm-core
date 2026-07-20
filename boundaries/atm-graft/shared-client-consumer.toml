@@ -43,8 +43,8 @@ forbidden = [
 ]
 
 [contracts]
-request_types = ["RequestEnvelope", "SendRequestEnvelope", "ReadQuery"]
-response_types = ["ResponseEnvelope", "SendResponseEnvelope", "ReadOutcome"]
+request_types = ["RequestEnvelope", "SendRequest", "ReadQuery"]
+response_types = ["ResponseEnvelope", "SendOutcome", "ReadOutcome"]
 error_types = ["AtmError"]
 
 [testing]
