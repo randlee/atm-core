@@ -62,6 +62,10 @@ Each sprint extends and runs the following checks against its own merge base:
    custom ATM frame codec and Windows named-pipe support after AI.6. Structural
    tests verify the retained router/handler graph, so identifier renaming cannot
    satisfy the gate.
+6. **Append-only published surfaces:** CLI and OpenAPI baseline regeneration
+   may add entries only. A removal or rename hard-fails even under `--bless`;
+   an intentional breaking change requires a separately human-reviewed,
+   versioned baseline reset before its implementation PR.
 
 Every sprint reports its gate output, changed symbols, required deletions, and
 net LOC. A deletion sprint cannot close with a retained target under another
@@ -74,9 +78,13 @@ All clients use one application request model; transports only translate it:
 ```rust
 pub struct ChatId(/* validated safe segment */);
 
-pub struct AgentAddress {
+pub struct AgentIdentity {
     pub agent: AgentName,
     pub chat_id: Option<ChatId>,
+}
+
+pub struct AgentAddress {
+    pub identity: AgentIdentity,
     pub team: TeamName,
     pub host: Option<HostName>,
 }
@@ -113,8 +121,10 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 `DaemonApiClient` is introduced and owned by AI.6. All boundary traits in this
 plan are sealed unless their owning ADR explicitly authorizes an external
 implementation; clients consume the API contract but do not create another
-ingress trait. `AgentAddress` owns both parsing and `Display` rendering; no
-adapter concatenates address components. AI.6 constructs only the local form
+ingress trait. `AgentIdentity` owns `agent[:chat-id]` parsing and
+`AgentAddress` composes it with team/host and owns full-address parsing and
+`Display` rendering; no adapter concatenates address components. AI.6
+constructs only the local form
 of `AuthenticatedIngress`; AI.9 alone constructs `AuthenticatedPeer` after
 mTLS and exact trust validation.
 
@@ -166,8 +176,11 @@ starts. Findings are fixed on their owning sprint before forward merge.
 
 ## Post-migration retirement inventory
 
-AI.6 or AI.10 must remove these once their last consumer is gone; none is a
-fallback or compatibility requirement:
+These are mandatory deletions, never fallbacks or compatibility requirements.
+AI.6 removes the runtime sources and boundary records when the HTTP/UDS
+replacement lands; AI.10 removes the remaining historical documentation after
+its final source-consumer check. A closure inventory must name each retained
+item and its concrete consumer; an unnamed or renamed survivor blocks closure:
 
 1. `docs/atm-daemon/protocol-icd.md`, the custom-frame codec, and the retired
    `AtmProtocol`/`ClientTransport`/`ServerTransport`/`RequestDispatcher`
@@ -178,5 +191,5 @@ fallback or compatibility requirement:
 3. Historical frame/named-pipe sections in core, daemon, and CLI architecture
    documents, after the accepted tip has no source or documentation consumer.
 
-The candidate list is not permission to retain any item during implementation:
-the owning sprint's deletion inventory and architecture gate decide closure.
+The inventory is not permission to retain any item during implementation: the
+owning sprint's deletion inventory and architecture gate decide closure.

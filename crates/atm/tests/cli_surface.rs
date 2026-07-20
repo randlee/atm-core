@@ -1,0 +1,198 @@
+//! Diff-gate test proving the `atm` CLI's public surface (subcommands,
+//! arguments, flags) only ever grows across a release.
+//!
+//! This walks the *live* `clap::Command` tree of the real `atm` binary (via
+//! the hidden `ATM_CLI_SURFACE_DUMP=json` seam documented in
+//! `crates/atm/src/cli_surface.rs` and `crates/atm/src/main.rs` — not by
+//! parsing `--help` text) and diffs it structurally against the committed
+//! `cli_surface_baseline.json`. It hard-fails on:
+//!
+//! - any removed subcommand,
+//! - any removed or renamed argument (`id`, `long`, or `short`),
+//! - any argument whose `required` or arity (`num_args`) changed,
+//! - any **new** subcommand or argument not yet reflected in the baseline.
+//!
+//! That last point is deliberate: additions are allowed, but the baseline
+//! must be updated *in the same commit* that adds the new surface, not
+//! silently drift. Regenerate the baseline with:
+//!
+//! ```text
+//! UPDATE_ATM_CLI_SURFACE_BASELINE=1 cargo test -p agent-team-mail --test cli_surface
+//! ```
+//!
+//! or via `cargo run -p agent-team-mail --example gen_cli_docs`, which
+//! regenerates both this baseline and `docs/atm/cli-reference.md` from the
+//! same live tree in one step. No established bless/regen convention exists
+//! elsewhere in this repo (searched for `bless`/`UPDATE_*` env vars in
+//! existing golden-file tests and found none), so this follows the common
+//! Rust ecosystem `UPDATE_<THING>=1` pattern (cf. `UPDATE_EXPECT`,
+//! `INSTA_UPDATE`).
+
+use std::path::PathBuf;
+use std::process::Command;
+
+use serde_json::Value;
+
+const BASELINE_PATH_COMPONENTS: &str = "tests/cli_surface_baseline.json";
+const BLESS_ENV: &str = "UPDATE_ATM_CLI_SURFACE_BASELINE";
+
+fn baseline_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BASELINE_PATH_COMPONENTS)
+}
+
+/// Invokes the real `atm` binary's hidden CLI-surface JSON dump and parses
+/// the result. This is the exact same [`clap::Command`] tree `atm` uses at
+/// runtime — there is no separate/parallel definition to drift from it.
+fn live_surface_json() -> Value {
+    let atm_bin = env!("CARGO_BIN_EXE_atm");
+    let output = Command::new(atm_bin)
+        .env("ATM_CLI_SURFACE_DUMP", "json")
+        .output()
+        .expect("failed to run `atm` for CLI-surface introspection");
+    assert!(
+        output.status.success(),
+        "`atm` CLI-surface dump exited with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout =
+        String::from_utf8(output.stdout).expect("CLI-surface dump output must be valid UTF-8");
+    serde_json::from_str(&stdout).expect("CLI-surface dump output must be valid JSON")
+}
+
+fn as_str<'a>(value: &'a Value, field: &str) -> &'a str {
+    value[field]
+        .as_str()
+        .unwrap_or_else(|| panic!("expected string field {field:?} in {value}"))
+}
+
+fn as_array<'a>(value: &'a Value, field: &str) -> &'a [Value] {
+    value[field]
+        .as_array()
+        .unwrap_or_else(|| panic!("expected array field {field:?} in {value}"))
+}
+
+/// Recursively diffs `baseline` against `live`, appending human-readable
+/// failure descriptions to `issues`. `path` tracks the current command path
+/// (e.g. `atm teams add-member`) for readable messages.
+fn diff_command(path: &str, baseline: &Value, live: &Value, issues: &mut Vec<String>) {
+    diff_args(
+        path,
+        as_array(baseline, "args"),
+        as_array(live, "args"),
+        issues,
+    );
+    diff_subcommands(
+        path,
+        as_array(baseline, "subcommands"),
+        as_array(live, "subcommands"),
+        issues,
+    );
+}
+
+fn diff_args(path: &str, baseline_args: &[Value], live_args: &[Value], issues: &mut Vec<String>) {
+    for baseline_arg in baseline_args {
+        let id = as_str(baseline_arg, "id");
+        match live_args.iter().find(|arg| as_str(arg, "id") == id) {
+            None => issues.push(format!("{path}: argument {id:?} was removed or renamed")),
+            Some(live_arg) => {
+                for field in ["long", "short", "required", "num_args"] {
+                    if baseline_arg[field] != live_arg[field] {
+                        issues.push(format!(
+                            "{path}: argument {id:?} field {field:?} changed: {:?} -> {:?}",
+                            baseline_arg[field], live_arg[field]
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    for live_arg in live_args {
+        let id = as_str(live_arg, "id");
+        if !baseline_args.iter().any(|arg| as_str(arg, "id") == id) {
+            issues.push(format!(
+                "{path}: argument {id:?} is new and not yet reflected in the baseline \
+                 (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
+            ));
+        }
+    }
+}
+
+fn diff_subcommands(
+    path: &str,
+    baseline_subcommands: &[Value],
+    live_subcommands: &[Value],
+    issues: &mut Vec<String>,
+) {
+    for baseline_sub in baseline_subcommands {
+        let name = as_str(baseline_sub, "name");
+        let child_path = format!("{path} {name}");
+        match live_subcommands
+            .iter()
+            .find(|sub| as_str(sub, "name") == name)
+        {
+            None => issues.push(format!(
+                "{path}: subcommand {name:?} was removed or renamed"
+            )),
+            Some(live_sub) => diff_command(&child_path, baseline_sub, live_sub, issues),
+        }
+    }
+
+    for live_sub in live_subcommands {
+        let name = as_str(live_sub, "name");
+        if !baseline_subcommands
+            .iter()
+            .any(|sub| as_str(sub, "name") == name)
+        {
+            issues.push(format!(
+                "{path}: subcommand {name:?} is new and not yet reflected in the baseline \
+                 (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
+            ));
+        }
+    }
+}
+
+#[test]
+fn cli_surface_matches_committed_baseline() {
+    let live = live_surface_json();
+
+    if std::env::var_os(BLESS_ENV).is_some() {
+        let pretty = serde_json::to_string_pretty(&live).expect("serialize live CLI surface");
+        std::fs::write(baseline_path(), format!("{pretty}\n"))
+            .expect("write regenerated CLI-surface baseline");
+        eprintln!(
+            "{BLESS_ENV} set: wrote {} — re-run without {BLESS_ENV} to verify the diff gate",
+            baseline_path().display()
+        );
+        return;
+    }
+
+    let baseline_raw = std::fs::read_to_string(baseline_path()).unwrap_or_else(|error| {
+        panic!(
+            "failed to read {}: {error} (generate it first with \
+             `cargo run -p agent-team-mail --example gen_cli_docs`)",
+            baseline_path().display()
+        )
+    });
+    let baseline: Value =
+        serde_json::from_str(&baseline_raw).expect("baseline CLI-surface JSON must parse");
+
+    assert_eq!(
+        as_str(&baseline, "name"),
+        as_str(&live, "name"),
+        "root command name changed"
+    );
+
+    let mut issues = Vec::new();
+    diff_command("atm", &baseline, &live, &mut issues);
+
+    assert!(
+        issues.is_empty(),
+        "atm CLI surface diverged from crates/atm/tests/cli_surface_baseline.json:\n{}\n\n\
+         If this is an intentional, reviewed addition, regenerate the baseline in the same \
+         commit with `cargo run -p agent-team-mail --example gen_cli_docs` (or \
+         `{BLESS_ENV}=1 cargo test -p agent-team-mail --test cli_surface`).",
+        issues.join("\n")
+    );
+}

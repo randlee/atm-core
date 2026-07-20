@@ -495,6 +495,13 @@ Product requirement ID:
 Required behavior:
 
 - canonical address grammar is `<agent>[:<chat-id>]@<team>[.<host>]`
+- `agent[:<chat-id>]` is the canonical agent-identity grammar used wherever a
+  full team/host address is not required; therefore `agent:XXX` means agent
+  `agent` with chat-id `XXX`
+- CLI address composition is equivalent to canonical text: base agent plus
+  `--team <team>` yields logical `agent@team`; adding `--chat-id XXX` yields
+  logical `agent:XXX@team`, before a single normalization to the structured
+  address
 - `agent`, `team`, and `chat-id` use the safe segment alphabet already
   required above; only the address parser interprets `:` and `.` delimiters
 - storage keeps nullable source and destination chat-id columns rather than
@@ -820,9 +827,9 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | target recipient/team are not caller context; mutating identity impersonation is forbidden |
+| `atm send` | Yes | `--as`, else `--chat-id` plus `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select the ambient caller's chat context; target recipient/team are not caller context |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
-| `atm read` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
+| `atm read` | Yes | `--as`, else `--chat-id` plus `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
 | `atm ack` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
 | `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
 | `atm clear` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating clear path |
@@ -837,9 +844,25 @@ Global caller-context rules:
 
 ### 4.2 Command-Specific Notes
 
+- `atm send --as <agent>[:<chat-id>]` is the explicit caller agent/chat
+  override; its caller team still comes from `--team` or `ATM_TEAM`
+- with ambient `ATM_IDENTITY=<agent>`, `atm send <to> --chat-id <chat-id>` is
+  equivalent to `atm send <to> --as <agent>:<chat-id>`; `--chat-id` and
+  `--as` are mutually exclusive and failure to resolve the ambient base agent
+  fails before daemon dispatch
+- with ambient `ATM_IDENTITY=<agent>`, `atm read --chat-id <chat-id>` is
+  equivalent to `atm read --as <agent>:<chat-id>`; it resolves the owner
+  mailbox before the existing owner-only read path, and the two flags are
+  mutually exclusive
+- on mutating `send` and owner-only `read`, `--as` must use the same base
+  agent as `ATM_IDENTITY`; a different base agent is an impersonation attempt
+  and fails before daemon dispatch
+- a chat-qualified recipient is expressed only in canonical `<to>` syntax:
+  `<agent>:<chat-id>@<team>[.<host>]`
 - `--from` on `send` is not an accepted caller-identity override
 - `--from` on `read` / `list` is a sender filter only
-- `--as` is accepted only on inspection-only surfaces such as `peek` and `list`
+- `--as` is accepted on `send` and `read` for the caller agent/chat override,
+  and on inspection-only surfaces such as `peek` and `list`
 - any command without an explicit caller override surface must rely on the
   invoking shell when caller context is required
 - `atm doctor` may inspect `ATM_IDENTITY` visibility and team override
@@ -1229,12 +1252,14 @@ Shared rules:
   defined precedence
 - `atm list` and `atm peek` may resolve caller identity from `--as`, else the
   invoking-shell `ATM_IDENTITY`
-- `atm read` must resolve caller identity from invoking-shell `ATM_IDENTITY`
-  only
+- `atm read` resolves caller identity from `--as`, else `--chat-id` plus
+  invoking-shell `ATM_IDENTITY`, else invoking-shell `ATM_IDENTITY`; its
+  existing owner-only mutation rule applies to the resolved full identity
 - if required caller identity cannot be resolved from the documented source
   for that command, fail before daemon dispatch
-- `--as <name>` changes caller identity resolution on inspection-only
-  commands, not message matching
+- `--as <name>` changes caller identity resolution on `send`, owner-only
+  `read`, and inspection-only commands, never message matching; mutating
+  commands require the base-agent match specified in the command matrix
 - `--json` changes output format only and is not a message-selection filter
 - all three commands must verify target team exists
 - `atm list` and `atm peek` must verify an explicit target agent exists in the
@@ -3561,9 +3586,9 @@ mail correctness.
   - remote peers use HTTPS over TCP
   - both adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
-    `/v1/atm/message/{message-id}`, `/v1/atm/doctor`, `/v1/atm/teams`, and
-    `/v1/atm/team/{team-name}`; their methods and schemas are the versioned
-    OpenAPI contract
+    `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`,
+    `/v1/atm/doctor`, `/v1/atm/teams`, and `/v1/atm/team/{team-name}`; their
+    methods and schemas are the versioned OpenAPI contract
   - the test adapter exercises the same router/handler contract without a live
     socket
   - HTTP adapters perform decode, authentication, and response translation

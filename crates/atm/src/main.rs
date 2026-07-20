@@ -1,3 +1,4 @@
+mod cli_surface;
 mod commands;
 mod composition;
 mod constants;
@@ -22,8 +23,8 @@ use atm_core::observability::{
     standard_level_for_outcome,
 };
 use chrono::{DateTime, Utc};
-use clap::Parser;
 use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::LogSink;
 #[cfg(any(test, feature = "fault-injection"))]
@@ -44,6 +45,11 @@ use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
+/// Hidden maintainer/test seam: when set to `json` or `markdown`, `run()`
+/// prints the live CLI-surface tree in that format and exits before any
+/// normal argument parsing occurs. Not a documented `atm` flag or
+/// subcommand — see `crate::cli_surface` for the rationale and consumers.
+const ATM_CLI_SURFACE_DUMP_ENV: &str = "ATM_CLI_SURFACE_DUMP";
 #[cfg(any(test, feature = "fault-injection"))]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
@@ -152,6 +158,11 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
 }
 
 fn run() -> Result<(), AtmError> {
+    if let Ok(mode) = std::env::var(ATM_CLI_SURFACE_DUMP_ENV) {
+        dump_cli_surface(&mode)?;
+        return Ok(());
+    }
+
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -194,6 +205,35 @@ fn run() -> Result<(), AtmError> {
     match cli.run(&observability) {
         Ok(()) => Ok(()),
         Err(error) => Err(report_and_map_service_error(&observability, error)),
+    }
+}
+
+/// Prints the live CLI-surface tree in the requested `mode` (`json` or
+/// `markdown`) to stdout. Backs the hidden [`ATM_CLI_SURFACE_DUMP_ENV`] seam;
+/// see `crate::cli_surface` module docs for consumers and rationale.
+fn dump_cli_surface(mode: &str) -> Result<(), AtmError> {
+    let mut root = commands::Cli::command();
+    // `Command::build()` finalizes derived properties (e.g. `num_args`,
+    // default values) that clap otherwise only resolves lazily during
+    // parsing. Introspection without this call would see stale/empty
+    // values for those fields.
+    root.build();
+    match mode {
+        "json" => {
+            let surface = cli_surface::command_surface_json(&root);
+            let rendered = serde_json::to_string_pretty(&surface).map_err(|source| {
+                AtmError::validation("failed to render CLI-surface JSON").with_source(source)
+            })?;
+            println!("{rendered}");
+            Ok(())
+        }
+        "markdown" => {
+            println!("{}", cli_surface::command_surface_markdown(&root));
+            Ok(())
+        }
+        other => Err(AtmError::validation(format!(
+            "unsupported {ATM_CLI_SURFACE_DUMP_ENV} mode: {other} (expected \"json\" or \"markdown\")"
+        ))),
     }
 }
 
