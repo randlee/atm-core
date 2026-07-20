@@ -147,7 +147,7 @@ fn select_delete_manifests(
     active_sprint: Option<&std::ffi::OsStr>,
 ) -> Vec<SprintDeleteManifest> {
     let Some(sprint) = active_sprint else {
-        return manifests;
+        return Vec::new();
     };
     let sprint = sprint.to_string_lossy();
     let matching = manifests
@@ -669,6 +669,22 @@ fn delete_list_gate_scopes_to_the_active_sprint() {
 }
 
 #[test]
+fn delete_list_gate_skips_future_sprint_manifests_without_an_active_sprint() {
+    let manifests = vec![SprintDeleteManifest {
+        sprint: "AG.19".to_string(),
+        description: "fixture".to_string(),
+        scan_files: Vec::new(),
+        allowed_changed_files: Vec::new(),
+        min_net_crates_loc: -1,
+        forbidden_type_definitions: Vec::new(),
+        forbidden_literals: Vec::new(),
+        forbidden_regexes: Vec::new(),
+    }];
+
+    assert!(select_delete_manifests(manifests, None).is_empty());
+}
+
+#[test]
 fn parse_numstat_supports_text_and_binary_rows() {
     let rows = parse_numstat("12\t30\tcrates/atm-core/src/protocol.rs\n-\t-\tassets/logo.png\n");
     assert_eq!(
@@ -720,13 +736,17 @@ fn diff_gate_rejects_out_of_scope_and_positive_loc_growth() {
     ];
 
     let violations = validate_manifest_diff_gate(&manifest, &changed_files, &numstat, false);
-    assert!(violations
-        .iter()
-        .any(|v| v.contains("outside the sprint allowlist")));
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("outside the sprint allowlist"))
+    );
     assert!(violations.iter().any(|v| v.contains("forbidden gate edit")));
-    assert!(violations
-        .iter()
-        .any(|v| v.contains("net crates/ LOC delta")));
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.contains("net crates/ LOC delta"))
+    );
 }
 
 #[test]
