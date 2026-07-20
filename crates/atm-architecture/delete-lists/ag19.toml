@@ -9,7 +9,15 @@ scan_files = [
 ]
 
 allowed_changed_files = [
+  "crates/atm-architecture/delete-lists/ag19.toml",
   "crates/atm-core/src/ack/mod.rs",
+  "crates/atm-core/src/delivery_execution.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+  "crates/atm-core/src/delivery_policy.rs",
+  "crates/atm-core/src/service_runtime.rs",
+  "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs",
+  "crates/atm-daemon/src/peer_transport/tests/harness.rs",
+  "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs",
   "crates/atm/src/composition.rs",
 ]
 

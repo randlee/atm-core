@@ -108,7 +108,6 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let endpoint = listener_transport
         .bound_addr_for_test()
         .expect("bound peer listener addr");
-
     let client_transport = PeerTransportRuntime::new_for_test(
         endpoint,
         PeerTransportConfig::default(),
@@ -170,8 +169,8 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         .send(canonical_ack_request(
             &atm_home,
             &workspace_dir,
-            "qa-a",
             &format!("{ROLE_TEAM_LEAD}@{}", test_team_name().as_str()),
+            "qa-a",
             test_team_name().as_str(),
             source_message_id,
             "ack over peer listener",
@@ -687,12 +686,10 @@ fn localhost_remote_target_retry_visible_recovery_remains_bounded_and_observable
         ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "deferred");
             assert_eq!(outcome.receipt_message_id, Some(outcome.message_id));
-            assert!(
-                outcome
-                    .summary
-                    .as_deref()
-                    .is_some_and(|summary| summary.contains("deferred remote delivery"))
-            );
+            assert!(outcome
+                .summary
+                .as_deref()
+                .is_some_and(|summary| summary.contains("deferred remote delivery")));
             outcome.message_id
         }
         other => panic!("unexpected deferred response: {other:?}"),

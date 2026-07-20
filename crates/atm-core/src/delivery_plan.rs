@@ -10,7 +10,6 @@ use crate::send::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanKind {
     Send,
-    Reply,
 }
 
 #[derive(Debug, Clone, PartialEq)]

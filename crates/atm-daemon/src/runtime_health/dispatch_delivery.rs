@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
-    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
+    ack::{ack_request_from_send_request, finalize_ack_after_send, prepare_ack_reply},
     boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
@@ -11,10 +10,11 @@ use atm_core::{
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
         persist_remote_delivery_receipt_with_runtime, route_send_request,
-        send_mail_with_runtime_and_post_send_emitter,
+        send_mail_with_runtime_and_post_send_emitter, SendCommandOutcome, SendOutcome, SendRequest,
+        SendRequestRoute,
     },
+    RequestEnvelope, ResponseEnvelope,
 };
 
 use super::{DaemonGraftPostSendPort, DaemonPostSendHookEmitter, DaemonRequestDispatcher};
@@ -60,16 +60,36 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
+        // A peer-delivered ack is already a canonical send envelope and must
+        // enter normal receive persistence. Only a local `atm ack` command
+        // needs preparation before it joins the same outbound send route.
         if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-            return Ok(ResponseEnvelope::Ack(
-                ack_mail_with_runtime_and_post_send_emitter(
-                    ack_request_from_send_request(request)?,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?,
-            ));
+            let prepared = prepare_ack_reply(
+                &self.service_runtime,
+                ack_request_from_send_request(request)?,
+            )?;
+            let response =
+                self.dispatch_outbound_send(prepared.reply_request.clone(), post_send_emitter)?;
+            let ResponseEnvelope::Send(outcome) = response else {
+                return Err(AtmError::daemon_unavailable(
+                    "ack reply did not return a canonical send result; the source message remains pending acknowledgement",
+                ));
+            };
+            return Ok(ResponseEnvelope::Ack(finalize_ack_after_send(
+                &self.service_runtime,
+                self.observability.as_ref(),
+                prepared,
+                outcome,
+            )?));
         }
+        self.dispatch_outbound_send(request, post_send_emitter)
+    }
+
+    fn dispatch_outbound_send(
+        &self,
+        request: SendRequest,
+        post_send_emitter: &DaemonPostSendHookEmitter,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match route_send_request(&request) {
             SendRequestRoute::Local => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(

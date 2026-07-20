@@ -13,7 +13,6 @@ use serde_json::Value;
 pub(crate) enum DeliveryEventFamily {
     NewMessage,
     ThreadUpdate,
-    AckReply,
     InboxRepair,
     RestoreInboxRebuild,
 }
@@ -23,7 +22,6 @@ impl DeliveryEventFamily {
         match self {
             Self::NewMessage => "new_message",
             Self::ThreadUpdate => "thread_update",
-            Self::AckReply => "ack_reply",
             Self::InboxRepair => "inbox_repair",
             Self::RestoreInboxRebuild => "restore_inbox_rebuild",
         }
@@ -251,52 +249,6 @@ impl ThreadUpdateStateMachine {
 
 #[expect(
     dead_code,
-    reason = "Phase Y.4 keeps the full documented ack-reply state inventory explicit even before every failure branch is exercised by runtime callers."
-)]
-#[deprecated(
-    note = "AG.19 deletion target: use canonical send transition inventory and remove the parallel ack-reply state machine"
-)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AckReplyStateMachine {
-    Received,
-    ValidateAckTargetExists,
-    ValidateReplyTargetAllowed,
-    PersistAckTransition,
-    BuildReplyDeliveryRequest,
-    DispatchReplyByHarness,
-    Delivered,
-    Rejected,
-    Failed,
-}
-
-// AG.19 legacy implementation: delete with AckReplyStateMachine after callers
-// use the canonical SendRequest transition inventory.
-#[expect(
-    deprecated,
-    reason = "AG.19 tracks this legacy state-machine implementation until the type is deleted"
-)]
-impl AckReplyStateMachine {
-    fn transition_name(self) -> &'static str {
-        match self {
-            Self::Received => "delivery_policy.ack_reply.received",
-            Self::ValidateAckTargetExists => "delivery_policy.ack_reply.validate_ack_target_exists",
-            Self::ValidateReplyTargetAllowed => {
-                "delivery_policy.ack_reply.validate_reply_target_allowed"
-            }
-            Self::PersistAckTransition => "delivery_policy.ack_reply.persist_ack_transition",
-            Self::BuildReplyDeliveryRequest => {
-                "delivery_policy.ack_reply.build_reply_delivery_request"
-            }
-            Self::DispatchReplyByHarness => "delivery_policy.ack_reply.dispatch_reply_by_harness",
-            Self::Delivered => "delivery_policy.ack_reply.delivered",
-            Self::Rejected => "delivery_policy.ack_reply.rejected",
-            Self::Failed => "delivery_policy.ack_reply.failed",
-        }
-    }
-}
-
-#[expect(
-    dead_code,
     reason = "Phase Y.4 keeps the full documented inbox-repair state inventory explicit even before every branch is exercised by runtime callers."
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -484,9 +436,6 @@ fn restore_inbox_rebuild_persisted_success_transitions() -> Vec<&'static str> {
         .collect()
 }
 
-#[deprecated(
-    note = "AG.19 legacy caller: route AckReply transition queries through canonical send transition inventory before deleting AckReplyStateMachine"
-)]
 pub(crate) fn persisted_success_transition_names(
     family: DeliveryEventFamily,
     harness: DeliveryHarnessPath,
@@ -498,20 +447,6 @@ pub(crate) fn persisted_success_transition_names(
             .copied()
             .map(ThreadUpdateStateMachine::transition_name)
             .collect(),
-        // AG.19 migration required: replace this parallel AckReply inventory
-        // with the canonical SendRequest transition inventory before deleting
-        // AckReplyStateMachine and ack_reply_transitions.
-        DeliveryEventFamily::AckReply => {
-            #[expect(
-                deprecated,
-                reason = "AG.19 tracks the parallel ack inventory until it is replaced by canonical send transitions"
-            )]
-            ack_reply_transitions()
-            .iter()
-            .copied()
-            .map(AckReplyStateMachine::transition_name)
-            .collect()
-        }
         DeliveryEventFamily::InboxRepair => inbox_repair_persisted_success_transitions(),
         DeliveryEventFamily::RestoreInboxRebuild => {
             restore_inbox_rebuild_persisted_success_transitions()
@@ -582,27 +517,6 @@ pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine]
     ]
 }
 
-// AG.19 migration: remove this parallel ack state inventory; the canonical send state
-// transitions must be the only observable delivery sequence.
-#[deprecated(
-    note = "AG.19 deletion target: replace callers with canonical send transition inventory"
-)]
-pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
-    #[expect(
-        deprecated,
-        reason = "AG.19 tracks legacy ack-state variants until this inventory is deleted"
-    )]
-    &[
-        AckReplyStateMachine::Received,
-        AckReplyStateMachine::ValidateAckTargetExists,
-        AckReplyStateMachine::ValidateReplyTargetAllowed,
-        AckReplyStateMachine::PersistAckTransition,
-        AckReplyStateMachine::BuildReplyDeliveryRequest,
-        AckReplyStateMachine::DispatchReplyByHarness,
-        AckReplyStateMachine::Delivered,
-    ]
-}
-
 pub(crate) fn inbox_repair_transitions() -> &'static [InboxRepairStateMachine] {
     &[
         InboxRepairStateMachine::Received,
@@ -627,17 +541,14 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
     ]
 }
 
-// AG.19 migration: replace these legacy ack-state assertions with canonical send-path
-// assertions when AckReplyStateMachine and ack_reply_transitions are deleted.
 #[cfg(test)]
 mod tests {
     use super::{
-        AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
-        DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
-        RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_sqlite_failure_transitions,
-        new_message_success_transitions, restore_inbox_rebuild_transitions,
-        thread_update_transitions,
+        append_failure_transitions, inbox_repair_transitions,
+        new_message_sqlite_failure_transitions, new_message_success_transitions,
+        restore_inbox_rebuild_transitions, thread_update_transitions, DeliveryEventFamily,
+        DeliveryHarnessPath, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
+        InboxRepairStateMachine, NewMessageCoordinatorState, RestoreInboxRebuildStateMachine,
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
@@ -811,20 +722,6 @@ mod tests {
                 super::ThreadUpdateStateMachine::PersistSqlite,
                 super::ThreadUpdateStateMachine::DispatchByHarness,
                 super::ThreadUpdateStateMachine::Delivered,
-            ]
-        );
-        // AG.19 migration required: assert the canonical SendRequest
-        // transition inventory after the parallel AckReply inventory is removed.
-        assert_eq!(
-            ack_reply_transitions(),
-            &[
-                AckReplyStateMachine::Received,
-                AckReplyStateMachine::ValidateAckTargetExists,
-                AckReplyStateMachine::ValidateReplyTargetAllowed,
-                AckReplyStateMachine::PersistAckTransition,
-                AckReplyStateMachine::BuildReplyDeliveryRequest,
-                AckReplyStateMachine::DispatchReplyByHarness,
-                AckReplyStateMachine::Delivered,
             ]
         );
         assert_eq!(
