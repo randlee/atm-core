@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-SPRINT-DOC-STALE-FRONTMATTER>
+  a triage:Finding ;
+  triage:findingId "AG19-SPRINT-DOC-STALE-FRONTMATTER" ;
+  triage:title "docs/plans/phase-AG/sprint-AG19.md frontmatter is self-contradictory" ;
+  triage:description "Hygiene, non-blocking (AG19-FIX-1-QA-RECHECK-1 item 9): docs/plans/phase-AG/sprint-AG19.md declares status: complete in frontmatter while execution_status: not_started, with an inline comment claiming code has not landed. This contradicts the actual state (AG.19 has landed multiple commits including dc05145b). Not required for merge; tracked for cleanup." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "HYGIENE" ;
+  triage:severity "Non-blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-SPRINT-DOC-STALE-FRONTMATTER/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:notes "Non-blocking per verdict item 9. Not included in the current fix-assignment batch; hold for phase-end doc sweep or a later low-priority pass." .
+
+<urn:atm:triage:occurrence/AG19-SPRINT-DOC-STALE-FRONTMATTER/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG19.md" ;
+  triage:line 1 ;
+  triage:snippet "status: complete / execution_status: not_started (self-contradictory frontmatter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:orderIndex 0 .

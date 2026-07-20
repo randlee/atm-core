@@ -20,31 +20,33 @@
   triage:severity "Critical" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-19T19:42:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:notes "AG19-FIX-1-QA-RECHECK-1 verdict splits this: RSH-001 (masking) FIXED -- finalize_acknowledgement_after_confirmed_send (send/mod.rs:60-83) now pushes a WarningEntry on local-commit failure instead of masking a delivered reply as failed, outcome.outcome stays Sent, surfaced via output.rs. RSH-002 (retry idempotency) STILL OPEN -- downgraded critical->important by 2 of 3 reviewers; no idempotency key prevents a second real reply if an operator retries atm ack against the warning's own advice." .
 
-# Occurrence 1: RSH-001 - commit_ack_mutation failure masks successful delivery
+# Occurrence 1: RSH-001 - commit_ack_mutation failure masks successful delivery -- FIXED at dc05145b
 <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1>
   a triage:Occurrence ;
   triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
   triage:subFindingId "RSH-001" ;
   triage:title "commit_ack_mutation failure masks confirmed delivery" ;
-  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
-  triage:line 112 ;
-  triage:snippet "commit_ack_mutation(&self.service_runtime, mutation)?" ;
-  triage:description "If commit_ack_mutation fails on line 112 with ?, the error propagates to caller even though line 110 confirms outcome.outcome == SendCommandOutcome::Sent (delivery successful). The reply was already delivered but error masks success." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 60 ;
+  triage:snippet "finalize_acknowledgement_after_confirmed_send now pushes WarningEntry on persist failure instead of propagating an error" ;
+  triage:description "FIXED: finalize_acknowledgement_after_confirmed_send (send/mod.rs:60-83) now appends a WarningEntry to outcome.warnings on local-commit failure rather than masking a confirmed-Sent delivery as a hard error. outcome.outcome remains Sent." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "2d1f198c" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
 
-# Occurrence 2: RSH-002 - no idempotency guard for retries
+# Occurrence 2: RSH-002 - no idempotency guard for retries -- STILL OPEN at dc05145b
 <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2>
   a triage:Occurrence ;
   triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
@@ -52,18 +54,18 @@
   triage:title "no idempotency guard for ack retries" ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 65 ;
-  triage:snippet "let (request, mutation) = resolve_ack_send_request(&self.service_runtime, request)?;" ;
-  triage:description "A caller retrying after RSH-001's false failure will call dispatch_send again, which calls resolve_ack_send_request (line 65) and re-dispatches a brand-new SendRequest with the same reply body, creating a duplicate reply. No dedup check exists." ;
+  triage:snippet "dispatch_send has no idempotency key check before re-dispatching a retried ack SendRequest" ;
+  triage:description "STILL OPEN. A caller retrying atm ack after RSH-001's warning (per the warning's own advice text) will re-resolve and re-dispatch a brand-new SendRequest with the same reply body, creating a duplicate visible reply. The only added guard checks PendingAck state, which does not stop a second send from occurring." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "2d1f198c" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
 
 # Worktree snapshot: feature/pAG-s19-delete-remote-ack-path
-<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "2d1f198c" ;
+  triage:headSha "dc05145b" ;
   triage:orderIndex 0 .

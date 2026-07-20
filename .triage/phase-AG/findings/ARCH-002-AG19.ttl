@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002-AG19>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-AG19" ;
+  triage:title "boundaries/atm-graft/shared-client-consumer.toml still lists deleted AckOutcome type" ;
+  triage:description "arch-qa (AG19-FIX-1-QA-RECHECK-1, Important, non-blocking): boundaries/atm-graft/shared-client-consumer.toml:47 still lists AckOutcome in response_types, a stale boundary-doc reference to a type deleted as part of the AG.19 ack-path unification." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AG19/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:occurrence/ARCH-002-AG19/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
+  triage:line 47 ;
+  triage:snippet "response_types = [..., \"AckOutcome\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-R1-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-R1-001" ;
+  triage:title "docs/architecture.md still documents the deleted ack_mail<S>(...) -> AckOutcome contract" ;
+  triage:description "req-qa (AG19-FIX-1-QA-RECHECK-1, Blocking): docs/architecture.md section 6.3 (lines 1100-1150) and section 18.4.1 (lines 2126-2147) still document ack_mail<S>(...) -> AckOutcome and a dedicated locking-contract subsection for a function that no longer exists anywhere in the codebase. This is the carried-forward doc-alignment finding from the original AG19-QA-1/REAL-QA rounds (ATM-QA-AG19-101, a different stale-doc finding about reply_disposition.kind in requirements.md), but worsened rather than resolved since the AG.19 redo did a full deletion of ack_mail/AckOutcome rather than just changing its shape." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/architecture.md sections 6.3 and 18.4.1" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1100 ;
+  triage:lineEnd 1150 ;
+  triage:snippet "section 6.3 documents ack_mail<S>(...) -> AckOutcome, a deleted function/type" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2126 ;
+  triage:lineEnd 2147 ;
+  triage:snippet "section 18.4.1 dedicated locking-contract subsection for ack_mail, a deleted function" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:orderIndex 0 .

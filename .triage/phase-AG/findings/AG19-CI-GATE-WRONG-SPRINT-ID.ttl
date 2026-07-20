@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# CI-blocking finding. Reconciles two round-trip diagnoses:
+# 1. quality-mgr's AG19-FIX-1-QA-RECHECK-1 verdict: the gate script invocation must use the
+#    dotted sprint identifier "AG.19" (matching ag19.toml's own `sprint = "AG.19"` field), not
+#    "AG19" -- both this task's original assignment and the prior AG19-FIX-1-QA assignment used
+#    the wrong identifier, producing a false denylist/LOC-floor failure.
+# 2. arch-ctm's initial RCA proposed a different root cause (wrong base-SHA derivation from
+#    github.event.pull_request.base.sha) but RETRACTED that theory in a follow-up correction
+#    (2026-07-20T04:35:54Z) after independently reproducing quality-mgr's wrong-sprint-identifier
+#    diagnosis: with the corrected "AG.19" identifier, the denylist gate passes and the LOC floor
+#    passes (-157 vs -100 floor).
+#
+# The one REMAINING real gate failure after the identifier fix is a genuine circular self-gating
+# problem: AG.19 legitimately introduces its own ag19.toml manifest, which the gate's own
+# generic gate-edit denylist correctly rejects unless ATM_ARCH_ALLOW_GATE_CHANGES=1 is set.
+# quality-mgr recommended setting that override flag in CI. arch-ctm's corrected recommendation
+# (accepted here as the better architectural fix, since it avoids permanently weakening the gate
+# for all future sprints) is: do NOT enable ATM_ARCH_ALLOW_GATE_CHANGES; instead land each
+# sprint's immutable manifest/gate fixture in a separately reviewed gate-prep commit BEFORE that
+# sprint's declared diff base, then run the deletion sprint against that prepared base. CI must
+# invoke the gate script with the exact dotted sprint id and validate against the declared
+# parent/base commit.
+
+<urn:atm:triage:finding/AG19-CI-GATE-WRONG-SPRINT-ID>
+  a triage:Finding ;
+  triage:findingId "AG19-CI-GATE-WRONG-SPRINT-ID" ;
+  triage:title "AG deletion gate CI job fails: wrong sprint identifier invocation plus genuine circular self-gating on ag19.toml's own addition" ;
+  triage:description "scripts/check-ag-sprint-gates.sh must be invoked with the dotted sprint identifier 'AG.19' (matching ag19.toml's own sprint field), not 'AG19' -- this was the actual root cause of the reported denylist/LOC-floor failures, confirmed independently by quality-mgr and (after retracting an earlier wrong-base-SHA theory) by arch-ctm. With the corrected identifier, denylist and LOC-floor gates both pass. The one remaining genuine failure is that AG.19 legitimately adds its own ag19.toml manifest, which the gate's generic gate-edit denylist correctly flags unless overridden. Recommended fix (arch-ctm, accepted): do not set ATM_ARCH_ALLOW_GATE_CHANGES; instead land the sprint's manifest/gate fixture in a separately reviewed gate-prep commit before the sprint's declared diff base, and have CI invoke the gate with the exact dotted sprint id against that declared parent." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "scripts/check-ag-sprint-gates.sh, CI workflow invocation of the gate for PR #578" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-CI-GATE-WRONG-SPRINT-ID/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:notes "arch-ctm's initial RCA (wrong base-SHA github.event.pull_request.base.sha vs documented ladder parent 12a45c6f) is RETRACTED per his follow-up message; do not dispatch that theory as the fix. The gate-prep-commit approach is preferred over ATM_ARCH_ALLOW_GATE_CHANGES=1 because it does not create a standing override any later sprint could reuse to bypass the gate legitimately-or-not." .
+
+<urn:atm:triage:occurrence/AG19-CI-GATE-WRONG-SPRINT-ID/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/check-ag-sprint-gates.sh" ;
+  triage:line 0 ;
+  triage:snippet "CI invocation must pass sprint identifier 'AG.19' (dotted), and must land ag19.toml's own manifest addition in a gate-prep commit prior to the sprint's declared diff base rather than via ATM_ARCH_ALLOW_GATE_CHANGES=1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:orderIndex 0 .

@@ -12,12 +12,12 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/tests/runtime_root/cross_host.rs and crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ARCH-AG15-004-REGRESSION/AG19/1> ;
-  triage:openOn <urn:atm:triage:worktree/AG19/2d1f198c> ;
-  triage:promoteTo <urn:atm:triage:worktree/AG19/2d1f198c> .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
+  triage:notes "AG19-FIX-1-QA-RECHECK-1 verdict (2026-07-19, /Users/randlee/.config/atm/share/atm-dev/ag19-fix1-qa-recheck1-verdict.md) and independent team-lead direct read of cross_host.rs at dc05145b confirm this is fixed: the test now asserts the CORRECT direction -- Deferred outcome, empty warnings, pending_ack_at.is_some(), acknowledged_at.is_none() (lines 236-263). Confirmed independently by req-qa, arch-qa, rust-service-hardening-agent, and team-lead's own read. Closed." .
 
 <urn:atm:triage:occurrence/AG19-ARCH-AG15-004-REGRESSION/AG19/1>
   a triage:Occurrence ;
@@ -25,12 +25,19 @@
   triage:line 41 ;
   triage:lineEnd 256 ;
   triage:snippet "fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() { ... assert!(still_pending_message.envelope.acknowledged_at.is_some()); }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:headSha "2d1f198c" ;
   triage:occursIn <urn:atm:triage:worktree/AG19/2d1f198c> ;
-  triage:notes "Contradictory assertions: lines 223-234 expect warnings[0].message to contain 'ATM deferred remote ack delivery', but build_remote_deferred_outcome sets warnings: Vec::new(). Lines 252-253 assert pending_ack_at.is_none() and acknowledged_at.is_some(), requiring acknowledged local state for a deferred remote ack outcome. Test name says 'stays_pending' but assertions require it to be acknowledged." .
+  triage:notes "At 2d1f198c, contradictory assertions existed: lines 223-234 expected warnings[0].message to contain 'ATM deferred remote ack delivery', but build_remote_deferred_outcome sets warnings: Vec::new(). Lines 252-253 asserted pending_ack_at.is_none() and acknowledged_at.is_some() -- inverse of the test's own name. FIXED by dc05145b: now asserts ack_outcome.warnings.is_empty() and still_pending_message.envelope.pending_ack_at.is_some() / acknowledged_at.is_none()." .
+
+<urn:atm:triage:worktree/pAG-s19/dc05145b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "dc05145b" ;
+  triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/AG19/2d1f198c>
   a triage:WorktreeSnapshot ;
