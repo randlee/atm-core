@@ -452,7 +452,7 @@ fn read_response_frame_with_helper(
                 );
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
 
 

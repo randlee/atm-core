@@ -2,6 +2,35 @@
 
 use crate::error_codes::AtmErrorCode;
 
+macro_rules! warning_codes {
+    () => {
+        AtmErrorCode::WarningInvalidTeamMemberSkipped
+            | AtmErrorCode::WarningMailboxRecordSkipped
+            | AtmErrorCode::WarningMalformedAtmFieldIgnored
+            | AtmErrorCode::WarningObservabilityHealthDegraded
+            | AtmErrorCode::WarningSqliteHealthDegraded
+            | AtmErrorCode::WarningOriginInboxEntrySkipped
+            | AtmErrorCode::WarningMissingTeamConfigFallback
+            | AtmErrorCode::WarningSendAlertStateDegraded
+            | AtmErrorCode::WarningIdentityDrift
+            | AtmErrorCode::WarningRosterDrift
+            | AtmErrorCode::WarningBaselineMemberMissing
+            | AtmErrorCode::WarningRestoreInProgress
+            | AtmErrorCode::WarningStaleMailboxLock
+            | AtmErrorCode::WarningHookSkipped
+            | AtmErrorCode::WarningHookExecutionFailed
+    };
+}
+
+macro_rules! post_send_codes {
+    () => {
+        AtmErrorCode::PostSendPaneMissing
+            | AtmErrorCode::PostSendTmuxSendFailed
+            | AtmErrorCode::PostSendGraftUnavailable
+            | AtmErrorCode::PostSendAdvisoryDeliveryFailed
+    };
+}
+
 /// Renders the sole user-visible error string for an ATM error code.
 ///
 /// Adapters may provide bounded, non-secret detail, but the catalog owns the
@@ -82,27 +111,8 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
             "Repair the observability backend or retry the operation later."
         }
         AtmErrorCode::ObservabilityHealthOk => "No operator action is required.",
-        AtmErrorCode::WarningInvalidTeamMemberSkipped
-        | AtmErrorCode::WarningMailboxRecordSkipped
-        | AtmErrorCode::WarningMalformedAtmFieldIgnored
-        | AtmErrorCode::WarningObservabilityHealthDegraded
-        | AtmErrorCode::WarningSqliteHealthDegraded
-        | AtmErrorCode::WarningOriginInboxEntrySkipped
-        | AtmErrorCode::WarningMissingTeamConfigFallback
-        | AtmErrorCode::WarningSendAlertStateDegraded
-        | AtmErrorCode::WarningIdentityDrift
-        | AtmErrorCode::WarningRosterDrift
-        | AtmErrorCode::WarningBaselineMemberMissing
-        | AtmErrorCode::WarningRestoreInProgress
-        | AtmErrorCode::WarningStaleMailboxLock
-        | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed => {
-            "Inspect the warning context and correct the reported condition."
-        }
-        AtmErrorCode::PostSendPaneMissing
-        | AtmErrorCode::PostSendTmuxSendFailed
-        | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => {
+        warning_codes!() => "Inspect the warning context and correct the reported condition.",
+        post_send_codes!() => {
             "Repair the configured post-send target and retry if delivery is required."
         }
         AtmErrorCode::TestFakeTransportInjectionFailed => {
