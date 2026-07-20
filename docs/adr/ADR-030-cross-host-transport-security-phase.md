@@ -15,9 +15,9 @@ while the implementation line remains functionally focused and not yet fully
 secured. The phase needs an explicit sequencing decision so functional closure
 does not implicitly claim transport-security closure.
 
-## Decision
+## Historical proposal (retired)
 
-Phase AG will sequence transport security after the functional cross-host
+Phase AG sequenced transport security after the functional cross-host
 control-plane and host-pair validation work.
 
 Functional closure must not:

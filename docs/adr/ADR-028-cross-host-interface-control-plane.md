@@ -15,10 +15,10 @@ existing surface. The daemon had no durable operator-managed control plane for
 which interfaces it should bind or advertise, and env-driven peer wiring was
 too ad hoc to serve as the intended product contract.
 
-## Decision
+## Historical proposal (retired)
 
-ATM will add a SQLite-backed cross-host interface control plane managed through
-CLI commands rather than environment variables as the primary operator surface.
+Phase AG proposed a SQLite-backed cross-host interface control plane managed
+through CLI commands rather than environment variables.
 
 The control plane must define:
 

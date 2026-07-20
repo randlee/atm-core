@@ -1795,6 +1795,10 @@ Logging architecture:
 
 ## 15. Error Model
 
+**Historical through AI.2.** AI.3 replaces this shape with ADR-032's
+serializable `{ code, message }` `AtmError`; `AtmErrorKind`, recovery, and
+captured source fields are not accepted protocol contract after AI.3.
+
 Root public error:
 
 ```rust
@@ -2245,7 +2249,7 @@ Governing ADR:
   lives on a read-only filesystem, so ATM cannot create, update, or remove the
   required mailbox-lock artifact
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
-- New `AtmErrorKind::MailboxLock` variant in `error.rs`
+- New `AtmErrorCode::MailboxLock` code in the central registry
 
 ### 18.6 Shared Mutable File Atomicity
 
@@ -2719,9 +2723,7 @@ Architectural rules:
 
 ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform local IPC contract
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
+- same-host: one cross-platform HTTP-over-AF_UNIX IPC contract on Unix and Windows
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.

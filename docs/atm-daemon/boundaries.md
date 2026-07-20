@@ -103,30 +103,23 @@ Notes:
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
-## LocalIpcServerTransportAdapter
+## LocalIpcServerTransportAdapter (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Owns the same-host runtime listener implementation for the ServerTransport
-  contract.
+- Historically owned the same-host listener for the custom-frame contract.
+  AI.6 replaces it with an HTTP-over-UDS adapter that calls `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The historical machine-readable boundary id remains
-  `BOUNDARY-ServerTransport-Socket` for continuity, but the target boundary
-  surface is one cross-platform local IPC contract:
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
-- release closeout requires both Unix and Windows implementations to exist
-  behind this boundary; non-Unix unsupported-path stubs are an intermediate
-  implementation state only
-- the local IPC adapter must use the canonical ATM frame header and
-  request/response packet family
-- the adapter must not treat EOF or half-close as the stable request boundary;
-  framed read/write helpers own packet delimiting
+- The target boundary is one cross-platform HTTP-over-AF_UNIX contract on Unix
+  and Windows. Named pipes, custom frame headers, and frame decoders are
+  retired and must not be retained as fallback.
+- The adapter owns HTTP decode/response translation and same-user endpoint
+  ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
   Windows pipe names, or platform-specific ACL details directly

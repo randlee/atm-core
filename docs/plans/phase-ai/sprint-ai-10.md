@@ -17,8 +17,17 @@ target: integrate/phase-AI
 3. Prove that `agent`, `agent:chat-a`, and `agent:chat-b` remain independent
    through local, own-IP, and two-host send/read/nudge/ack flows.
 4. Remove obsolete Phase AG cross-host runbooks/claims and reconcile user,
-   developer, doctor, and architecture documentation with ADR-032–037.
+   developer, doctor, and architecture documentation with ADR-032–037. Delete
+   the retired custom-frame ICD and deprecated boundary records if AI.6 has no
+   remaining consumer; otherwise list the concrete retained consumer as a
+   release blocker rather than preserving a historical fallback.
 5. Run final architecture gates and publish one accepted-tip evidence set.
+
+## Proof record
+
+Every evidence row records the exact commit, command, sender address,
+recipient address, transport, result, and artifact path. Raw TCP connection
+success is never a message-delivery proof.
 
 ## Acceptance criteria
 

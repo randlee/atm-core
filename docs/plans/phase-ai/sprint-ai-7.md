@@ -18,7 +18,27 @@ target: integrate/phase-AI
    mutation, then emit the post-write event exactly once.
 4. Preserve chat-qualified addresses through send, reply, and acknowledgement;
    delete duplicate send/ack envelopes, handlers, persistence/nudge branches,
-   and host-routing decisions.
+   and host-routing decisions. The deletion inventory is every retained
+   Compose/DirectDeliver-equivalent pair, separate ack sender, sender-side ack
+   mutation, and any host check outside `PostWriteRouter`; an identifier rename
+   does not satisfy this deliverable.
+
+## Contract
+
+```rust
+pub trait MessageWriter: Send + Sync {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
+}
+
+pub trait PostWriteRouter: Send + Sync {
+    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
+}
+```
+
+`acknowledges_message_id` is the sole semantic difference between send and
+ack. The handler owns persistence and receiver-side acknowledgement mutation;
+`PostWriteRouter` is the only host-routing decision point. It emits a local
+nudge only for an empty host; every present host uses HTTPS.
 
 ## Acceptance criteria
 
@@ -29,8 +49,9 @@ target: integrate/phase-AI
 - Same-message ULID replay is idempotent and does not duplicate a nudge.
 - A chat-qualified reply or ack preserves the original address and does not
   leak into a base-agent mailbox.
-- Self-send policy is checked once before write routing; no later special ack
-  exception exists.
+- Exact self-address with an empty host is rejected once before write routing;
+  every present host, including localhost and own IP, follows ordinary HTTPS
+  routing with no special send or ack exception.
 
 ## Required validation
 

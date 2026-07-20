@@ -12,9 +12,8 @@ target: integrate/phase-AI
 
 1. Introduce ADR-037's optional `ChatId` and canonical `AgentAddress` model:
    `<agent>[:<chat-id>]@<team>[.<host>]`.
-   Cherry-pick Phase AG commit `924861da` into the Phase AI integration line
-   before this work and reuse its central `atm_storage::validate_path_segment`
-   for agent, team, and chat-id validation.
+   Reuse and extend AI.1's inherited `atm_storage::validate_path_segment` for
+   agent, team, and chat-id validation; do not create an adapter-local policy.
 2. Persist nullable source/destination chat-id columns independently from agent
    names, migrate existing rows as null, and preserve both fields in canonical
    message projections.
@@ -28,6 +27,33 @@ target: integrate/phase-AI
    session header or a separate chat delivery path.
 5. Add structural tests rejecting chat-id parsing/rendering outside the
    canonical address type.
+
+## Contract
+
+```rust
+pub struct ChatId(/* validated safe segment */);
+
+pub struct AgentAddress {
+    pub agent: AgentName,
+    pub chat_id: Option<ChatId>,
+    pub team: TeamName,
+    pub host: Option<HostName>,
+}
+
+pub struct MessageParticipantFilter {
+    pub agent: AgentName,
+    pub chat_id: Option<ChatId>,
+    pub direction: ParticipantDirection,
+}
+
+pub enum ParticipantDirection { From, To, Either }
+```
+
+`AgentAddress::from_str` is the sole parser for `agent[:chat]@team[.host]`.
+It splits at `:`, then `@`, then the first `.` after `@`; a team has no `.`,
+so a DNS or IP host may contain further periods. The inherited segment
+validator remains the shared leaf validation policy; no CLI, graft, Python,
+nudge, or transport adapter may split these delimiters.
 
 ## Acceptance criteria
 

@@ -66,6 +66,12 @@ gate for QA dispatch.
   `feature/pAI-1-daemon-preag-reset`.
 - CI green on PR #592.
 
+## Retained contract
+
+AI.1 retains only singleton ownership, local IPC, the dispatcher, storage
+trait assembly, and the post-write event boundary. It introduces no peer
+adapter, replay state, second request type, or alternate write path.
+
 ## References
 
 - PR #590 (superseded): `fix/daemon-pre-ag-deletion-reset` -> `develop`

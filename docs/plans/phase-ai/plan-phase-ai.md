@@ -24,8 +24,8 @@ the same read/write handlers. Cross-host code is transport-only.
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
 | Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
 | Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
-| Host routing | One post-write router; local nudge for current host, HTTPS for another host |
-| Security | SQLite-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint |
+| Host routing | One post-write router; empty host emits local nudge, every present host uses HTTPS |
+| Security | Storage-trait-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint; SQLite is the initial backend |
 | Delivery state | No outbox, replay store, retry queue, deferred receipt, or remote ack state |
 | Idempotency | Immutable existing message ULID; storage accepts duplicate identity idempotently |
 
@@ -51,7 +51,7 @@ Each sprint extends and runs the following checks against its own merge base:
 1. **One ingress:** exactly one production write handler and one storage write
    call path; no Compose/DirectDeliver or separate ack sender may remain.
 2. **One router:** only the post-write router may inspect destination host or
-   choose UDS-local versus HTTPS-remote delivery.
+   choose local nudge versus HTTPS delivery. UDS is ingress only.
 3. **Transport-only remote adapter:** HTTPS adapter code may authenticate,
    encode/decode HTTP, connect/listen, and call the router. It may not depend
    on SQLite, mailbox mutation, acknowledgement state, nudge sinks, replay,
@@ -66,6 +66,42 @@ Each sprint extends and runs the following checks against its own merge base:
 Every sprint reports its gate output, changed symbols, required deletions, and
 net LOC. A deletion sprint cannot close with a retained target under another
 name.
+
+## Shared application contract
+
+All clients use one application request model; transports only translate it:
+
+```rust
+pub struct ChatId(/* validated safe segment */);
+
+pub struct AgentAddress {
+    pub agent: AgentName,
+    pub chat_id: Option<ChatId>,
+    pub team: TeamName,
+    pub host: Option<HostName>,
+}
+
+pub struct WriteRequest {
+    pub message_id: MessageId,
+    pub caller: AgentAddress,
+    pub to: AgentAddress,
+    pub body: String,
+    pub requires_ack: bool,
+    pub acknowledges_message_id: Option<MessageId>,
+}
+
+pub trait DaemonApiClient: Send + Sync {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+}
+```
+
+CLI, graft, Python bindings, UDS HTTP, and HTTPS HTTP create or decode this
+same request and call one router, handler, storage method, and post-write
+event. The sole host decision is in the post-write router: an empty host emits
+the local nudge, while every present host—including `localhost` and own IP—uses
+HTTPS. A present chat-id
+is stored in nullable source/destination columns and rendered to agents as
+`agent:chat-id`; it is not a transport session or a second delivery path.
 
 ## Sprint sequence
 
@@ -102,3 +138,20 @@ starts. Findings are fixed on their owning sprint before forward merge.
 - a separate remote daemon, separate ack protocol, or cross-host mailbox
   handler;
 - inventing a third public verb before a concrete adapter need exists.
+
+## Post-migration retirement inventory
+
+AI.6 or AI.10 must remove these once their last consumer is gone; none is a
+fallback or compatibility requirement:
+
+1. `docs/atm-daemon/protocol-icd.md`, the custom-frame codec, and the retired
+   `AtmProtocol`/`ClientTransport`/`ServerTransport`/`RequestDispatcher`
+   boundary records.
+2. Historical ADR-028 through ADR-031, after their sole remaining value has
+   been captured by ADR-034/ADR-035 and the project ADR retention policy
+   permits archival or deletion.
+3. Historical frame/named-pipe sections in core, daemon, and CLI architecture
+   documents, after the accepted tip has no source or documentation consumer.
+
+The candidate list is not permission to retain any item during implementation:
+the owning sprint's deletion inventory and architecture gate decide closure.

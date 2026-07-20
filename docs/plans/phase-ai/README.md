@@ -27,7 +27,7 @@ own nullable columns; every agent-facing `from`, `to`, nudge, reply, and ack
 uses the same rendered address. `atm read --agent hendrix` spans chats and
 `--agent hendrix --chat 12345` narrows to one context.
 
-The authoritative plan is [plan-phase-AI.md](./plan-phase-AI.md). Sprint
+The authoritative plan is [plan-phase-ai.md](./plan-phase-ai.md). Sprint
 closure is recorded in [readiness.md](./readiness.md).
 
 The checked-in OpenAPI 3.1 description is a durable interface artifact. A

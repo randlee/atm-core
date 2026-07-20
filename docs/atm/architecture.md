@@ -10,8 +10,8 @@ It complements the product architecture in
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-The canonical daemon packet contract lives in:
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+The Phase AI target daemon API contract lives in:
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2. Responsibilities
 
@@ -31,31 +31,22 @@ The `atm` crate is responsible for:
 
 The `atm` crate must remain thin.
 
-Phase R redesign notes:
-- the CLI should depend on `AtmProtocol` and `ClientTransport`, not on daemon
-  internals or SQLite adapters
-- retained user-facing workflows may still include `ack`, but thin-client
-  transport shape should stay centered on `send` and `receive`
-- the CLI same-host client transport should use the shared ATM frame helper
-  layer rather than a CLI-only framing path
-- the current daemon packet family serves `send`, `ack`, `read`, `clear`, and
-  `doctor`; retained `log`, `teams`, and `members` stay outside the daemon
-  request/response packet surface in the current Phase S line
-- the current daemon packet family also serves `list` as the bounded metadata
-  queue query surface
-- S.7 lands the aligned `atm list` / single-message `atm read`
-  implementation while S.8 owns the JSONL retrieval-stub
-  compatibility path that preserves the exact
-  `atm read --message-id <id>` retrieval command
+Phase AI target:
+- the CLI depends on `DaemonApiClient` and transport-neutral application DTOs,
+  never daemon internals or SQLite adapters
+- send and ack create the same canonical `WriteRequest`; ack only populates
+  `acknowledges_message_id`
+- all daemon-backed CLI operations use ADR-033's HTTP/UDS API; the custom-frame
+  helper and packet family are historical through AI.5 and must not be extended
 
 ## 1.1 ADRs
 
-## CLI uses shared protocol and client transport only
+## CLI uses one daemon API client only
 
 ```yaml
 adr_id: ADR-ATM-001
 crate: atm
-title: CLI uses shared protocol and client transport only
+title: CLI uses one daemon API client only
 status: accepted
 date: 2026-05-03
 deciders:
@@ -66,9 +57,7 @@ tags:
   - transport
   - privacy
 related_boundaries:
-  - BOUNDARY-AtmProtocol
-  - BOUNDARY-ClientTransport
-  - BOUNDARY-ClientTransport-CLI
+  - BOUNDARY-DaemonApiClient
 code_references:
   - docs/atm/boundaries.md
   - docs/atm-core/boundaries.md
@@ -79,17 +68,18 @@ Context:
   adapters made architecture violations easy and review expensive.
 
 Decision:
-- The CLI depends on `AtmProtocol` and `ClientTransport` only.
+- The CLI depends on `DaemonApiClient` and transport-neutral application DTOs
+  only.
 - It must not depend on daemon internals or SQLite adapter crates.
-- Retained user workflows may still include `ack`, but thin-client transport
-  shape remains `send` / `receive`.
+- Ack is the canonical write request with `acknowledges_message_id` populated;
+  it has no separate client or transport path.
 
 Consequences:
 - CLI runtime wiring stays thin.
 - Thin extension crates can mirror the same client shape without importing CLI
   internals.
 - Thin extension crates can also version-skew from the primary `atm` install as
-  long as they remain compatible with the documented same-host RPC surface.
+  long as they remain compatible with the documented same-host HTTP API.
 
 Alternatives considered:
 - Let CLI call daemon internals directly.
@@ -106,7 +96,7 @@ Follow-up work:
 - `atm` owns mapping of CLI flags to `atm-core` request structs.
 - `atm` owns mapping of CLI commands to the daemon/service request boundary in
   production.
-- `atm` owns `--stdin` materialization before daemon bootstrap; the daemon RPC
+- `atm` owns `--stdin` materialization before daemon bootstrap; the daemon HTTP
   surface must never receive a deferred `stdin` marker or any instruction to
   read process stdin on behalf of the caller.
 - `atm` owns the explicit mailbox-surface split where `peek` and `list` are

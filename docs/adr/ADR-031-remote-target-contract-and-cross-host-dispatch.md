@@ -26,9 +26,9 @@ The user-approved correction is intentionally narrow:
 - host-routing logic must stop at one typed boundary so socket logic does not
   leak through general send/runtime code
 
-## Historical decision
+## Historical proposal (retired)
 
-ATM will support exactly two operator-facing remote-send forms:
+Phase AG proposed exactly two operator-facing remote-send forms:
 
 - `atm send <agent>@<team>.<host> ...`
 - `atm send <agent>@<team> --host <host> ...`
@@ -92,9 +92,8 @@ Parser and normalization rules:
   - whitespace
   - wildcard or pattern characters that could be interpreted by current or
     future parsers, including at minimum `*`, `?`, `[` and `]`
-- inline parsing splits on the final `.` after `@`
-- the suffix after that final `.` is the remote host
-- the prefix before that final `.` is the team name
+- inline parsing splits at the first `.` after `@`; team names cannot contain
+  `.`, while a DNS or IP host may contain later periods
 - mixed inline-host plus `--host` input is rejected instead of silently
   preferring one source
 - each parser rejection maps to one stable error code / variant:
@@ -181,5 +180,5 @@ decision with a transport-only HTTPS adapter and one canonical write path.
   path
 - AG.14 must include at least one ADR-003 Tier-3 regression that exercises the
   production cross-host delivery path end to end
-- any future host-routing change must update this ADR instead of silently
-  widening the accepted CLI surface
+- current host-routing policy is ADR-035 and `REQ-CORE-TRANSPORT-002`; this
+  retired proposal is not authority for new work

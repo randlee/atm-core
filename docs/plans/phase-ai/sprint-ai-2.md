@@ -18,6 +18,18 @@ target: integrate/phase-AI
 3. Establish one backend-neutral factory/assembly input so a backend is selected
    at composition without daemon, CLI, graft, or transport backend access.
 
+## Contract
+
+```rust
+pub trait StorageFactory: Send + Sync {
+    fn open(&self, scope: &HostRuntimeScope) -> Result<Box<dyn MessageStore>, AtmError>;
+}
+```
+
+`MessageStore` and its related storage traits are the only persistence types
+visible outside the selected backend. `atm-storage-rusqlite` alone owns
+`rusqlite`, SQL, schema, and migrations.
+
 ## Acceptance criteria
 
 - `rg` finds no runtime replay/finalizer type, schema, or SQLite-specific
