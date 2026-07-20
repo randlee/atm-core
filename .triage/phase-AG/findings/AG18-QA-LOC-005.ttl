@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-LOC-005>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-LOC-005" ;
+  triage:title "ack/mod.rs +771 net lines with no completion-record justification" ;
+  triage:description "crates/atm-core/src/ack/mod.rs grew ~+365 net lines (568 insertions, 203 deletions; diff context spans ~771 lines) with no completion-record justification against the Hard Merge Gate's 'every added line scrutinized for absolute necessity' requirement. New public functions prepare_ack_send_request and ack_request_from_send_request added to support ack/send unification effort. Related to AG18-QA-LOC-001 (overall Hard Merge Gate violation) and AG18-QA-SCOPE-002 (out-of-sequence scope creep); may substantially overlap with cross_host.rs relocation scope creep." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "merge-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T17:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-LOC-005/pAG-s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:notes "INITIAL PASS: ack/mod.rs added unification helper functions (prepare_ack_send_request, ack_request_from_send_request) as part of AG.18's canonical send/ack envelope consolidation work. Growth measured via git diff --stat 9a52c0f0..1b25b36c: +568 insertions, -203 deletions = +365 net LOC. Hard Merge Gate requires justification for every added line; per QA verdict (req-qa ATM-QA-005), this growth lacks explicit completion-record justification or necessity proof. Severity downgraded to IMPORTANT (not BLOCKING) as it is a sub-component of the primary LOC-gate blocker AG18-QA-LOC-001; root-cause fix of AG.25-scoped scope creep (cross_host.rs) should materially reduce this file's overall growth footprint. Occurrence is specific file/range in pAG-s18 worktree only." .
+
+<urn:atm:triage:occurrence/AG18-QA-LOC-005/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 164 ;
+  triage:snippet "pub fn prepare_ack_send_request(request: AckRequest) -> Result<SendRequest, AtmError> { ... }; pub fn ack_request_from_send_request(request: SendRequest) -> Result<AckRequest, AtmError> { ... }; git diff --stat 9a52c0f0..1b25b36c: +568 insertions, -203 deletions = +365 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-ag/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

@@ -1,0 +1,95 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-LOC-001>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-LOC-001" ;
+  triage:title "Hard Merge Gate LOC violation on AG.18" ;
+  triage:description "sprint-AG18.md:328-337 requires >= -100 net LOC across crates/ in named target files; actual measured diff (9a52c0f0..1b25b36c) is +966 net LOC in named target files (21 files, +2045/-1079), and +1916 net LOC across all of crates/ (56 files, +3203/-1287). ~10-19x over ceiling in wrong direction. Triple-corroborated by req-qa, arch-qa, and quality-mgr's own independent measurement." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "merge-gate" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T16:22:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-LOC-001/pAG-s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:notes "INITIAL PASS: AG.18 sprint fails Hard Merge Gate LOC requirement by ~10-19x in wrong direction. Measurement scope: named target files identified in sprint-AG18.md (21 files across crates/atm-core, crates/atm, crates/atm-daemon). Gate violation is mechanical blocker preventing merge to integrate/phase-AG. Root cause analysis via QA verdict identifies out-of-sequence scope creep (AG.25-assigned cross_host.rs) as primary LOC driver. Dispatch ready: true; however, merge gate fix is prerequisite for any higher sprint advancement." .
+
+<urn:atm:triage:occurrence/AG18-QA-LOC-001/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/" ;
+  triage:line 0 ;
+  triage:snippet "git diff --stat 9a52c0f0..1b25b36c -- crates/ => 3203 insertions(+), 1287 deletions(-) = +1916 net LOC in all of crates/; named target files (21 files) => 2045 insertions(+), 1079 deletions(-) = +966 net LOC vs required <= -100 net LOC" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/46a3f29a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "46a3f29a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/8f645d26>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "8f645d26" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-ag/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

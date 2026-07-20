@@ -1,0 +1,201 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-SCOPE-002>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-SCOPE-002" ;
+  triage:title "Out-of-sequence AG.25-scoped scope creep on AG.18" ;
+  triage:description "crates/atm-daemon/src/tests/runtime_root/cross_host.rs (~790 new lines) is a live two-daemon cross-host integration test explicitly assigned to AG.25 (CROSSHOST-UNIFY-8/9) per sprint-AG18.md's own 'This Sprint Does Not Close' section. Primary driver of the LOC blowout finding (AG18-QA-LOC-001). Should likely be relocated to AG.25's branch, not deleted, since AG.25 needs this work eventually -- but it must not count against AG.18's gate." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-SCOPE-002/INTEGRATE/1> ;
+  triage:openOn <urn:atm:triage:worktree/S18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/S19/46a3f29a> ;
+  triage:openOn <urn:atm:triage:worktree/S20/8f645d26> ;
+  triage:openOn <urn:atm:triage:worktree/S21/8652bdd3> ;
+  triage:openOn <urn:atm:triage:worktree/S22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/S23/ca3fb30f> ;
+  triage:openOn <urn:atm:triage:worktree/S24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/S25/c245c2ea> ;
+  triage:openOn <urn:atm:triage:worktree/INTEGRATE/e78b0ef4> ;
+  triage:promoteTo <urn:atm:triage:worktree/S18/1b25b36c> ;
+  triage:highestOpenBranch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated true .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/S18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "46a3f29a" ;
+  triage:occursIn <urn:atm:triage:worktree/S19/46a3f29a> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "8f645d26" ;
+  triage:occursIn <urn:atm:triage:worktree/S20/8f645d26> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:occursIn <urn:atm:triage:worktree/S21/8652bdd3> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:occursIn <urn:atm:triage:worktree/S23/ca3fb30f> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/S24/81298e32> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/S25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines, AG.25 proper assignment)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/S25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG18-QA-SCOPE-002/INTEGRATE/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:snippet "Two-daemon cross-host integration test (~790 lines)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/e78b0ef4> .
+
+<urn:atm:triage:worktree/S18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S19/46a3f29a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "46a3f29a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S20/8f645d26>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "8f645d26" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/S23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/S24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/S25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/INTEGRATE/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

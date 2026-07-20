@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-DOC-003>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-DOC-003" ;
+  triage:title "Missing requirements/ADR deliverable for canonical envelope" ;
+  triage:description "Neither docs/requirements.md nor any docs/adr/ entry names the single canonical send envelope/handler family, despite this being an explicit Deliverable and Acceptance Criterion (sprint-AG18.md:263, 325-326). AG.18 required elimination of the two-packet SendCompose/SendAcknowledge split and consolidation to a single SendRequest envelope family with unified handler dispatch, but the architectural decision and wire-contract documentation is absent from the requirements/ADR baseline." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T17:30:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18-unify-envelope-handler/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/e78b0ef4> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AG/e78b0ef4> ;
+  triage:highestOpenBranch "integrate/phase-AG" ;
+  triage:highestOpenBranchIndex 9 ;
+  triage:propagated false ;
+  triage:mergeForwardNeeded false ;
+  triage:regressed false ;
+  triage:notes "Documented in AG18-REAL-QA-1 verdict #3 (req-qa ATM-QA-003). Sprint-AG18.md explicitly requires canonical envelope documentation as both a Deliverable and Acceptance Criterion. Documentation deliverable is absent from both feature/pAG-s18 and integrate/phase-AG worktrees." .
+
+<urn:atm:triage:worktree/pAG-s18-unify-envelope-handler/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .
