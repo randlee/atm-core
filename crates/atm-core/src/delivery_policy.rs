@@ -544,11 +544,11 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
 #[cfg(test)]
 mod tests {
     use super::{
-        append_failure_transitions, inbox_repair_transitions,
+        DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
+        DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
+        RestoreInboxRebuildStateMachine, append_failure_transitions, inbox_repair_transitions,
         new_message_sqlite_failure_transitions, new_message_success_transitions,
-        restore_inbox_rebuild_transitions, thread_update_transitions, DeliveryEventFamily,
-        DeliveryHarnessPath, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
-        InboxRepairStateMachine, NewMessageCoordinatorState, RestoreInboxRebuildStateMachine,
+        restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
