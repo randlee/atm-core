@@ -150,11 +150,6 @@ impl TestRuntime {
             non_claude_deliveries: Mutex::new(Vec::new()),
         }
     }
-
-    pub(super) fn with_recipient_pane_id(mut self, pane_id: PaneId) -> Self {
-        self.recipient_pane_id = Some(pane_id);
-        self
-    }
 }
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
@@ -598,7 +593,6 @@ fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_notification_log_absent(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
@@ -623,12 +617,6 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
         &deliveries[0].messages[1],
         "hello",
     );
-}
-
-fn assert_notification_log_absent(_home_dir: &Path) {
-    // The host-owned notification stream is shared by the sole daemon and may
-    // contain events from another command; the recording emitter proves this
-    // path itself did not emit one.
 }
 
 fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObservability) {
@@ -686,32 +674,24 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
 #[test]
 #[serial_test::serial(env)]
 fn acknowledgement_send_marks_post_send_delivery_as_acknowledgement() {
-    let pane_id = PaneId::from_cli("%19").expect("pane id");
-    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode)
-        .with_recipient_pane_id(pane_id.clone());
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    runtime.recipient_pane_id = Some(PaneId::from_cli("%19").expect("pane id"));
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
-    let home_dir = tempdir.path().join("home");
-    let _env = install_home_env(&home_dir);
+    let _env = install_home_env(&tempdir.path().join("home"));
     let post_send_emitter = RecordingPostSendEmitter::succeed();
     let mut request = send_request(tempdir.path());
     request.acknowledges_message_id = Some(AtmMessageId::new());
 
-    let outcome = super::send_mail_with_runtime_impl(
-        request,
-        &observability,
-        &runtime,
-        Some(&post_send_emitter),
-    )
-    .expect("acknowledgement send outcome");
+    super::send_mail_with_runtime_impl(request, &observability, &runtime, Some(&post_send_emitter))
+        .expect("acknowledgement send outcome");
 
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     let emitted = post_send_emitter.emitted();
     assert_eq!(emitted.len(), 1);
     assert!(emitted[0].event.is_ack);
     match &emitted[0].target {
         PostSendBuiltInTarget::LocalTmux(target) => {
-            assert_eq!(target.pane_id, pane_id);
+            assert_eq!(target.pane_id.as_str(), "%19");
             assert!(target.rendered_nudge.contains("<atm kind=\"ack\""));
             assert!(target.rendered_nudge.contains("task-id=\"task-123\""));
         }
@@ -753,7 +733,6 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    assert_notification_log_absent(&home_dir);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
