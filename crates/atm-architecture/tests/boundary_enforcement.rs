@@ -323,11 +323,29 @@ fn sprint_delete_manifests() -> Vec<SprintDeleteManifest> {
 }
 
 fn scan_delete_manifest(manifest: &SprintDeleteManifest) -> Vec<String> {
-    manifest
+    let mut violations = manifest
         .scan_files
         .iter()
         .flat_map(|relative_path| scan_manifest_file(manifest, relative_path))
-        .collect()
+        .collect::<Vec<_>>();
+    violations.extend(
+        manifest
+            .forbidden_absent_paths
+            .iter()
+            .filter_map(|relative_path| {
+                let path = workspace_root().join(relative_path);
+                path.exists().then(|| {
+                    format!(
+                        "{} ({}): forbidden retired path `{}` is present at {}",
+                        manifest.sprint,
+                        manifest.description,
+                        relative_path,
+                        path.display(),
+                    )
+                })
+            }),
+    );
+    violations
 }
 
 fn scan_manifest_file(manifest: &SprintDeleteManifest, relative_path: &str) -> Vec<String> {
@@ -459,6 +477,7 @@ fn delete_manifest_missing_scan_path_fails_closed_with_a_gate_violation() {
         allowed_changed_files: Vec::new(),
         min_net_crates_loc: 0,
         forbidden_type_definitions: Vec::new(),
+        forbidden_absent_paths: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     };
@@ -467,6 +486,25 @@ fn delete_manifest_missing_scan_path_fails_closed_with_a_gate_violation() {
     assert_eq!(violations.len(), 1);
     assert!(violations[0].contains("manifest scan path"));
     assert!(violations[0].contains("resolve the manifest before this gate can pass"));
+}
+
+#[test]
+fn delete_manifest_forbidden_retired_path_fails_closed_when_reintroduced() {
+    let manifest = SprintDeleteManifest {
+        sprint: "AG.fixture".to_string(),
+        description: "retired-path fixture".to_string(),
+        scan_files: Vec::new(),
+        allowed_changed_files: Vec::new(),
+        min_net_crates_loc: 0,
+        forbidden_type_definitions: Vec::new(),
+        forbidden_absent_paths: vec!["Cargo.toml".to_string()],
+        forbidden_literals: Vec::new(),
+        forbidden_regexes: Vec::new(),
+    };
+
+    let violations = scan_delete_manifest(&manifest);
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].contains("forbidden retired path `Cargo.toml`"));
 }
 
 fn validate_manifest_diff_gate(
@@ -626,6 +664,8 @@ struct SprintDeleteManifest {
     #[serde(default)]
     forbidden_type_definitions: Vec<String>,
     #[serde(default)]
+    forbidden_absent_paths: Vec<String>,
+    #[serde(default)]
     forbidden_literals: Vec<String>,
     #[serde(default)]
     forbidden_regexes: Vec<String>,
@@ -648,6 +688,7 @@ fn delete_list_gate_scopes_to_the_active_sprint() {
             allowed_changed_files: Vec::new(),
             min_net_crates_loc: -1,
             forbidden_type_definitions: Vec::new(),
+            forbidden_absent_paths: Vec::new(),
             forbidden_literals: Vec::new(),
             forbidden_regexes: Vec::new(),
         },
@@ -658,6 +699,7 @@ fn delete_list_gate_scopes_to_the_active_sprint() {
             allowed_changed_files: Vec::new(),
             min_net_crates_loc: -1,
             forbidden_type_definitions: Vec::new(),
+            forbidden_absent_paths: Vec::new(),
             forbidden_literals: Vec::new(),
             forbidden_regexes: Vec::new(),
         },
@@ -677,6 +719,7 @@ fn delete_list_gate_skips_future_sprint_manifests_without_an_active_sprint() {
         allowed_changed_files: Vec::new(),
         min_net_crates_loc: -1,
         forbidden_type_definitions: Vec::new(),
+        forbidden_absent_paths: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     }];
@@ -713,6 +756,7 @@ fn diff_gate_rejects_out_of_scope_and_positive_loc_growth() {
         allowed_changed_files: vec!["crates/atm-core/src/protocol.rs".to_string()],
         min_net_crates_loc: -100,
         forbidden_type_definitions: Vec::new(),
+        forbidden_absent_paths: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     };
@@ -761,6 +805,7 @@ fn diff_gate_accepts_negative_loc_within_allowlist() {
         ],
         min_net_crates_loc: -100,
         forbidden_type_definitions: Vec::new(),
+        forbidden_absent_paths: Vec::new(),
         forbidden_literals: Vec::new(),
         forbidden_regexes: Vec::new(),
     };
