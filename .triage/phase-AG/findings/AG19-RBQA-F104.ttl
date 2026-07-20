@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBQA-F104>
+  a triage:Finding ;
+  triage:findingId "AG19-RBQA-F104" ;
+  triage:title "composition.rs::ack and atm-graft::acknowledge_message remain two thin near-identical RPC-dispatch wrappers" ;
+  triage:description "Code duplication: narrowed from prior RBQA-AG19-F003 but not fully collapsed. composition.rs::ack and atm-graft::acknowledge_message are thin RPC-dispatch wrappers that remain nearly identical. Assessed as low-priority boilerplate, not business-logic duplication, but still represents a maintenance surface that could be unified." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F104/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-RBQA-F104/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "pub fn ack(...) -> Result<...> {...}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

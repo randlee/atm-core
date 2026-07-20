@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-PRINT-ACK-RESULT-UNCONDITIONAL>
+  a triage:Finding ;
+  triage:findingId "AG19-PRINT-ACK-RESULT-UNCONDITIONAL" ;
+  triage:title "print_ack_result always reports success regardless of Sent vs Deferred outcome" ;
+  triage:description "Independently confirmed by three reviewers (req-qa ATM-QA-AG19-202, arch-qa ARCH-002, ruthless-boundary-qa RBQA-AG19-F102) in AG19-REAL-QA-2 verdict on PR #578 @ 2d1f198c. Function unconditionally prints \"Acknowledged ... and sent reply ...\" regardless of outcome.outcome (Sent vs Deferred); its sibling print_send_result correctly branches on this. Deferred/unconfirmed remote ack replies are reported to the human CLI caller as unconditional success, with only a secondary stderr warning appended. Fails the deliverable requiring an explicit caller-visible non-success result for remote-ack deferred/outcome-unknown cases. Full verdict at /Users/randlee/.config/atm/share/atm-dev/ag19-real-qa2-verdict.md." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AG19" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-PRINT-ACK-RESULT-UNCONDITIONAL/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AG19-PRINT-ACK-RESULT-UNCONDITIONAL/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 177 ;
+  triage:snippet "println!(\"Acknowledged {} for {}@{} and sent reply {} to {}@{}\", ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2d1f198c" ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

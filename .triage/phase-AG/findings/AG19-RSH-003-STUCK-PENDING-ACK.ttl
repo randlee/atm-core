@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RSH-003-STUCK-PENDING-ACK>
+  a triage:Finding ;
+  triage:findingId "AG19-RSH-003-STUCK-PENDING-ACK" ;
+  triage:title "Deferred/OutcomeUnknown ack-mutation linkage silently dropped -- background replay success can never commit ack state" ;
+  triage:description "For Deferred/OutcomeUnknown branches, the resolved AckMutation is a local variable that is silently dropped when dispatch_send returns -- nothing re-invokes commit_ack_mutation when the daemon's background replay later succeeds, so a genuinely-delivered deferred reply can leave the source message stuck in PendingAck forever. Same root cause as the central finding (ack-state commit not correctly wired to actual confirmed-delivery status across all outcome branches), opposite failure direction." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/ack/mod.rs, daemon background replay path" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 109 ;
+  triage:snippet "if let (Some(mutation), ResponseEnvelope::Send(outcome)) = (ack_mutation, &response) && matches!(outcome.outcome, SendCommandOutcome::Sent) { commit_ack_mutation(&self.service_runtime, mutation)?; }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/2d1f198c> .
+
+<urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

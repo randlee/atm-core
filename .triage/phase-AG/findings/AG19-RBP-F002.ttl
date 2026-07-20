@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AG19-RBP-F002" ;
+  triage:title "compose vs ack requests still discriminated by raw Option::is_some()/is_none() on acknowledges_message_id" ;
+  triage:description "rust-best-practices-agent finding from AG19-REAL-QA-2, severity RAISED from minor to important: DaemonRequestDispatcher::dispatch_send (crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:64) forks ack-vs-send dispatch on the untyped boolean guard request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() instead of a typed enum/classifier. route_send_request()/SendRequestRoute already demonstrates the typed alternative for the local-vs-remote distinction in the same dispatch path, but the ack-vs-send fork itself uses raw Option::is_some()/is_none() checks. Severity raised to important because the verdict confirms this is live in production dispatch, not just test code, and contributes to the central finding about incorrect ack-state commit behavior." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/ack/mod.rs, dispatch_delivery.rs:64" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBP-F002/s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/2d1f198c> ;
+  triage:notes "FOLLOWUP_PASS reconciliation against prior AG19-REAL-QA-1 finding RBP-AG19-F002 (then severity minor, now raised to important per verdict line 33). Prior record tracked this finding across all branches and integration; all open. Current followup focuses on s19 @ 2d1f198c per AG19-REAL-QA-2 verdict. Finding remains open: dispatch_delivery.rs:64 still uses untyped boolean guard `if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none()`. Verdict confirms this untyped fork exists live in production dispatch behavior and contributes to the RSH-001/002/003 runtime-hardening failures (post-send local-state commit race, idempotency gaps, deferred-outcome state persistence). Severity raised from minor to important because the pattern is confirmed active in production, not just a style issue. Repeatable not applicable (repeatable=false per input). dispatch_ready=false because this finding is not resolved and the verdict requires dedicated typed-variant fix in subsequent round." .
+
+<urn:atm:triage:occurrence/AG19-RBP-F002/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 64 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/2d1f198c> .
+
+<urn:atm:triage:worktree/s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

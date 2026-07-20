@@ -1,0 +1,69 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Canonical triage record for AG19-RSH-001-002: Post-send ack-state commit failure masks
+# successful delivery and no idempotency guard exists for retries.
+#
+# Root cause: dispatch_delivery.rs lines 109-113 calls commit_ack_mutation() after confirming
+# SendCommandOutcome::Sent, but if commit_ack_mutation fails, the error propagates as if the
+# entire ack failed, even though the reply was already delivered. No idempotency guard means
+# a retry will re-resolve and re-dispatch the same SendRequest, creating a duplicate reply.
+
+<urn:atm:triage:finding/AG19-RSH-001-002-ACK-COMMIT-MASKING>
+  a triage:Finding ;
+  triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
+  triage:title "Post-send local ack-state commit failure masks a successfully-delivered reply, and no idempotency guard exists for retries" ;
+  triage:description "rust-service-hardening-agent findings RSH-001 (Critical) and RSH-002 (Critical) from AG19-REAL-QA-2 verdict on PR #578 @ 2d1f198c, corroborating the central ARCH-AG15-004 finding from a runtime-hardening angle. RSH-001: if commit_ack_mutation fails locally AFTER a confirmed Sent outcome, the error propagates to the caller as if the whole ack failed, even though the reply was already delivered. RSH-002: no idempotency guard exists; a caller retrying after RSH-001's false failure will re-resolve and re-dispatch a brand-new SendRequest with the same reply body, producing a duplicate reply with no dedup check." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "Critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T19:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+# Occurrence 1: RSH-001 - commit_ack_mutation failure masks successful delivery
+<urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1>
+  a triage:Occurrence ;
+  triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
+  triage:subFindingId "RSH-001" ;
+  triage:title "commit_ack_mutation failure masks confirmed delivery" ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 112 ;
+  triage:snippet "commit_ack_mutation(&self.service_runtime, mutation)?" ;
+  triage:description "If commit_ack_mutation fails on line 112 with ?, the error propagates to caller even though line 110 confirms outcome.outcome == SendCommandOutcome::Sent (delivery successful). The reply was already delivered but error masks success." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+# Occurrence 2: RSH-002 - no idempotency guard for retries
+<urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2>
+  a triage:Occurrence ;
+  triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
+  triage:subFindingId "RSH-002" ;
+  triage:title "no idempotency guard for ack retries" ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 65 ;
+  triage:snippet "let (request, mutation) = resolve_ack_send_request(&self.service_runtime, request)?;" ;
+  triage:description "A caller retrying after RSH-001's false failure will call dispatch_send again, which calls resolve_ack_send_request (line 65) and re-dispatches a brand-new SendRequest with the same reply body, creating a duplicate reply. No dedup check exists." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+# Worktree snapshot: feature/pAG-s19-delete-remote-ack-path
+<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

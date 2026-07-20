@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-ARCH-AG15-004-REGRESSION>
+  a triage:Finding ;
+  triage:findingId "AG19-ARCH-AG15-004-REGRESSION" ;
+  triage:title "Shipped acceptance test for ARCH-AG15-004 asserts inverse of required behavior" ;
+  triage:description "Test cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending asserts a warning string 'ATM deferred remote ack delivery' that does not exist in production code. dispatch_delivery.rs build_remote_deferred_outcome always sets warnings: Vec::new(). Test also asserts pending_ack_at.is_none() and acknowledged_at.is_some(), requiring acknowledged local state for a message with deferred remote ack delivery, which is the inverse of the test name and sprint acceptance criterion: deferred/unknown remote ack outcomes must NOT mark source message acknowledged locally." ;
+  triage:category "AG" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/tests/runtime_root/cross_host.rs and crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-ARCH-AG15-004-REGRESSION/AG19/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG19/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-ARCH-AG15-004-REGRESSION/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 41 ;
+  triage:lineEnd 256 ;
+  triage:snippet "fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() { ... assert!(still_pending_message.envelope.acknowledged_at.is_some()); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/2d1f198c> ;
+  triage:notes "Contradictory assertions: lines 223-234 expect warnings[0].message to contain 'ATM deferred remote ack delivery', but build_remote_deferred_outcome sets warnings: Vec::new(). Lines 252-253 assert pending_ack_at.is_none() and acknowledged_at.is_some(), requiring acknowledged local state for a deferred remote ack outcome. Test name says 'stays_pending' but assertions require it to be acknowledged." .
+
+<urn:atm:triage:worktree/AG19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

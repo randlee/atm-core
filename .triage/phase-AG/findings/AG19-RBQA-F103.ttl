@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBQA-F103>
+  a triage:Finding ;
+  triage:findingId "AG19-RBQA-F103" ;
+  triage:title "dispatch_delivery.rs:64 ack-vs-plain-send classifier is an inline boolean expression, not a named single-owner function" ;
+  triage:description "Code quality: the conditional that dispatches ack requests vs. plain send requests at dispatch_delivery.rs:64 is an inline boolean expression (checks Option::is_some() on acknowledges_message_id) rather than a named function like route_send_request. Assessed as low-priority boilerplate code organization issue, not business-logic defect." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F103/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-RBQA-F103/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/dispatch_delivery.rs" ;
+  triage:line 64 ;
+  triage:snippet "let is_ack_request = request.acknowledges_message_id.is_some();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

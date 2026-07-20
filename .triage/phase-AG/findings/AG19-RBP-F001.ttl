@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AG19-RBP-F001" ;
+  triage:title "SendRequest.to has no type-level signal distinguishing placeholder/self-address values from resolved recipients" ;
+  triage:description "rust-best-practices-agent finding from AG19-REAL-QA-2: SendRequest.to (crates/atm-core/src/send/mod.rs:215) is a plain `pub to: AgentAddress` field, and AgentAddress itself is a plain struct { agent: AgentName, team: Option<TeamName> } with no enum/newtype variant distinguishing an intended real recipient from a placeholder or self-referential value. In the ack-reply path (crates/atm-core/src/ack/mod.rs), prepare_ack_send_request constructs the outbound SendRequest by creating a self-addressed initial SendRequest that is later replaced with the actual resolved recipient. The same untyped AgentAddress is used whether the value is a genuinely external recipient or a self-referential/placeholder target, so callers cannot distinguish the two cases at the type level and must rely on out-of-band convention. This is a shared-crate struct definition defect present uniformly across all branches." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "rust-best-practices" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBP-F001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBP-F001/s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/2d1f198c> ;
+  triage:notes "FOLLOWUP_PASS reconciliation against prior AG19-REAL-QA-1 findings. Prior record RBP-AG19-F001 tracked this finding across all 8 feature branches (s18-s25) and integration branch, all open. Current followup focuses on s19 @ 2d1f198c per AG19-REAL-QA-2 verdict. Finding remains open in current worktree: SendRequest.to field still untyped AgentAddress, and prepare_ack_send_request still constructs untyped placeholder SendRequest at line 33 (`format!(\"{}@{}\", actor.clone(), team)`) before resolution. Repeatable sweep not applicable (repeatable=false per verdict note 'no typed distinction at the type level'). dispatch_ready=false because this finding is not resolved by the current sprint work and requires explicit type-level fix." .
+
+<urn:atm:triage:occurrence/AG19-RBP-F001/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 215 ;
+  triage:snippet "pub to: AgentAddress," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-RBP-F001/s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 33 ;
+  triage:snippet "format!(\"{}@{}\", actor.clone(), team)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/2d1f198c> .
+
+<urn:atm:triage:worktree/s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .

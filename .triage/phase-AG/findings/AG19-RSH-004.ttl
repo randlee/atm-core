@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RSH-004>
+  a triage:Finding ;
+  triage:findingId "AG19-RSH-004" ;
+  triage:title "No fault-injection test covers commit_ack_mutation failing after a successful send" ;
+  triage:description "Test coverage gap: the code path where commit_ack_mutation fails locally AFTER a confirmed Sent outcome (RSH-001) is not covered by fault-injection tests. This would have caught the defect in the critical RSH-001/RSH-002 finding, where a post-send local-state commit failure propagates as if the whole ack failed even though the reply was already delivered." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-004/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/2d1f198c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:occurrence/AG19-RSH-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/dispatch_send.rs" ;
+  triage:line 0 ;
+  triage:snippet "No test covering: if commit_ack_mutation(...) fails AFTER SendCommandOutcome::Sent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/2d1f198c> .
+
+<urn:atm:triage:worktree/pAG-s19/2d1f198c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "2d1f198c" ;
+  triage:orderIndex 0 .
