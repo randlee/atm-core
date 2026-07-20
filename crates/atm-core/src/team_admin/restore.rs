@@ -656,10 +656,12 @@ mod tests {
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::InboxMessage {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,

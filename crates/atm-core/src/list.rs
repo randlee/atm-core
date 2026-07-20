@@ -283,10 +283,12 @@ mod tests {
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                destination_chat_id: None,
                 summary: None,
                 message_id: Some(message_id),
                 requires_ack: false,
@@ -486,10 +488,12 @@ mod tests {
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
             requires_ack: false,

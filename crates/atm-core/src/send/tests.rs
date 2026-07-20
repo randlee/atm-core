@@ -41,10 +41,12 @@ fn message(
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -334,10 +336,12 @@ fn outbound_message() -> InboxMessage {
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,
@@ -520,10 +524,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let ack_intent = AckIntentFields::not_required();
     let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
+        source_chat_id: None,
         text: "sqlite failed".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,

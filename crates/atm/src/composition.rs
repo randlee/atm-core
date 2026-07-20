@@ -1013,10 +1013,12 @@ mod tests {
         fn message(&self, text: &str, read: bool) -> InboxMessage {
             InboxMessage {
                 from: TEST_LEAD.parse().expect("lead"),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: Utc::now().into(),
                 read,
                 source_team: Some(TEST_TEAM.parse().expect("team")),
+                destination_chat_id: None,
                 summary: None,
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,

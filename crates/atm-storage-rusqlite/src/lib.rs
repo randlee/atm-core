@@ -802,10 +802,12 @@ mod tests {
             message_key: MessageKey::new(key).expect("key"),
             envelope: MessageEnvelope {
                 from: agent,
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,

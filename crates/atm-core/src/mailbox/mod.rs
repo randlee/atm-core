@@ -873,6 +873,7 @@ mod tests {
     fn sample_message(message_id: AtmMessageId, body: &str) -> InboxMessage {
         InboxMessage {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -881,6 +882,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: false,

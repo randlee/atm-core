@@ -170,10 +170,12 @@ mod tests {
             message_key: MessageKey::from(AtmMessageId::new()),
             envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("from"),
+                source_chat_id: None,
                 text: "body".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(RPC_TEST_TEAM.parse().expect("source team")),
+                destination_chat_id: None,
                 summary: Some("body".to_string()),
                 message_id: None,
                 requires_ack: false,

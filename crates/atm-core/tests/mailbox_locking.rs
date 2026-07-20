@@ -1528,10 +1528,12 @@ fn pending_ack_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: true,
@@ -1558,10 +1560,12 @@ fn read_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,
@@ -1588,10 +1592,12 @@ fn unread_message_at(
 ) -> InboxMessage {
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: text.to_string(),
         timestamp: IsoTimestamp::from_datetime(timestamp),
         read: false,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: false,

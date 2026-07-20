@@ -498,10 +498,12 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.canonical_sender.clone(),
+            source_chat_id: None,
             text: body.to_string(),
             timestamp,
             read: false,
             source_team: Some(request.caller_team.clone()),
+            destination_chat_id: request.to.chat_id.clone(),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
             requires_ack: ack_intent.requires_ack,
@@ -517,10 +519,12 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
     let envelope = InboxMessage {
         from: context.canonical_sender.clone(),
+        source_chat_id: None,
         text: body.to_string(),
         timestamp,
         read: false,
         source_team: Some(request.caller_team.clone()),
+        destination_chat_id: request.to.chat_id.clone(),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
