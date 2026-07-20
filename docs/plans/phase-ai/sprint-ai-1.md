@@ -41,6 +41,9 @@ gate for QA dispatch.
    `crates/atm-daemon/src/direct_boundaries.rs`,
    `crates/atm-daemon/src/peer_transport.rs`,
    `crates/atm-runtime/src/replay_store.rs` all deleted)
+   The retained `SourceIngress` and `ProjectionExport` TOML/doc records must
+   be historical `state = "retired"` records with no live caller or accepted
+   runtime contract, not renamed implementations.
 3. Close the 3 findings QA-4 left open on PR #590:
    - `ARCH-003`/`RBQA-F008`: rewrite `docs/atm-daemon/boundaries.md`'s Policy
      Placement section from present-tense governance prose to retired/local-IPC-only
@@ -57,13 +60,18 @@ gate for QA dispatch.
 
 ## Acceptance Criteria
 
-- Cross-host/peer-transport subsystem is fully absent from AI.1's tree (no
-  reintroduction of `SourceIngress`/`ProjectionExport` boundary contracts).
+- Cross-host/peer-transport subsystem is fully absent from AI.1's tree. The
+  retired `SourceIngress`/`ProjectionExport` records have no live caller,
+  implementation, or accepted runtime contract.
 - `docs/atm-daemon/boundaries.md` contains no present-tense cross-host
   governance prose or forward-looking `Phase Yb` language.
 - `CHANGELOG.md` defines `DAEMON-PREAG-RESET-1`.
 - `cargo build --workspace` and `cargo test --workspace` pass on
   `feature/pAI-1-daemon-preag-reset`.
+- `git diff --name-only develop...HEAD` contains no Phase AG plan artifact,
+  generated gate material, or unrelated triage change; the changed tree is
+  limited to singleton/local-IPC baseline, deletion, required retirement docs,
+  and their validation.
 - CI green on PR #592.
 
 ## Retained contract
@@ -71,6 +79,8 @@ gate for QA dispatch.
 AI.1 retains only singleton ownership, local IPC, the dispatcher, storage
 trait assembly, and the post-write event boundary. It introduces no peer
 adapter, replay state, second request type, or alternate write path.
+`atm_storage::validate_path_segment` remains the one inherited identifier
+segment validator for AI.5; AI.1 neither forks nor replaces it.
 
 ## References
 

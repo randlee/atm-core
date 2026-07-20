@@ -22,6 +22,9 @@ target: integrate/phase-AI
    remaining consumer; otherwise list the concrete retained consumer as a
    release blocker rather than preserving a historical fallback.
 5. Run final architecture gates and publish one accepted-tip evidence set.
+6. Prove daemon startup rejects invalid enabled HTTPS configuration without a
+   partial listener, and prove bounded UDS/HTTPS shutdown drains or cancels
+   tracked work within the configured deadline.
 
 ## Proof record
 

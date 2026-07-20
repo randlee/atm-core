@@ -35,6 +35,13 @@ synthesis, per-host acknowledgement state, or duplicate-delivery subsystem.
 Messages are immutable and carry their existing ULID identity. Storage accepts
 the same message identity idempotently on either host.
 
+The HTTPS adapter applies bounded `5s` connect, TLS-handshake, and request
+deadlines, and rejects an over-limit body before decode. Listener startup
+validates every enabled interface and certificate reference before publishing
+any listener; an invalid configuration or bind failure leaves no partial HTTPS
+service. On shutdown it stops accepts then drains or cancels tracked work
+within the daemon shutdown deadline.
+
 ## Consequences
 
 An unavailable remote peer returns a normal transport error for that write

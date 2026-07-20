@@ -2,9 +2,10 @@
 
 | Field | Value |
 | --- | --- |
+| ID | ADR-037 |
 | Status | Accepted for Phase AI planning |
-| Date | 2026-07-20 |
-| Deciders | ATM architecture |
+| Scope | Repository-wide |
+| Relates to | ADR-033, ADR-035, Phase AH, Phase AI |
 
 ## Context
 
@@ -48,7 +49,8 @@ address delimiters. Chat IDs use the same safe segment alphabet so an address
 has one unambiguous grammar. AI.1's baseline already contains the completed
 Phase AG central validator, `atm_storage::validate_path_segment`; Phase AI
 extends that one validator and does not reimplement validation in the CLI,
-graft, HTTP, or Python binding.
+graft, or HTTP adapter. A future Phase AH Python binding consumes this same
+validator and address type rather than adding its own policy.
 
 Every persisted message has nullable `source_chat_id` and
 `destination_chat_id` columns beside its existing source/destination agent,
@@ -62,9 +64,10 @@ write accepts or displays it in `to`, and a nudge from
 targets `hendrix:12345@hermes`, never a collapsed `hendrix@hermes` identity.
 
 The REST API represents source and destination as structured addresses, not a
-synthetic session header. The local CLI, graft, and Python binding populate the
-same caller-address contract; the canonical write handler and post-write router
-do not branch on chat-id. HTTPS preserves the same request schema.
+synthetic session header. The local CLI and graft populate the same
+caller-address contract; a future Phase AH Python binding uses that contract.
+The canonical write handler and post-write router do not branch on chat-id.
+HTTPS preserves the same request schema.
 
 Message search is explicitly broader than the caller's chat identity:
 `atm read --agent hendrix` searches messages involving `hendrix` across all

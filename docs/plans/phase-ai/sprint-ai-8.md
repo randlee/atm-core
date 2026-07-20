@@ -17,6 +17,10 @@ target: integrate/phase-AI
    local certificate, and explicitly add/replace/revoke trusted peers.
 3. Surface safe configured/bound/trust state in `atm doctor`.
 4. Forbid environment-controlled peer address, bind address, or trust state.
+5. Validate the complete enabled listener set, certificate reference, and
+   exact trust records before startup. Any invalid enabled HTTPS configuration
+   or bind preflight failure fails daemon startup without publishing a partial
+   listener set; doctor reports the typed configuration/bind failure.
 
 ## Contract
 
@@ -56,6 +60,8 @@ mailbox state and is implemented by the selected storage backend.
 - Configuration is behind the storage trait; HTTP/HTTPS adapters do not use
   rusqlite types.
 - Doctor never exposes private key material.
+- Invalid enabled listener configuration fails before partial HTTPS service is
+  published; a disabled interface never binds.
 
 ## Non-closure
 
