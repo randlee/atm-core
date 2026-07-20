@@ -99,6 +99,24 @@ fn assert_recovered_payload_texts(
     );
 }
 
+#[test]
+fn warning_render_keeps_catalog_recovery_singleton() {
+    let error = AtmError::new(
+        AtmErrorCode::ConfigParseFailed,
+        "post-send hook configuration is invalid",
+    );
+    let warning = WarningEntry::with_code(
+        error.code,
+        format!(
+            "warning: post-send hook config lookup failed: {}.",
+            error.message
+        ),
+        Some(error.message),
+    );
+
+    assert_eq!(warning.render().matches("Recovery:").count(), 1);
+}
+
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,

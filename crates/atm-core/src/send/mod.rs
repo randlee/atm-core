@@ -181,8 +181,11 @@ impl WarningEntry {
             _ => self.message.clone(),
         };
         match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            Some(recovery) if !message.contains("Recovery:") => {
+                format!("{message} Recovery: {recovery}")
+            }
             None => message,
+            Some(_) => message,
         }
     }
 }
