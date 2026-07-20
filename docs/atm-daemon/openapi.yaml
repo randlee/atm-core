@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: ATM daemon API
+  version: v1
+  description: HTTP contract shared by local UDS and future peer HTTPS adapters.
+servers:
+  - url: /v1/atm
+paths:
+  /messages:
+    get:
+      operationId: listMessages
+      parameters:
+        - $ref: '#/components/parameters/Agent'
+        - $ref: '#/components/parameters/ChatId'
+      responses:
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    post:
+      operationId: writeMessage
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
+      responses:
+        '201': { description: Created message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /message/{messageId}:
+    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
+    get:
+      operationId: getMessage
+      responses:
+        '200': { description: Message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    delete:
+      operationId: clearMessage
+      responses:
+        '204': { description: Cleared }
+        default: { $ref: '#/components/responses/AtmError' }
+  /message/{messageId}/read:
+    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
+    post:
+      operationId: markMessageRead
+      responses:
+        '200': { description: Updated message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /message/{messageId}/ack:
+    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
+    post:
+      operationId: acknowledgeMessage
+      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/AckRequest' } } } }
+      responses:
+        '201': { description: Ack message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /doctor:
+    get:
+      operationId: doctor
+      responses:
+        '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /teams:
+    get:
+      operationId: listTeams
+      responses:
+        '200': { description: Teams, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Team' } } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    post:
+      operationId: createTeam
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+      responses:
+        '201': { description: Created team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /team/{teamName}:
+    parameters: [ { name: teamName, in: path, required: true, schema: { type: string } } ]
+    get:
+      operationId: getTeam
+      responses:
+        '200': { description: Team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    patch:
+      operationId: updateTeam
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+      responses:
+        '200': { description: Updated team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    delete:
+      operationId: deleteTeam
+      responses:
+        '204': { description: Deleted }
+        default: { $ref: '#/components/responses/AtmError' }
+components:
+  parameters:
+    MessageId: { name: messageId, in: path, required: true, schema: { type: string } }
+    Agent: { name: agent, in: query, schema: { type: string } }
+    ChatId: { name: chat_id, in: query, schema: { type: string } }
+  responses:
+    AtmError:
+      description: ATM error
+      content: { application/json: { schema: { $ref: '#/components/schemas/AtmError' } } }
+  schemas:
+    AgentAddress:
+      type: object
+      required: [agent, team]
+      properties:
+        agent: { type: string }
+        chat_id: { type: string }
+        team: { type: string }
+        host: { type: string }
+    WriteRequest:
+      type: object
+      required: [message_id, from, to, body]
+      properties:
+        message_id: { type: string }
+        from: { $ref: '#/components/schemas/AgentAddress' }
+        to: { $ref: '#/components/schemas/AgentAddress' }
+        body: { type: string }
+        requires_ack: { type: boolean }
+        acknowledges_message_id: { type: string }
+    AckRequest:
+      type: object
+      properties: { body: { type: string } }
+    Message:
+      type: object
+      required: [message_id, from, to, body]
+      properties:
+        message_id: { type: string }
+        from: { $ref: '#/components/schemas/AgentAddress' }
+        to: { $ref: '#/components/schemas/AgentAddress' }
+        body: { type: string }
+        requires_ack: { type: boolean }
+        acknowledges_message_id: { type: string }
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        cursor: { type: string }
+    Team:
+      type: object
+      required: [name]
+      properties: { name: { type: string } }
+    AtmError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
