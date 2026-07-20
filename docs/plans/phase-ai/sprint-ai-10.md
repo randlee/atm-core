@@ -25,6 +25,21 @@ target: integrate/phase-AI
 6. Prove daemon startup rejects invalid enabled HTTPS configuration without a
    partial listener, and prove bounded UDS/HTTPS shutdown drains or cancels
    tracked work within the configured deadline.
+7. Add the two additions-only compatibility gates for the HTTP migration:
+   - generate canonical JSON from the live `clap::Command` tree using
+     `get_subcommands()` and `get_arguments()`—never parsed `--help` text—for
+     every command path and argument/flag name, short/long form, requiredness,
+     arity, and default; compare it to a checked-in pre-Phase-AI baseline;
+   - put the generator/diff test beside the structural architecture gates and
+     allow baseline regeneration only through an explicit `--bless`/update
+     command; removed subcommands, removed/renamed arguments, or changed
+     requiredness/arity hard-fail. New surface is allowed, but a baseline/live
+     mismatch in either direction fails until the same reviewed change updates
+     the baseline;
+   - apply the same checked-in additions-only baseline-diff pattern to the
+     OpenAPI artifact AI.6 emits: removed path, method, required field, or
+     response/error semantic hard-fails; additive paths, operations, and fields
+     are allowed. The OpenAPI gate consumes the schema, not rendered prose.
 
 ## Proof record
 
@@ -42,9 +57,13 @@ success is never a message-delivery proof.
   needed to reply.
 - No prior custom frame, named-pipe, peer/replay, duplicate write-path, or
   runtime SQLite escape-hatch source remains.
+- The CLI compatibility gate proves the pre-Phase-AI public CLI surface is
+  additions-only; the OpenAPI compatibility gate proves the published HTTP API
+  is additions-only from its AI.6 baseline.
 
 ## Required validation
 
 All readiness commands; `just lint`; `just test`; Windows CI; two-Mac and
 Windows-host evidence; local/own-IP/two-host chat-identity proof; final
-boundary/error/transport/storage gates.
+boundary/error/transport/storage gates; CLI metadata and OpenAPI additions-only
+gates.
