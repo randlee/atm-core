@@ -1,5 +1,16 @@
 # ATM-Core Boundary Inventory
 
+> **Phase AI supersession notice:** storage contracts remain backend-neutral.
+> ADR-036 retires `RemoteReplayStore`, `RuntimeStorageFinalizer`, and any
+> daemon-specific persistence trait; retained boundary records must not be used
+> to recreate them.
+>
+> **Phase AI transport supersession:** `AtmProtocol`, `ClientTransport`,
+> `ServerTransport`, and `RequestDispatcher` describe the retired custom-frame
+> line until AI.6. The accepted target is ADR-033's HTTP router over UDS/HTTPS,
+> with transport-neutral requests and one canonical write handler; these legacy
+> records must not be extended or used to add a parallel route.
+
 This document is the initial Phase R boundary inventory for `atm-core`.
 
 Contract-owner records intentionally use:
@@ -14,15 +25,15 @@ concrete adapter in this crate.
 Test doubles planned; not yet landed. Until they exist, `allowed_test_double_paths`
 remains empty for the `atm-core` contract-owner records below.
 
-## AtmProtocol
+## AtmProtocol (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/atm-protocol.toml](../../boundaries/atm-core/atm-protocol.toml)
 
 
 Purpose:
-- Owns the shared ATM request/response contract used by local CLI, daemon, and
-  thin extension clients.
+- Historically owned the custom framed request/response contract. AI.6 retires
+  it in favor of ADR-033's HTTP/OpenAPI request contract.
 
 Notes:
 - The canonical request/response family now includes:
@@ -38,14 +49,16 @@ Notes:
   retained-runtime test harness seam; it is not a production consumer
   boundary.
 
-## ClientTransport
+## ClientTransport (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/client-transport.toml](../../boundaries/atm-core/client-transport.toml)
 
 
 Purpose:
-- Owns the outbound ATM request path from thin clients into a server/runtime.
+- Historically owned the outbound custom-frame client path. AI.6 replaces it
+  with one HTTP/UDS `DaemonApiClient` adapter used by CLI, graft, Python, and
+  in-process contract tests.
 
 Notes:
 - The public workflow surface above this boundary should stay centered on send
@@ -93,26 +106,29 @@ Notes:
 - on the earlier compatibility line, this closed the missing watch/reconcile
   boundary gap in the initial Phase R set.
 
-## ServerTransport
+## ServerTransport (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/server-transport.toml](../../boundaries/atm-core/server-transport.toml)
 
 
 Purpose:
-- Owns inbound ATM request serving and response framing for runtime hosts.
+- Historically owned inbound custom-frame serving. AI.6 replaces it with an
+  HTTP adapter that only translates HTTP and calls `ApiRouter`.
 
 Notes:
 - Listener/runtime code should remain thin and dispatch through RequestDispatcher.
 
-## RequestDispatcher
+## RequestDispatcher (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/request-dispatcher.toml](../../boundaries/atm-core/request-dispatcher.toml)
 
 
 Purpose:
-- Owns routing of typed protocol requests to the correct service handlers.
+- Historically routed custom-frame protocol requests. AI.6 replaces it with
+  `ApiRouter`, which selects a shared typed handler and does not own storage,
+  host routing, or nudges.
 
 Notes:
 - Transport-specific listeners should not embed request-family logic.
@@ -297,65 +313,38 @@ Purpose:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-ingress.toml](../../boundaries/atm-core/inbox-ingress.toml)
 
+Historical status:
+- retired by AI.1 with the deletion of daemon peer/compatibility adapters
+- retained only as a historical boundary record; no accepted runtime path
+  constructs or calls this contract
 
 Purpose:
-- Owns import from compatibility/shared inbox surfaces into ATM-owned state.
+- Historically owned import from compatibility/shared inbox surfaces into
+  ATM-owned state.
 
 Notes:
-- The import path stays separate from durable store ownership.
-- The hidden `atm_core::boundary_support` helper module is the only retained
-  implementation seam that may still touch compatibility inbox source files for
-  this boundary family.
+- It is not a live store, daemon, or transport extension point.
+- Any future compatibility import requires a new approved contract; this
+  retired record must not be reactivated by adding an implementation.
 
 ## ProjectionExport
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-export.toml](../../boundaries/atm-core/inbox-export.toml)
 
+Historical status:
+- retired by AI.1 with the deletion of daemon peer/compatibility adapters
+- retained only as a historical boundary record; no accepted runtime path
+  constructs or calls this contract
 
 Purpose:
-- Owns projection of ATM-owned state back to compatibility/shared inbox surfaces.
+- Historically owned projection of ATM-owned state back to compatibility/shared
+  inbox surfaces.
 
 Notes:
-- This is the write-facing sibling of SourceIngress, not a general store boundary.
-- Retained command/runtime code must reach compatibility inbox export only
-  through the daemon-owned ingress/export seam; it must not treat export-file
-  reads as a second source of mailbox truth.
-- Harness-specific export policy belongs in one central delivery-policy
-  coordinator and event-family state machines above this boundary, not in
-  scattered command callers.
-- `Y.4` lands that retained-command coordinator seam in
-  `crates/atm-core/src/delivery_policy.rs`; retained `send` and `ack` now
-  resolve roster snapshots through `RosterStore` before choosing whether
-  compatibility export is allowed for the recipient harness.
-- `Y.5` removes mutable compatibility fields from the shared inbox export path
-  via two helper functions in
-  `crates/atm-core/src/schema/inbox_message.rs`:
-  - `strip_removed_compatibility_fields` — removes: `source_team`,
-    `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `expiresAt`
-  - `strip_metadata_atm_namespace` — removes the `atm` key from the
-    `metadata` object
-- See [docs/plans/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
-  for the full field inventory.
-- Phase `Yb` adds a stricter rule:
-  - only approved delivery executors may call the write-facing export/append
-    primitives behind this boundary
-  - send/ack/persistence modules must not call them directly
-  - delivery-target construction and transition translation must stay in the
-    shared plan/execution seam:
-    - `crates/atm-core/src/delivery_plan.rs`
-    - `crates/atm-core/src/delivery_execution.rs`
-  - see:
-    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
-    - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
-- `Phase Yc` adds one final recovered-Claude seam requirement:
-  - `Y.12` introduces one explicit recovered logical-message-set export seam
-    for `DeliveryPlanDisposition::SqliteFailedRecovered` through
-    `ProjectionExport::append_message_set(...)`
-  - the recovered Claude path must not loop one message at a time through the
-    normal append helper while degrading to warnings after partial success
-  - persisted single-message Claude append remains on the existing append-only
-    path and is not reopened onto this boundary
+- It is not a live store, daemon, or transport extension point.
+- Any future compatibility projection requires a new approved contract; this
+  retired record must not be reactivated by adding an implementation.
 
 ## PostSendHookEmitter
 

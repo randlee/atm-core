@@ -36,10 +36,16 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-025 — Installed User Documentation Surface](./ADR-025-installed-user-documentation-surface.md)
 - [ADR-026 — Host Singleton And Durable State Root](./ADR-026-host-singleton-and-durable-state-root.md)
 - [ADR-027 — Client/Daemon Version Compatibility](./ADR-027-client-daemon-version-compatibility.md)
-- [ADR-028 — Cross-Host Interface Control Plane](./ADR-028-cross-host-interface-control-plane.md)
-- [ADR-029 — Cross-Host Host Authorization](./ADR-029-cross-host-host-authorization.md)
-- [ADR-030 — Cross-Host Transport Security Sequencing](./ADR-030-cross-host-transport-security-phase.md)
-- [ADR-031 — Remote-Target Contract And Cross-Host Dispatch Boundary](./ADR-031-remote-target-contract-and-cross-host-dispatch.md)
+- [ADR-028 — Cross-Host Interface Control Plane (superseded by ADR-034)](./ADR-028-cross-host-interface-control-plane.md)
+- [ADR-029 — Cross-Host Host Authorization (superseded by ADR-034)](./ADR-029-cross-host-host-authorization.md)
+- [ADR-030 — Cross-Host Transport Security Sequencing (superseded by ADR-034)](./ADR-030-cross-host-transport-security-phase.md)
+- [ADR-031 — Remote-Target Contract And Cross-Host Dispatch Boundary (superseded by ADR-034/035)](./ADR-031-remote-target-contract-and-cross-host-dispatch.md)
+- [ADR-032 — Unified Error Contract](./ADR-032-unified-error-contract.md)
+- [ADR-033 — HTTP Endpoint Contract](./ADR-033-http-endpoint-contract.md)
+- [ADR-034 — Minimal Cross-Host HTTPS Transport](./ADR-034-minimal-cross-host-https-transport.md)
+- [ADR-035 — Canonical Write Ingress And Host Routing](./ADR-035-canonical-write-ingress-and-host-routing.md)
+- [ADR-036 — Storage Boundary And Composition Topology](./ADR-036-storage-boundary-and-composition-topology.md)
+- [ADR-037 — Chat Address Identity](./ADR-037-chat-address-identity.md)
 
 ## Extracted Crate-Local ADRs
 
