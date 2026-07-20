@@ -202,7 +202,8 @@ Initial crate requirement IDs:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
   and post-write routing contract. Exactly one post-write router chooses local
-  nudge for a current/empty host or HTTPS delivery for another host. Satisfies:
+  nudge for an empty host or HTTPS delivery for every present host, including
+  localhost and the daemon's own advertised or bound IP. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
   delivery state: no replay store, outbox, retry queue, receipt, remote ack
@@ -212,9 +213,11 @@ Initial crate requirement IDs:
   canonical write. A failed remote attempt creates no remote recipient row or
   delivery state; an already-persisted local sender record remains immutable.
   Satisfies `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-005` `atm-core` owns the object-safe, `Send + Sync`
-  `DaemonApiClient` contract used by CLI, graft, Python, and test clients. It
-  exposes one application API; concrete UDS/HTTPS HTTP I/O is adapter-owned.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the sealed, object-safe, `Send + Sync`
+  `DaemonApiClient` contract used by CLI, graft, and test clients. It exposes
+  one application API; concrete UDS/HTTPS HTTP I/O is adapter-owned. A future
+  Python binding consumes this contract in its owning phase and must not create
+  a parallel ingress or client trait.
   Satisfies `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-TRANSPORT-006` is historical only. The custom ATM wire-frame
   schema, frame codec, and `ClientTransport` framing contract are retired by

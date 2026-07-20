@@ -22,18 +22,39 @@ target: integrate/phase-AI
    inventory is every `peer_transport` queue/store/receipt type, any remote
    acknowledgement state, and any HTTPS-specific handler that does not call
    `ApiRouter`.
+5. Enforce the concrete `5s` connect, TLS-handshake, and request deadlines;
+   reject the shared `1_048_576` byte request body limit before decode; and on shutdown stop HTTPS
+   accepts then drain or cancel tracked connections within the documented
+   daemon shutdown deadline.
 
 ## Contract
 
 ```rust
 pub trait PeerHttpTransport: Send + Sync {
-    fn deliver(&self, request: WriteRequest, peer: &TrustedPeer) -> Result<MessageRecord, AtmError>;
+    fn deliver(
+        &self,
+        request: WriteRequest,
+        peer: &TrustedPeer,
+        deadline: PeerRequestDeadline,
+    ) -> Result<MessageRecord, AtmError>;
+}
+
+pub struct AuthenticatedPeer(/* private; built only after mTLS + exact trust */);
+
+pub struct PeerRequestDeadline {
+    pub connect: Duration,
+    pub handshake: Duration,
+    pub request: Duration,
 }
 ```
 
 `PeerHttpTransport` owns mTLS HTTP I/O only. Inbound HTTPS calls `ApiRouter`;
 outbound delivery is selected only by `PostWriteRouter`. Neither owns storage,
 ack state, nudge state, receipt synthesis, or retry state.
+The HTTPS adapter creates `AuthenticatedPeer` only after the exact configured
+host and fingerprint checks succeed, then passes it as the peer form of
+`AuthenticatedIngress`; no unauthenticated caller can invoke the peer router
+entry.
 
 ## Acceptance criteria
 
@@ -47,6 +68,8 @@ ack state, nudge state, receipt synthesis, or retry state.
   write handler; peer transport performs no roster lookup.
 - A remote message and remote acknowledgement preserve the chat-qualified
   source/destination addresses visible to the receiving agent.
+- HTTPS bind failure, oversized body, each timeout leg, and shutdown draining
+  are covered by listener lifecycle tests; no partial listener remains live.
 
 ## Non-closure
 

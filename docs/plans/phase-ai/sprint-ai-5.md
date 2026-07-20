@@ -12,7 +12,7 @@ target: integrate/phase-AI
 
 1. Introduce ADR-037's optional `ChatId` and canonical `AgentAddress` model:
    `<agent>[:<chat-id>]@<team>[.<host>]`.
-   Reuse and extend AI.1's inherited `atm_storage::validate_path_segment` for
+   Reuse AI.1's retained `atm_storage::validate_path_segment` contract for
    agent, team, and chat-id validation; do not create an adapter-local policy.
 2. Persist nullable source/destination chat-id columns independently from agent
    names, migrate existing rows as null, and preserve both fields in canonical
@@ -52,8 +52,11 @@ pub enum ParticipantDirection { From, To, Either }
 `AgentAddress::from_str` is the sole parser for `agent[:chat]@team[.host]`.
 It splits at `:`, then `@`, then the first `.` after `@`; a team has no `.`,
 so a DNS or IP host may contain further periods. The inherited segment
-validator remains the shared leaf validation policy; no CLI, graft, Python,
-nudge, or transport adapter may split these delimiters.
+validator remains the shared leaf validation policy; no CLI, graft, nudge, or
+transport adapter may split these delimiters. A future Phase AH Python binding
+uses this parser unchanged.
+`impl Display for AgentAddress` is the sole agent-facing renderer; callers
+must not concatenate agent, chat, team, or host fields themselves.
 
 ## Acceptance criteria
 
@@ -63,7 +66,7 @@ nudge, or transport adapter may split these delimiters.
   chat-id; no chat-specific send/ack/nudge route exists.
 - Nullable source/destination columns are separate from agent-name columns;
   existing rows remain readable.
-- The API, CLI, graft, Python-facing projection, and nudge render the same
+- The API, CLI, graft, and nudge render the same
   chat-qualified address.
 - `--agent hendrix` finds all of Hendrix's messages regardless of chat ID;
   `--agent hendrix --chat 12345` finds only `hendrix:12345`.

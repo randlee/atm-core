@@ -3721,6 +3721,9 @@ mail correctness.
   - if the configured listener bind address itself changes or disappears, the
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
+  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS and
+    HTTPS shutdown stop accepts then drain or cancel tracked requests within
+    the one documented daemon shutdown deadline
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

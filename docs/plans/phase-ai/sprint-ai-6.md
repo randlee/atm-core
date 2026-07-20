@@ -26,6 +26,17 @@ target: integrate/phase-AI
    under a new name or fallback feature.
 5. Embed/publish the OpenAPI JSON through `atm api spec` and contract-test it
    against router requests/responses.
+6. Introduce the sealed `DaemonApiClient` as the one client-facing application
+   API for CLI, graft, UDS, HTTPS, and test adapters. It may not own a second
+   handler or transport decision.
+7. Enforce a 3s same-host request deadline and the documented `1_048_576` byte
+   body limit before decoding. On shutdown, stop UDS accepts and drain or
+   cancel tracked requests within the one documented shutdown deadline.
+8. Add an AST-based architecture test that resolves production module/use
+   paths and proves every write ingress reaches `ApiRouter::route`, then the
+   canonical handler, `MessageWriter::write`, and `PostWriteRouter::dispatch`;
+   it must reject another direct storage write or post-write call. String
+   matching is not an acceptable graph check.
 
 ## Contract
 
@@ -40,12 +51,31 @@ pub enum ApiRequest {
 }
 
 pub trait ApiRouter: Send + Sync {
-    fn route(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+    fn route(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError>;
 }
+
+pub struct RequestDeadline(/* monotonic absolute deadline */);
+
+pub enum AuthenticatedIngress {
+    Local(/* UDS-authenticated local caller */),
+    Peer(AuthenticatedPeer),
+}
+
+pub struct AuthenticatedPeer { /* private construction */ }
+
+pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 ```
 
 The UDS adapter translates HTTP to/from `ApiRequest` and calls `ApiRouter`; it
 does not own a storage, nudge, acknowledgement, or routing branch.
+`AuthenticatedIngress` is transport proof only. Its peer variant is
+declared here but remains unconstructable until AI.9's mTLS adapter; the router
+still dispatches one application handler.
 
 ## Acceptance criteria
 
@@ -55,6 +85,8 @@ does not own a storage, nudge, acknowledgement, or routing branch.
 - No source/dependency reference to named pipes or the retired custom frame
   protocol remains.
 - Router tests prove adapters cannot reach storage or post-send boundaries.
+- UDS startup/shutdown tests prove a bounded body is rejected before decode and
+  tracked requests drain or cancel within the documented deadline.
 
 ## Non-closure
 

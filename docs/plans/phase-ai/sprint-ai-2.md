@@ -17,6 +17,10 @@ target: integrate/phase-AI
    type, SQLite observability bridge, or daemon-specific persistence contract.
 3. Establish one backend-neutral factory/assembly input so a backend is selected
    at composition without daemon, CLI, graft, or transport backend access.
+4. Extend the architecture boundary gate to parse every
+   `boundaries/atm-core/*.toml` record. A record whose implementation source is
+   absent must be `state = "retired"`, must not name live callers, and must be
+   described as historical in `docs/atm-core/boundaries.md`.
 
 ## Contract
 
@@ -44,3 +48,9 @@ visible outside the selected backend. `atm-storage-rusqlite` alone owns
 
 `cargo test -p atm-storage -p atm-runtime -p atm-daemon`; dependency and
 architecture checks; `just lint`; `just test`.
+
+## Non-closure
+
+AI.2 removes storage topology and stale-record escape hatches only. It does
+not add an HTTP listener, a peer listener, delivery persistence, or an
+alternative storage trait for transport.

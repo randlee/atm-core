@@ -50,3 +50,9 @@ second routing or acknowledgement path.
 
 Architecture checks must reject these shapes structurally, not merely by a
 denylist of historical identifiers.
+
+The router receives an authenticated ingress context. The peer form is an
+opaque `AuthenticatedPeer` constructed only by the HTTPS adapter after mTLS and
+exact configured-host/fingerprint verification; adapters cannot fabricate it.
+This type preserves the authenticate-before-route invariant without adding a
+peer-specific application handler.

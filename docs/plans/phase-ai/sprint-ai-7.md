@@ -58,3 +58,9 @@ nudge only for an empty host; every present host uses HTTPS.
 CLI, graft, and REST send/ack integration tests; chat-address reply/ack tests;
 duplicate-ULID and failed-write tests; `just lint`; `just test`; canonical-write
 architecture gate.
+
+## Non-closure
+
+AI.7 closes the in-process canonical write semantics and local ingress
+convergence. It does not bind HTTPS, perform TLS, configure peers, or claim
+two-host delivery proof; AI.8 through AI.10 own those outcomes.

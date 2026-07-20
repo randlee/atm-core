@@ -20,7 +20,8 @@ nudges.
 Every message projection uses structured `from` and `to` addresses. Each has
 `agent`, optional `chat_id`, `team`, and optional `host`. Storage keeps the
 optional chat IDs in separate nullable source/destination columns; CLI, graft,
-Python, nudge, and read rendering show a present value as `agent:chat-id`.
+nudge, and read rendering show a present value as `agent:chat-id`. A future
+Phase AH Python binding consumes this same projection.
 Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
 and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
@@ -28,6 +29,12 @@ field.
 Remote HTTPS requires mTLS plus the configured exact peer identity and pinned
 certificate fingerprint. Local UDS uses endpoint ownership/permissions. These
 are adapter concerns and do not alter endpoint schemas.
+
+All routes have a bounded request deadline and reject a body over `1_048_576`
+bytes before decode. UDS uses the `3s` same-host deadline; HTTPS uses the documented `5s`
+connect, handshake, and request legs within its `10s` synchronous wait budget.
+Both listeners stop accepting new requests during shutdown and drain or cancel
+tracked requests within the daemon shutdown deadline.
 
 ## Resource contract
 

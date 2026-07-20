@@ -24,10 +24,12 @@ module. Transport adapters, application handlers, storage adapters, the CLI,
 and graft return this value rather than translating it into parallel error
 envelopes or kind hierarchies.
 
-`AtmErrorKind`, recovery text, captured sources, captured backtraces, and
-`ProtocolErrorEnvelope` are retired from the protocol contract. A boundary may
-log structured diagnostic context before returning `AtmError`; that context is
-not transported as an alternative error shape.
+`AtmErrorKind`, per-site recovery text, captured sources, captured backtraces,
+and `ProtocolErrorEnvelope` are retired from the protocol contract. The one
+constructor/catalog module owns safe operator recovery guidance by
+`AtmErrorCode`; it renders that guidance into the single `message` field. A
+boundary may log structured diagnostic context before returning `AtmError`, but
+that context is neither serialized nor exposed through a second accessor.
 
 ## Required invariants
 
@@ -39,6 +41,9 @@ not transported as an alternative error shape.
   approved constructor module fails the architecture check.
 - Error serialization is lossless for `code` and `message` and carries no
   backend-specific type, source, or platform handle.
+- Exactly one catalog maps each `AtmErrorCode` to its safe message and recovery
+  guidance. A caller may add bounded, non-secret detail only through that
+  catalog; it cannot create a second recovery or rendering path.
 
 ## Consequences
 

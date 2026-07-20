@@ -20,7 +20,7 @@ the same read/write handlers. Cross-host code is transport-only.
 | --- | --- |
 | Local client transport | HTTP over UDS on Unix and Windows AF_UNIX; no named pipes |
 | Remote transport | HTTPS/TCP to the same daemon router |
-| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
+| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
 | Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
 | Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
@@ -59,7 +59,7 @@ Each sprint extends and runs the following checks against its own merge base:
 4. **Storage boundary:** HTTP/HTTPS/UDS adapters may not use rusqlite or schema
    types; only the sealed storage trait reaches SQLite.
 5. **No retired parallel protocol:** source and dependency checks reject the
-   custom ATM frame codec and Windows named-pipe support after AI.4. Structural
+   custom ATM frame codec and Windows named-pipe support after AI.6. Structural
    tests verify the retained router/handler graph, so identifier renaming cannot
    satisfy the gate.
 
@@ -93,29 +93,54 @@ pub struct WriteRequest {
 pub trait DaemonApiClient: Send + Sync {
     fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
 }
+
+pub struct RequestDeadline(/* monotonic absolute deadline */);
+
+pub struct AuthenticatedPeer {
+    host: HostName,
+    fingerprint: CertificateFingerprint,
+    _private: (),
+}
+
+pub enum AuthenticatedIngress {
+    Local(/* UDS-authenticated local caller */),
+    Peer(AuthenticatedPeer),
+}
+
+pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 ```
 
-CLI, graft, Python bindings, UDS HTTP, and HTTPS HTTP create or decode this
+`DaemonApiClient` is introduced and owned by AI.6. All boundary traits in this
+plan are sealed unless their owning ADR explicitly authorizes an external
+implementation; clients consume the API contract but do not create another
+ingress trait. `AgentAddress` owns both parsing and `Display` rendering; no
+adapter concatenates address components. AI.6 constructs only the local form
+of `AuthenticatedIngress`; AI.9 alone constructs `AuthenticatedPeer` after
+mTLS and exact trust validation.
+
+CLI, graft, UDS HTTP, and HTTPS HTTP create or decode this
 same request and call one router, handler, storage method, and post-write
 event. The sole host decision is in the post-write router: an empty host emits
 the local nudge, while every present host—including `localhost` and own IP—uses
 HTTPS. A present chat-id
 is stored in nullable source/destination columns and rendered to agents as
 `agent:chat-id`; it is not a transport session or a second delivery path.
+Python bindings are Phase AH/future-client scope: they consume this published
+contract later and are not a Phase AI implementation deliverable.
 
 ## Sprint sequence
 
 | Sprint | Branch | Single closure |
 | --- | --- | --- |
 | AI.1 | `feature/pAI-1-daemon-preag-reset` | Rebased minimal singleton/local daemon baseline; peer/replay subsystem is actually gone |
-| AI.2 | `feature/pAI-s2-storage-topology` | SQLite is confined to its backend; runtime replay/finalizer escape hatches are gone |
+| AI.2 | `feature/pAI-s2-storage-topology` | SQLite is confined to its backend; runtime replay/finalizer escape hatches are gone and retired core boundary records are mechanically rejected |
 | AI.3 | `feature/pAI-s3-error-contract-foundation` | One serializable `AtmError` and no protocol error envelope/kind hierarchy |
 | AI.4 | `feature/pAI-s4-error-consumer-migration` | All error producers/consumers use the unified contract; direct-construction gate active |
 | AI.5 | `feature/pAI-s5-chat-address-identity` | Optional chat-id is stored, parsed, rendered, and preserved as an independent agent context |
-| AI.6 | `feature/pAI-s6-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; named pipes/custom frames removed |
+| AI.6 | `feature/pAI-s6-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; `DaemonApiClient`, bounded request admission, body limits, and graceful UDS draining are live; named pipes/custom frames removed |
 | AI.7 | `feature/pAI-s7-canonical-write-path` | CLI, graft, local UDS, and ack use one canonical write handler and post-write router |
-| AI.8 | `feature/pAI-s8-crosshost-control-plane` | SQLite/CLI interface, certificate, and exact peer-trust control plane |
-| AI.9 | `feature/pAI-s9-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with no cross-host state subsystem |
+| AI.8 | `feature/pAI-s8-crosshost-control-plane` | Storage/CLI interface, certificate, exact peer-trust control plane, and fail-closed listener startup validation |
+| AI.9 | `feature/pAI-s9-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with bounded per-leg timeouts, body limits, and graceful HTTPS draining; no cross-host state subsystem |
 | AI.10 | `feature/pAI-s10-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
 
 Each sprint merges forward to the next sprint branch before the next sprint
