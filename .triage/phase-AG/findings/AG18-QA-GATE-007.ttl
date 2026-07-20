@@ -1,0 +1,32 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-GATE-007>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-GATE-007" ;
+  triage:title "Delete-list gate is purely literal/regex, cannot catch renamed reintroduction" ;
+  triage:description "ag18.toml + boundary_enforcement.rs:324-373 -- the delete-list gate is structurally incapable of catching a renamed reintroduction of forbidden behavior, exactly what AG18-QA-003 and AG18-QA-RESPSPLIT-006 demonstrate (same fork/split logic under new names). This is a note about the atm-architecture crate's own tooling gap; team-lead has NOT pre-authorized any additional atm-architecture changes beyond the narrow AG.19 gate-scoping and AG18 stale-path fixes already authorized separately -- flag for a future, explicitly-scoped tooling task rather than dispatching a fix here." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "informational" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "documented_limitation" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:triageNotes "This is a tooling limitation in the atm-architecture crate's delete-list gate mechanism. No code occurrences are tracked. A future, explicitly-scoped tooling task should be created to enhance the gate to understand semantic equivalence beyond literal/regex matching. QA verdict reference: AG18-REAL-QA-1 CONSOLIDATED VERDICT, Finding #7 (RBQA-F003)." .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-ag/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

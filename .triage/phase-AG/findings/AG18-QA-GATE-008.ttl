@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-GATE-008>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-GATE-008" ;
+  triage:title "ag18.toml never lists DirectDeliver in forbidden_literals/regexes" ;
+  triage:description "ag18.toml:77 -- ag18.toml's own forbidden_literals/forbidden_regexes never list 'DirectDeliver' itself (the sprint's namesake symbol), despite it being explicitly named in the sprint doc's Required Validation grep command. Not a live regression today, but the gate wouldn't catch one. This IS a manifest-content fix (adding a literal to ag18.toml's forbidden_literals list), which is a narrow, low-risk change distinct from gate-logic changes -- still requires team-lead pre-authorization before touching atm-architecture per standing policy." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "gate-coverage-gap" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-architecture/delete-lists/ag18.toml only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/ag18-gate-coverage/manifest-gap> ;
+  triage:highestOpenBranch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:notes "Gate-coverage finding: ag18.toml forbidden_literals lacks 'DirectDeliver' literal despite sprint doc's Required Validation explicitly grep'ing for it. No live DirectDeliver occurrences in code today; however gate would fail to catch future reintroduction. Classified as open because gate itself is incomplete and awaits team-lead authorization for manifest fix per atm-architecture policy." .
+
+<urn:atm:triage:worktree/ag18-gate-coverage/manifest-gap>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/ag18-integrate-phase-ag>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

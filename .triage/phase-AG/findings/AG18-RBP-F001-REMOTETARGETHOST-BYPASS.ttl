@@ -1,0 +1,150 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-RBP-F001-REMOTETARGETHOST-BYPASS>
+  a triage:Finding ;
+  triage:findingId "AG18-RBP-F001-REMOTETARGETHOST-BYPASS" ;
+  triage:title "Raw Option<String> bypasses validated RemoteTargetHost newtype" ;
+  triage:description "ReplyTarget.remote_host (ack/mod.rs) and DeliveryRecipientSnapshot.remote_host (delivery_policy.rs:54) use raw Option<String> instead of the existing validated RemoteTargetHost newtype (send/mod.rs:66); parsing deferred/duplicated in persist_sent_ack_reply (ack/mod.rs:569-573) and test helpers." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AG/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 67 ;
+  triage:snippet "remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s18" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 71 ;
+  triage:snippet "fn new(agent: AgentName, team: TeamName, remote_host: Option<String>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s18" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s18/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 54 ;
+  triage:snippet "pub(crate) remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s18" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 49 ;
+  triage:snippet "remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s19" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 53 ;
+  triage:snippet "fn new(agent: AgentName, team: TeamName, remote_host: Option<String>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s19" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/pAG-s19/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 52 ;
+  triage:snippet "pub(crate) remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "pAG-s19" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 67 ;
+  triage:snippet "remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 71 ;
+  triage:snippet "fn new(agent: AgentName, team: TeamName, remote_host: Option<String>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBP-F001/integrate-phase-AG/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 54 ;
+  triage:snippet "pub(crate) remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAG-s18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAG-s19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 2 .

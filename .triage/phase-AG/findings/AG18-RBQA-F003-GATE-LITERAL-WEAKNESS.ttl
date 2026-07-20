@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-RBQA-F003-GATE-LITERAL-WEAKNESS>
+  a triage:Finding ;
+  triage:findingId "AG18-RBQA-F003-GATE-LITERAL-WEAKNESS" ;
+  triage:title "Delete-list gate is purely literal/regex, structurally incapable of catching renamed reintroduction" ;
+  triage:description "ag18.toml + boundary_enforcement.rs:325-372 -- the gate matches only literal symbol names/regexes, exactly what AG18-RBQA-F002 (rename-to-evade) demonstrates it cannot catch. Important, not blocking on its own, but corroborates why F002 slipped through. Additionally ag18.toml's own forbidden_literals/forbidden_regexes never list 'DirectDeliver' itself (the sprint's namesake symbol), despite it being explicitly named in the sprint doc's Required Validation grep command -- not a live regression today but the gate wouldn't catch one." ;
+  triage:category "RBQA" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T18:35:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/345da805> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F003-GATE-LITERAL-WEAKNESS/structural/1> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F003-GATE-LITERAL-WEAKNESS/structural/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/delete-lists/ag18.toml" ;
+  triage:line 77 ;
+  triage:snippet "forbidden_literals list does not include DirectDeliver; gate is purely literal/regex pattern matching" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F003-GATE-LITERAL-WEAKNESS/structural/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 325 ;
+  triage:snippet "scan_delete_manifest function implements gate as literal contains() + regex is_match() only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 999 .

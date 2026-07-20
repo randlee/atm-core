@@ -1,0 +1,203 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-101" ;
+  triage:title "requirements.md AckOutcome JSON contract stale (nested reply_disposition.kind vs shipped flat shape)" ;
+  triage:description "docs/requirements.md:1654-1666 still documents AckOutcome's JSON contract as a nested reply_disposition.kind object (\"sent\" | \"suppressed_self_ack\"). Shipped AckOutcome (crates/atm-core/src/ack/mod.rs) is flat (reply_message_id/reply_target, no disposition field, no suppressed_self_ack path possible anymore) on branches pAG-s19 through pAG-s25. Requirements baseline was not updated to match the shipped wire contract on any branch, including branches where the struct itself has reverted to the nested pre-flattening shape (pAG-s18, integrate/phase-AG)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T01:00:10Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s18/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s19/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s20/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s21/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s22/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s23/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s24/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/s25/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-AG19-101/integrate/1> ;
+
+  triage:openOn
+    <urn:atm:triage:worktree/pAG-s18/1b25b36c> ,
+    <urn:atm:triage:worktree/pAG-s19/93ac3d07> ,
+    <urn:atm:triage:worktree/pAG-s20/7f745f01> ,
+    <urn:atm:triage:worktree/pAG-s21/8652bdd3> ,
+    <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ,
+    <urn:atm:triage:worktree/pAG-s23/ca3fb30f> ,
+    <urn:atm:triage:worktree/pAG-s24/81298e32> ,
+    <urn:atm:triage:worktree/pAG-s25/c245c2ea> ,
+    <urn:atm:triage:worktree/integrate-phase-AG/65593144> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AG/65593144> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/93ac3d07> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/7f745f01> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/8652bdd3> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/ca3fb30f> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-101/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1658 ;
+  triage:snippet "- `reply_disposition`\n  - `kind = \"sent\"` ... `kind = \"suppressed_self_ack\"` ..." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/65593144> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 ;
+  triage:notes "AckOutcome struct in ack/mod.rs is nested (reply_disposition: AckReplyDisposition) — pre-AG.19 shape, has not merge-forwarded AG.19's flattening." .
+
+<urn:atm:triage:worktree/pAG-s19/93ac3d07>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "93ac3d07" ;
+  triage:orderIndex 2 ;
+  triage:notes "Origin of this finding. AckOutcome struct is flat (reply_message_id, reply_target; no reply_disposition field) — the shipped wire contract that requirements.md fails to document." .
+
+<urn:atm:triage:worktree/pAG-s20/7f745f01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:orderIndex 3 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/pAG-s21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/pAG-s23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 ;
+  triage:notes "AckOutcome struct is flat, matching pAG-s19." .
+
+<urn:atm:triage:worktree/integrate-phase-AG/65593144>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:orderIndex 9 ;
+  triage:notes "AckOutcome struct is nested (reply_disposition: AckReplyDisposition), same as pAG-s18 — current tip has not yet merge-forwarded AG.19's flattening fix. Doc mismatch is open here regardless: nested-doc vs nested-code disagree on the suppressed_self_ack path (no longer reachable per AG.19's deletion of the remote-ack path), and once AG.19 merges forward this branch will also need the flat-shape doc update." .

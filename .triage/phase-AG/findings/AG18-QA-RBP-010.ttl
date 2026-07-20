@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-RBP-010>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-RBP-010" ;
+  triage:title "Raw Option<String> instead of RemoteTargetHost newtype" ;
+  triage:description "ReplyTarget.remote_host (ack/mod.rs) and DeliveryRecipientSnapshot.remote_host (delivery_policy.rs:54) use raw Option<String> instead of the existing validated RemoteTargetHost newtype (send/mod.rs:66); parsing deferred/duplicated in persist_sent_ack_reply (ack/mod.rs:569-573) and test helpers." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-RBP-010/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-RBP-010/s18/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-QA-RBP-010/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 67 ;
+  triage:snippet "remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-QA-RBP-010/s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 54 ;
+  triage:snippet "pub(crate) remote_host: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,150 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-RBQA-F002-RESPONSE-SPLIT>
+  a triage:Finding ;
+  triage:findingId "AG18-RBQA-F002-RESPONSE-SPLIT" ;
+  triage:title "Response-side envelope split reintroduced under new names" ;
+  triage:description "ResponseEnvelope now has Send(SendOutcome)/Ack(AckOutcome) variants, both serializing to the same wire MessageKind::SendResponse -- recreating the exact SendResponseEnvelope::{Sent,Acknowledged} split the sprint required eliminated, moved to the response side under new names, unified only at the wire-serialization layer, with 20+ call sites still branching on it." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/protocol.rs ResponseEnvelope and all call sites branching on Send/Ack variants" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T18:04:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/3> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-ag/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 57 ;
+  triage:snippet "Send(SendOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 58 ;
+  triage:snippet "Ack(AckOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s18/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 754 ;
+  triage:snippet "ResponseEnvelope::Send(_) | ResponseEnvelope::Ack(_) => MessageKind::SendResponse," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 57 ;
+  triage:snippet "Send(SendOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 58 ;
+  triage:snippet "Ack(AckOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/s19/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 754 ;
+  triage:snippet "ResponseEnvelope::Send(_) | ResponseEnvelope::Ack(_) => MessageKind::SendResponse," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 57 ;
+  triage:snippet "Send(SendOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 58 ;
+  triage:snippet "Ack(AckOutcome)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F002-RESPONSE-SPLIT/integrate-ag/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 754 ;
+  triage:snippet "ResponseEnvelope::Send(_) | ResponseEnvelope::Ack(_) => MessageKind::SendResponse," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/345da805> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/integrate-ag/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 99 .

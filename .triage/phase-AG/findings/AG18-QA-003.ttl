@@ -4,12 +4,12 @@
 <urn:atm:triage:finding/AG18-QA-003>
   a triage:Finding ;
   triage:findingId "AG18-QA-003" ;
-  triage:title "Daemon dispatch still forks send-vs-ack before routing" ;
-  triage:description "Daemon dispatch fork on acknowledges_message_id: AG.18 original finding (dispatch_delivery.rs:63), confirmed across AG.19-20 unchanged. AG.21 relocated fork to send/mod.rs:371-383 (dispatch_delivery.rs fork removed). AG.22-25 fork persists in send/mod.rs at varying line numbers (412-418). Pattern: boolean check on request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() branches unconditionally to ack_mail_with_runtime_and_post_send_emitter vs send_mail_with_runtime_and_post_send_emitter BEFORE any canonical routing decision. This is the core architectural violation: ack-vs-send decision made by runtime boolean flag inside shared function, not at request construction/type level." ;
+  triage:title "Send-vs-ack dispatch fork relocated, not deleted (repeatable ladder-wide pattern)" ;
+  triage:description "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:58-72 (dispatch_send, renamed from dispatch_compose_send) still branches on request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() into two separate downstream execution/finalization paths (ack_mail_with_runtime_... vs send_mail_with_runtime_...) producing AckOutcome vs SendOutcome. quality-mgr resolved the reviewer split (req-qa: open pending ruling; ruthless-boundary-qa: blocking) in favor of blocking -- the sprint doc's ack-as-data carve-out describes SendRequest construction, not license for a pre-routing boolean fork to two separate outcome-typed handler functions. Cited as an open ladder-wide finding (AG18-QA-003) already present across every sub-sprint branch s18-s25 -- full repeatable-pattern sweep executed across all 8 branches plus integration branch." ;
   triage:category "ATM-QA-003" ;
   triage:severity "blocking" ;
   triage:phaseId "phase-AG" ;
-  triage:triageMode "followup_pass" ;
+  triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
   triage:status "open" ;
@@ -23,14 +23,16 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s24/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/s25/1> ;
-  triage:openOn <urn:atm:triage:worktree/s18/e46c3a6d> ;
-  triage:openOn <urn:atm:triage:worktree/s19/5d20ca5a> ;
-  triage:openOn <urn:atm:triage:worktree/s20/50572166> ;
-  triage:openOn <urn:atm:triage:worktree/s21/758732cd> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-003/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/46a3f29a> ;
+  triage:openOn <urn:atm:triage:worktree/s20/8f645d26> ;
+  triage:openOn <urn:atm:triage:worktree/s21/8652bdd3> ;
   triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
-  triage:openOn <urn:atm:triage:worktree/s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/s23/ca3fb30f> ;
   triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
   triage:openOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/e78b0ef4> ;
   triage:promoteTo <urn:atm:triage:worktree/s25/c245c2ea> .
 
 # --- AG.18: Fork in dispatch_delivery.rs ---
@@ -38,48 +40,48 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 63 ;
-  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "e46c3a6d" ;
-  triage:occursIn <urn:atm:triage:worktree/s18/e46c3a6d> .
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
 
 # --- AG.19: Fork unchanged in dispatch_delivery.rs ---
 <urn:atm:triage:occurrence/AG18-QA-003/s19/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 63 ;
-  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { prepare_ack_reply(...); }" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "5d20ca5a" ;
-  triage:occursIn <urn:atm:triage:worktree/s19/5d20ca5a> .
+  triage:headSha "46a3f29a" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/46a3f29a> .
 
 # --- AG.20: Fork unchanged in dispatch_delivery.rs ---
 <urn:atm:triage:occurrence/AG18-QA-003/s20/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 63 ;
-  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); } ... send_mail_with_runtime_and_post_send_emitter(...)" ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))); }" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-  triage:headSha "50572166" ;
-  triage:occursIn <urn:atm:triage:worktree/s20/50572166> .
+  triage:headSha "8f645d26" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/8f645d26> .
 
 # --- AG.21: Fork relocated to send/mod.rs (dispatch_delivery.rs version gone) ---
 <urn:atm:triage:occurrence/AG18-QA-003/s21/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/mod.rs" ;
-  triage:line 418 ;
-  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(ack_request_from_send_request(request)?, ...); } send_mail_with_runtime_and_post_send_emitter(request, ...)" ;
+  triage:line 420 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "758732cd" ;
-  triage:occursIn <urn:atm:triage:worktree/s21/758732cd> .
+  triage:headSha "8652bdd3" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/8652bdd3> .
 
 # --- AG.22: Fork persists in send/mod.rs ---
 <urn:atm:triage:occurrence/AG18-QA-003/s22/1>
@@ -102,8 +104,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
-  triage:headSha "a13fc219" ;
-  triage:occursIn <urn:atm:triage:worktree/s23/a13fc219> .
+  triage:headSha "ca3fb30f" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/ca3fb30f> .
 
 # --- AG.24: Fork persists in send/mod.rs (line 416) ---
 <urn:atm:triage:occurrence/AG18-QA-003/s24/1>
@@ -129,34 +131,46 @@
   triage:headSha "c245c2ea" ;
   triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
 
+# --- Integrate branch: Fork in dispatch_delivery.rs ---
+<urn:atm:triage:occurrence/AG18-QA-003/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { return ack_mail_with_runtime_and_post_send_emitter(...); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/e78b0ef4> .
+
 # --- WorktreeSnapshots ---
 
-<urn:atm:triage:worktree/s18/e46c3a6d>
+<urn:atm:triage:worktree/s18/1b25b36c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s18-unify-envelope-handler" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
-  triage:headSha "e46c3a6d" ;
+  triage:headSha "1b25b36c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/s19/5d20ca5a>
+<urn:atm:triage:worktree/s19/46a3f29a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "5d20ca5a" ;
+  triage:headSha "46a3f29a" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/s20/50572166>
+<urn:atm:triage:worktree/s20/8f645d26>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
-  triage:headSha "50572166" ;
+  triage:headSha "8f645d26" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/s21/758732cd>
+<urn:atm:triage:worktree/s21/8652bdd3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
-  triage:headSha "758732cd" ;
+  triage:headSha "8652bdd3" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s22/c9aedbcc>
@@ -166,11 +180,11 @@
   triage:headSha "c9aedbcc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/s23/a13fc219>
+<urn:atm:triage:worktree/s23/ca3fb30f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
-  triage:headSha "a13fc219" ;
+  triage:headSha "ca3fb30f" ;
   triage:orderIndex 6 .
 
 <urn:atm:triage:worktree/s24/81298e32>
@@ -186,3 +200,10 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
   triage:headSha "c245c2ea" ;
   triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

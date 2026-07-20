@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AG19-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AG19-F001" ;
+  triage:title "Duplicate ack-orchestration wrapper -- public function with zero production callers, production entry point hand-rolls the same sequence inline" ;
+  triage:description "crates/atm-core exposes a complete, public ack-orchestration wrapper (ack_mail_with_runtime_and_post_send_emitter, crates/atm-core/src/ack/mod.rs) with zero production callers. The production entry point (DaemonRequestDispatcher::dispatch_send, crates/atm-daemon/src/runtime_health/dispatch_delivery.rs) hand-rolls the identical prepare/send/finalize sequence inline instead of calling it." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AG19-F001/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/cdc33011> ;
+  triage:openOn <urn:atm:triage:worktree/s20/7f745f01> ;
+  triage:fixedOn <urn:atm:triage:worktree/s21/8652bdd3> ;
+  triage:fixedOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/s23/ca3fb30f> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/7f745f01> .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F001/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn dispatch_send hand-rolls prepare_ack_reply(...) + dispatch_outbound_send(...) + finalize_ack_after_send(...) inline instead of calling ack_mail_with_runtime_and_post_send_emitter; wrapper defined at crates/atm-core/src/ack/mod.rs:140 with zero production callers on this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/cdc33011> .
+
+<urn:atm:triage:occurrence/RBQA-AG19-F001/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn dispatch_send hand-rolls prepare_ack_reply(...) + dispatch_outbound_send(...) + finalize_ack_after_send(...) inline instead of calling ack_mail_with_runtime_and_post_send_emitter; wrapper defined at crates/atm-core/src/ack/mod.rs:140 with zero production callers on this branch (propagated unchanged from AG.19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/7f745f01> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/s19/cdc33011>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s20/7f745f01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/integrate/65593144>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:orderIndex 9 ;
+  triage:status "absent" .

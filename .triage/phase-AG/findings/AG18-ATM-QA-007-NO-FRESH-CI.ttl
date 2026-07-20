@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-ATM-QA-007-NO-FRESH-CI>
+  a triage:Finding ;
+  triage:findingId "AG18-ATM-QA-007-NO-FRESH-CI" ;
+  triage:title "No PR/CI artifact confirms just test/just lint passed against reviewed commit" ;
+  triage:description "No PR/CI artifact in the reviewed worktree confirms just test/just lint passed specifically against commit 1b25b36c (informational; PR #577 CI history is known-stale per the gate-scoping-bug note, so this is not a re-litigation of that point -- just an absence-of-fresh-evidence flag)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "PR #577 CI history / re-run status" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/integrate-AG/1> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "PR #577 CI history" ;
+  triage:line 0 ;
+  triage:snippet "Just lint (ubuntu-latest): FAILURE, Just lint (macos-latest): FAILURE, Just lint (windows-latest): FAILURE, Test (ubuntu-latest): FAILURE, Test (macos-latest): FAILURE, Test (windows-latest): FAILURE" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:details "No fresh CI evidence confirms test/lint passes on commit 1b25b36c. PR #577 shows all lint jobs FAILED, all test jobs FAILED as of 2026-07-20T00:08:09Z." ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "PR #578 CI history" ;
+  triage:line 0 ;
+  triage:snippet "Just lint (ubuntu-latest): FAILURE, Just lint (macos-latest): FAILURE, Just lint (windows-latest): FAILURE, Test (ubuntu-latest): SUCCESS, Test (macos-latest): SUCCESS, Test (windows-latest): SUCCESS" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:details "Partial improvement: tests now PASS on all platforms as of 2026-07-20T01:20:18Z, but lint still FAILS. No complete fresh CI evidence (both test AND lint passing)." ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-007-NO-FRESH-CI/integrate-AG/1>
+  a triage:Occurrence ;
+  triage:file "integrate/phase-AG CI status" ;
+  triage:line 0 ;
+  triage:snippet "integrate/phase-AG includes 1b25b36c with failed CI evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:details "Integration branch head (345da805) includes pAG-s18 commit (1b25b36c) which has no passing CI evidence. No PR yet for integrate/phase-AG." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 0 ;
+  triage:prNumber 577 ;
+  triage:mergedToIntegrate true .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 578 ;
+  triage:mergedToIntegrate false .
+
+<urn:atm:triage:worktree/integrate-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 2 ;
+  triage:prNumber 0 ;
+  triage:mergedToIntegrate false .

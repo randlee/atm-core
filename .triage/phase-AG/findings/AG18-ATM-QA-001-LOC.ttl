@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-ATM-QA-001-LOC>
+  a triage:Finding ;
+  triage:findingId "AG18-ATM-QA-001-LOC" ;
+  triage:title "Hard Merge Gate LOC violation" ;
+  triage:description "sprint-AG18.md:328-337 requires >= -100 net LOC across crates/ in named target files. Actual measured diff (9a52c0f0..1b25b36c): named target files +966 net LOC (21 files, +2045/-1079); all of crates/ +1916 net LOC (56 files, +3203/-1287). Both ~10-19x over ceiling in wrong direction. Primary driver: crates/atm-daemon/src/tests/runtime_root/cross_host.rs (~790 new lines) is live two-daemon cross-host integration test explicitly assigned to AG.25 (CROSSHOST-UNIFY-8/9) per sprint-AG18.md's own This Sprint Does Not Close section — out-of-sequence scope creep." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "ATM-QA-LOC" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:lineCount 790 ;
+  triage:snippet "use super::*; use atm_core::boundary::RequestDispatcher; use atm_core::protocol::{RequestEnvelope, ResponseEnvelope}; use atm_core::read::{ReadOutcome, ReadQuery}; use atm_core::schema::AgentMember;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-ATM-QA-001-LOC/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/cross_host.rs" ;
+  triage:line 1 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/345da805> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 .

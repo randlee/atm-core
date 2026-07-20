@@ -1,0 +1,126 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-102>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-102-STALE-SELFACK-ARCH-DOC" ;
+  triage:title "architecture.md still documents SuppressedSelfAck termination behavior, now hard-rejected" ;
+  triage:description "docs/architecture.md:1114-1136 (section 6.3) still documents local self-addressed pending-ack messages terminating at (Read, Acknowledged) via AckReplyDisposition::SuppressedSelfAck. Implementation now hard-rejects local self-ack in validate_reply_target (ack/mod.rs lines 431-464) and returns an error instead -- a state-machine behavior change not reflected in the architecture doc. Needs a decision on whether this is intentional scope tightening beyond sprint-doc authorization or an undocumented behavior change, then doc or code brought into alignment." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture-documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/architecture.md section 6.3, crates/atm-core/src/ack/mod.rs validate_reply_target" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate-ag/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-ag/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-ag/345da805> ;
+  triage:openQuestion "Intentional scope tightening (hard-rejection of local self-ack) beyond sprint-doc authorization in AG.19, or undocumented behavior change from Phase R? This decision gates whether architecture.md section 6.3 should be rewritten to document the rejection flow, or whether the hard-rejection should be reverted to allow SuppressedSelfAck again." .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1122 ;
+  triage:snippet "SuppressedSelfAck when a historical self-addressed pending-ack was acknowledged without emitting a replacement reply" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:severity "blocking" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 448 ;
+  triage:snippet "local self-ack is not allowed without an explicit host target" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:severity "blocking" ;
+  triage:foundInVersion "implementation-contradiction" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1122 ;
+  triage:snippet "SuppressedSelfAck when a historical self-addressed pending-ack was acknowledged without emitting a replacement reply" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:severity "blocking" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 348 ;
+  triage:snippet "local self-ack is not allowed without an explicit host target" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:severity "blocking" ;
+  triage:foundInVersion "implementation-contradiction" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/4500cf31> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate-ag/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1122 ;
+  triage:snippet "SuppressedSelfAck when a historical self-addressed pending-ack was acknowledged without emitting a replacement reply" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:severity "blocking" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/345da805> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate-ag/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 448 ;
+  triage:snippet "local self-ack is not allowed without an explicit host target" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:severity "blocking" ;
+  triage:foundInVersion "implementation-contradiction" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ag/345da805> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 ;
+  triage:status "open" ;
+  triage:merged true .
+
+<urn:atm:triage:worktree/s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/integrate-ag/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 ;
+  triage:status "open" ;
+  triage:isIntegrationBranch true .

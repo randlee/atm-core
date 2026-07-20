@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-HYGIENE-STALE-TTL-RECORDS>
+  a triage:Finding ;
+  triage:findingId "AG19-HYGIENE-STALE-TTL-RECORDS" ;
+  triage:title "Four stale .triage .ttl records reference pre-redo gamed state, not current commit" ;
+  triage:description "Four stale .triage/phase-AG/findings/*.ttl records (AG19-ATM-QA-AG19-001/002/003, AG19-RBQA-F003) reference headShas (5d20ca5a, 59225e0f) and code constructs (execute_ack_reply_plan, AckReplyDisposition branches, a divergent Err/Ok classification) that do not exist in the reviewed commit 77c99484 -- they describe the pre-redo/gamed state of this branch. Recommend reconciling/closing these on integrate/phase-AG (not the feature worktree) before AG.20 starts, so a future reviewer doesn't mistake them for live findings. Note: per standing rule, .ttl edits only happen on integrate/phase-X, never on a feature-sprint worktree." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "HYGIENE" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "stale-triage-record-cleanup" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/4> ;
+  triage:openOn <urn:atm:triage:worktree/INTEGRATE/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/INTEGRATE/345da805> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/AG19-ATM-QA-AG19-001.ttl" ;
+  triage:snippet "Stale record referencing pre-redo state with headShas 5d20ca5a, 59225e0f" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/345da805> .
+
+<urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/2>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/AG19-ATM-QA-AG19-002.ttl" ;
+  triage:snippet "Stale record referencing pre-redo state with headShas 5d20ca5a, 59225e0f" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/345da805> .
+
+<urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/3>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/AG19-ATM-QA-AG19-003.ttl" ;
+  triage:snippet "Stale record referencing pre-redo state with headShas 5d20ca5a, 59225e0f" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/345da805> .
+
+<urn:atm:triage:occurrence/AG19-HYGIENE-STALE-TTL-RECORDS/AG19/4>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AG/findings/AG19-RBQA-F003.ttl" ;
+  triage:snippet "Stale record referencing pre-redo state with headShas 5d20ca5a, 59225e0f" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/INTEGRATE/345da805> .
+
+<urn:atm:triage:worktree/INTEGRATE/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 100 .

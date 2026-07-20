@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002-AG19-UNTYPED-BOOL-STATE>
+  a triage:Finding ;
+  triage:findingId "RBP-F002-AG19-UNTYPED-BOOL-STATE" ;
+  triage:title "Untyped boolean-condition state distinction in the dispatcher" ;
+  triage:description "Untyped boolean-condition state distinction in the dispatcher (same dispatch_delivery.rs fork discussed under AG18-RBQA-F001-DISPATCH-FORK; this is the rust-best-practices lens on the same code)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "untyped-bool-state" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-AG19-UNTYPED-BOOL-STATE/AG19/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG19/4500cf31> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/RBP-F002-AG19-UNTYPED-BOOL-STATE/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:snippet "Untyped boolean-condition state distinction in dispatcher" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/4500cf31> .
+
+<urn:atm:triage:worktree/AG19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 19 .

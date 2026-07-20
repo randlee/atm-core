@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-MINOR-011-012>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-MINOR-011-012" ;
+  triage:title "Stale sprint-doc frontmatter status + no fresh CI evidence" ;
+  triage:description "(11) Sprint doc frontmatter still reads status: complete despite the blocking findings -- no longer accurate. (12) No PR/CI artifact confirms just test/just lint passed specifically against commit 1b25b36c (informational; PR #577 CI history is known-stale per the AG.19 gate-scoping-bug note)." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-status" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-MINOR-011-012/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-MINOR-011-012/s18/2> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-QA-MINOR-011-012/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-QA-MINOR-011-012/s18/2>
+  a triage:Occurrence ;
+  triage:file "CI evidence (PR #577)" ;
+  triage:line 0 ;
+  triage:snippet "No fresh test/lint CI run against commit 1b25b36c" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/e78b0ef4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "e78b0ef4" ;
+  triage:orderIndex 9 .

@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-RBQA-F001-DISPATCH-FORK>
+  a triage:Finding ;
+  triage:findingId "AG18-RBQA-F001-DISPATCH-FORK" ;
+  triage:title "Send-vs-ack dispatch fork relocated, not deleted" ;
+  triage:description "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:58-72 (dispatch_send, renamed from dispatch_compose_send) still branches on request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() into two separate downstream execution/finalization paths (ack_mail_with_runtime_... vs send_mail_with_runtime_...) producing AckOutcome vs SendOutcome. Corroborated by req-qa citing the same pattern as an open ladder-wide finding (AG18-QA-003) across every sub-sprint branch s18-s25. quality-mgr resolved this as blocking (not a licensed ack-as-data carve-out) given the ladder's prior consistent treatment of this exact pattern as blocking." ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-AG" ;
+  triage:category "AG18-RBQA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 66 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... dispatch_outbound_send + finalize_ack_after_send ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F001-DISPATCH-FORK/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
+  triage:line 63 ;
+  triage:snippet "if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() { ... ack_mail_with_runtime_and_post_send_emitter ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AG/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-phase-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 .

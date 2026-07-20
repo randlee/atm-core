@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-RBQA-F004-STALE-FRONTMATTER>
+  a triage:Finding ;
+  triage:findingId "AG18-RBQA-F004-STALE-FRONTMATTER" ;
+  triage:title "Sprint doc frontmatter still reads status complete despite open blocking findings" ;
+  triage:description "Sprint doc frontmatter still reads status:complete despite F001/F002 (dispatch fork, response-split) being open; no longer accurate." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-AG/sprint-AG18.md frontmatter" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T18:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/integrate-AG/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/4500cf31> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AG/345da805> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/pAG-s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/4500cf31> .
+
+<urn:atm:triage:occurrence/AG18-RBQA-F004-STALE-FRONTMATTER/integrate-AG/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-AG/345da805> .
+
+<urn:atm:triage:worktree/pAG-s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/4500cf31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "4500cf31" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-AG/345da805>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "345da805" ;
+  triage:orderIndex 3 .
