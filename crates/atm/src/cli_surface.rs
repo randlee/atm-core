@@ -17,7 +17,7 @@
 //!   consumed by `crates/atm/tests/cli_surface.rs` and used to regenerate
 //!   `crates/atm/tests/cli_surface_baseline.json`.
 //! - `ATM_CLI_SURFACE_DUMP=markdown` prints [`command_surface_markdown`]
-//!   output, used to regenerate `docs/atm/cli-reference.md`.
+//!   output, used to regenerate the version-suffixed `docs/atm/cli-reference-<version>.md`.
 //!
 //! Neither mode is a documented `atm` subcommand or flag; both are
 //! test/tooling seams only, invoked out-of-band by

@@ -20,11 +20,14 @@
 //! This regenerates:
 //! - `crates/atm/tests/cli_surface_baseline.json` (consumed by the
 //!   `cli_surface` diff-gate integration test)
-//! - `docs/atm/cli-reference.md` (a generated, human-readable CLI reference;
-//!   do not hand-edit)
+//! - `docs/atm/cli-reference-<version>.md` (a generated, human-readable CLI
+//!   reference for the current crate version; do not hand-edit)
 //!
-//! Run this in the same commit that adds or changes any `atm` subcommand or
-//! argument, then review the diff before committing.
+//! The reference doc's filename is version-suffixed (e.g.
+//! `cli-reference-1-3-1.md` for version `1.3.1`) so each release's snapshot
+//! is preserved as a historical baseline rather than overwritten by the
+//! next regeneration. Run this in the same commit that adds or changes any
+//! `atm` subcommand or argument, then review the diff before committing.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,6 +42,12 @@ fn workspace_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("crates/atm has a workspace root two directories up")
         .to_path_buf()
+}
+
+/// Turns the crate version (e.g. `1.3.1`) into the dash-separated slug used
+/// in the versioned CLI reference filename (e.g. `1-3-1`).
+fn version_slug() -> String {
+    env!("CARGO_PKG_VERSION").replace('.', "-")
 }
 
 /// Locates the sibling `atm` binary alongside this example's own executable,
@@ -105,7 +114,7 @@ fn main() {
     println!("wrote {}", baseline_path.display());
 
     let markdown = dump(&atm_bin, "markdown");
-    let doc_path = workspace_root().join("docs/atm/cli-reference.md");
+    let doc_path = workspace_root().join(format!("docs/atm/cli-reference-{}.md", version_slug()));
     std::fs::write(&doc_path, markdown)
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", doc_path.display()));
     println!("wrote {}", doc_path.display());
