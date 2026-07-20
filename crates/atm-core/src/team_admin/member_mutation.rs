@@ -166,7 +166,7 @@ pub fn update_member_with_roster_store(
 
     apply_member_metadata_update(member, &request);
     roster_store
-        .replace_roster(&request.team, &existing_roster, None)
+        .replace_roster(&request.team, &existing_roster)
         .map_err(|error| {
             error.with_recovery(
                 "Check ATM roster store availability and rerun `atm teams update-member`.",
@@ -274,7 +274,7 @@ fn replace_roster_for_member_add(
     existing_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
     roster_store
-        .replace_roster(team, existing_roster, None)
+        .replace_roster(team, existing_roster)
         .map_err(|error| {
             error.with_recovery(
                 "Check ATM roster store availability and rerun `atm teams add-member`.",

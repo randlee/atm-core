@@ -2,7 +2,7 @@ use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
 use atm_core::doctor::{self, DoctorQuery};
-use atm_runtime::assemble_default_runtime;
+use atm_daemon_bootstrap::assemble_default_runtime;
 use clap::Args;
 
 use crate::composition::{

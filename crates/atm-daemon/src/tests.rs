@@ -254,14 +254,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .collect::<Vec<_>>();
     assembly
         .roster_store_arc()
-        .replace_roster(
-            test_team(),
-            &roster,
-            Some(
-                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
-                    .expect("replay source"),
-            ),
-        )
+        .replace_roster(test_team(), &roster)
         .expect("replace roster");
 }
 

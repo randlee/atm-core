@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::mail::DoctorFinding;
-use super::{ReplaySource, sealed};
+use super::sealed;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreHealthSnapshot {
@@ -175,12 +175,7 @@ pub trait RosterStore: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when roster replacement cannot be applied safely.
-    fn replace_roster(
-        &self,
-        team: &TeamName,
-        members: &[RosterEntry],
-        source: Option<&ReplaySource>,
-    ) -> Result<(), AtmError>;
+    fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when one roster snapshot cannot be loaded.

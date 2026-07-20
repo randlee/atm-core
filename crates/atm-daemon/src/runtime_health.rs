@@ -916,7 +916,8 @@ impl DaemonRequestDispatcher {
         let runtime_observability: std::sync::Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
         let runtime_assembly =
-            crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
+            crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path)
+                .expect("assemble sqlite runtime for daemon dispatcher test");
         match build_runtime_status_cache_state(
             None,
             runtime_assembly.shared_roster_store_arc().as_ref(),

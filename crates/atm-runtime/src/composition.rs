@@ -1,34 +1,34 @@
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::boundary::{self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound};
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
-use atm_core::home::host_mail_db_path;
-use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, load_atm_config};
-use atm_storage::{MessageStore as SharedMessageStore, RosterStore as SharedRosterStore};
-use atm_storage_rusqlite::SqliteStorageBackend;
+use atm_core::home::HostRuntimeScope;
+use atm_core::{LocalServiceRuntime, load_atm_config};
+use atm_storage::{
+    MessageStore as SharedMessageStore, RosterStore as SharedRosterStore, StorageFactory,
+};
 
 use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
-use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
-    pub sqlite_db_path: PathBuf,
+    pub host_runtime_scope: HostRuntimeScope,
+    pub storage_factory: Arc<dyn StorageFactory>,
     pub config_current_dir: PathBuf,
-    pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
 }
 
 impl fmt::Debug for RuntimeAssemblyInputs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeAssemblyInputs")
-            .field("sqlite_db_path", &self.sqlite_db_path)
+            .field("host_runtime_scope", &self.host_runtime_scope)
+            .field("storage_factory", &"dyn StorageFactory")
             .field("config_current_dir", &self.config_current_dir)
-            .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
             .finish()
     }
@@ -75,76 +75,28 @@ impl ConfigDoctor for RuntimeConfigDoctor {
     }
 }
 
-pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
-    assemble_sqlite_runtime_at_path(
-        &inputs.sqlite_db_path,
-        inputs.config_current_dir.clone(),
-        Arc::clone(&inputs.sqlite_observer),
-        Arc::clone(&inputs.non_claude_outbound),
-    )
-}
-
-fn assemble_sqlite_runtime_at_path(
-    sqlite_db_path: &Path,
-    config_current_dir: PathBuf,
-    sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
-    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
-) -> Result<RuntimeAssembly, AtmError> {
-    let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        sqlite_db_path,
-        sqlite_observability,
-    )?);
-    let shared_messages = sqlite_backend.message_store();
-    let shared_rosters = sqlite_backend.roster_store();
+pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
+    let storage = inputs
+        .storage_factory
+        .open(inputs.host_runtime_scope.durable_state_root.as_ref())?;
     let storage_backends = StorageBackends {
-        messages: shared_messages.clone(),
-        rosters: shared_rosters.clone(),
+        messages: storage.message_store(),
+        rosters: storage.roster_store(),
     };
+    let nudge_template_override_store = storage.nudge_template_override_store();
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
-        sqlite_backend.nudge_template_override_store(),
-        non_claude_outbound,
+        Arc::clone(&nudge_template_override_store),
+        inputs.non_claude_outbound,
     );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
+    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
+        config_current_dir: inputs.config_current_dir,
+    }));
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
-        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
-        doctor_ports,
-    })
-}
-
-pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
-    let config_current_dir = std::env::current_dir().map_err(|source| {
-        AtmError::config("failed to resolve current directory for direct runtime assembly")
-            .with_recovery(
-                "Run the direct retained runtime path from a readable ATM workspace so config inspection and runtime assembly share one validated root.",
-            )
-            .with_source(source)
-    })?;
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        host_mail_db_path()?,
-        RuntimeSqliteObservability::disabled(),
-    )?);
-    let shared_messages = sqlite_backend.message_store();
-    let shared_rosters = sqlite_backend.roster_store();
-    let storage_backends = StorageBackends {
-        messages: shared_messages.clone(),
-        rosters: shared_rosters.clone(),
-    };
-    let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
-        storage_backends.messages.clone(),
-        storage_backends.rosters.clone(),
-        sqlite_backend.nudge_template_override_store(),
-        Arc::new(LocalFileNonClaudeOutbound::new()),
-    );
-    let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
-    Ok(RuntimeAssembly {
-        service_runtime,
-        storage_backends,
-        nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
+        nudge_template_override_store,
         doctor_ports,
     })
 }
@@ -167,18 +119,6 @@ impl RuntimeAssembly {
     }
 }
 
-pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
-    assemble_default_runtime().map(|assembly| assembly.service_runtime)
-}
-
-pub fn with_default_roster_store<T>(
-    f: impl FnOnce(&(dyn boundary::RosterStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    let assembly = assemble_default_runtime()?;
-    let roster_store = assembly.roster_store_arc();
-    f(roster_store.as_ref())
-}
-
 /// Invoke the retained roster boundary through the runtime selected by
 /// atm-core. This preserves fixture-scoped runtime installation in tests.
 pub fn with_installed_roster_store<T>(
@@ -188,15 +128,4 @@ pub fn with_installed_roster_store<T>(
         let roster_store = boundary_roster_store_view(runtime.shared_roster_store_arc());
         f(roster_store.as_ref())
     })
-}
-
-pub fn with_default_nudge_template_override_store<T>(
-    f: impl FnOnce(&(dyn boundary::NudgeTemplateOverrideStore + Send + Sync)) -> Result<T, AtmError>,
-) -> Result<T, AtmError> {
-    let sqlite_backend = Arc::new(SqliteStorageBackend::new_with_observability(
-        host_mail_db_path()?,
-        RuntimeSqliteObservability::disabled(),
-    )?);
-    let override_store = sqlite_backend.nudge_template_override_store();
-    f(override_store.as_ref())
 }

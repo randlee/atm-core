@@ -4,13 +4,13 @@ use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, Socke
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
 use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_daemon_bootstrap::assemble_host_runtime;
+use atm_runtime::RuntimeAssembly;
 use std::fs::OpenOptions;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -156,25 +156,11 @@ impl RuntimeComposition {
         runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let sqlite_observer =
-            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-        let config_current_dir =
-            std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
-        let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-            sqlite_db_path: runtime_db_path,
-            config_current_dir: config_current_dir.clone(),
-            sqlite_observer,
-            non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-        })
-        .map_err(|error| {
-            runtime_assembly_failed(
-                error,
-                &SubsystemObservability::new(
-                    DaemonSubsystem::Composition,
-                    Arc::clone(&observability),
-                ),
-            )
-        })?;
+        let composition_observability =
+            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        let runtime_assembly =
+            crate::test_support::sqlite_runtime_assembly_for_test(&runtime_db_path)
+                .map_err(|error| runtime_assembly_failed(error, &composition_observability))?;
         Self::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
     }
 
@@ -616,14 +602,10 @@ pub(crate) fn compose_runtime(
         )
         .with_source(source)
     })?;
-    let runtime_db_path = atm_core::home::host_mail_db_path()?;
-    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-    let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: runtime_db_path,
-        config_current_dir: current_dir.clone(),
-        sqlite_observer,
-        non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-    })
+    let runtime_assembly = assemble_host_runtime(
+        current_dir.clone(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+    )
     .map_err(|error| {
         runtime_assembly_failed(
             error,

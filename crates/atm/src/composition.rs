@@ -764,11 +764,7 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             roster_store
-                .replace_roster(
-                    &team,
-                    &members,
-                    Some(&boundary::ReplaySource::new("config.json").expect("source")),
-                )
+                .replace_roster(&team, &members)
                 .expect("seed sqlite roster");
         }
 
