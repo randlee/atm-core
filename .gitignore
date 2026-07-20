@@ -23,6 +23,7 @@ scripts/__pycache__/
 
 # Local session artifacts and compose logs from sc tooling
 .sc/sessions/
+.sc/oversigne/*
 .sc-compose/logs/
 .just/logs/
 artifacts/view/

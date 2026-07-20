@@ -177,14 +177,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   shared mutable coordination locks to callers
 - daemon watch/reconcile lanes are historical only and are not part of the
   accepted runtime architecture
-- `atm-daemon` owns runtime implementations of one shared ATM protocol with
-  multiple transport implementations:
-  - cross-platform local IPC for same-host daemon access
-  - TCP/TLS
-  - in-process `LoopbackClientTransport` (`test-socket`)
-- same-host local IPC and cross-host daemon transport must use one shared ATM
-  frame header and request/response packet family rather than separate local
-  and remote message systems, as defined by `protocol-icd.md`
+- `atm-daemon` owns one cross-platform local IPC protocol and the in-process
+  `LoopbackClientTransport` (`test-socket`) used to test its handler boundary.
 - the accepted same-host Windows local-IPC depth contract is fail-fast and
   unary:
   - a dispatcher panic during shutdown must record one panic-path failure and
@@ -214,18 +208,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
     owned adapter modules
-  - runtime composition, dispatcher, replay, status cache, and runtime lanes
+  - runtime composition, dispatcher, status cache, and runtime lanes
     must not depend directly on Unix-only host APIs
-- cross-host delivery is daemon-to-daemon only.
-- remote delivery may use bounded transient retry for short intermittent
-  failures, but not a durable long-lived remote outbox.
-- remote send success is defined by remote daemon acceptance within the bounded
-  retry window.
-- bounded transient retry uses exponential backoff with jitter, an initial
-  delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
-  total retry ceiling within the documented timeout budget; it must not
-  collapse into fixed sleeps, unbounded churn, or tests that can wait
-  indefinitely for eventual success
 - graceful shutdown finalization must remain bounded; observability flush
   steps must time out rather than block daemon exit indefinitely
 - daemon runtime failures must remain typed and must not depend on
@@ -461,7 +445,7 @@ V.3 deletion targets:
   meaning after the fact
 
 Transport dispatcher rule:
-- local-IPC and TCP/TLS listener/connection receive loops are deliberately tiny
+- local-IPC listener/connection receive loops are deliberately tiny
 - they may:
   - read a framed request
   - parse a qualified request type
@@ -473,8 +457,7 @@ Transport dispatcher rule:
   - emit notifications directly
   - embed workflow/business-state transitions
 - the same dispatcher/handler contract must back the in-process `test-socket`
-  transport so handler behavior is testable without Unix-specific or TCP/TLS
-  host code
+  transport so handler behavior is testable without host socket code
 - same-host functional coverage must also exercise the real local-IPC adapter
   on Unix and Windows through one shared harness shape; a Unix-only host test
   suite is not sufficient for Phase S closeout
@@ -489,8 +472,7 @@ Dispatcher/handler rule:
   adapter
 - concrete request-family behavior belongs to injectable handlers behind that
   dispatcher
-- same-host local-IPC and TCP/TLS adapters share the same dispatcher/handler
-  contract
+- local IPC and the test transport share the same dispatcher/handler contract
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
@@ -702,8 +684,6 @@ Architectural rules:
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
@@ -770,16 +750,12 @@ Doctor health contract distinction:
 Crash recovery must preserve durable truth and compatibility export ordering.
 
 Required rules:
-- durable ordering is `SQLite commit -> Claude export / remote handoff`
+- durable ordering is `SQLite commit -> Claude export`
 - export/re-export must be keyed by durable `message_key`
 - if a crash occurs after SQLite commit but before export completes, recovery
   must resume from durable state keyed by `message_key`
-- bounded retry/re-export state required after daemon crash must be stored in
-  SQLite with an expiry/deadline, not only in RAM
 - WAL checkpoint is attempted on graceful shutdown, but crash recovery must not
   depend on graceful shutdown having completed
-- recovery must not turn bounded transient retry state into a long-lived
-  durable remote outbox; expired retry rows are purged/fail closed on replay
 
 ## 4. ADR Namespace
 

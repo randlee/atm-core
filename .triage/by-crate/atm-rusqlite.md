@@ -6,7 +6,7 @@ Crate path: `crates/atm-rusqlite/`
 
 | ID | Severity | File | Summary | Status |
 |----|----------|------|---------|--------|
-| RULE-005 | BLOCKING | src/lib.rs:30 | RemoteReplayStateRecord duplicate struct (canonical here, duplicate in atm-daemon/peer_transport.rs:74) | open |
+| RULE-005 | BLOCKING | retired peer transport | Duplicate replay DTO | closed (peer transport deleted) |
 
 ## Notes
 - Primary concern: boundary violations (atm-daemon or atm importing directly instead of through composition root)

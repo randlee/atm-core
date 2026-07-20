@@ -292,11 +292,11 @@ impl ClearNudgeTemplateCommand {
 }
 
 impl UpdateMemberCommand {
-    fn run(self, atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
+    fn run(self, _atm_home_dir: PathBuf, caller_context: CallerContext) -> Result<()> {
         let json = self.json;
         let request = self.build_request(caller_context)?;
         let outcome = with_retained_roster_store(|roster_store| {
-            team_admin::update_member_with_roster_store(roster_store, &atm_home_dir, request)
+            team_admin::update_member_with_roster_store(roster_store, request)
         })?;
         output::print_update_member_result(&outcome, json)
     }

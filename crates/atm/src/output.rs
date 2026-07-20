@@ -393,7 +393,7 @@ fn print_doctor_environment(report: &DoctorReport) {
             || daemon_context.identity.is_some()
             || daemon_context.version.is_some())
     {
-        println!("  daemon_context:");
+        println!("  daemon_context (daemon launch-time process env, not the caller):");
         if let Some(team) = &daemon_context.team {
             println!("    team={team}");
         }

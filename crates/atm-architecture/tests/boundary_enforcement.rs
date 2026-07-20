@@ -22,6 +22,15 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-runtime", "atm-daemon"),
 ];
 
+const RETIRED_DAEMON_CONSTRUCTS: &[&str] = &[
+    "peer_transport",
+    "PeerTransport",
+    "RemoteReplay",
+    "replay_store",
+    "remote_retry_budget",
+    "RemoteDeliveryOutcomeUnknown",
+];
+
 #[test]
 fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm-daemon", "atm-storage-rusqlite");
@@ -111,6 +120,42 @@ fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
         vec!["atm-daemon -> atm-storage-rusqlite".to_string()],
         "synthetic relaxation fixture must demonstrate the removed daemon/sqlite edge is detected"
     );
+}
+
+#[test]
+fn daemon_source_must_not_reintroduce_retired_peer_delivery_constructs() {
+    let source_root = workspace_root().join("crates/atm-daemon/src");
+    let mut findings = Vec::new();
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    for path in files {
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        for construct in RETIRED_DAEMON_CONSTRUCTS {
+            if contents.contains(construct) {
+                findings.push(format!("{}: {construct}", path.display()));
+            }
+        }
+    }
+    assert!(
+        findings.is_empty(),
+        "retired peer-delivery constructs must not re-enter atm-daemon: {findings:?}"
+    );
+}
+
+fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(directory)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
+    {
+        let path = entry
+            .unwrap_or_else(|error| panic!("failed to read directory entry: {error}"))
+            .path();
+        if path.is_dir() {
+            collect_rust_files(&path, files);
+        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+            files.push(path);
+        }
+    }
 }
 
 fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {

@@ -58,6 +58,36 @@ pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
     read_env_raw("ATM_TEAM")?.map(parse_team).transpose()
 }
 
+pub fn read_cli_identity_from_env_or_warn(warning_site: &'static str) -> Option<AgentName> {
+    match read_cli_identity_from_env() {
+        Ok(identity) => identity,
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                warning_site,
+                env_var = "ATM_IDENTITY",
+                "ignoring malformed caller identity environment variable during doctor context capture"
+            );
+            None
+        }
+    }
+}
+
+pub fn read_cli_team_from_env_or_warn(warning_site: &'static str) -> Option<TeamName> {
+    match read_cli_team_from_env() {
+        Ok(team) => team,
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                warning_site,
+                env_var = "ATM_TEAM",
+                "ignoring malformed caller team environment variable during doctor context capture"
+            );
+            None
+        }
+    }
+}
+
 fn resolve_identity_component(explicit: Option<&str>) -> Result<AgentName, AtmError> {
     let raw = match explicit {
         Some(value) => value.to_string(),
@@ -130,7 +160,8 @@ mod tests {
 
     use super::{
         CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        read_cli_identity_from_env, read_cli_team_from_env, resolve_cli_inspection_caller_context,
+        read_cli_identity_from_env, read_cli_identity_from_env_or_warn, read_cli_team_from_env,
+        read_cli_team_from_env_or_warn, resolve_cli_inspection_caller_context,
         resolve_cli_mutation_caller_context,
     };
 
@@ -218,5 +249,24 @@ mod tests {
 
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn lossy_identity_env_read_warns_and_falls_back_to_none() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", Some("   ")), ("ATM_TEAM", None)]);
+
+        assert_eq!(
+            read_cli_identity_from_env_or_warn("caller_context test"),
+            None
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn lossy_team_env_read_warns_and_falls_back_to_none() {
+        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", Some("   "))]);
+
+        assert_eq!(read_cli_team_from_env_or_warn("caller_context test"), None);
     }
 }

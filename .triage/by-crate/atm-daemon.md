@@ -6,7 +6,7 @@ Crate path: `crates/atm-daemon/`
 
 | ID | Severity | File | Summary | Status |
 |----|----------|------|---------|--------|
-| RULE-005 | BLOCKING | src/peer_transport.rs:74 | RemoteReplayStateRecord duplicate struct (also in atm-rusqlite:30) | open |
+| RULE-005 | BLOCKING | retired peer transport | Duplicate replay DTO | closed (peer transport deleted) |
 | FTQ-001 | BLOCKING | src/tests.rs:28-29 | OnceLock global dispatcher — parallel test race | open |
 | FTQ-002 | IMPORTANT | src/tests.rs:136 | Fixed 50ms sleep — timing flaky on slow CI | open |
 | FTQ-005 | IMPORTANT | src/tests.rs:148 | singleton_guard_recovers_stale_owner shared-state race | open |

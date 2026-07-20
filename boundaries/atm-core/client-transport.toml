@@ -44,6 +44,5 @@ state = "stub_landed"
 notes = [
   "stub trait plus request/response shells landed in atm_core::boundary",
   "designed for thin callers such as atm-graft",
-  "daemon-to-daemon remote delivery also depends on this outbound client boundary",
   "same-host daemon launch/bootstrap helpers shared by atm and atm-graft now live below this boundary in atm-daemon-client",
 ]

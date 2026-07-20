@@ -1,4 +1,4 @@
-# RULE-005: Duplicate struct definition across crate boundaries
+# RULE-005: Duplicate struct definition across crate boundaries (resolved)
 
 ## Pattern
 ```
@@ -15,21 +15,18 @@ pub\(crate\) struct.*Record.*\{
 R.16 (first reported R.16-QA-4)
 
 ## Status
-open
+closed — resolved by deleting the retired peer transport and its replay DTO.
 
 ## Description
-`RemoteReplayStateRecord` defined in both `crates/atm-daemon/src/peer_transport.rs:74` (pub(crate)) and `crates/atm-rusqlite/src/lib.rs:30` (pub). Duplicate struct definitions across crate boundaries violate RULE-005 (single source of truth). The canonical definition must live in one crate only. Per ARCH-001 boundary rule, peer_transport.rs must not directly import from atm-rusqlite; the struct must be referenced via injected trait/type through the composition root.
+The duplicate existed only to support the retired peer-transport replay path. That path and its DTO were deleted; the local-IPC daemon has no replay-store contract.
 
 ## Occurrences
 | Branch | File | Line | Snippet | Fixed |
 |--------|------|------|---------|-------|
-| R.16 | crates/atm-daemon/src/peer_transport.rs | 74 | `pub(crate) struct RemoteReplayStateRecord` | open |
-| R.16 | crates/atm-rusqlite/src/lib.rs | 30 | `pub struct RemoteReplayStateRecord` | open (canonical) |
-| R.17 | crates/atm-daemon/src/peer_transport.rs | TBD | sweep needed | open |
-| R.17 | crates/atm-rusqlite/src/lib.rs | TBD | sweep needed | open |
+| pre-reset | retired peer transport | n/a | deleted with its replay DTO | resolved |
 
 ## Fix
-Keep canonical definition in atm-rusqlite/src/lib.rs (persistence crate). Remove duplicate from peer_transport.rs. peer_transport.rs references the type via injected trait or re-export through the composition root — never via direct `use atm_rusqlite::...` import.
+Do not reintroduce replay persistence for peer delivery. The architecture gate rejects retired peer/replay constructs.
 
 ## Fix History
 - 2026-05-07: First reported R.16-QA-4 [B] on 7413d20. Carry-forward to R.17 expected. Fix target: R.17 (highest).

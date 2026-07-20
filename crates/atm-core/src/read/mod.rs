@@ -774,13 +774,6 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
         ensure_owner_only_read_target(&actor, &query.caller_team, &target)?;
     }
 
-    let team_dir = runtime.team_dir(&query.mailbox.home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm read`.",
-        ));
-    }
-
     validate_target_member_in_roster(runtime, &target)?;
 
     let seen_watermark =
@@ -1263,7 +1256,6 @@ mod tests {
     }
 
     struct ReadRuntime {
-        team_dir: PathBuf,
         roster_present: bool,
         metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
         metadata_row_batches: Option<Vec<Vec<boundary::MailStoreMailboxMetadataRow>>>,
@@ -1283,21 +1275,6 @@ mod tests {
             _current_dir: &Path,
         ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
             Ok(None)
-        }
-
-        fn load_team_config_for_doctor_compare(
-            &self,
-            _team_dir: &Path,
-        ) -> Result<crate::schema::TeamConfig, crate::error::AtmError> {
-            unreachable!("read roster-truth tests must not load team config")
-        }
-
-        fn team_dir(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-        ) -> Result<PathBuf, crate::error::AtmError> {
-            Ok(self.team_dir.clone())
         }
 
         fn inbox_path(
@@ -1328,15 +1305,6 @@ mod tests {
             self.save_seen_watermark_count
                 .fetch_add(1, Ordering::SeqCst);
             Ok(())
-        }
-
-        fn rebuild_compat_inbox_projection(
-            &self,
-            _inbox_path: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<(), crate::error::AtmError> {
-            unreachable!("read roster-truth tests do not rebuild projections")
         }
 
         fn deliver_non_claude_payloads(
@@ -1854,8 +1822,6 @@ mod tests {
     #[test]
     fn metadata_backed_read_contains_fetches_durable_body_when_summary_misses() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (mut metadata_row, mut message_record) = metadata_row(
             "durable body with needle",
             Some("summary miss"),
@@ -1865,7 +1831,6 @@ mod tests {
         message_record.envelope.read = true;
         let load_count = Arc::new(AtomicUsize::new(0));
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: vec![metadata_row],
             metadata_row_batches: None,
@@ -1911,14 +1876,11 @@ mod tests {
     #[test]
     fn peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (metadata_row, message_record) =
             metadata_row("peek target", Some("peek summary"), TEST_SENDER);
         let persist_count = Arc::new(AtomicUsize::new(0));
         let seen_count = Arc::new(AtomicUsize::new(0));
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: vec![metadata_row],
             metadata_row_batches: None,
@@ -1954,10 +1916,7 @@ mod tests {
     #[test]
     fn read_mail_rejects_explicit_cross_agent_targets_on_mutating_path() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
             metadata_row_batches: None,
@@ -1983,10 +1942,7 @@ mod tests {
     #[test]
     fn peek_mail_rejects_explicit_targets_missing_from_atm_roster() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: false,
             metadata_rows: Vec::new(),
             metadata_row_batches: None,
@@ -2012,15 +1968,12 @@ mod tests {
     #[test]
     fn read_wait_propagates_contains_reload_errors_instead_of_timeout() {
         let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        std::fs::create_dir_all(&team_dir).expect("team dir");
         let (metadata_row, message_record) = metadata_row(
             "durable body with needle",
             Some("summary miss"),
             TEST_SENDER,
         );
         let runtime = ReadRuntime {
-            team_dir,
             roster_present: true,
             metadata_rows: Vec::new(),
             metadata_row_batches: Some(vec![Vec::new(), vec![metadata_row]]),

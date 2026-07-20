@@ -20,35 +20,19 @@ FORBIDDEN_PATTERNS = (
     ("replay capability degradation field", re.compile(r"\breplay_store\s*:\s*None\b")),
 )
 
-ALLOWED_TEST_MATCHES = (
-    (
-        "crates/atm-daemon/src/peer_transport.rs",
-        re.compile(r"\breplay_store\s*:\s*None,\s*$"),
-    ),
-)
-
-
 def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
     return tuple(sorted((repo_root / "crates").rglob("*.rs")))
-
-
-def is_allowed_test_match(relative_path: str, line: str) -> bool:
-    return any(
-        relative_path.endswith(path_suffix) and pattern.search(line)
-        for path_suffix, pattern in ALLOWED_TEST_MATCHES
-    )
 
 
 def find_violations(repo_root: Path) -> tuple[Violation, ...]:
     violations: list[Violation] = []
     for path in iter_rust_sources(repo_root):
-        relative_path = path.relative_to(repo_root).as_posix()
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if is_allowed_test_match(relative_path, line):
-                continue
             for label, pattern in FORBIDDEN_PATTERNS:
                 if pattern.search(line):
-                    violations.append(Violation(Path(relative_path), line_number, label, line.strip()))
+                    violations.append(
+                        Violation(path.relative_to(repo_root), line_number, label, line.strip())
+                    )
     return tuple(violations)
 
 

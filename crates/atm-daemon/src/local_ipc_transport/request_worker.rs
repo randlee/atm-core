@@ -564,6 +564,7 @@ mod tests {
             home_dir: tmp.clone(),
             current_dir: tmp,
             team_override: None,
+            ..DoctorQuery::default()
         });
         assert_eq!(
             request_execution_risk(&request),

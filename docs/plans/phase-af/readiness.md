@@ -1,6 +1,6 @@
 ---
 title: Phase AF Readiness
-status: in_progress
+status: complete
 branch: integrate/phase-AF
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AF
 ---
@@ -12,11 +12,9 @@ required execution evidence; it does not claim that the 1.3.1 implementation
 has shipped.
 
 AF-1, AF-2, and AF-3 are all merged into `integrate/phase-AF` (commit
-`52c5c338`). PR #539 (`integrate/phase-AF` -> `develop`) is the accepted
-develop candidate under phase-end review. Phase readiness remains
-`in_progress` until quality-mgr's phase-end QA gate and arch-ctm's
-production-readiness review both close, and the user authorizes merging
-PR #539.
+`52c5c338`). PR #539 then merged that accepted line to `develop` at
+`98a4e66c`. Phase AF therefore remains the accepted closed same-host
+dependency line for later phases.
 
 | Sprint | Plan closure | Required accepted-line evidence |
 | --- | --- | --- |

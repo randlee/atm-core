@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+pub use atm_storage::validate_path_segment;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AtmError;
@@ -41,43 +42,6 @@ impl fmt::Display for AgentAddress {
             None => f.write_str(&self.agent),
         }
     }
-}
-
-pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmError> {
-    if value.is_empty() {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not be empty"
-        )));
-    }
-
-    if value.starts_with('.') {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not start with '.'"
-        )));
-    }
-
-    if value.contains("..") {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not contain '..'"
-        )));
-    }
-
-    if value.contains(['/', '\\']) {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name must not contain path separators"
-        )));
-    }
-
-    if !value
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
-    {
-        return Err(AtmError::address_parse(format!(
-            "{kind} name contains invalid characters"
-        )));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -121,14 +85,16 @@ mod tests {
         assert!(AgentAddress::from_str("team/subdir").is_err());
         assert!(AgentAddress::from_str(r"team\\subdir").is_err());
         assert!(AgentAddress::from_str(".hidden").is_err());
+        assert!(AgentAddress::from_str("bad:name").is_err());
+        assert!(AgentAddress::from_str("bad name").is_err());
         assert!(AgentAddress::from_str("a..b@team").is_err());
         assert!(AgentAddress::from_str("a...b@team").is_err());
     }
 
     #[test]
     fn accepts_valid_segment_characters() {
-        let parsed = AgentAddress::from_str("valid-team_name.1").expect("address");
-        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name.1"));
+        let parsed = AgentAddress::from_str("valid-team_name1").expect("address");
+        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name1"));
         assert_eq!(parsed.team, None);
 
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");

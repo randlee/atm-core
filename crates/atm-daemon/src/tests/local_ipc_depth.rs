@@ -70,6 +70,7 @@ fn send_doctor_request(
         home_dir,
         current_dir,
         team_override: None,
+        ..DoctorQuery::default()
     });
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");

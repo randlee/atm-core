@@ -3517,19 +3517,18 @@ mail correctness.
 
 ### 22.4 Transport And Routing Model
 
-- `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with two
-  production transport implementations and one test transport.
+- `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with one
+  same-host production transport and one test transport.
 
   Required behavior:
   - same-host transport: one cross-platform local IPC contract
     - Unix implementation: Unix domain socket
     - Windows implementation: named-pipe-backed local IPC
-  - cross-host transport: TCP/TLS
   - test transport: in-process `test-socket` implementation of the same
     protocol/interface for subsystem and daemon-boundary tests; this is the
     Tier 2 `LoopbackClientTransport` shape in the testing guidelines
   - these are implementations of one protocol/interface, not separate systems
-  - local-IPC and TCP/TLS receive logic must remain a small framed-message
+  - local-IPC receive logic must remain a small framed-message
     loop that:
     - reads one request frame
     - parses it into a qualified request enum/value
@@ -3538,13 +3537,13 @@ mail correctness.
   - request-kind routing must live behind one dispatcher boundary with
     injectable typed handlers for request families
   - adding a new request family must not require embedding business logic into
-    same-host local-IPC or TCP/TLS transport adapters
+    same-host local-IPC transport adapters
   - transport receive logic must not perform SQL, filesystem watch, or
     post-send emission
     business logic inline
   - any violation of this transport isolation rule is a direct QA failure for
     the current SQLite/daemon implementation line
-  - subsystem and runtime tests must be able to replace local-IPC/TCP transport
+  - subsystem and runtime tests must be able to replace the local-IPC transport
     adapters with the `test-socket` transport without changing business logic
   - same-host daemon functionality must be production-complete on every
     supported operating system; transport-specific non-Unix stubs are allowed
@@ -3587,36 +3586,17 @@ mail correctness.
     closed with typed backpressure instead of silently buffering unbounded
     plugin traffic
 
-- `REQ-CORE-TRANSPORT-002` Cross-host traffic must be daemon-to-daemon only.
+- `REQ-CORE-TRANSPORT-002` is superseded. The accepted runtime is same-host
+  local IPC only; it has no cross-host listener, remote routing form, TCP/TLS
+  transport, remote retry, or remote outbox.
 
-  Required behavior:
-  - native agent/plugin code talks only to the local daemon
-  - cross-host delivery happens only between daemons
-  - remote routing uses an address form equivalent to `agent@team.host`
-  - sender-side daemons must not write remote host inbox JSONL directly
-
-- `REQ-CORE-TRANSPORT-003` Remote delivery must not leave durable long-lived
-  pending messages behind when a host is unreachable.
-
-  Required behavior:
-  - bounded transient retry is allowed for short intermittent failures
-  - retryable failures are limited to transient connect/read/write/socket-path
-    failures before remote acceptance, including timeout, connection refused,
-    connection reset, broken pipe, network unreachable, and host unreachable
-  - non-retryable failures include protocol decode/encode violations,
-    certificate validation failure, TLS/authentication mismatch, and explicit
-    remote daemon rejection
-  - after the bounded retry window expires, the send fails
-  - ATM must not keep a durable remote outbox that can leave stale messages
-    queued for days
+- `REQ-CORE-TRANSPORT-003` is superseded with `REQ-CORE-TRANSPORT-002`.
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
   Required behavior:
   - same-host daemon request deadline: `3s`
-  - per-leg TCP/TLS connect deadline: `5s`
-  - per-leg TCP/TLS read/write deadline: `5s`
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`

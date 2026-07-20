@@ -1,11 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
-use crate::config::load_claude_team_config_document;
 use crate::error::AtmError;
 use crate::home;
 use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
@@ -113,8 +112,6 @@ pub struct UpdateMemberOutcome {
 }
 
 struct MemberAddContext {
-    team_dir: PathBuf,
-    current_extra: serde_json::Map<String, Value>,
     existing_roster: Vec<RosterEntry>,
 }
 
@@ -129,8 +126,6 @@ pub fn add_member_with_roster_store(
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
     let MemberAddContext {
-        team_dir,
-        current_extra,
         mut existing_roster,
     } = load_member_add_context(roster_store, &request)?;
 
@@ -142,19 +137,6 @@ pub fn add_member_with_roster_store(
     let created_inbox = filesystem::ensure_inbox_exists(&inbox_path)?;
     existing_roster.push(build_member_add_roster_record(&request));
     replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
-    let projected_config =
-        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
-
-    if let Err(error) = filesystem::write_team_config(&team_dir, &projected_config) {
-        if created_inbox {
-            let _ = std::fs::remove_file(&inbox_path);
-        }
-        return Err(
-            error.with_recovery(
-                "Check team config permissions and rerun `atm teams add-member`; ATM roster state may already include the new member.",
-            )
-        );
-    }
 
     Ok(AddMemberOutcome {
         action: "add-member",
@@ -172,16 +154,9 @@ pub fn add_member_with_roster_store(
 /// or roster/config persistence fails.
 pub fn update_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
-    atm_home_dir: &Path,
     request: UpdateMemberRequest,
 ) -> Result<UpdateMemberOutcome, AtmError> {
     validate_update_member_caller(roster_store, &request)?;
-    let team_dir = home::team_dir_from_home(atm_home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
     let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     let member_name = request.member.0.clone();
     let member = existing_roster
@@ -197,13 +172,6 @@ pub fn update_member_with_roster_store(
                 "Check ATM roster store availability and rerun `atm teams update-member`.",
             )
         })?;
-    let projected_config =
-        projection::project_team_config_from_roster(current_extra, &existing_roster)?;
-    filesystem::write_team_config(&team_dir, &projected_config).map_err(|error| {
-        error.with_recovery(
-            "Check team config permissions and rerun `atm teams update-member`; ATM roster state may already include the repaired metadata.",
-        )
-    })?;
 
     Ok(UpdateMemberOutcome {
         action: "update-member",
@@ -218,19 +186,9 @@ fn load_member_add_context(
     roster_store: &dyn RosterStore,
     request: &AddMemberRequest,
 ) -> Result<MemberAddContext, AtmError> {
-    let team_dir = home::team_dir_from_home(request.atm_home_dir.as_ref(), &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
     let existing_roster = projection::load_team_roster(roster_store, &request.team)?;
     ensure_member_absent(&existing_roster, &request.team, &request.member)?;
-    Ok(MemberAddContext {
-        team_dir,
-        current_extra,
-        existing_roster,
-    })
+    Ok(MemberAddContext { existing_roster })
 }
 
 fn ensure_member_absent(
@@ -375,14 +333,6 @@ fn parse_roster_harness(value: String) -> Result<RosterHarness, AtmError> {
             "harness must be one of: claude-code, codex-cli, gemini-cli, opencode".to_string(),
         )),
     }
-}
-
-fn load_team_projection_extra_for_member_add(
-    team_dir: &Path,
-) -> Result<serde_json::Map<String, Value>, AtmError> {
-    // Add-member still preserves non-roster Claude config extras while it
-    // projects canonical ATM roster truth back into config.json.
-    load_claude_team_config_document(team_dir).map(|config| config.extra)
 }
 
 fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {

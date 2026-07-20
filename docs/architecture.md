@@ -2666,12 +2666,6 @@ There are three distinct paths:
    - native agents talk to the local daemon API
    - the daemon commits through the SQLite store boundary
 
-3. Remote host path
-   - cross-host delivery is daemon-to-daemon only
-   - routing expands from `agent@team` to `agent@team.host`
-   - sender-side daemons do not write remote host mailbox JSON directly
-   - successful remote delivery requires remote daemon acceptance
-
 ### 21.3.1 New-Message Failure Contract
 
 The accepted daemon + SQLite runtime keeps one direct post-persist rule for new
@@ -2715,15 +2709,13 @@ Architectural rules:
   `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
   worker/runtime
 
-### 21.4 One Interface, Two Transport Implementations
+### 21.4 One Same-Host Interface
 
-ATM uses one daemon API with two production transport adapters plus one
-test transport:
+ATM uses one same-host daemon API plus one test transport:
 
 - same-host: one cross-platform local IPC contract
   - Unix implementation: Unix domain socket
   - Windows implementation: named-pipe-backed local IPC
-- cross-host: TCP/TLS
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
@@ -2744,14 +2736,6 @@ Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real
   socket I/O so subsystem and daemon-boundary tests can exercise the transport
   boundary in process
-
-Remote-delivery semantics:
-- bounded transient retry is acceptable for short intermittent failures
-- there is no durable long-lived remote outbox
-- if the remote host remains unreachable after the bounded retry window, send
-  fails rather than leaving stale pending delivery behind
-- sender-side daemons do not treat a remote send as delivered until the remote
-  daemon accepts it
 
 ### 21.5 Singleton Daemon
 
@@ -2893,17 +2877,16 @@ Minimum method set:
 #### Transport
 
 Dispatch model:
-- request/response for same-host and remote daemon traffic
+- request/response for same-host daemon traffic
 - the same dispatch contract must also support the in-process `test-socket`
   transport used by tests
 
 Object-safety rule:
-- callers depend on an object-safe transport trait or façade so local and
-  remote adapters remain swappable
+- callers depend on an object-safe transport trait or façade so the local
+  adapter remains replaceable by the test transport
 
 Minimum method set:
 - serve local daemon API
-- send remote daemon request
 - query daemon health
 - shut down listener/connection set gracefully
 - construct or bind an in-process `test-socket` endpoint for transport-boundary
@@ -2914,7 +2897,7 @@ Dispatcher rule:
 - the dispatcher owns request-kind routing only
 - request-family behavior lives in injectable handlers behind that dispatcher
 - adding a new request type must not require embedding business logic into
-  Unix-socket or TCP/TLS adapter code
+  local-IPC adapter code
 
 Socket receive loop rule:
 - the receive loop must stay intentionally small
@@ -3070,8 +3053,6 @@ Phase R operational defaults:
 - daemon auto-start publish deadline: `10s`
   (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`

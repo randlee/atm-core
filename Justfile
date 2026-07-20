@@ -97,6 +97,10 @@ _lint-identities:
     {{python_cmd}} .just/check_test_identity_literals.py
 
 [private]
+_lint-env-var-boundary:
+    {{python_cmd}} .just/check_env_var_boundary.py
+
+[private]
 _lint-fixed-sleep:
     {{python_cmd}} .just/check_fixed_sleep_hygiene.py
 
