@@ -22,13 +22,13 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-runtime", "atm-daemon"),
 ];
 
-const RETIRED_DAEMON_CONSTRUCTS: &[&str] = &[
-    "peer_transport",
-    "PeerTransport",
-    "RemoteReplay",
-    "replay_store",
-    "remote_retry_budget",
-    "RemoteDeliveryOutcomeUnknown",
+const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
+    ("peer_", "transport"),
+    ("Peer", "Transport"),
+    ("Remote", "Replay"),
+    ("replay_", "store"),
+    ("remote_retry_", "budget"),
+    ("RemoteDelivery", "OutcomeUnknown"),
 ];
 
 #[test]
@@ -96,6 +96,7 @@ fn synthetic_daemon_boundary_relaxation_fixture_is_detected() {
             ],
             ..BoundaryDependencies::default()
         },
+        ..BoundaryToml::default()
     };
 
     assert!(
@@ -123,24 +124,59 @@ fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
 }
 
 #[test]
-fn daemon_source_must_not_reintroduce_retired_peer_delivery_constructs() {
-    let source_root = workspace_root().join("crates/atm-daemon/src");
+fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
+    let source_root = workspace_root().join("crates");
     let mut findings = Vec::new();
     let mut files = Vec::new();
     collect_rust_files(&source_root, &mut files);
     for path in files {
         let contents = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        for construct in RETIRED_DAEMON_CONSTRUCTS {
-            if contents.contains(construct) {
+        for (prefix, suffix) in RETIRED_DAEMON_CONSTRUCT_FRAGMENTS {
+            let construct = format!("{prefix}{suffix}");
+            if contents.contains(&construct) {
                 findings.push(format!("{}: {construct}", path.display()));
             }
         }
     }
     assert!(
         findings.is_empty(),
-        "retired peer-delivery constructs must not re-enter atm-daemon: {findings:?}"
+        "retired peer-delivery constructs must not re-enter workspace Rust source: {findings:?}"
     );
+}
+
+#[test]
+fn deleted_daemon_boundary_modules_must_be_retired() {
+    let root = workspace_root();
+    let stale = daemon_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            let source = daemon_boundary_module_source(&root, &boundary.implementation.module)?;
+            module_is_stale_if_missing(source.exists(), &boundary.status.state).then(|| {
+                format!(
+                    "{} declares missing module {} with status {}",
+                    path.display(),
+                    boundary.implementation.module,
+                    boundary.status.state
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        stale.is_empty(),
+        "daemon boundary TOMLs for deleted modules must be retired: {stale:?}"
+    );
+}
+
+#[test]
+fn missing_daemon_module_requires_retired_boundary_state() {
+    assert!(module_is_stale_if_missing(false, "active"));
+    assert!(!module_is_stale_if_missing(false, "retired"));
 }
 
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
@@ -156,6 +192,19 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
             files.push(path);
         }
     }
+}
+
+fn daemon_boundary_module_source(root: &Path, module: &str) -> Option<PathBuf> {
+    let relative_module = module.strip_prefix("atm_daemon::")?;
+    Some(
+        root.join("crates/atm-daemon/src")
+            .join(relative_module.replace("::", "/"))
+            .with_extension("rs"),
+    )
+}
+
+fn module_is_stale_if_missing(source_exists: bool, state: &str) -> bool {
+    !source_exists && state != "retired"
 }
 
 fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
@@ -271,9 +320,26 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 struct BoundaryToml {
+    #[serde(default)]
+    implementation: BoundaryImplementation,
+    #[serde(default)]
+    status: BoundaryStatus,
+    #[serde(default)]
     dependencies: BoundaryDependencies,
+}
+
+#[derive(Default, Deserialize)]
+struct BoundaryImplementation {
+    #[serde(default)]
+    module: String,
+}
+
+#[derive(Default, Deserialize)]
+struct BoundaryStatus {
+    #[serde(default)]
+    state: String,
 }
 
 #[derive(Default, Deserialize)]

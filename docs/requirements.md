@@ -14,11 +14,10 @@ Satisfied by:
 
 The product is a local command-line tool named `atm`.
 
-The current target architecture no longer treats daemon removal as a product
-goal. The current SQLite/daemon architecture uses a tightly-bounded singleton daemon runtime because
-mail routing, native agent notification, and cross-host transport need one
-coordinating process, while ATM command behavior remains the user-facing
-surface.
+The current target architecture uses a tightly-bounded singleton daemon runtime
+for same-host local IPC, mail routing, and native-agent notification. ATM
+command behavior remains the user-facing surface; cross-host TCP/TLS transport
+is superseded.
 
 Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original

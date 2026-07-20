@@ -198,26 +198,20 @@ Initial crate requirement IDs:
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
-  `ServerTransport` contracts plus route-selection semantics between local and
-  cross-host daemon paths. Satisfies:
-  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
-  retry semantics exposed at service boundaries. Satisfies:
-  `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
-  no-durable-remote-outbox semantics above transport implementations. Satisfies:
-  `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-002`, `REQ-CORE-TRANSPORT-003`, and
+  `REQ-CORE-TRANSPORT-004` are superseded. The accepted runtime is same-host
+  local IPC only; it has no cross-host route, remote retry, remote acceptance,
+  or remote outbox behavior.
 - `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
   contract used by production, fake, and loopback transports. The shared
   `ClientTransport` boundary must remain object-safe and include `Send + Sync`
   semantics so callers do not have to restate them ad hoc. Satisfies:
   `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
-  and framed encode/decode helpers used by same-host local IPC, cross-host
-  daemon transport, and in-process protocol tests. The canonical wire contract
-  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
-  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
+  and framed encode/decode helpers used by same-host local IPC and in-process
+  protocol tests. The canonical wire contract is documented in
+  `docs/atm-daemon/protocol-icd.md`, including exact header constants,
+  `message_kind` assignments, and payload DTO mapping. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the current

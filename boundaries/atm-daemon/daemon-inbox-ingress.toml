@@ -8,7 +8,7 @@ trait = "SourceIngress"
 
 [implementation]
 type = "DaemonInboxIngress"
-module = "atm_daemon"
+module = "atm_daemon::boundary_adapters"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-INBOX-INGRESS-DAEMON-EDGES", "LINT-BOUNDARY-INBOX-I
 review_gates = ["no_public_impl", "no_public_constructor", "no_direct_mailbox_helper_calls"]
 
 [status]
-state = "active"
-notes = ["daemon-local historical Claude compatibility helpers own the retired inbox ingress contract until reconcile/watch deletion lands", "watcher-driven reconcile routes through this boundary rather than directly to mailbox helpers"]
+state = "retired"
+notes = ["retired with the deleted daemon boundary_adapters module; inbox ingress is not a daemon runtime surface"]

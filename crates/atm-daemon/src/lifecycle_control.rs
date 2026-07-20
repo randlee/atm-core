@@ -241,7 +241,7 @@ impl LifecycleControlSourceAdapter {
             .wait_for_change_timeout(observed_generation, timeout)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn terminate_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.terminate)
     }
