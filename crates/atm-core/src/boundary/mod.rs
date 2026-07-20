@@ -205,10 +205,7 @@ impl HookExecutionSummary {
         if succeeded_rules + failed_rules > matched_rules {
             return Err(AtmError::validation(format!(
                 "invalid post-send hook execution summary: succeeded ({succeeded_rules}) + failed ({failed_rules}) exceeds matched ({matched_rules})"
-            ))
-            .with_recovery(
-                "Count each matching post-send hook rule exactly once before constructing hook execution summary state.",
-            ));
+            )));
         }
         Ok(Self {
             matched_rules,

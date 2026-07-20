@@ -142,9 +142,7 @@ pub(crate) fn filter_metadata_backed_contains_candidates<R: RetainedMailboxRunti
                     "sqlite mailbox metadata source index {} is out of range during contains filtering",
                     message.source_index.get()
                 ))
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read` or `atm list`.",
-                )
+
             })?;
             let mut selection = MetadataBackedReadSelection {
                 summary_text: row.summary.clone(),
@@ -192,9 +190,6 @@ pub(crate) fn load_durable_metadata_message<R: RetainedMailboxRuntime>(
                 "sqlite mailbox metadata source index {} is out of range during durable reload",
                 selected_message.source_index.get()
             ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox metadata row before retrying `atm read`.",
-            )
         })?;
     let Some(record) =
         runtime.load_message_record(home_dir, team, agent, &metadata_row.message_key)?
@@ -243,10 +238,7 @@ fn load_durable_message_text<R: RetainedMailboxRuntime>(
         return Err(AtmError::validation(format!(
             "sqlite mailbox metadata row {} could not be reloaded for contains filtering",
             metadata_row.message_key
-        ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox row before retrying `atm read` or `atm list`.",
-        ));
+        )));
     };
     let envelope = if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
         load_logical_current_record(
@@ -293,20 +285,14 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
             return Err(AtmError::validation(format!(
                 "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
                 message_id
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
-            ));
+            )));
         };
         let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
         else {
             return Err(AtmError::validation(format!(
                 "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
                 row.message_key
-            ))
-            .with_recovery(
-                "Repair the malformed sqlite thread chain before retrying `atm read` or `atm list`.",
-            ));
+            )));
         };
         chain.push(record.envelope);
     }
@@ -320,9 +306,6 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
         )
         .ok_or_else(|| {
             AtmError::validation("failed to reconstruct logical current thread envelope")
-                .with_recovery(
-                    "Repair or remove the malformed sqlite mailbox thread rows before retrying `atm read` or `atm list`.",
-                )
         })
 }
 

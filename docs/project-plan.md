@@ -964,6 +964,9 @@ send/ack paths, or cross-host-specific mailbox logic.
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
+AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
+serializable error contract and removes the retired protocol error envelope.
+
 ## Publishing Improvements
 
 Implementation Branches:

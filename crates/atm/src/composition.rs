@@ -81,21 +81,6 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CliBootstrapError {
-    AtmHomeUnresolved { command: &'static str },
-}
-
-impl CliBootstrapError {
-    fn into_atm_error(self) -> AtmError {
-        match self {
-            Self::AtmHomeUnresolved { command } => AtmError::atm_home_unresolved(format!(
-                "failed to resolve ATM_HOME before bootstrapping `atm {command}`"
-            )),
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct InvocationDir<'a>(&'a Path);
 
@@ -128,10 +113,10 @@ pub(crate) fn resolve_command_runtime_context(
     let invocation_dir = home::command_invocation_dir().inspect_err(|error| {
         log_runtime_root_failure(command, error);
     })?;
-    let atm_home = home::atm_home().map_err(|source| {
-        let error = CliBootstrapError::AtmHomeUnresolved { command }
-            .into_atm_error()
-            .with_source(source);
+    let atm_home = home::atm_home().map_err(|_source| {
+        let error = AtmError::atm_home_unresolved(format!(
+            "failed to resolve ATM_HOME before bootstrapping `atm {command}`"
+        ));
         log_runtime_root_failure(command, &error);
         error
     })?;
@@ -260,7 +245,7 @@ impl<'a> CliComposition<'a> {
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
         match self.transport.send(request)? {
-            ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
     }
@@ -582,9 +567,7 @@ mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
-    use atm_core::protocol::{
-        ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    };
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
@@ -1063,9 +1046,8 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let observability = CliObservability::fallback();
         let transport = Arc::new(FakeClientTransport::new(|_| {
-            Ok(ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                &AtmError::daemon_unavailable("synthetic daemon failure")
-                    .with_recovery("retry after the daemon is reachable"),
+            Ok(ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                "synthetic daemon failure",
             )))
         }));
         let composition = CliComposition::from_transport(transport, &observability);
@@ -1084,10 +1066,7 @@ mod tests {
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
-        let recovery = error.primary_recovery().expect("daemon recovery");
-        assert!(recovery.contains("atm-daemon binary is installed"));
-        assert!(recovery.contains("daemon socket path is reachable"));
-        assert!(recovery.contains("ATM_HOME are set correctly"));
+        assert!(error.message.contains("Recovery:"));
     }
 
     #[test]

@@ -39,12 +39,8 @@ pub fn assemble_host_runtime(
 
 /// Assemble the default local runtime for retained bootstrap consumers.
 pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
-    let config_current_dir = std::env::current_dir().map_err(|source| {
+    let config_current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::config("failed to resolve current directory for runtime assembly")
-            .with_recovery(
-                "Run the retained runtime path from a readable ATM workspace so config inspection and runtime assembly share one validated root.",
-            )
-            .with_source(source)
     })?;
     assemble_host_runtime(
         config_current_dir,

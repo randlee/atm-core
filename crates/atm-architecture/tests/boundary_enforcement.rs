@@ -33,6 +33,40 @@ const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
     ("RemoteDelivery", "OutcomeUnknown"),
 ];
 
+const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
+    "AtmErrorKind",
+    "ProtocolErrorEnvelope",
+    "error_kind_for_code",
+];
+
+#[test]
+fn production_code_cannot_restore_retired_error_contract_symbols() {
+    let root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&root, &mut files);
+    let violations = files
+        .into_iter()
+        .filter(|path| {
+            !path
+                .components()
+                .any(|component| component.as_os_str() == "tests")
+        })
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            RETIRED_ERROR_CONTRACT_SYMBOLS
+                .iter()
+                .find(|symbol| contents.contains(**symbol))
+                .map(|symbol| format!("{} contains retired `{symbol}`", path.display()))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        violations.is_empty(),
+        "AI.3's two-field error contract forbids retired error shapes: {violations:?}"
+    );
+}
+
 #[test]
 fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm-daemon", "atm-storage-rusqlite");

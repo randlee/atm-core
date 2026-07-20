@@ -5,7 +5,7 @@ use atm_core::protocol::{
     self, CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope,
     ResponseEnvelope,
 };
-use atm_storage::{AtmError, AtmErrorCode, AtmErrorKind};
+use atm_storage::{AtmError, AtmErrorCode};
 
 use crate::wire::MessageKind;
 use crate::{DaemonLocalIpcEndpoint, RpcEnvelope, exchange_envelope};
@@ -59,16 +59,12 @@ impl Connection<Unverified> {
         daemon_release: ReleaseVersion,
     ) -> Result<Connection<VersionVerified>, AtmError> {
         if self.preflight.client_release != daemon_release {
-            return Err(AtmError::new_with_code(
+            return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
-                AtmErrorKind::DaemonUnavailable,
                 format!(
-                    "ATM client release {} is incompatible with daemon release {daemon_release}",
-                    self.preflight.client_release
+                    "ATM client release {} is incompatible with daemon release {}",
+                    self.preflight.client_release, daemon_release
                 ),
-            )
-            .with_recovery(
-                "Install matching atm and atm-daemon releases; no request was dispatched.",
             ));
         }
         Ok(Connection {
@@ -113,10 +109,7 @@ pub fn verify_connection_compatibility(
         other => {
             return Err(AtmError::daemon_unavailable(format!(
                 "daemon returned an unexpected response for compatibility preflight: {other:?}"
-            ))
-            .with_recovery(
-                "Align the ATM client and daemon builds so compatibility preflight returns a CompatibilityVerdict before retrying writes.",
-            ));
+            )));
         }
     };
     let connection = Connection::<Unverified>::new(preflight.clone());
@@ -128,15 +121,11 @@ pub fn verify_connection_compatibility(
             client_release,
             daemon_release,
             code,
-        } => Err(AtmError::new_with_code(
+        } => Err(AtmError::new(
             code,
-            AtmErrorKind::DaemonUnavailable,
             format!(
                 "ATM client release {client_release} is incompatible with daemon release {daemon_release}"
             ),
-        )
-        .with_recovery(
-            "Install matching atm and atm-daemon releases; no request was dispatched.",
         )),
     }
 }

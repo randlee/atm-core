@@ -99,9 +99,6 @@ fn render_template(
     if template.contains("{%") || template.contains("%}") {
         return Err(AtmError::validation(
             "built-in nudge templates do not support Jinja or conditional blocks",
-        )
-        .with_recovery(
-            "Use only the documented placeholder tokens in the stored template body before retrying built-in nudge rendering.",
         ));
     }
 
@@ -111,19 +108,15 @@ fn render_template(
         output.push_str(&rest[..start]);
         let after_start = &rest[start + 2..];
         let Some(end) = after_start.find("}}") else {
-            return Err(AtmError::validation("unterminated built-in nudge placeholder")
-                .with_recovery(
-                    "Close every built-in nudge placeholder with `}}` before retrying template rendering.",
-                ));
+            return Err(AtmError::validation(
+                "unterminated built-in nudge placeholder",
+            ));
         };
         let key = after_start[..end].trim();
         let Some(value) = values.get(key) else {
             return Err(AtmError::validation(format!(
                 "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
-            ))
-            .with_recovery(
-                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, and {{task_id}} in built-in nudge templates.",
-            ));
+            )));
         };
         output.push_str(value);
         rest = &after_start[end + 2..];

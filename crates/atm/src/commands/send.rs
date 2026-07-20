@@ -52,11 +52,9 @@ pub struct SendCommand {
 impl SendCommand {
     fn message_validation_error(
         message: impl Into<String>,
-        recovery: impl Into<String>,
+        _recovery: impl Into<String>,
     ) -> anyhow::Error {
-        atm_core::error::AtmError::validation(message.into())
-            .with_recovery(recovery.into())
-            .into()
+        atm_core::error::AtmError::validation(message.into()).into()
     }
 
     /// Execute the `atm send` command.

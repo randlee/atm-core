@@ -208,10 +208,7 @@ fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
             return Err(AtmError::validation(format!(
                 "sqlite mailbox metadata row {} could not be reloaded for clear",
                 row.message_key
-            ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox row before retrying `atm clear`.",
-            ));
+            )));
         };
 
         let class = state::classify_message(&record.envelope);
@@ -232,11 +229,8 @@ fn cutoff_timestamp(
 ) -> Result<Option<chrono::DateTime<Utc>>, AtmError> {
     older_than
         .map(|duration| {
-            TimeDelta::from_std(duration).map_err(|error| {
-                AtmError::validation(format!("invalid duration filter: {error}")).with_recovery(
-                    "Use --older-than with a positive duration like 30s, 10m, 2h, or 7d.",
-                )
-            })
+            TimeDelta::from_std(duration)
+                .map_err(|error| AtmError::validation(format!("invalid duration filter: {error}")))
         })
         .transpose()
         .map(|delta| delta.map(|delta| Utc::now() - delta))

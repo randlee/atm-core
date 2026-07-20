@@ -200,10 +200,6 @@ impl SharedDb {
                     "failed to create sqlite parent directory {}: {error}",
                     parent.display()
                 ))
-                .with_recovery(
-                    "Check the sqlite database directory permissions or choose a different ATM durable-state root before retrying.",
-                )
-                .with_source(error)
             })?;
         }
 
@@ -334,16 +330,14 @@ impl SharedDb {
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
             let error =
-                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
-                    );
-            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "reader_budget_state",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
+                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned");
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "reader_budget_state",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ));
             error
         })?;
         if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
@@ -377,9 +371,6 @@ fn reader_budget_exceeded_error() -> AtmError {
     AtmError::daemon_unavailable(format!(
         "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
     ))
-    .with_recovery(
-        "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
-    )
 }
 
 impl std::fmt::Debug for SharedDb {
@@ -671,54 +662,35 @@ pub(crate) fn sqlite_error(
     source: RusqliteError,
 ) -> AtmError {
     let message = message.into();
-    let error = match &source {
-        RusqliteError::SqliteFailure(error, _) => match error.code {
-            rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message)
-                .with_recovery(
-                    "Correct the conflicting ATM message/thread/store input so it satisfies the SQLite-backed durability constraints, then retry.",
-                ),
-            rusqlite::ffi::ErrorCode::DatabaseBusy
-            | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
-                SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                #[cfg(test)]
-                SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                    "timed out waiting for sqlite database lock on {}",
-                    target.display()
-                )),
-            },
-            rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Check the SQLite durable-state path, parent directory creation, and filesystem permissions before retrying.",
-                ),
-            rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Remount the SQLite durable-state root as writable or choose a writable ATM durable-state path before retrying.",
-                ),
-            rusqlite::ffi::ErrorCode::DatabaseCorrupt
-            | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message)
-                .with_recovery(
-                    "Inspect or rebuild the SQLite durable-state store because the current file is corrupt or not a valid database.",
-                ),
-            rusqlite::ffi::ErrorCode::SystemIoFailure
-            | rusqlite::ffi::ErrorCode::DiskFull => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Check the host filesystem health, available disk space, and SQLite durable-state path before retrying.",
-                ),
-            _ => AtmError::mailbox_write(message).with_recovery(
-                "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
-            ),
-        },
-        _ => AtmError::mailbox_write(message).with_recovery(
-            "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
-        ),
-    };
-    error.with_source(source)
+    match &source {
+        RusqliteError::SqliteFailure(error, _) => {
+            match error.code {
+                rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
+                rusqlite::ffi::ErrorCode::DatabaseBusy
+                | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
+                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
+                    #[cfg(test)]
+                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
+                        "timed out waiting for sqlite database lock on {}",
+                        target.display()
+                    )),
+                },
+                rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message),
+                rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message),
+                rusqlite::ffi::ErrorCode::DatabaseCorrupt
+                | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message),
+                rusqlite::ffi::ErrorCode::SystemIoFailure | rusqlite::ffi::ErrorCode::DiskFull => {
+                    AtmError::mailbox_write(message)
+                }
+                _ => AtmError::mailbox_write(message),
+            }
+        }
+        _ => AtmError::mailbox_write(message),
+    }
 }
 
-fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
+fn json_error(message: impl Into<String>, _source: serde_json::Error) -> AtmError {
     AtmError::validation(message)
-        .with_recovery("Repair the persisted ATM-owned JSON payload or rebuild it through the owning boundary.")
-        .with_source(source)
 }
 
 pub(crate) fn serialize_json<T: serde::Serialize>(

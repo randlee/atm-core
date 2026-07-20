@@ -103,12 +103,7 @@ impl RpcEnvelope {
     where
         T: DeserializeOwned,
     {
-        serde_json::from_slice(self.body.as_ref()).map_err(|error| {
-            AtmError::from(error).with_recovery(format!(
-                "Decode RpcEnvelope.body as {} from canonical JSON bytes.",
-                std::any::type_name::<T>()
-            ))
-        })
+        serde_json::from_slice(self.body.as_ref()).map_err(AtmError::from)
     }
 
     /// Wrap a request envelope into the generic RPC transport surface.

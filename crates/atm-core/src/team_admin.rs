@@ -415,15 +415,12 @@ pub fn clear_nudge_template_override_with_store(
 fn validate_nudge_template_override_team(
     caller_team: TeamName,
     team: TeamName,
-    action: &'static str,
+    _action: &'static str,
 ) -> Result<(), AtmError> {
     if caller_team != team {
         return Err(AtmError::validation(format!(
             "caller team '{}' does not match nudge-template target team '{}'",
             caller_team, team
-        ))
-        .with_recovery(format!(
-            "Run `atm teams {action}` from the same ATM team that owns the target override row.",
         )));
     }
     Ok(())

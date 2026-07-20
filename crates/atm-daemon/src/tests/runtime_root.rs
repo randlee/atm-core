@@ -195,7 +195,7 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
         .expect_err("self-addressed daemon send must fail");
 
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
-    assert!(error.is_validation());
+    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
 }
 
 #[test]
@@ -319,9 +319,6 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
                         AtmError::daemon_unavailable(
                             "send round-trip test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
                     })
                 },
             },
@@ -440,9 +437,6 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
                             "send round-trip test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
                         )
                     })
                 },

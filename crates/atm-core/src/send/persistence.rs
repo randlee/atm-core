@@ -31,7 +31,7 @@ pub(crate) fn persist_message(
 
     match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
         Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
-        Err(error) if error.is_mailbox_write() => {
+        Err(error) if error.code == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
         Err(error) => Err(error),

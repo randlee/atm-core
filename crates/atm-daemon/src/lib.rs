@@ -76,11 +76,17 @@ pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
             | AtmErrorCode::DaemonLaunchGateRejected
             | AtmErrorCode::ConfigHomeUnavailable
             | AtmErrorCode::ObservabilityBootstrapFailed
-    ) || error.is_config()
-    {
+    ) || matches!(
+        error.code,
+        AtmErrorCode::ConfigParseFailed
+            | AtmErrorCode::ConfigRetiredHookMembersKey
+            | AtmErrorCode::ConfigRetiredLegacyHookKeys
+            | AtmErrorCode::ConfigTeamParseFailed
+            | AtmErrorCode::ConfigTeamMissing
+    ) {
         return DaemonExitCode::DoNotRestart;
     }
-    if error.is_daemon_unavailable() {
+    if error.code == AtmErrorCode::DaemonUnavailable {
         return DaemonExitCode::TransportFatal;
     }
     DaemonExitCode::InternalBug

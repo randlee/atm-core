@@ -129,17 +129,12 @@ impl AsRef<Path> for DaemonBinaryPath {
 
 fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the same-host ATM daemon client.",
-        ));
+        return Err(AtmError::validation(format!("{label} must not be empty")));
     }
     if path.to_str().is_none() {
         return Err(AtmError::validation(format!(
             "{label} must be valid UTF-8 at the ATM boundary"
-        ))
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the same-host ATM daemon client.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -173,11 +168,10 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
     if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
         return DaemonBinaryPath::new(PathBuf::from(path));
     }
-    let current = std::env::current_exe().map_err(|source| {
+    let current = std::env::current_exe().map_err(|_source| {
         AtmError::daemon_unavailable(format!(
             "failed to resolve the current {current_host_label} executable path"
         ))
-        .with_source(source)
     })?;
     DaemonBinaryPath::new(
         current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
@@ -186,7 +180,6 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
 
 pub fn parse_bootstrap_caller_context() -> Result<CallerContext, AtmError> {
     resolve_cli_caller_context(CallerContextOverrides::default())
-        .map_err(|error| error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set."))
 }
 
 pub fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
@@ -358,10 +351,7 @@ impl BootstrapTraceState {
 }
 
 fn format_bootstrap_error_detail(error: &AtmError) -> String {
-    match error.primary_recovery() {
-        Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
-        None => error.message.clone(),
-    }
+    error.message.clone()
 }
 
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
@@ -376,34 +366,25 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStrea
                 );
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn bounded daemon local IPC connect worker")
-                .with_recovery(
-                    "Retry the request after the local runtime can create the same-host daemon connect helper thread again.",
-                )
-                .with_source(source)
+
+
         })?;
     match result_rx.recv_timeout(LOCAL_IPC_CONNECT_DEADLINE) {
         Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(AtmError::daemon_unavailable(format!(
+        Ok(Err(_source)) => Err(AtmError::daemon_unavailable(format!(
             "failed to connect to daemon local IPC endpoint at {}",
             endpoint.display()
-        ))
-        .with_source(source)),
+        ))),
         Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(format!(
             "timed out connecting to daemon local IPC endpoint at {}",
             endpoint.display()
-        ))
-        .with_recovery(
-            "Retry the request after atm-daemon reaches serving state. If the same-host connect path remains stuck, inspect daemon startup and local IPC health before retrying again.",
-        )),
+        ))),
         Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(format!(
             "daemon local IPC connect worker disconnected unexpectedly for {}",
             endpoint.display()
-        ))
-        .with_recovery(
-            "Retry the request after the same-host daemon connect helper can be created again.",
-        )),
+        ))),
     }
 }
 
@@ -426,9 +407,9 @@ pub fn exchange_envelope(
     let request_id = request.header.request_id();
     let frame = request.into_frame_payload();
     wire::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
-    })?;
+    stream
+        .flush()
+        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon request frame"))?;
     let response_frame =
         read_response_frame_with_deadline(stream, request_deadline, recv_deadline_support)?;
     let response = RpcEnvelope::from_frame_payload(response_frame);
@@ -437,10 +418,7 @@ pub fn exchange_envelope(
             "daemon response request_id {} did not match request_id {}",
             response.header.request_id(),
             request_id
-        ))
-        .with_recovery(
-            "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
-        ));
+        )));
     }
     Ok(response)
 }
@@ -476,10 +454,8 @@ fn read_response_frame_with_helper(
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
-                .with_recovery(
-                    "Retry the request after the same-host daemon read helper can be created again.",
-                )
-                .with_source(source)
+
+
         })?;
 
     let started = Instant::now();
@@ -488,9 +464,6 @@ fn read_response_frame_with_helper(
         if remaining.is_zero() {
             return Err(AtmError::daemon_unavailable(
                 "timed out reading daemon response frame",
-            )
-            .with_recovery(
-                "Retry the request after atm-daemon reaches serving state. If the same-host read path remains stuck, inspect daemon and local IPC health before retrying again.",
             ));
         }
         let poll = std::cmp::min(remaining, LOCAL_IPC_READ_HELPER_POLL_INTERVAL);
@@ -500,9 +473,6 @@ fn read_response_frame_with_helper(
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Err(AtmError::daemon_unavailable(
                     "daemon local IPC read helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Retry the request after the same-host daemon read helper can be created again.",
                 ));
             }
         }
@@ -519,9 +489,6 @@ fn read_response_frame(stream: &mut LocalSocketStream) -> Result<FramePayload, A
         AtmError::daemon_unavailable(
             "daemon closed the local IPC connection before returning a response frame",
         )
-        .with_recovery(
-            "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
-        )
     })
 }
 
@@ -535,7 +502,7 @@ fn apply_local_ipc_deadline(
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
             Ok(LocalIpcDeadlineSupport::Unsupported)
         }
-        Err(source) => Err(AtmError::daemon_unavailable(message).with_source(source)),
+        Err(_source) => Err(AtmError::daemon_unavailable(message)),
     }
 }
 
@@ -543,9 +510,6 @@ pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
-    .with_recovery(
-        "Retry the request once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
-    )
 }
 
 impl DaemonSupervisor {
@@ -808,10 +772,7 @@ impl DaemonSupervisor {
         let error = AtmError::daemon_auto_start_failed(format!(
             "failed to connect to daemon local IPC endpoint at {} after auto-start",
             self.endpoint.display()
-        ))
-        .with_recovery(
-            "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
-        );
+        ));
         self.emit_trace(
             traceability,
             "daemon_auto_start",
@@ -835,15 +796,10 @@ impl DaemonSupervisor {
 
     fn spawn_daemon(&self) -> Result<(), AtmError> {
         if !self.daemon_bin.as_ref().is_file() {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "daemon binary is missing at {}",
-                    self.daemon_bin.display()
-                ))
-                .with_recovery(
-                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
-                ),
-            );
+            return Err(AtmError::daemon_unavailable(format!(
+                "daemon binary is missing at {}",
+                self.daemon_bin.display()
+            )));
         }
 
         let mut command = Command::new(self.daemon_bin.as_ref());
@@ -851,15 +807,11 @@ impl DaemonSupervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        command.spawn().map_err(|source| {
+        command.spawn().map_err(|_source| {
             AtmError::daemon_auto_start_failed(format!(
                 "failed to spawn daemon binary at {}",
                 self.daemon_bin.display()
             ))
-            .with_recovery(
-                "Confirm ATM_DAEMON_BIN points to an executable atm-daemon binary and retry after fixing the daemon launch environment.",
-            )
-            .with_source(source)
         })?;
         Ok(())
     }
@@ -881,22 +833,15 @@ impl LaunchGateGuard {
             "daemon launch gate remained owned while connecting to {}",
             endpoint.display()
         ))
-        .with_recovery(
-            "Wait for the in-flight daemon launch to finish, then retry the same-host connection. If the launch gate stays owned, inspect the launch-lock owner and clear stale launch state before retrying.",
-        )
     }
 
     pub fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
         if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|source| {
+            fs::create_dir_all(parent).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to create daemon launch lock directory at {}",
                     parent.display()
                 ))
-                .with_recovery(
-                    "Create or grant write access to the daemon launch-lock directory before retrying daemon auto-start.",
-                )
-                .with_source(source)
             })?;
         }
         let file = OpenOptions::new()
@@ -905,28 +850,20 @@ impl LaunchGateGuard {
             .write(true)
             .truncate(false)
             .open(&lock_path)
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to open daemon launch gate at {}",
                     lock_path.display()
                 ))
-                .with_recovery(
-                    "Confirm the daemon launch-lock path is writable and not blocked by another process before retrying daemon auto-start.",
-                )
-                .with_source(source)
             })?;
 
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { file })),
             Err(error) if is_launch_gate_contention_error(&error) => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
+            Err(_source) => Err(AtmError::daemon_unavailable(format!(
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
-            ))
-            .with_recovery(
-                "Inspect the daemon launch-lock owner and repair stale lock state before retrying daemon auto-start.",
-            )
-            .with_source(source)),
+            ))),
         }
     }
 }
