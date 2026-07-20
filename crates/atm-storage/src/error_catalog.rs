@@ -15,6 +15,49 @@ pub(crate) fn render_code(code: AtmErrorCode) -> String {
 }
 
 const fn guidance(code: AtmErrorCode) -> &'static str {
+    if let Some(message) = configuration_guidance(code) {
+        return message;
+    }
+    if let Some(message) = identity_guidance(code) {
+        return message;
+    }
+    if let Some(message) = daemon_guidance(code) {
+        return message;
+    }
+    if let Some(message) = mailbox_guidance(code) {
+        return message;
+    }
+    if let Some(message) = request_guidance(code) {
+        return message;
+    }
+    if let Some(message) = observability_guidance(code) {
+        return message;
+    }
+    if let Some(message) = warning_guidance(code) {
+        return message;
+    }
+    if let Some(message) = post_send_guidance(code) {
+        return message;
+    }
+
+    match code {
+        AtmErrorCode::InternalError => "Inspect the logged diagnostic context before retrying.",
+        AtmErrorCode::SerializationFailed => {
+            "Repair the invalid serialized ATM data before retrying."
+        }
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
+            "Correct the referenced path or file-policy input before retrying."
+        }
+        AtmErrorCode::WaitTimeout => "Retry after the bounded operation becomes available.",
+        AtmErrorCode::TestFakeTransportInjectionFailed => {
+            "Repair the test transport fixture before retrying."
+        }
+        AtmErrorCode::HelpTopicNotFound => "Use `atm help --list` to inspect available topics.",
+        _ => "Inspect the logged diagnostic context before retrying.",
+    }
+}
+
+const fn configuration_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
@@ -22,13 +65,32 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
         | AtmErrorCode::ConfigRetiredHookMembersKey
         | AtmErrorCode::ConfigRetiredLegacyHookKeys
         | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => "Repair the active ATM configuration and retry.",
+        | AtmErrorCode::ConfigTeamMissing => Some("Repair the active ATM configuration and retry."),
         AtmErrorCode::IdentityUnavailable
         | AtmErrorCode::IdentityInvalid
-        | AtmErrorCode::IdentityConflict => "Set a valid ATM identity before retrying.",
+        | AtmErrorCode::IdentityConflict => Some("Set a valid ATM identity before retrying."),
         AtmErrorCode::MemberAlreadyExists | AtmErrorCode::MemberNotFound => {
-            "Confirm the target team and member before retrying."
+            Some("Confirm the target team and member before retrying.")
         }
+        _ => None,
+    }
+}
+
+const fn identity_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::AddressParseFailed
+        | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamInvalid
+        | AtmErrorCode::TeamNotFound
+        | AtmErrorCode::AgentNotFound => {
+            Some("Correct the ATM address or team selection and retry.")
+        }
+        _ => None,
+    }
+}
+
+const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::DaemonUnavailable
         | AtmErrorCode::RuntimeRootInvalid
         | AtmErrorCode::RuntimeBootstrapRefused
@@ -43,45 +105,56 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
         | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
-        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed => {
-            "Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry."
-        }
-        AtmErrorCode::AddressParseFailed
-        | AtmErrorCode::TeamUnavailable
-        | AtmErrorCode::TeamInvalid
-        | AtmErrorCode::TeamNotFound
-        | AtmErrorCode::AgentNotFound => "Correct the ATM address or team selection and retry.",
+        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed => Some(
+            "Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.",
+        ),
+        _ => None,
+    }
+}
+
+const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::MailboxReadFailed
         | AtmErrorCode::MailboxWriteFailed
         | AtmErrorCode::MailboxLockFailed
         | AtmErrorCode::MailboxLockReadOnlyFilesystem
         | AtmErrorCode::MailboxLockTimeout => {
-            "Repair mailbox access or wait for the competing operation, then retry."
+            Some("Repair mailbox access or wait for the competing operation, then retry.")
         }
-        AtmErrorCode::InternalError => "Inspect the logged diagnostic context before retrying.",
+        _ => None,
+    }
+}
+
+const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::MessageValidationFailed
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState => {
-            "Correct the invalid ATM request or state before retrying."
+            Some("Correct the invalid ATM request or state before retrying.")
         }
-        AtmErrorCode::SerializationFailed => {
-            "Repair the invalid serialized ATM data before retrying."
-        }
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
-            "Correct the referenced path or file-policy input before retrying."
-        }
-        AtmErrorCode::WaitTimeout => "Retry after the bounded operation becomes available.",
+        _ => None,
+    }
+}
+
+const fn observability_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::ObservabilityEmitFailed
         | AtmErrorCode::ObservabilityQueryFailed
         | AtmErrorCode::ObservabilityFollowFailed
         | AtmErrorCode::ObservabilityHealthFailed
         | AtmErrorCode::ObservabilityBootstrapFailed => {
-            "Repair the observability backend or retry the operation later."
+            Some("Repair the observability backend or retry the operation later.")
         }
-        AtmErrorCode::ObservabilityHealthOk => "No operator action is required.",
+        AtmErrorCode::ObservabilityHealthOk => Some("No operator action is required."),
+        _ => None,
+    }
+}
+
+const fn warning_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::WarningInvalidTeamMemberSkipped
         | AtmErrorCode::WarningMailboxRecordSkipped
         | AtmErrorCode::WarningMalformedAtmFieldIgnored
@@ -97,17 +170,20 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
         | AtmErrorCode::WarningStaleMailboxLock
         | AtmErrorCode::WarningHookSkipped
         | AtmErrorCode::WarningHookExecutionFailed => {
-            "Inspect the warning context and correct the reported condition."
+            Some("Inspect the warning context and correct the reported condition.")
         }
+        _ => None,
+    }
+}
+
+const fn post_send_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
         AtmErrorCode::PostSendPaneMissing
         | AtmErrorCode::PostSendTmuxSendFailed
         | AtmErrorCode::PostSendGraftUnavailable
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => {
-            "Repair the configured post-send target and retry if delivery is required."
+            Some("Repair the configured post-send target and retry if delivery is required.")
         }
-        AtmErrorCode::TestFakeTransportInjectionFailed => {
-            "Repair the test transport fixture before retrying."
-        }
-        AtmErrorCode::HelpTopicNotFound => "Use `atm help --list` to inspect available topics.",
+        _ => None,
     }
 }
