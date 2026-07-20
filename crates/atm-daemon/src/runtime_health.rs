@@ -43,7 +43,6 @@ pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
-const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -264,8 +263,6 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
-    remote_replay_store: Option<Arc<dyn boundary::RemoteReplayStore + Send + Sync>>,
-    storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -276,14 +273,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("service_runtime", &self.service_runtime)
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
-            .field(
-                "remote_replay_store_present",
-                &self.remote_replay_store.is_some(),
-            )
-            .field(
-                "storage_finalizer_present",
-                &self.storage_finalizer.is_some(),
-            )
             .finish()
     }
 }
@@ -547,8 +536,6 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
-            remote_replay_store: Some(runtime_assembly.remote_replay_store),
-            storage_finalizer: Some(runtime_assembly.storage_finalizer),
         }
     }
 
@@ -679,16 +666,6 @@ impl DaemonRequestDispatcher {
             "bounded daemon config/roster reload applied successfully"
         );
         Ok(())
-    }
-
-    pub(crate) fn finalize_storage_shutdown(&self) {
-        if let Some(storage_finalizer) = self.storage_finalizer.clone() {
-            Self::run_bounded_shutdown_step(
-                "sqlite_wal_checkpoint",
-                SHUTDOWN_WAL_CHECKPOINT_DEADLINE,
-                move || storage_finalizer.finalize_storage_shutdown(),
-            );
-        }
     }
 
     pub(crate) fn finalize_observability_shutdown(&self) {
@@ -959,8 +936,6 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
-            remote_replay_store: Some(runtime_assembly.remote_replay_store.clone()),
-            storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
         }
     }
 }

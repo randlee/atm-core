@@ -114,7 +114,6 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
         | AtmErrorCode::WarningSqliteHealthDegraded => 4,
         AtmErrorCode::MailboxReadFailed
         | AtmErrorCode::MailboxWriteFailed

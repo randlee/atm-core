@@ -5,7 +5,9 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use signal_hook::SigId;
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 // Keep the Unix wake worker responsive to lifecycle signals without turning the
@@ -130,6 +132,7 @@ impl LifecycleStateChange {
 }
 
 impl LifecycleControlSourceAdapter {
+    #[cfg(test)]
     pub(crate) fn install() -> Result<Self, AtmError> {
         Self::install_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::LifecycleControl,
@@ -238,6 +241,7 @@ impl LifecycleControlSourceAdapter {
             .wait_for_change_timeout(observed_generation, timeout)
     }
 
+    #[cfg(test)]
     pub(crate) fn terminate_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.terminate)
     }

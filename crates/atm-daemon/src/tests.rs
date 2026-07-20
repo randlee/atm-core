@@ -106,7 +106,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
@@ -512,23 +511,6 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
         status_cache.member_state_for_test(&team, &leader),
         Some(RuntimeMemberState::Active)
     );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
-    let _drain_guard = ShutdownFinalizerDrainGuard;
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let db_path = tempdir.path().join("mail.db");
-
-    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
-
-    dispatcher.finalize_storage_shutdown();
-    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
 #[test]

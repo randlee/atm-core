@@ -116,11 +116,6 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-004` `atm-daemon` owns concrete resource-cap and
   saturation policy for runtime queues, accepts, and store handles. Satisfies:
   `REQ-CORE-QA-RUNTIME-001`.
-- `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
-  around daemon-managed delivery/export work. Satisfies:
-  `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
-  The replay store is a fail-closed startup dependency because the bounded
-  replay-resume sweep must run before the daemon can enter serving state.
 - `REQ-DAEMON-RUNTIME-006` `atm-daemon` daemon-private control-plane code must
   be partitioned into explicit ownership modules rather than one mixed
   crate-root implementation surface. Satisfies:
@@ -202,14 +197,13 @@ Initial crate requirement IDs:
   and on lifecycle-control-triggered reload or rescan. The minimum daemon-owned
   config inventory includes:
   - same-host endpoint contract inputs
-  - remote peer transport endpoint and credential inputs
-  - timeout and retry-budget inputs
+  - same-host timeout inputs
   - queue/cap inputs
   - retained-log / observability sink inputs
   Invalid config must produce a typed failure or bounded reload rejection
   rather than a silent degraded state. Startup-fatal or reload-fatal validation
-  applies to ownership, transport, replay-store, timeout-floor, retry-budget,
-  and cap violations; warning-only handling is allowed only for optional
+  applies to ownership, transport, timeout-floor, and cap violations;
+  warning-only handling is allowed only for optional
   observability sinks when the daemon keeps one documented degraded fallback
   path. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
@@ -433,7 +427,6 @@ Required runtime rules:
   - server runtime / connection registry / drain
   - request execution ownership
   - runtime status / reload / doctor projection
-  - peer transport
 - historical watch / reconcile lanes are not part of the accepted runtime
   requirement set
 - if temporary deletion scaffolding remains while `AD.4` / `AD.5` are in
@@ -484,14 +477,11 @@ Required runtime rules:
   - configured values may raise the documented defaults, but they must not
     drop below the daemon timeout floor of `250ms`; same-host request and
     daemon-health deadlines must not drop below `1s`
-  - `daemon.remote_retry_budget` is configurable only in the inclusive range
-    `1s..=300s`; out-of-range values are startup-fatal and reload-fatal
 - runtime queues and handles must obey one documented concrete cap policy
 - resource-cap matrix:
   - max concurrent accepted connections: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
 - request work launched from the server path must remain tracked by runtime

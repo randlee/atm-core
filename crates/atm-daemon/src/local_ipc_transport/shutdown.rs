@@ -3,15 +3,13 @@ use super::*;
 use std::fs;
 use std::time::Instant;
 
-pub(super) fn finalize_serve_loop<BeginShutdown, FinalizeShutdown>(
+pub(super) fn finalize_serve_loop<BeginShutdown>(
     begin_shutdown: &BeginShutdown,
-    finalize_shutdown: &FinalizeShutdown,
     context: ServeShutdownContext<'_>,
     lifecycle_waiter: std::thread::ScopedJoinHandle<'_, ()>,
 ) -> Option<AtmError>
 where
     BeginShutdown: Fn() -> Result<(), AtmError>,
-    FinalizeShutdown: Fn(),
 {
     let mut shutdown_error = begin_shutdown().err();
     let shutdown_started = Instant::now();
@@ -47,7 +45,6 @@ where
     if let Err(error) = context.endpoint_guard.unpublish() {
         append_shutdown_error(&mut shutdown_error, "endpoint_cleanup_error", error);
     }
-    finalize_shutdown();
     shutdown_error
 }
 

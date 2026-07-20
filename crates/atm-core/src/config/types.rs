@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -30,19 +29,6 @@ impl ByteCount {
 
     pub fn as_usize(self) -> Option<usize> {
         usize::try_from(self.0).ok()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DaemonConfig {
-    pub remote_retry_budget: Duration,
-}
-
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            remote_retry_budget: Duration::from_secs(30),
-        }
     }
 }
 
@@ -80,7 +66,6 @@ pub struct AtmConfig {
     pub aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
     pub claude_jsonl_body_export_max_bytes: ByteCount,
-    pub daemon: DaemonConfig,
     pub graft: GraftConfig,
     pub config_root: PathBuf,
 }
@@ -96,7 +81,6 @@ impl Default for AtmConfig {
             claude_jsonl_body_export_max_bytes: ByteCount::new(
                 DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
             ),
-            daemon: DaemonConfig::default(),
             graft: GraftConfig::default(),
             config_root: PathBuf::new(),
         }

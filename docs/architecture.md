@@ -2583,26 +2583,10 @@ Required invariants:
 - no normal command path relies on implicit autocommit as its correctness
   model
 
-### 21.1.3 Crash Recovery And Replay
+### 21.1.3 Crash Recovery
 
-Crash recovery must preserve durable truth before any historical compatibility
-export or remote handoff.
-
-Required architectural rules:
-- the ordering rule is `SQLite commit -> historical export / remote handoff`
-- re-export/replay is keyed by durable `message_key`
-- if daemon-managed retry/re-export state must survive crash, it is stored in
-  SQLite with a bounded expiry/deadline rather than remaining RAM-only
-- remote replay rows live in the host-scoped SQLite root and are keyed by
-  mailbox identity plus durable `message_key` so startup resume can replay
-  pending remote handoff without duplicating committed local state
-- daemon startup is fail-closed when the persisted replay store cannot be
-  opened, because the bounded replay-resume sweep is part of the serving
-  startup contract rather than an optional degraded-mode feature
-- WAL checkpoint is part of graceful shutdown, but recovery correctness must
-  not depend on graceful shutdown having succeeded
-- persisted retry state must not become a long-lived remote outbox; expired
-  retry rows fail closed during replay
+Crash recovery preserves the committed local mailbox. The daemon owns no
+remote replay store, deferred outbox, or retry state.
 
 ### 21.2 Compatibility Surfaces
 
@@ -3088,8 +3072,6 @@ Phase R operational defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -3099,7 +3081,6 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- retry queue depth: `256`
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
@@ -3111,31 +3092,6 @@ Required runtime-control behavior:
   sequence on every platform
 - the reload control path triggers bounded rescan/reload without dropping
   singleton ownership
-
-Remote peer transport rules:
-- retryable remote peer failures are limited to transient socket/network
-  failures before remote acceptance:
-  - timeout
-  - connection refused
-  - connection reset / aborted
-  - broken pipe
-  - host unreachable / network unreachable
-- non-retryable failures include:
-  - protocol/frame decode failures
-  - TLS/certificate/authentication mismatch
-  - explicit remote daemon rejection
-- if a connection drops after the request write completes but before the remote
-  daemon confirms acceptance, the send result is one typed
-  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
-- outbound peer delivery must resolve and open a fresh connection per attempt;
-  ordinary local interface changes must not require daemon restart for new
-  outbound attempts
-- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
-  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
-  restart in the normal case
-- if an operator binds the listener to one explicit local address and that
-  address disappears or changes, the daemon must surface degraded status and
-  require bounded reload/rebind rather than silently claiming readiness
 
 Phase R daemon implementation notes:
 - per-connection inflight cap `32` is documented now, but the current daemon

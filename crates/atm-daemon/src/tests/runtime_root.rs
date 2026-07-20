@@ -314,7 +314,6 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
@@ -437,7 +436,6 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(

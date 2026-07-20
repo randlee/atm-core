@@ -15,7 +15,6 @@ pub mod types;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -60,7 +59,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             parsed.atm.claude_jsonl_body_export_max_bytes,
             &path,
         )?,
-        daemon: parse_daemon_config(&parsed.daemon, &path)?,
         graft: normalize_graft_config(parsed.atm.graft),
         config_root,
     }))
@@ -112,22 +110,6 @@ fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<Te
             })
         })
         .transpose()
-}
-
-fn parse_daemon_config(
-    daemon: &RawDaemonSection,
-    path: &Path,
-) -> Result<types::DaemonConfig, AtmError> {
-    let config = daemon
-        .remote_retry_budget
-        .as_deref()
-        .map(|value| parse_duration_literal(value, path, "daemon.remote_retry_budget"))
-        .transpose()?
-        .map(|remote_retry_budget| types::DaemonConfig {
-            remote_retry_budget,
-        })
-        .unwrap_or_default();
-    Ok(config)
 }
 
 /// Load and validate the Claude Code `config.json` document for one team
@@ -204,8 +186,6 @@ struct RawConfigFile {
     #[serde(default)]
     atm: RawAtmSection,
     #[serde(default)]
-    daemon: RawDaemonSection,
-    #[serde(default)]
     identity: Option<String>,
     #[serde(default)]
     default_team: Option<String>,
@@ -227,12 +207,6 @@ struct RawAtmSection {
     claude_jsonl_body_export_max_bytes: Option<u64>,
     #[serde(default)]
     graft: Option<RawGraftSection>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawDaemonSection {
-    #[serde(default)]
-    remote_retry_budget: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -333,107 +307,6 @@ fn normalize_graft_config(raw: Option<RawGraftSection>) -> GraftConfig {
     GraftConfig {
         enabled: raw.and_then(|section| section.enabled).unwrap_or(true),
     }
-}
-
-fn parse_duration_literal(
-    value: &str,
-    path: &Path,
-    field_name: &str,
-) -> Result<Duration, AtmError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(duration_parse_error(
-            path,
-            field_name,
-            "value must not be blank".to_string(),
-            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-        ));
-    }
-
-    let (number, unit) = parse_duration_parts(trimmed, path, field_name)?;
-    let amount = parse_duration_amount(number, path, field_name)?;
-    if amount == 0 {
-        return Err(duration_parse_error(
-            path,
-            field_name,
-            "zero is not allowed".to_string(),
-            "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-        ));
-    }
-
-    Ok(duration_from_unit(amount, unit))
-}
-
-fn parse_duration_parts<'a>(
-    trimmed: &'a str,
-    path: &Path,
-    field_name: &str,
-) -> Result<(&'a str, &'static str), AtmError> {
-    if let Some(value) = trimmed.strip_suffix("ms") {
-        return Ok((value, "ms"));
-    }
-    if let Some(value) = trimmed.strip_suffix('s') {
-        return Ok((value, "s"));
-    }
-    if let Some(value) = trimmed.strip_suffix('m') {
-        return Ok((value, "m"));
-    }
-    Err(duration_parse_error(
-        path,
-        field_name,
-        format!("unsupported unit '{trimmed}'"),
-        "Use one positive duration literal ending in ms, s, or m for daemon timeout settings.",
-    ))
-}
-
-fn parse_duration_amount(number: &str, path: &Path, field_name: &str) -> Result<u64, AtmError> {
-    number.parse::<u64>().map_err(|error| {
-        duration_parse_error_with_source(
-            path,
-            field_name,
-            error.to_string(),
-            "Use one positive integer duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-            error,
-        )
-    })
-}
-
-fn duration_from_unit(amount: u64, unit: &str) -> Duration {
-    match unit {
-        "ms" => Duration::from_millis(amount),
-        "s" => Duration::from_secs(amount),
-        "m" => Duration::from_secs(amount.saturating_mul(60)),
-        _ => unreachable!("duration unit filtered above"),
-    }
-}
-
-fn duration_parse_error(
-    path: &Path,
-    field_name: &str,
-    detail: String,
-    recovery: &'static str,
-) -> AtmError {
-    AtmError::new_with_code(
-        AtmErrorCode::ConfigParseFailed,
-        AtmErrorKind::Config,
-        format!(
-            "invalid duration for {} in {}: {}",
-            field_name,
-            path.display(),
-            detail
-        ),
-    )
-    .with_recovery(recovery)
-}
-
-fn duration_parse_error_with_source(
-    path: &Path,
-    field_name: &str,
-    detail: String,
-    recovery: &'static str,
-    source: impl std::error::Error + Send + Sync + 'static,
-) -> AtmError {
-    duration_parse_error(path, field_name, detail, recovery).with_source(source)
 }
 
 fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {
@@ -627,9 +500,6 @@ command = ["scripts/atm-nudge.sh", "{ROLE_TEAM_LEAD}"]
 recipient = "*"
 command = ["bash", "-lc", "echo hi"]
 
-[daemon]
-remote_retry_budget = "45s"
-
 [atm.aliases]
 tl = "{ROLE_TEAM_LEAD}"
 qa = "{TEST_QA}"
@@ -678,25 +548,6 @@ blank = ""
         );
         assert_eq!(config.aliases.get("qa").map(String::as_str), Some(TEST_QA));
         assert!(!config.aliases.contains_key("blank"));
-        assert_eq!(
-            config.daemon.remote_retry_budget,
-            std::time::Duration::from_secs(45)
-        );
-    }
-
-    #[test]
-    fn load_config_rejects_invalid_remote_retry_budget() {
-        let root = unique_temp_dir("atm-config-invalid-remote-retry-budget");
-        fs::write(
-            root.path().join(".atm.toml"),
-            "[daemon]\nremote_retry_budget = \"soon\"\n",
-        )
-        .expect("config");
-
-        let error = load_config(root.path()).expect_err("invalid duration");
-
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("daemon.remote_retry_budget"));
     }
 
     #[test]

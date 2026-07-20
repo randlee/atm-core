@@ -44,7 +44,7 @@ even though they are not public cross-crate traits:
   - owns live daemon-memory member state and cache-cap semantics
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
-  - must remain separate from socket serving and peer transport code
+  - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
 
@@ -61,7 +61,6 @@ daemon-private ownership map is:
 - `runtime_status`
   - `RuntimeStatusCache`, roster hydration, reload assembly, and
     `atm doctor` runtime-health projection
-- `peer_transport`
 
 Historical pre-AD planning names that no longer describe the accepted current
 daemon-private ownership map:
@@ -120,8 +119,8 @@ Notes:
 - release closeout requires both Unix and Windows implementations to exist
   behind this boundary; non-Unix unsupported-path stubs are an intermediate
   implementation state only
-- the local IPC adapter must use the same ATM frame header and request/response
-  packet family as the remote peer transport
+- the local IPC adapter must use the canonical ATM frame header and
+  request/response packet family
 - the adapter must not treat EOF or half-close as the stable request boundary;
   framed read/write helpers own packet delimiting
 - the adapter owns logical endpoint naming and same-user access-control
@@ -200,28 +199,6 @@ Phase S adds these review rules for the three daemon portability boundaries:
 - module-level platform test gates such as `#[cfg(all(test, unix))]` are not
   allowed in daemon-owned test modules; use `#[cfg(unix)]` on individual test
   functions when one assertion is OS-specific
-
-## PeerClientTransportAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
-
-
-Purpose:
-- Owns the daemon-side outbound client transport used for remote peer delivery.
-
-Notes:
-- The concrete `PeerClientTransport` implementation stays runtime-private inside
-  `atm_daemon::peer_transport`.
-- Runtime composition owns replay resume and exposes the transport only through
-  the shared `ClientTransport` contract.
-- Runtime composition also owns peer-transport config resolution through the
-  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
-  workspace config loader directly or silently fall back to defaults after a
-  config-load failure.
-- The peer transport must reuse the shared ATM frame header and packet DTOs
-  used by the same-host local IPC boundary; host-host traffic is not a second
-  daemon message system.
 
 ## FileWatchEventSourceAdapter
 

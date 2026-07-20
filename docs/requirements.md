@@ -3378,18 +3378,9 @@ mail correctness.
 - roster/config ingest must apply one deterministic last-write-wins policy
   for replacing roster truth in SQLite
 
-- `REQ-CORE-RUNTIME-003` Crash recovery and replay must preserve the durable
-  ordering rule for daemon-managed export work.
-
-  Required behavior:
-  - the ordering rule is `SQLite commit -> export / remote handoff`
-  - re-export/replay must be keyed by durable `message_key`
-  - if daemon-managed retry/re-export state survives crash, it must be stored
-    durably with a bounded expiry/deadline
-  - daemon startup must fail closed if the persisted replay store cannot be
-    opened, because the bounded replay-resume sweep is part of the serving
-    startup contract
-  - persisted retry state must not become a long-lived remote outbox
+- `REQ-CORE-RUNTIME-003` Crash recovery preserves committed local mailbox
+  state. The daemon must not maintain a replay store, remote outbox, or retry
+  state.
 
 - `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its
   authoritative live truth.
@@ -3619,26 +3610,6 @@ mail correctness.
   - ATM must not keep a durable remote outbox that can leave stale messages
     queued for days
 
-- `REQ-CORE-TRANSPORT-004` Remote send success must require remote daemon
-  acceptance within the bounded retry window.
-
-  Required behavior:
-  - sender-side daemons may record observability/audit information locally
-    while attempting remote delivery
-  - a remote send must not be reported as successfully delivered until the
-    remote daemon accepts it
-  - if the connection drops after the sender finishes writing the request but
-    before remote acceptance is confirmed, the daemon must return one typed
-    `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-    must not report success
-  - `RemoteDeliveryOutcomeUnknown` must be recoverable through the bounded
-    replay/re-export path rather than by silently assuming success
-  - if the bounded retry window expires without remote acceptance, the send
-    fails and must not leave durable delivered-message state behind
-  - pending replay/re-export state must be persisted in the host-scoped SQLite
-    root keyed by mailbox identity plus `message_key`, with bounded expiry and
-    operator-visible retained-failure state
-
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
@@ -3646,28 +3617,16 @@ mail correctness.
   - same-host daemon request deadline: `3s`
   - per-leg TCP/TLS connect deadline: `5s`
   - per-leg TCP/TLS read/write deadline: `5s`
-  - total remote retry budget default: `30s`
-  - the remote retry budget must be configurable through one daemon transport
-    setting (`daemon.remote_retry_budget`) so operators can lengthen it on
-    unstable networks without changing code
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
-  - retry queue depth: `256`
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
-  - outbound peer connections must resolve/bind per attempt so ordinary local
-    interface up/down changes do not require daemon restart
-  - inbound TCP/TLS listeners bound to wildcard/unspecified local addresses
-    must survive ordinary interface rebinding without daemon restart
-  - if the configured listener bind address itself changes or disappears, the
-    daemon must require bounded reload/rebind through the documented reload
-    path and must surface degraded status until rebind succeeds
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

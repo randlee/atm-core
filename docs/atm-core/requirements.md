@@ -319,13 +319,11 @@ Required `atm-core` crate rules:
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
 - `ClientTransport` remains the shared request/response seam for:
   - production same-host local IPC transport
-  - production remote daemon peer transport
   - fake in-process transport doubles
   - loopback in-process transport
 - `ClientTransport` must be strong enough for shared ownership and concurrent
   request execution without downstream callers restating `Send + Sync`
-- `atm-core` owns one ATM frame contract for local IPC and remote daemon
-  request/response transport, as defined by
+- `atm-core` owns one ATM frame contract, as defined by
   `docs/atm-daemon/protocol-icd.md`
 - the current shared daemon packet family covers:
   - send compose

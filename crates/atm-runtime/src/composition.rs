@@ -2,9 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use atm_core::boundary::{
-    self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound, RuntimeStorageFinalizer,
-};
+use atm_core::boundary::{self, ConfigDoctor, ConfigDoctorReport, NonClaudeOutbound};
 use atm_core::doctor::RuntimeDoctorPorts;
 use atm_core::error::AtmError;
 use atm_core::home::host_mail_db_path;
@@ -15,7 +13,6 @@ use atm_storage_rusqlite::SqliteStorageBackend;
 use crate::legacy_storage_adapters::{
     StorageBackends, boundary_mail_store_view, boundary_roster_store_view, runtime_doctor_ports,
 };
-use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
 use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
 
 #[derive(Clone)]
@@ -46,8 +43,6 @@ pub struct RuntimeAssembly {
     >,
     pub nudge_template_override_store: Arc<dyn boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub doctor_ports: RuntimeDoctorPorts,
-    pub remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync>,
-    pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
 }
 
 impl fmt::Debug for RuntimeAssembly {
@@ -60,8 +55,6 @@ impl fmt::Debug for RuntimeAssembly {
                 &"dyn NudgeTemplateOverrideStore",
             )
             .field("doctor_ports", &self.doctor_ports)
-            .field("remote_replay_store", &"dyn RemoteReplayStore")
-            .field("storage_finalizer", &"dyn RuntimeStorageFinalizer")
             .finish()
     }
 }
@@ -115,18 +108,11 @@ fn assemble_sqlite_runtime_at_path(
         non_claude_outbound,
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
-    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
-        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
-        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
-    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
         nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
-        remote_replay_store,
-        storage_finalizer,
     })
 }
 
@@ -155,18 +141,11 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         Arc::new(LocalFileNonClaudeOutbound::new()),
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor { config_current_dir }));
-    let remote_replay_store: Arc<dyn boundary::RemoteReplayStore + Send + Sync> =
-        Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&sqlite_backend)));
-    let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> = Arc::new(
-        SqliteRuntimeStorageFinalizer::new(Arc::clone(&sqlite_backend)),
-    );
     Ok(RuntimeAssembly {
         service_runtime,
         storage_backends,
         nudge_template_override_store: sqlite_backend.nudge_template_override_store(),
         doctor_ports,
-        remote_replay_store,
-        storage_finalizer,
     })
 }
 
@@ -197,14 +176,7 @@ pub fn with_default_roster_store<T>(
 ) -> Result<T, AtmError> {
     let assembly = assemble_default_runtime()?;
     let roster_store = assembly.roster_store_arc();
-    let result = f(roster_store.as_ref());
-    let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
-    match (result, finalize_result) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error),
-        (Err(error), Ok(())) => Err(error),
-        (Err(error), Err(_)) => Err(error),
-    }
+    f(roster_store.as_ref())
 }
 
 /// Invoke the retained roster boundary through the runtime selected by
@@ -226,13 +198,5 @@ pub fn with_default_nudge_template_override_store<T>(
         RuntimeSqliteObservability::disabled(),
     )?);
     let override_store = sqlite_backend.nudge_template_override_store();
-    let result = f(override_store.as_ref());
-    let finalize_result =
-        SqliteRuntimeStorageFinalizer::new(sqlite_backend).finalize_storage_shutdown();
-    match (result, finalize_result) {
-        (Ok(value), Ok(())) => Ok(value),
-        (Ok(_), Err(error)) => Err(error),
-        (Err(error), Ok(())) => Err(error),
-        (Err(error), Err(_)) => Err(error),
-    }
+    f(override_store.as_ref())
 }

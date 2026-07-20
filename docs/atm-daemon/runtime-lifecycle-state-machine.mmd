@@ -6,19 +6,15 @@
 %% terminal_classes: StartupFailed is a caller-facing startup dependency error with rollback to Stopped. | Running is the success state that permits request serving. | StoppedAfterShutdown is the normal shutdown terminal.
 %% sets: daemon
 flowchart TD
-    A["<b>Stopped</b>"] -->|start_requested| B["StartingReplay"]
-    B -->|resume_pending_replay ok| C["StartingLanes"]
-    B -->|resume_pending_replay err| X["StartupFailed
+    A["<b>Stopped</b>"] -->|start_requested| D["PreparingRuntime"]
+    D -->|prepare_runtime err| X["StartupFailed
 caller: typed runtime error
 doctor: no report"]
-    C -->|start_background_lanes ok| D["PreparingRuntime"]
-    C -->|start_background_lanes err| X
     D -->|prepare_runtime ok| E["ActivatingRuntime"]
-    D -->|prepare_runtime err| X
     E -->|activate_runtime ok| F["Running"]
     E -->|activate_runtime err| X
     F -->|begin_shutdown| G["Draining"]
-    G -->|finalize_shutdown| H["StoppedAfterShutdown"]
+    G -->|stop| H["StoppedAfterShutdown"]
 
     classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
     classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
@@ -26,4 +22,4 @@ doctor: no report"]
 
     class A,F,H happy;
     class X error;
-    class B,C,D,E,G neutral;
+    class D,E,G neutral;

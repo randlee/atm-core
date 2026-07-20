@@ -226,37 +226,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   total retry ceiling within the documented timeout budget; it must not
   collapse into fixed sleeps, unbounded churn, or tests that can wait
   indefinitely for eventual success
-- retryable peer failures are limited to transient pre-acceptance socket
-  failures:
-  - timeout
-  - connection refused
-  - connection reset / aborted
-  - broken pipe
-  - host unreachable / network unreachable
-- non-retryable peer failures include protocol/frame corruption, TLS or
-  certificate mismatch, authentication mismatch, and explicit remote daemon
-  rejection
-- if the request body has been fully written but remote acceptance has not been
-  confirmed when the connection drops, the runtime returns one typed
-  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-  hands recovery to bounded replay/re-export rather than guessing success
-- outbound peer attempts resolve and dial per attempt so ordinary interface
-  changes on the sender host do not require daemon restart
-- inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
-  default; ordinary cable unplug / replug or Wi-Fi to ethernet rebinding must
-  not require restart in that default mode
-- if the configured listener bind address is an explicit local IP that later
-  disappears or changes, the runtime must enter degraded status and require
-  bounded reload/rebind via the runtime reload path
-- graceful shutdown finalization must remain bounded; best-effort SQLite WAL
-  checkpoint and observability flush steps must time out rather than block
-  daemon exit indefinitely
-- startup must run one bounded replay-resume sweep from the host-scoped SQLite
-  state root before serving requests so pending remote handoff rows keyed by
-  durable `message_key` are retried or retained with typed degraded status
-- replay-store assembly is therefore fail-closed at startup; atm-daemon must
-  not enter serving state without the SQLite-backed replay store required for
-  that bounded replay-resume sweep
+- graceful shutdown finalization must remain bounded; observability flush
+  steps must time out rather than block daemon exit indefinitely
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -478,7 +449,6 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
 - `advisory_runtime.rs`
-- `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
 - `runtime_status_cache.rs`
@@ -544,9 +514,6 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_transport`
-  - owns remote delivery, replay, retry, and remote transport-specific failure
-    handling
 
 Historical-only retired partitions:
 - `watch_runtime`
@@ -686,7 +653,6 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 
@@ -697,7 +663,6 @@ Required saturation behavior:
   in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting through `DaemonIngestQueueSaturated`; no silent drop
-- retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
   removed entries project as explicit `unknown` on later snapshot/doctor reads
@@ -739,21 +704,15 @@ Required timeout defaults:
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget default: `30s` via
-  `daemon.remote_retry_budget`
-- peer-transport retry-budget config is resolved once through daemon
-  `ConfigIngress` during runtime composition; invalid config is a startup
-  error, not a silent fallback to the default budget
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
 - lifecycle wake-worker join during runtime teardown: `1s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max
-- configurable timeout or retry-budget overrides may raise these defaults, but
+- configurable timeout overrides may raise these defaults, but
   they must not violate the floor contract:
   - global minimum timeout floor: `250ms`
   - same-host request and daemon-health minimum floor: `1s`
-  - `daemon.remote_retry_budget` accepted range: `1s..=300s`
 
 Shutdown sub-deadline rationale:
 - these per-component bounds sit under the existing daemon shutdown ceilings so

@@ -218,7 +218,6 @@ const fn observability_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErro
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
         | AtmErrorCode::WarningSqliteHealthDegraded
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => Some(AtmErrorKind::DaemonUnavailable),
         AtmErrorCode::ObservabilityEmitFailed => Some(AtmErrorKind::ObservabilityEmit),
@@ -1179,24 +1178,6 @@ mod tests {
     fn daemon_socket_path_rejects_override() {
         let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
         assert!(daemon_socket_path().is_err());
-    }
-
-    #[test]
-    fn protocol_error_envelope_preserves_remote_delivery_outcome_unknown_recovery() {
-        let error = AtmError::remote_delivery_outcome_unknown(
-            "remote peer delivery outcome is unknown and replay persistence failed",
-        )
-        .with_source(
-            AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
-                "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
-            ),
-        );
-        let envelope = ProtocolErrorEnvelope::from_error(&error);
-        let round_trip = envelope.into_atm_error();
-
-        assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
-        assert_eq!(round_trip.message, error.message);
-        assert_eq!(round_trip.recovery, error.recovery);
     }
 
     #[test]
