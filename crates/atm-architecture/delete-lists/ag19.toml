@@ -18,7 +18,6 @@ allowed_changed_files = [
   "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs",
   "crates/atm-daemon/src/peer_transport/tests/harness.rs",
   "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs",
-  "crates/atm/src/composition.rs",
 ]
 
 forbidden_type_definitions = [
