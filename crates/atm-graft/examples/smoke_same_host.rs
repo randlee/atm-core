@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use atm_core::ack::AckRequest;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendCommandOutcome, SendMessageSource, SendRequest};
@@ -199,14 +198,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let ack_outcome = session.ack(AckRequest {
-        home_dir: home_dir.clone(),
-        current_dir: args.workspace_root.clone(),
-        caller_identity: args.agent.parse().expect("caller"),
-        caller_team: args.team.parse().expect("team"),
-        message_id: nudge.message_id,
-        reply_body: "graft smoke ack reply".to_string(),
-    })?;
+    let ack_outcome = session.send(SendRequest::acknowledgement(
+        home_dir.clone(),
+        args.workspace_root.clone(),
+        args.agent.parse().expect("caller"),
+        args.team.parse().expect("team"),
+        nudge.message_id,
+        "graft smoke ack reply".to_string(),
+    )?)?;
 
     let follow_up_outcome = session.send(SendRequest::new(
         home_dir,
@@ -248,9 +247,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "task_id": nudge.task_id.map(|task_id| task_id.to_string()),
             },
             "read_selected_message_id": read_selected_message_id.to_string(),
-            "ack_message_id": ack_outcome.message_id.to_string(),
-            "ack_reply_message_id": ack_outcome.reply_message_id.to_string(),
-            "ack_reply_target": ack_outcome.reply_target,
+            "ack_reply_message_id": ack_outcome.message_id.to_string(),
+            "ack_outcome": ack_outcome.outcome.as_str(),
             "follow_up_message_id": follow_up_outcome.message_id.to_string(),
         }))?
     );

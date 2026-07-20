@@ -155,6 +155,20 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         ack.outcome,
         atm_core::send::SendCommandOutcome::Sent
     ));
+    let acknowledged_source = read_message_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
+        ReadSelection::All,
+        Some(recipient_message_id),
+    );
+    let acknowledged_source = acknowledged_source
+        .message
+        .expect("source message after confirmed acknowledgement send");
+    assert!(acknowledged_source.envelope.pending_ack_at.is_none());
+    assert!(acknowledged_source.envelope.acknowledged_at.is_some());
 
     let ack_reply_message =
         wait_for_ack_reply(&arch_ctx, source_message_id, "cross-host ack success");
@@ -219,16 +233,13 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
     );
-    assert_eq!(ack_outcome.warnings.len(), 1);
-    assert_eq!(
-        ack_outcome.warnings[0].code,
-        Some(atm_core::error_codes::AtmErrorCode::DaemonUnavailable)
-    );
+    assert!(matches!(
+        ack_outcome.outcome,
+        atm_core::send::SendCommandOutcome::Deferred
+    ));
     assert!(
-        ack_outcome.warnings[0]
-            .message
-            .contains("ATM deferred remote ack delivery"),
-        "{:#?}",
+        ack_outcome.warnings.is_empty(),
+        "ack uses the canonical deferred-send outcome, not an ack-only warning: {:#?}",
         ack_outcome.warnings
     );
 
@@ -243,13 +254,13 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     );
     let still_pending_message = still_pending
         .message
-        .expect("acknowledged message after deferred remote ack");
+        .expect("pending message after deferred remote ack");
     assert_eq!(
         still_pending_message.envelope.message_id,
         Some(second_recipient_message_id)
     );
-    assert!(still_pending_message.envelope.pending_ack_at.is_none());
-    assert!(still_pending_message.envelope.acknowledged_at.is_some());
+    assert!(still_pending_message.envelope.pending_ack_at.is_some());
+    assert!(still_pending_message.envelope.acknowledged_at.is_none());
 
     stop_cross_host_child(&child_state, &mut cm5_process);
 }

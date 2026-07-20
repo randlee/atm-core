@@ -1,5 +1,4 @@
 /// Acknowledgement workflows for ack-required mailbox messages.
-pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
 /// Phase R boundary traits and placeholder contract types.

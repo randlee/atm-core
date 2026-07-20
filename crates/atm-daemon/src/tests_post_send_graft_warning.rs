@@ -1,4 +1,3 @@
-use atm_core::ack::{AckRequest, prepare_ack_send_request};
 use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
@@ -190,14 +189,14 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
 
     let ack_response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(
-            prepare_ack_send_request(AckRequest {
-                home_dir: atm_home,
-                current_dir: workspace_dir,
-                caller_identity: ROLE_TEAM_LEAD.parse().expect("caller"),
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: source_message_id,
-                reply_body: "ack reply".to_string(),
-            })
+            SendRequest::acknowledgement(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                TEST_TEAM.parse().expect("team"),
+                source_message_id,
+                "ack reply".to_string(),
+            )
             .expect("ack request"),
         )))
         .expect("ack response");
