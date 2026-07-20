@@ -151,12 +151,10 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         recipient_message_id,
         "cross-host ack success",
     );
-    match ack.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id: _,
-            ..
-        } => {}
-    }
+    assert!(matches!(
+        ack.outcome,
+        atm_core::send::SendCommandOutcome::Sent
+    ));
 
     let ack_reply_message =
         wait_for_ack_reply(&arch_ctx, source_message_id, "cross-host ack success");
@@ -681,7 +679,7 @@ fn send_ack_over_local_ipc(
     caller_team: &str,
     message_id: AtmMessageId,
     body: &str,
-) -> atm_core::ack::AckOutcome {
+) -> atm_core::send::SendOutcome {
     match dispatch_ack_over_local_ipc(
         socket_path,
         home,
@@ -693,7 +691,7 @@ fn send_ack_over_local_ipc(
     )
     .expect("ack over local ipc")
     {
-        ResponseEnvelope::Ack(outcome) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("unexpected local ipc ack response: {other:?}"),
     }
 }

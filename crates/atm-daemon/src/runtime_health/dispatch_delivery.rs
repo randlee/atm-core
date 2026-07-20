@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use atm_core::{
     RequestEnvelope, ResponseEnvelope,
-    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
+    ack::{commit_ack_mutation, resolve_ack_send_request},
     boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
@@ -60,17 +60,14 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-            return Ok(ResponseEnvelope::Ack(
-                ack_mail_with_runtime_and_post_send_emitter(
-                    ack_request_from_send_request(request)?,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?,
-            ));
-        }
-        match route_send_request(&request) {
+        let (request, ack_mutation) =
+            if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
+                let (request, mutation) = resolve_ack_send_request(&self.service_runtime, request)?;
+                (request, Some(mutation))
+            } else {
+                (request, None)
+            };
+        let response = match route_send_request(&request) {
             SendRequestRoute::Local => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
                     request,
@@ -108,7 +105,13 @@ impl DaemonRequestDispatcher {
                     )?)),
                 }
             }
+        }?;
+        if let (Some(mutation), ResponseEnvelope::Send(outcome)) = (ack_mutation, &response)
+            && matches!(outcome.outcome, SendCommandOutcome::Sent)
+        {
+            commit_ack_mutation(&self.service_runtime, mutation)?;
         }
+        Ok(response)
     }
 
     fn compatibility_verdict(

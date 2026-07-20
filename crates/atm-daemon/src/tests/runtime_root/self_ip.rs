@@ -231,12 +231,12 @@ fn dispatcher_secure_self_ip_requires_ack_round_trips_and_updates_reply_state() 
             "ack from secure self ip",
         ))
         .expect("ack over secure self ip");
-    let ResponseEnvelope::Ack(outcome) = ack else {
+    let ResponseEnvelope::Send(outcome) = ack else {
         panic!("expected ack response");
     };
     assert!(matches!(
-        outcome.reply_disposition,
-        atm_core::ack::AckReplyDisposition::Sent { .. }
+        outcome.outcome,
+        atm_core::send::SendCommandOutcome::Sent
     ));
 
     let sender_read = dispatcher

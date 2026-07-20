@@ -60,18 +60,6 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::sealed::Sealed {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[InboxMessage],
     ) -> Result<(), AtmError>;
-    fn deliver_remote_send_request(
-        &self,
-        _request: SendRequest,
-        _remote_host: RemoteTargetHost,
-    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "remote send routing is unavailable in this runtime",
-        )
-        .with_recovery(
-            "Run the request through atm-daemon with the cross-host runtime assembled before retrying the remote-target send.",
-        ))
-    }
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -382,15 +370,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
-    }
-
-    fn deliver_remote_send_request(
-        &self,
-        request: SendRequest,
-        remote_host: RemoteTargetHost,
-    ) -> Result<crate::boundary::RemoteSendDeliveryOutcome, AtmError> {
-        self.remote_send_router
-            .deliver_remote_send(request, remote_host)
     }
 }
 

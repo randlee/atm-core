@@ -237,10 +237,13 @@ impl AtmGraftClient for GraftClient {
     }
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
+        let ack_request = request.clone();
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {
-            ResponseEnvelope::Ack(outcome) => Ok(outcome),
+            ResponseEnvelope::Send(outcome) => {
+                Ok(AckOutcome::from_send_outcome(outcome, &ack_request))
+            }
             other => Err(unexpected_response("ack", other)),
         }
     }
@@ -534,7 +537,6 @@ mod tests {
     use atm_core::test_support::{EnvGuard, TEST_LEAD, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, CommandAction, ReadSelection, TeamName};
-    use serde_json::json;
     use tempfile::TempDir;
 
     use super::*;
@@ -596,11 +598,9 @@ mod tests {
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
         let transport = Arc::new(FakeClientTransport::new(Box::new(
-            |request| {
-                match request {
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_none() => Ok(
-                    CoreResponseEnvelope::Send(SendOutcome {
+            |request| match request {
+                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_none() => {
+                    Ok(CoreResponseEnvelope::Send(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated(TEST_LEAD),
@@ -614,8 +614,8 @@ mod tests {
                         message: None,
                         warnings: Vec::new(),
                         dry_run: false,
-                    }),
-                ),
+                    }))
+                }
                 CoreRequestEnvelope::Peek(_) => {
                     Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
                         action: CommandAction::Peek,
@@ -654,28 +654,24 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_some() => Ok(
-                    CoreResponseEnvelope::Ack(
-                        serde_json::from_value(json!({
-                            "action": "ack",
-                            "team": TEST_TEAM,
-                            "agent": TEST_LEAD,
-                            "message_id": atm_core::schema::AtmMessageId::new().to_string(),
-                            "task_id": null,
-                            "reply_disposition": {
-                                "kind": "sent",
-                                "reply_target": format!("{TEST_LEAD}@{TEST_TEAM}"),
-                                "reply_message_id": atm_core::schema::AtmMessageId::new().to_string()
-                            },
-                            "reply_text": "ack",
-                            "warnings": [],
-                        }))
-                        .expect("ack outcome"),
-                    ),
-                ),
-                other => panic!("unexpected request: {other:?}"),
+                CoreRequestEnvelope::Send(request) if request.acknowledges_message_id.is_some() => {
+                    Ok(CoreResponseEnvelope::Send(SendOutcome {
+                        action: CommandAction::Ack,
+                        team: TeamName::from_validated(TEST_TEAM),
+                        agent: AgentName::from_validated(TEST_LEAD),
+                        sender: AgentName::from_validated(TEST_LEAD),
+                        outcome: SendCommandOutcome::Sent,
+                        message_id: atm_core::schema::AtmMessageId::new(),
+                        receipt_message_id: None,
+                        requires_ack: false,
+                        task_id: None,
+                        summary: None,
+                        message: Some("ack".to_string()),
+                        warnings: Vec::new(),
+                        dry_run: false,
+                    }))
                 }
+                other => panic!("unexpected request: {other:?}"),
             },
         )));
         let client = GraftClient::from_transport(transport);

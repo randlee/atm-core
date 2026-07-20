@@ -14,7 +14,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use serde::{Deserialize, Serialize};
 
-use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
@@ -55,8 +54,6 @@ pub enum RequestEnvelope {
 pub enum ResponseEnvelope {
     /// Result of one canonical send-shaped request.
     Send(SendOutcome),
-    /// Caller-facing acknowledgement result. The request and wire message kind remain send-shaped.
-    Ack(AckOutcome),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
@@ -751,7 +748,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
 
 fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
     match response {
-        ResponseEnvelope::Send(_) | ResponseEnvelope::Ack(_) => MessageKind::SendResponse,
+        ResponseEnvelope::Send(_) => MessageKind::SendResponse,
         ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
         ResponseEnvelope::List(_) => MessageKind::ListResponse,

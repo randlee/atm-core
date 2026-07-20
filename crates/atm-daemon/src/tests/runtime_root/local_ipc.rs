@@ -479,10 +479,10 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "read ack frame",
     );
     match ack_response {
-        ResponseEnvelope::Ack(outcome) => {
+        ResponseEnvelope::Send(outcome) => {
             assert!(matches!(
-                outcome.reply_disposition,
-                atm_core::ack::AckReplyDisposition::Sent { .. }
+                outcome.outcome,
+                atm_core::send::SendCommandOutcome::Sent
             ));
         }
         other => panic!("unexpected ack response: {other:?}"),
