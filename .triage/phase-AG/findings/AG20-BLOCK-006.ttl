@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-006>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-006" ;
+  triage:title "The one candidate higher-level boundary seam is a pure passthrough, not a policy layer" ;
+  triage:description "DaemonRemoteSendRouter::deliver_remote_send (crates/atm-daemon/src/non_claude_outbound_runtime.rs:103-131, on feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166) is a 1:1 field passthrough of peer_transport::delivery::SendOutcome into a structurally identical parallel enum boundary::RemoteSendDeliveryOutcome. Each variant (Delivered, Deferred{receipt_message_id,error}, OutcomeUnknown{receipt_message_id,error}, RejectedTerminal) is remapped verbatim with no independent decision logic at this layer -- all deciding still happens in transport's classify_error. Confirmed by arch-qa (ARCH-006). AG.20's sprint goal was to move deferred-policy decisioning out of the transport layer into a higher-level boundary seam; this router does not do that, it only relabels the transport's own enum." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:category "boundary-design" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-006/pAG-s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:notes "Pattern is non-repeatable: this is a single-site design defect in AG.20's own named deliverable (DaemonRemoteSendRouter::deliver_remote_send), not a code pattern instantiated elsewhere in the ladder, so sweep_scope is restricted to feature/pAG-s20-move-deferred-policy-out-of-transport and no cross-branch grep sweep is warranted. Ladder position: s20 (origin, head 50572166) is where the defect was introduced/confirmed by arch-qa. s21 (head 56fdcdef) is currently a merge-forward-plus-active-dev branch (dev in progress per team-lead) that already contains s20's commits and therefore already carries this defect forward unchanged; it has not yet landed its own independent fix. s22-25 (feature/pAG-s22 through feature/pAG-s25) are all still pinned at baseline 03c873fc (not started) and have not picked up the AG.20 commits yet, so the defect is not yet present there -- not-yet-applicable, re-check when those branches pick up s20/s21 commits. Per team fix-dispatch policy (fix dispatch targets latest sprint branch, never integrate; merge-forward closes lower occurrences -- see feedback_fix_dispatch_latest_branch and feedback_fix_dispatch_strict_earliest_order), promote_to_branch is set to the highest currently-open branch, feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef. Fix must introduce genuine independent decision logic at the boundary::RemoteSendRouter layer (e.g. actual deferred-vs-terminal policy evaluation owned by the boundary crate rather than a relabeling passthrough of transport's classify_error output) on s21, then merge-forward is not applicable upstream (s20 is earlier in the ladder) -- instead s21 must carry its own fix and s20 remains open until reconciled; if s20 itself is still an active target for direct fix per team fix-dispatch-earliest-order policy, team-lead should confirm whether the fix lands on s20 directly (earliest branch with the defect) with subsequent merge-forward through s21, consistent with 'strict earliest-to-latest branch order' policy, rather than only on s21. This qa-triage record defers that branch-choice tie-break to team-lead's dispatch decision but records the correlation facts needed to make it: origin=s20 @ 50572166, currently-open-and-latest=s21 @ 56fdcdef, not-yet-started=s22-25 @ 03c873fc." .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-006/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 103 ;
+  triage:snippet "impl boundary::RemoteSendRouter for DaemonRemoteSendRouter { fn deliver_remote_send(...) -> Result<boundary::RemoteSendDeliveryOutcome, AtmError> { let outcome = self.cross_host_delivery.deliver_remote(...).map_err(...)?; Ok(match outcome { SendOutcome::Delivered(r) => RemoteSendDeliveryOutcome::Delivered(r), SendOutcome::Deferred{receipt_message_id,error} => RemoteSendDeliveryOutcome::Deferred{receipt_message_id,error}, SendOutcome::OutcomeUnknown{receipt_message_id,error} => RemoteSendDeliveryOutcome::OutcomeUnknown{receipt_message_id,error}, SendOutcome::RejectedTerminal(e) => RemoteSendDeliveryOutcome::RejectedTerminal(e) }) } } -- 1:1 field passthrough, no independent decision logic; all deciding happens in transport's classify_error." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/56fdcdef>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/pAG-s22/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 22 ;
+  triage:notStarted true .
+
+<urn:atm:triage:worktree/pAG-s23/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 23 ;
+  triage:notStarted true .
+
+<urn:atm:triage:worktree/pAG-s24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 24 ;
+  triage:notStarted true .
+
+<urn:atm:triage:worktree/pAG-s25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 25 ;
+  triage:notStarted true .

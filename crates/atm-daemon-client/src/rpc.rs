@@ -150,8 +150,7 @@ impl RpcEnvelope {
 mod tests {
     use super::{MessageKind, RpcEnvelope, RpcHeader};
     use crate::wire::{
-        RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
-        request_from_frame_payload,
+        RequestEnvelope, ResponseEnvelope, next_request_id, request_from_frame_payload,
     };
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
@@ -314,7 +313,7 @@ mod tests {
 
     #[test]
     fn rpc_envelope_round_trips_response_envelopes() {
-        let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+        let response = ResponseEnvelope::Send(SendOutcome {
             action: atm_core::types::CommandAction::Send,
             team: RPC_TEST_TEAM.parse().expect("team"),
             agent: RPC_TEST_QUALITY_MGR.parse().expect("agent"),
@@ -328,7 +327,7 @@ mod tests {
             message: Some("body".to_string()),
             warnings: Vec::new(),
             dry_run: false,
-        }));
+        });
 
         let request_id = next_request_id();
         let envelope = RpcEnvelope::encode_response(request_id, response.clone()).expect("encode");
@@ -336,7 +335,7 @@ mod tests {
 
         assert_eq!(decoded_request_id, request_id);
         match decoded {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(decoded)) => {
+            ResponseEnvelope::Send(decoded) => {
                 assert_eq!(decoded.team.to_string(), RPC_TEST_TEAM);
                 assert_eq!(decoded.agent.to_string(), RPC_TEST_QUALITY_MGR);
                 assert_eq!(decoded.sender.to_string(), ROLE_TEAM_LEAD);

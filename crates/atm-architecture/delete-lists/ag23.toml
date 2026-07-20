@@ -1,0 +1,48 @@
+sprint = "AG.23"
+description = "Remove synthetic deferred-receipt construction from daemon dispatch so code returns delivery facts instead of daemon-authored mailbox receipts."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-daemon/src/composition.rs",
+  "crates/atm-daemon/src/peer_transport/client_helpers.rs",
+  "crates/atm-daemon/src/peer_transport/config_helpers.rs",
+  "crates/atm-daemon/src/peer_transport/delivery.rs",
+  "crates/atm-daemon/src/peer_transport/mod.rs",
+  "crates/atm-daemon/src/peer_transport/replay_persistence.rs",
+  "crates/atm-daemon/src/peer_transport/replay_resume_worker.rs",
+  "crates/atm-daemon/src/peer_transport/security.rs",
+  "crates/atm-daemon/src/peer_transport/server.rs",
+  "crates/atm-daemon/src/peer_transport/server_reload.rs",
+  "crates/atm-daemon/src/peer_transport/tests.rs",
+  "crates/atm-daemon/src/peer_transport/tests/authorization.rs",
+  "crates/atm-daemon/src/peer_transport/tests/harness.rs",
+  "crates/atm-daemon/src/peer_transport/tests/peer_listener.rs",
+  "crates/atm-daemon/src/peer_transport/tests/transport_client.rs",
+  "crates/atm-daemon/src/peer_transport/tests_transport.rs",
+  "crates/atm-daemon/src/peer_transport/types.rs",
+  "docs/plans/phase-AG/plan-phase-AG.md",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon/src/composition.rs",
+  "crates/atm-daemon/src/peer_transport.rs",
+  "docs/plans/phase-AG/plan-phase-AG.md",
+]
+
+forbidden_literals = [
+  "persist_outcome_unknown_request",
+  "resume_pending_replay",
+  "resume_startup_replay",
+  "final sender-inbox receipt",
+  "final delivery/failure receipt lands in sender inbox",
+  "sender receipt synthesis",
+  "deferred-receipt",
+]
+
+forbidden_regexes = [
+  "persist_outcome_unknown_request\\s*\\(",
+  "resume_pending_replay\\s*\\(",
+  "resume_startup_replay\\s*\\(",
+  "final sender[- ]inbox receipt",
+  "sender[- ]receipt (closure|synthesis|obligation)",
+]

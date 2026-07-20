@@ -1,0 +1,119 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG18-QA-006>
+  a triage:Finding ;
+  triage:findingId "AG18-QA-006" ;
+  triage:title "stale signature in doc sample" ;
+  triage:description "Documentation samples in sprint-AG18.md (line 269) and sprint-AG21.md (line 77) show an Explicit Code Sample with signature: fn execute_outbound_send_with_runtime_and_post_send_emitter(dispatcher: &impl boundary::OutboundSendDispatcher, request: SendRequest, post_send_emitter: &dyn boundary::PostSendEmitter) -> Result<ResponseEnvelope, AtmError>. The trait parameter 'dispatcher: &impl boundary::OutboundSendDispatcher' does not exist in the actual implementation. The real implemented function in crates/atm-core/src/send/mod.rs takes different parameters without this trait-based dispatcher. The documented signature is stale and should be updated to match the actual implementation signature. Correlated finding: ATM-QA-005.ttl covers the same doc-sample staleness context. This is a doc-only fix that should land on the highest open branch (s25) before phase merge." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:category "documentation-signature-mismatch" ;
+  triage:severity "minor" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG18-QA-006/pAG-s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:notes "Followup pass confirms finding is STILL OPEN on AG.21 as reported by AG21-QA-2 (PR #580, commit bf96dc86). Sweep across s21-s25 confirms stale dispatcher trait parameter persists in documentation sample across all branches. This is a pure documentation fix with no code impact. Recommended fix: update sprint-AG18.md line 269 and sprint-AG21.md line 77 to show the actual implementation signature (without the non-existent OutboundSendDispatcher trait parameter). Fix should land on s25 (highest open branch) for merge-forward closure." .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "fn execute_outbound_send_with_runtime_and_post_send_emitter(dispatcher: &impl boundary::OutboundSendDispatcher, request: SendRequest, post_send_emitter: &dyn boundary::PostSendEmitter) -> Result<ResponseEnvelope, AtmError>; -- stale signature: dispatcher parameter does not exist in actual implementation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "same stale signature carried forward from s21 (dispatcher parameter still does not exist)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "same stale signature carried forward from s22 (dispatcher parameter still does not exist)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "same stale signature carried forward from s23 (dispatcher parameter still does not exist)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG18-QA-006/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG18.md" ;
+  triage:line 269 ;
+  triage:snippet "same stale signature carried forward (dispatcher parameter still does not exist in actual implementation)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

@@ -9,54 +9,120 @@
   triage:category "architecture-duplication" ;
   triage:phaseId "phase-AG" ;
   triage:triageMode "initial_pass" ;
-  triage:repeatable true ;
-  triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
   triage:severity "important" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-18T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/3> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s15/4caa741e> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s21/758732cd> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s25/3eab4e6e> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-AG/23bdc60e> .
 
-<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/1>
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 8 ;
   triage:snippet "direct_delivery::deliver_direct_messages_with_runtime_and_post_send_emitter," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "4caa741e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:fixedReason "direct_delivery.rs deleted and unified into dispatch_delivery routing logic" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
 
-<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/2>
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 45 ;
   triage:snippet "deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "4caa741e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:fixedReason "direct_delivery.rs deleted and unified into dispatch_delivery routing logic" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
 
-<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s15/3>
+<urn:atm:triage:occurrence/CROSSHOST-UNIFY-4/pAG-s18/3>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/direct_delivery.rs" ;
   triage:line 10 ;
   triage:snippet "pub fn deliver_direct_messages_with_runtime_and_post_send_emitter(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "4caa741e" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s15/4caa741e> .
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:fixedReason "direct_delivery.rs deleted entirely; module unified into dispatch_delivery" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
 
-<urn:atm:triage:worktree/pAG-s15/4caa741e>
+<urn:atm:triage:worktree/pAG-s18/e46c3a6d>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAG-s15-othermac-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s15-othermac-smoke" ;
-  triage:headSha "4caa741e" ;
-  triage:orderIndex 1 .
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/758732cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "758732cd" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/pAG-s25/3eab4e6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "3eab4e6e" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/integrate-AG/23bdc60e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "23bdc60e" ;
+  triage:orderIndex 100 .

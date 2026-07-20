@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-007" ;
+  triage:title "AG-VAL-016/017/018 localhost validation evidence PENDING, no evidence links" ;
+  triage:description "Sprint AG.12 named deliverables AG-VAL-016 (unauthorized rejection evidence), AG-VAL-017 (full-function success evidence), and AG-VAL-018 (transport-security disposition) all remain PENDING in docs/plans/phase-AG/cross-host-smoke-checklist.md with no attached evidence (no transcripts, logs, retained artifacts) anywhere in the repo." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-17T05:59:12Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/AG12/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG12/34fe27b7> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:occurrence/ATM-QA-007/AG12/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 44 ;
+  triage:snippet "| AG-VAL-016 | unauthorized localhost rejection | PENDING |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:occursIn <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:occurrence/ATM-QA-007/AG12/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 45 ;
+  triage:snippet "| AG-VAL-017 | localhost full-function success evidence | PENDING |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:occursIn <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:occurrence/ATM-QA-007/AG12/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/cross-host-smoke-checklist.md" ;
+  triage:line 46 ;
+  triage:snippet "| AG-VAL-018 | localhost transport-security disposition | PENDING |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:occursIn <urn:atm:triage:worktree/AG12/34fe27b7> .
+
+<urn:atm:triage:worktree/AG12/34fe27b7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s12-localhost-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s12-localhost-proof" ;
+  triage:headSha "34fe27b7" ;
+  triage:orderIndex 12 .

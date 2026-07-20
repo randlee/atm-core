@@ -66,7 +66,7 @@ fn dispatcher_loopback_send_round_trips_through_peer_listener_into_self_inbox() 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch loopback send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+    let ResponseEnvelope::Send(outcome) = response else {
         panic!("expected send response");
     };
     assert_eq!(outcome.agent.as_str(), "qa-a");
@@ -348,7 +348,7 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("dispatch secure loopback send");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = response else {
+    let ResponseEnvelope::Send(outcome) = response else {
         panic!("expected send response");
     };
     assert_eq!(outcome.agent.as_str(), "qa-a");
@@ -404,7 +404,7 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
             "ack from secure localhost",
         ))
         .expect("ack over secure localhost");
-    let ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) = ack else {
+    let ResponseEnvelope::Ack(outcome) = ack else {
         panic!("expected ack response");
     };
     assert!(!outcome.reply_message_id.to_string().is_empty());

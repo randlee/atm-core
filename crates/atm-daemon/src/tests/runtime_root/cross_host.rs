@@ -1,6 +1,6 @@
 use super::*;
 use atm_core::boundary::RequestDispatcher;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::schema::AgentMember;
 use atm_core::send::{SendMessageSource, SendOutcome, SendRequest};
@@ -619,7 +619,7 @@ fn send_compose(caller: &CallerContext<'_>, spec: SendSpec<'_>) -> SendOutcome {
         .dispatch(RequestEnvelope::Send(Box::new(request)))
         .expect("send request should succeed")
     {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("unexpected send response: {other:?}"),
     }
 }
@@ -681,7 +681,7 @@ fn send_ack_over_local_ipc(
     )
     .expect("ack over local ipc")
     {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        ResponseEnvelope::Ack(outcome) => outcome,
         other => panic!("unexpected local ipc ack response: {other:?}"),
     }
 }

@@ -37,13 +37,6 @@ pub use runtime_status::{
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
-/// Shared protocol send-shaped response envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendResponseEnvelope {
-    Sent(SendOutcome),
-    Acknowledged(AckOutcome),
-}
-
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
@@ -60,7 +53,10 @@ pub enum RequestEnvelope {
 /// Shared protocol response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseEnvelope {
-    Send(SendResponseEnvelope),
+    /// Result of one canonical send-shaped request.
+    Send(SendOutcome),
+    /// Caller-facing acknowledgement result. The request and wire message kind remain send-shaped.
+    Ack(AckOutcome),
     CompatibilityVerdict(CompatibilityVerdict),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
@@ -755,7 +751,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
 
 fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
     match response {
-        ResponseEnvelope::Send(_) => MessageKind::SendResponse,
+        ResponseEnvelope::Send(_) | ResponseEnvelope::Ack(_) => MessageKind::SendResponse,
         ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
         ResponseEnvelope::List(_) => MessageKind::ListResponse,

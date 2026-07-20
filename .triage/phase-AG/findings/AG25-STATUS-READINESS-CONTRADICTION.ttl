@@ -1,0 +1,354 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG25-STATUS-READINESS-CONTRADICTION>
+  a triage:Finding ;
+  triage:findingId "AG25-STATUS-READINESS-CONTRADICTION" ;
+  triage:title "sprint doc claims status:complete while readiness.md and its own execution_status contradict it" ;
+  triage:description "AG.25 sprint doc frontmatter declares status: complete, but its own execution_status field says not_started. Readiness.md marks AG.25 as PENDING/TBD with no candidate commit. The contradiction is semantic: status:complete is ambiguous when execution_status:not_started. Related to companion findings ATM-QA-AG25-004/005 (req-qa: frontmatter self-contradiction and stale line-citations, both important). Hard dependency on AG.18-24 merged cannot be confirmed from readiness.md as currently written." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s18/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s18/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s18/e46c3a6d> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s19/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s19/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s20/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s20/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s21/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s21/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s22/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s22/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s23/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s23/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s24/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s24/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 4 ;
+  triage:snippet "status: complete" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s25/2>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 5 ;
+  triage:snippet "execution_status: not_started" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/AG25-STATUS-READINESS-CONTRADICTION/s25/3>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/readiness.md" ;
+  triage:line 51 ;
+  triage:snippet "AG.25 | PENDING | TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:worktree/pAG-s18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .

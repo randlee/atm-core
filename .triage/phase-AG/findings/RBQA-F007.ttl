@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F007>
+  a triage:Finding ;
+  triage:findingId "RBQA-F007" ;
+  triage:title "no lint gate exists -- 0/4 enforcement surfaces match" ;
+  triage:description "No mechanical CI/lint rule pins SendResponseEnvelope::{Sent,Acknowledged} construction to a single call site or blocks a second acknowledges_message_id-branching decision point from appearing. AG21-QA-2 (PR #580, commit bf96dc86) confirms this finding is STILL OPEN on AG.21 (important, not blocking): no lint/CI gate exists for this pattern, 0 of 4 expected enforcement surfaces match. Followup sweep across AG.18-AG.25 confirms no mechanical enforcement has been added in any downstream branch." ;
+  triage:category "RBQA" ;
+  triage:phaseId "phase-AG" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:isFindingType "process" ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:sourceVerdictRef "ATM-message-01KXXK928XSE7K7PAK56WP1HNF" ;
+  triage:sourcePRRef "https://github.com/randlee/atm-core/pull/580#issuecomment-5016482027" ;
+  triage:highest_open_branch "AG.25" ;
+  triage:promote_to_branch "AG.25" ;
+  triage:notes "Recommends a new lint/CI gate rather than a code fix. arch-inj's lint framework (worktree feature/pQ-lint-tools) may be the right home if/when actioned, but do not assign there during triage. This is a meta-finding about missing mechanical enforcement of a pattern constraint. Finding persists across all AG.18-AG.25 branches; no fix has been implemented." ;
+  triage:relatedContext "Second consecutive sprint (AG.20, AG.21) where file relocation breaks brittle rg-check targets; mechanical enforcement would have caught this during static analysis before dispatch. Followup pass on AG.22-AG.25 shows finding still open with no added enforcement surface." .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.20" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.21" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 21 ;
+  triage:notes "QA verdict issued on this branch; finding confirmed STILL OPEN" .
+
+<urn:atm:triage:worktree/AG22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.22" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:finding/RBQA-F007>
+  triage:openOn <urn:atm:triage:worktree/AG18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/AG22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/c245c2ea> .

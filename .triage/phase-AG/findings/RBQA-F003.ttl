@@ -1,0 +1,115 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003" ;
+  triage:title "AG.23's own sprint-doc retention condition for resume_pending_replay is unmet by the actual diff" ;
+  triage:description "AG.23's sprint-doc text conditions retaining resume_pending_replay on two things being true: (1) replay ownership remains above transport, and (2) no sender receipt semantics survive. Receipt-semantics half is met; the 'above transport' half is NOT — the method still lives fully inside peer_transport/mod.rs. This is the sprint's own stated acceptance condition for keeping this code, unmet by its own diff. Overlaps conceptually with carry-forward findings RBQA-F002-of-AG22 (resume_pending_replay owning an independent endpoint-resolution path via resolve_replay_endpoint) and RSH-003 (unguarded ? on resolve_replay_endpoint) — both already tracked open from AG.22. Determine whether RBQA-F003 is the same root defect as RBQA-F002/RSH-003 (i.e. resume_pending_replay's location) or a distinct scope-claim issue (the sprint doc's own wording vs the diff)." ;
+  triage:category "RBQA" ;
+  triage:severity "critical" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AG23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AG24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/AG25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/82f38708> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/0dd783d4> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG25/03c873fc> ;
+  triage:relatedFinding "AG22-RBQA-F002" ;
+  triage:relatedFinding "AG22-RSH-003" .
+
+<urn:atm:triage:occurrence/RBQA-F003/AG23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 242 ;
+  triage:snippet "fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.23" ;
+  triage:headSha "82f38708" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/82f38708> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AG24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 242 ;
+  triage:snippet "fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.24" ;
+  triage:headSha "0dd783d4" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/0dd783d4> .
+
+<urn:atm:triage:occurrence/RBQA-F003/AG25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/mod.rs" ;
+  triage:line 242 ;
+  triage:snippet "fn resume_pending_replay(&self) -> Result<ReplayResumeSummary, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/03c873fc> .
+
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.20" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/5ba8c6fe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.21" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "5ba8c6fe" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG22/0dac5ed2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.22" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "0dac5ed2" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/82f38708>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82f38708" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/0dd783d4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "0dd783d4" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 25 .

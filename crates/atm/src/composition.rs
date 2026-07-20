@@ -17,9 +17,7 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{
-    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
@@ -271,7 +269,7 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+            ResponseEnvelope::Send(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
                     action: action_name("send"),
@@ -300,7 +298,7 @@ impl<'a> CliComposition<'a> {
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
+            ResponseEnvelope::Ack(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: action_name("ack"),

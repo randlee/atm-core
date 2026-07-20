@@ -1,0 +1,33 @@
+sprint = "AG.24"
+description = "Stop transport from mutating request shape before send by collapsing to one send-shaped wire family."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-core/src/protocol.rs",
+  "crates/atm-core/src/transport/testing.rs",
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm/src/composition.rs",
+  "crates/atm-graft/src/lib.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-core/src/protocol.rs",
+  "crates/atm-core/src/transport/testing.rs",
+  "crates/atm-daemon/src/runtime_health.rs",
+  "crates/atm/src/composition.rs",
+  "crates/atm-graft/src/lib.rs",
+]
+
+forbidden_literals = [
+  "SendRequestEnvelope",
+  "SendResponseEnvelope",
+  "SendComposeRequest",
+  "SendAcknowledgeRequest",
+  "SendSentResponse",
+  "SendAcknowledgedResponse",
+]
+
+forbidden_regexes = [
+  "RequestEnvelope::Send\\(SendRequestEnvelope::",
+  "ResponseEnvelope::Send\\(SendResponseEnvelope::",
+]

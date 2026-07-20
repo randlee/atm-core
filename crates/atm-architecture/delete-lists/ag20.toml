@@ -1,0 +1,75 @@
+sprint = "AG.20"
+description = "Move deferred/retry/replay policy out of peer transport so transport returns transport facts only."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-daemon/src/peer_transport/client_helpers.rs",
+  "crates/atm-daemon/src/peer_transport/config_helpers.rs",
+  "crates/atm-daemon/src/peer_transport/delivery.rs",
+  "crates/atm-daemon/src/peer_transport/mod.rs",
+  "crates/atm-daemon/src/peer_transport/replay_persistence.rs",
+  "crates/atm-daemon/src/peer_transport/replay_resume_worker.rs",
+  "crates/atm-daemon/src/peer_transport/security.rs",
+  "crates/atm-daemon/src/peer_transport/server.rs",
+  "crates/atm-daemon/src/peer_transport/server_reload.rs",
+  "crates/atm-daemon/src/peer_transport/tests.rs",
+  "crates/atm-daemon/src/peer_transport/tests/authorization.rs",
+  "crates/atm-daemon/src/peer_transport/tests/harness.rs",
+  "crates/atm-daemon/src/peer_transport/tests/peer_listener.rs",
+  "crates/atm-daemon/src/peer_transport/tests/transport_client.rs",
+  "crates/atm-daemon/src/peer_transport/tests_transport.rs",
+  "crates/atm-daemon/src/peer_transport/types.rs",
+  "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/delivery_execution.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+  "crates/atm-core/src/send/outcome.rs",
+  "crates/atm-core/src/send/hook.rs",
+  "crates/atm-core/src/ack/mod.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-daemon/src/peer_transport.rs",
+  "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+]
+
+forbidden_literals = [
+  "AttemptFailureKind",
+  "AttemptFailure",
+  "DeliveryRetryState",
+  "DeliveryLoopDecision",
+  "handle_send_failure",
+  "handle_retryable_failure",
+  "handle_terminal_failure",
+  "wait_for_retry_backoff",
+  "classify_io_error",
+  "persist_replay_request",
+  "persist_outcome_unknown_request",
+  "resume_pending_replay",
+  "replay_store",
+  "remote_retry_budget",
+  "DeliveryPersistenceDisposition",
+  "DeliveryPersistenceResult",
+  "DeliveryPlanDisposition",
+  "DeliveryPlanKind",
+  "LogicalMessage",
+  "DeliveryTarget",
+  "DeliveryPlan",
+  "send_to_endpoint",
+  "peer_read_deadline_error",
+  "peer_write_deadline_error",
+  "peer_flush_error",
+  "peer_closed_before_response_error",
+  "peer_response_decode_error",
+  "peer_response_id_mismatch_error",
+]
+
+forbidden_regexes = [
+  "enum\\s+AttemptFailureKind\\b",
+  "struct\\s+AttemptFailure\\b",
+  "enum\\s+DeliveryRetryState\\b",
+  "enum\\s+DeliveryLoopDecision\\b",
+  "fn\\s+handle_(send_failure|retryable_failure|terminal_failure)\\b",
+  "fn\\s+wait_for_retry_backoff\\b",
+  "fn\\s+classify_io_error\\b",
+]

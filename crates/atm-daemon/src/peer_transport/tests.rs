@@ -17,7 +17,7 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmErrorCode;
 use atm_core::protocol::{
     HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
-    RuntimeMemberState, RuntimeReadinessState, SendResponseEnvelope, TeamMemberHeartbeatRequest,
+    RuntimeMemberState, RuntimeReadinessState, TeamMemberHeartbeatRequest,
     TeamMemberHeartbeatResponse,
 };
 use atm_core::read::ReadQuery;

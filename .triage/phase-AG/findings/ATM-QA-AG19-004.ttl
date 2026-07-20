@@ -1,0 +1,173 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-004" ;
+  triage:title "sprint-doc sequencing wording misdescribes merge-forward mechanics" ;
+  triage:description "AG21-QA-2 (PR #580, commit bf96dc86) confirms this finding remains OPEN on AG.21. Sprint-doc Hard Dependencies wording across AG.19-AG.25 uses ambiguous language ('merged', 'merged forward into this branch') that misdescribes the actual build dependency model. The actual model: sprints proceed back-to-back on unmerged branch tips, with arch-ctm performing merge-forwards from branch to branch. The sprint-doc language must explicitly describe this flow and account for carry-forward of open defects. AG.21's partial clarification (changed from '- AG.20 merged' to '- AG.20 merged forward into this branch', line 34) does not meet req-qa's standard: wording must explicitly state commits and open defects (e.g., 'AG.20's commits present in this branch's ancestry; AG.20's open defects are NOT presumed resolved unless explicitly closed'). Similar issues present on AG.19, AG.20, AG.22, AG.23, AG.24, AG.25." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation/clarity" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "none" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T14:32:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s25/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/bf96dc86> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s23/a13fc219> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s25/c245c2ea> ;
+  triage:notes """Followup Pass Confirmation (2026-07-19):
+
+AG21-QA-2 verdict confirms this finding remains blocking on AG.21. Verification of all eight ordered worktrees (AG.18-AG.25) shows:
+
+AG.19 (line 30): '- AG.18 merged' (ambiguous, no clarification)
+AG.20 (line 30): '- AG.19 merged' (ambiguous, no clarification)
+AG.21 (line 34): '- AG.20 merged forward into this branch' (partial clarification, req-qa rates insufficient)
+AG.22 (line 34): '- AG.21 merged' (ambiguous, no clarification)
+AG.23 (line 35): '- AG.22 merged' (ambiguous, no clarification)
+AG.24 (line 35): '- AG.23 merged' (ambiguous, no clarification)
+AG.25 (lines 30-33): Multiple entries '- AG.18/19/20/21 merged' (all ambiguous, no clarification)
+
+All occurrences are live across all seven branches through AG.25. AG.21's partial fix insufficient per req-qa's blocking standard.
+
+Promoted to feature/pAG-s25-live-two-daemon-proof (highest open branch) for comprehensive language correction across all affected sprint docs to be merge-forwarded phase-wide.""" .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG19.md" ;
+  triage:line 30 ;
+  triage:snippet "- AG.18 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/5d20ca5a> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG20.md" ;
+  triage:line 30 ;
+  triage:snippet "- AG.19 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG21.md" ;
+  triage:line 34 ;
+  triage:snippet "- AG.20 merged forward into this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/bf96dc86> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG22.md" ;
+  triage:line 34 ;
+  triage:snippet "- AG.21 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG23.md" ;
+  triage:line 35 ;
+  triage:snippet "- AG.22 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s23/a13fc219> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG24.md" ;
+  triage:line 35 ;
+  triage:snippet "- AG.23 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s24/81298e32> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-004/pAG-s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-AG/sprint-AG25.md" ;
+  triage:line 30 ;
+  triage:snippet "- AG.18 merged, - AG.19 merged, - AG.20 merged, - AG.21 merged" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s25/c245c2ea> .
+
+<urn:atm:triage:worktree/pAG-s19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAG-s21/bf96dc86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "bf96dc86" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAG-s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAG-s23/a13fc219>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "a13fc219" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAG-s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAG-s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 7 .

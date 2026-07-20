@@ -5,7 +5,7 @@ use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -156,7 +156,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         .expect("send response");
 
     let outcome = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
     assert_eq!(outcome.warnings.len(), 1);
@@ -184,7 +184,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         ))
         .expect("source send response");
     let source_message_id = match source_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
+        ResponseEnvelope::Send(outcome) => outcome.message_id,
         other => panic!("expected send response, got {other:?}"),
     };
 
@@ -203,7 +203,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         .expect("ack response");
 
     let ack_outcome = match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
+        ResponseEnvelope::Ack(outcome) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
     assert_eq!(ack_outcome.warnings.len(), 1);
@@ -275,7 +275,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ))
         .expect("send response");
     let response = match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
 

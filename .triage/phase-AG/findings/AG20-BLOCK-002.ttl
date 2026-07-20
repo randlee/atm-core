@@ -1,0 +1,74 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG20-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AG20-BLOCK-002" ;
+  triage:title "Transport-owned outcome-decision logic survives renamed, not deleted" ;
+  triage:description "crates/atm-daemon/src/peer_transport/delivery.rs (lines 16-34, 91-107, 224-291) still decides deferred-vs-immediate delivery policy from inside the transport layer, despite AG.20's headline deliverable being exactly the removal of this policy from transport (see AG20-BLOCK-001: shared_outcome_policy/OutboundDeliveryDisposition/TransportAttemptResult were never implemented). SendOutcome::{Deferred, OutcomeUnknown, RejectedTerminal} (lines 22-31) and RemoteDeliveryDecision::DeferredRetry (lines 16-19) are the renamed successors of classify_io_error/handle_retryable_failure/handle_terminal_failure; classify_error (lines 256-288) and handle_immediate_wait_error (lines 224-253) still perform the same in-transport branch-on-AtmErrorCode policy decisions (RemoteDeliveryOutcomeUnknown -> OutcomeUnknown; ClientDaemonVersionIncompatible/AddressParseFailed/validation -> RejectedTerminal; DaemonUnavailable/timeout/default -> Deferred) that classify_io_error etc. performed before the rename. Confirmed by req-qa (ATM-QA-AG20-002/003), arch-qa (ARCH-002), ruthless-boundary-qa (RBQA-F001). Cross-reference: structurally the same class of defect as AG19-RBQA-F003 (divergent outcome classification) -- in both cases outcome-classification/disposition policy that should live in a shared boundary layer is instead re-implemented or retained inside a single call site (ack/mod.rs for AG19-RBQA-F003; peer_transport/delivery.rs here), rather than being extracted to a shared, transport-agnostic policy function. This is the 3rd consecutive ladder sprint (AG.19, AG.20, and the AG.19-carried regression visible through AG.21) exhibiting this exact rename-not-remove / re-implement-not-share pattern." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "repeatable sweep AG.19-AG.21 for transport-layer ownership of outcome/deferred/retry policy decisions -- confirmed present unchanged on feature/pAG-s20-move-deferred-policy-out-of-transport @ 50572166 and feature/pAG-s21-collapse-dispatch-routing @ 56fdcdef (s21 is a merge-forward of s20 with no new dev commits yet); feature/pAG-s19-delete-remote-ack-path @ 59225e0f pre-dates this file's rename and does not yet carry the renamed SendOutcome/RemoteDeliveryDecision/classify_error/handle_immediate_wait_error names but does carry the pre-rename classify_io_error/handle_retryable_failure/handle_terminal_failure equivalents, so the underlying transport-owns-policy defect is present there too under the old names; s22-25 remain pinned at baseline 03c873fc (not started, not yet branched forward past s20/s21)" ;
+  triage:category "boundary-violation" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-002/pAG-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG20-BLOCK-002/pAG-s21/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s21/56fdcdef> ;
+  triage:crossReference "AG19-RBQA-F003 (divergent Deferred/OutcomeUnknown handling between atm-daemon dispatch_send and atm-core's execute_ack_reply_plan, introduced at AG.19 commit 59225e0f) is the same class of defect as this finding -- both are instances of outcome-classification/disposition policy being re-implemented at an individual call site instead of extracted into one shared, transport-agnostic boundary function. AG19-RBQA-F003 already names AG20-BLOCK-002 as its own cross-reference and recommends resolving both together on AG.21 since AG.21's stated scope (collapse dispatch routing) is the natural landing spot for a shared-helper fix that would close both findings simultaneously. See also AG20-BLOCK-001: the missing shared_outcome_policy(attempt: TransportAttemptResult) -> OutboundDeliveryDisposition deliverable from sprint-AG20.md is the correct extraction target for the policy logic identified in this finding -- AG20-BLOCK-001 (deliverable never implemented) and AG20-BLOCK-002 (old policy logic still transport-resident) are two views of the same unfinished refactor and should be closed by the same fix." ;
+  triage:notes "highest_open_branch = feature/pAG-s21-collapse-dispatch-routing (56fdcdef): it is the latest branch in the AG.18->AG.19->AG.20->AG.21 merge-forward chain, is dev-in-progress, and carries the defect unchanged (confirmed via grep of SendOutcome::{Deferred,OutcomeUnknown,RejectedTerminal}, RemoteDeliveryDecision::DeferredRetry, classify_error, handle_immediate_wait_error in crates/atm-daemon/src/peer_transport/delivery.rs at identical line numbers to s20). promote_to_branch = same, matching AG19-RBQA-F003's and AG20-BLOCK-001's promotion target. s22-25 (03c873fc) are siblings off integrate/phase-AG, not descendants of AG.19-21, and have not branched forward past s20/s21 -- they will inherit this defect only once AG.21 (or a later merge-forward) lands on them; re-check when those sprints branch forward. Fix must land as (or alongside) the shared_outcome_policy extraction demanded by AG20-BLOCK-001: delivery.rs's classify_error/handle_immediate_wait_error and SendOutcome/RemoteDeliveryDecision policy branching must be replaced by calls into the shared boundary function rather than retaining transport-local policy under new names. Do not mark closed without req-qa/arch-qa/ruthless-boundary-qa re-confirming that delivery.rs no longer branches on AtmErrorCode to decide deferred-vs-immediate-vs-terminal disposition, and that the decision is instead delegated to a shared, transport-agnostic function." .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-002/pAG-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 16 ;
+  triage:snippet "enum RemoteDeliveryDecision { HealthyImmediateWait, DeferredRetry } (16-19); enum SendOutcome { Delivered(..), Deferred{..}, RejectedTerminal(..), OutcomeUnknown{..} } (22-31); fn handle_immediate_wait_error(...) calls Self::classify_error(&error) (224-253); fn classify_error(error: &AtmError) -> SendOutcome branches on AtmErrorCode::{RemoteDeliveryOutcomeUnknown, ClientDaemonVersionIncompatible, AddressParseFailed, DaemonUnavailable}/is_validation()/is_timeout() to decide Deferred vs RejectedTerminal vs OutcomeUnknown (256-288)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s20/50572166> .
+
+<urn:atm:triage:occurrence/AG20-BLOCK-002/pAG-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 16 ;
+  triage:snippet "identical to pAG-s20 occurrence -- s21 (56fdcdef) is a merge-forward of s20 (50572166) with no new dev commits touching delivery.rs; RemoteDeliveryDecision::DeferredRetry, SendOutcome::{Deferred,OutcomeUnknown,RejectedTerminal}, classify_error, and handle_immediate_wait_error all present unchanged at the same line numbers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s21/56fdcdef> .
+
+<urn:atm:triage:worktree/pAG-s18/70cce097>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "70cce097" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAG-s19/59225e0f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "59225e0f" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/pAG-s20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/pAG-s21/56fdcdef>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "56fdcdef" ;
+  triage:orderIndex 21 .

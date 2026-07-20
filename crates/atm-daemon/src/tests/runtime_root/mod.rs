@@ -4,7 +4,7 @@ use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope, next_request_id,
+    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, next_request_id,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
@@ -39,16 +39,14 @@ pub(super) fn canonical_ack_request(
     body: &str,
 ) -> RequestEnvelope {
     RequestEnvelope::Send(Box::new(
-        prepare_ack_send_request(
-            AckRequest {
-                home_dir: home_dir.to_path_buf(),
-                current_dir: current_dir.to_path_buf(),
-                caller_identity: caller_identity.parse().expect("caller identity"),
-                caller_team: caller_team.parse().expect("caller team"),
-                message_id,
-                reply_body: body.to_string(),
-            },
-        )
+        prepare_ack_send_request(AckRequest {
+            home_dir: home_dir.to_path_buf(),
+            current_dir: current_dir.to_path_buf(),
+            caller_identity: caller_identity.parse().expect("caller identity"),
+            caller_team: caller_team.parse().expect("caller team"),
+            message_id,
+            reply_body: body.to_string(),
+        })
         .expect("ack send request"),
     ))
 }

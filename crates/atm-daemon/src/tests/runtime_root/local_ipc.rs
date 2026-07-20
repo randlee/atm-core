@@ -109,7 +109,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
     assert_eq!(response_id, request_id);
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
         }
         other => panic!("unexpected response: {other:?}"),
@@ -243,7 +243,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         .expect("dispatch write");
     let response: ResponseEnvelope = response.decode_body().expect("decode response");
     match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.requires_ack);
         }
@@ -421,7 +421,7 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "read send frame",
     );
     match send_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
+        ResponseEnvelope::Send(outcome) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
             assert!(outcome.requires_ack);
         }
@@ -479,8 +479,11 @@ fn local_ipc_runtime_round_trips_remote_target_send_read_and_ack_over_production
         "read ack frame",
     );
     match ack_response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-            assert!(!outcome.reply_message_id.to_string().is_empty());
+        ResponseEnvelope::Ack(outcome) => {
+            assert!(matches!(
+                outcome.reply_disposition,
+                atm_core::ack::AckReplyDisposition::Sent { .. }
+            ));
         }
         other => panic!("unexpected ack response: {other:?}"),
     }

@@ -16,7 +16,7 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -224,7 +224,7 @@ impl GraftClient {
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Send(Box::new(request)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
+            ResponseEnvelope::Send(outcome) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }
     }
@@ -240,7 +240,7 @@ impl AtmGraftClient for GraftClient {
         match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
             request,
         )?)))? {
-            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
+            ResponseEnvelope::Ack(outcome) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
         }
     }
@@ -600,7 +600,7 @@ mod tests {
                 match request {
                 CoreRequestEnvelope::Send(request)
                     if request.acknowledges_message_id.is_none() => Ok(
-                    CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+                    CoreResponseEnvelope::Send(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated(TEST_LEAD),
@@ -614,7 +614,7 @@ mod tests {
                         message: None,
                         warnings: Vec::new(),
                         dry_run: false,
-                    })),
+                    }),
                 ),
                 CoreRequestEnvelope::Peek(_) => {
                     Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
@@ -656,7 +656,7 @@ mod tests {
                 }
                 CoreRequestEnvelope::Send(request)
                     if request.acknowledges_message_id.is_some() => Ok(
-                    CoreResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
+                    CoreResponseEnvelope::Ack(
                         serde_json::from_value(json!({
                             "action": "ack",
                             "team": TEST_TEAM,
@@ -669,7 +669,7 @@ mod tests {
                             "warnings": [],
                         }))
                         .expect("ack outcome"),
-                    )),
+                    ),
                 ),
                 other => panic!("unexpected request: {other:?}"),
                 }

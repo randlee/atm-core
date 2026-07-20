@@ -1,0 +1,211 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG22-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AG22-RBQA-F001" ;
+  triage:title "Resolver/CrossHostDelivery traits still physically inside peer_transport module tree" ;
+  triage:description "The new resolver/CrossHostDelivery traits+impls are defined inside crates/atm-daemon/src/peer_transport/delivery.rs, itself a pub(crate) submodule of peer_transport (mod.rs:25) -- i.e. still physically inside the transport module tree, not a boundary structurally above/outside transport as sprint-AG22.md's own deliverable requires." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "RBQA" ;
+  triage:severity "critical" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-19T10:28:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG22-RBQA-F001/AG25/1> ;
+  triage:openOn <urn:atm:triage:worktree/AG18/e46c3a6d> ;
+  triage:openOn <urn:atm:triage:worktree/AG19/5d20ca5a> ;
+  triage:openOn <urn:atm:triage:worktree/AG20/50572166> ;
+  triage:openOn <urn:atm:triage:worktree/AG21/720b2737> ;
+  triage:openOn <urn:atm:triage:worktree/AG22/c5a79d89> ;
+  triage:openOn <urn:atm:triage:worktree/AG23/82a105d1> ;
+  triage:openOn <urn:atm:triage:worktree/AG24/03c873fc> ;
+  triage:openOn <urn:atm:triage:worktree/AG25/03c873fc> ;
+  triage:promoteTo <urn:atm:triage:worktree/AG25/03c873fc> .
+
+# AG.18 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.18" ;
+  triage:headSha "e46c3a6d" ;
+  triage:occursIn <urn:atm:triage:worktree/AG18/e46c3a6d> .
+
+# AG.19 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.19" ;
+  triage:headSha "5d20ca5a" ;
+  triage:occursIn <urn:atm:triage:worktree/AG19/5d20ca5a> .
+
+# AG.20 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 53 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.20" ;
+  triage:headSha "50572166" ;
+  triage:occursIn <urn:atm:triage:worktree/AG20/50572166> .
+
+# AG.21 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.21" ;
+  triage:headSha "720b2737" ;
+  triage:occursIn <urn:atm:triage:worktree/AG21/720b2737> .
+
+# AG.22 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.22" ;
+  triage:headSha "c5a79d89" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c5a79d89> .
+
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait RemoteEndpointResolver: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.22" ;
+  triage:headSha "c5a79d89" ;
+  triage:occursIn <urn:atm:triage:worktree/AG22/c5a79d89> .
+
+# AG.23 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.23" ;
+  triage:headSha "82a105d1" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/82a105d1> .
+
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait RemoteEndpointResolver: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.23" ;
+  triage:headSha "82a105d1" ;
+  triage:occursIn <urn:atm:triage:worktree/AG23/82a105d1> .
+
+# AG.24 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.24" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG24/03c873fc> .
+
+# AG.25 occurrences
+<urn:atm:triage:occurrence/AG22-RBQA-F001/AG25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport/delivery.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) trait CrossHostDelivery: boundary::sealed::Sealed + Send + Sync" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AG.25" ;
+  triage:headSha "03c873fc" ;
+  triage:occursIn <urn:atm:triage:worktree/AG25/03c873fc> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/AG18/e46c3a6d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.18" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "e46c3a6d" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/AG19/5d20ca5a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.19" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "5d20ca5a" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/AG20/50572166>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.20" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "50572166" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/AG21/720b2737>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.21" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "720b2737" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/AG22/c5a79d89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.22" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c5a79d89" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/AG23/82a105d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "82a105d1" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AG24/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AG25/03c873fc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AG.25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "03c873fc" ;
+  triage:orderIndex 25 .

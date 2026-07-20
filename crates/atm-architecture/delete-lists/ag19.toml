@@ -1,0 +1,36 @@
+sprint = "AG.19"
+description = "Delete the separate remote-ack execution path and force ack replies through the canonical outbound send path."
+min_net_crates_loc = -100
+
+scan_files = [
+  "crates/atm-core/src/ack/mod.rs",
+  "crates/atm/src/composition.rs",
+  "crates/atm-core/src/delivery_policy.rs",
+]
+
+allowed_changed_files = [
+  "crates/atm-core/src/ack/mod.rs",
+  "crates/atm/src/composition.rs",
+]
+
+forbidden_literals = [
+  "execute_remote_ack_reply_plan",
+  "AckReplyStateMachine",
+  "build_reply_delivery_plan",
+  "reply_post_send_messages",
+  "finalize_ack_outcome",
+  "finalize_suppressed_self_ack_outcome",
+  "finalize_sent_ack_outcome",
+  "AckReplyDisposition",
+  "route_send_request(&reply.reply_request)",
+]
+
+forbidden_regexes = [
+  "fn\\s+execute_remote_ack_reply_plan\\b",
+  "enum\\s+AckReplyDisposition\\b",
+  "struct\\s+FinalizeAckContext\\b",
+  "enum\\s+AckReplyStateMachine\\b",
+  "fn\\s+finalize_(ack_outcome|suppressed_self_ack_outcome|sent_ack_outcome)\\b",
+  "fn\\s+build_reply_delivery_plan\\b",
+  "fn\\s+reply_post_send_messages\\b",
+]

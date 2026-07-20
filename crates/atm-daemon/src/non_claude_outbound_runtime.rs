@@ -233,23 +233,21 @@ mod tests {
                 .lock()
                 .expect("requests")
                 .push((remote_host.as_str().to_string(), request));
-            let response = atm_core::ResponseEnvelope::Send(
-                atm_core::protocol::SendResponseEnvelope::Sent(atm_core::send::SendOutcome {
-                    action: atm_core::types::CommandAction::Send,
-                    team: atm_core::types::TeamName::from_validated(TEST_TEAM),
-                    agent: atm_core::types::AgentName::from_validated("recipient"),
-                    sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
-                    outcome: atm_core::send::SendCommandOutcome::Sent,
-                    message_id: AtmMessageId::new(),
-                    receipt_message_id: None,
-                    requires_ack: false,
-                    task_id: None,
-                    summary: None,
-                    message: None,
-                    warnings: Vec::new(),
-                    dry_run: false,
-                }),
-            );
+            let response = atm_core::ResponseEnvelope::Send(atm_core::send::SendOutcome {
+                action: atm_core::types::CommandAction::Send,
+                team: atm_core::types::TeamName::from_validated(TEST_TEAM),
+                agent: atm_core::types::AgentName::from_validated("recipient"),
+                sender: atm_core::types::AgentName::from_validated(TEST_SENDER),
+                outcome: atm_core::send::SendCommandOutcome::Sent,
+                message_id: AtmMessageId::new(),
+                receipt_message_id: None,
+                requires_ack: false,
+                task_id: None,
+                summary: None,
+                message: None,
+                warnings: Vec::new(),
+                dry_run: false,
+            });
             Ok(SendOutcome::Delivered(Box::new(response)))
         }
     }
