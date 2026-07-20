@@ -12,27 +12,28 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-AG19/pAG-s19/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "CLOSED per quality-mgr's AG19-FIX-1-QA-RECHECK-2 verdict, confirmed independently by req-qa and ruthless-boundary-qa: stale AckOutcome entry removed from boundaries/atm-graft/shared-client-consumer.toml response_types. NOTE: same pass missed adjacent stale SendRequestEnvelope/SendResponseEnvelope entries in the [contracts] block of the same file -- tracked separately as ATM-QA-AG19-R2-005, do not conflate." .
 
 <urn:atm:triage:occurrence/ARCH-002-AG19/pAG-s19/1>
   a triage:Occurrence ;
   triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
   triage:line 47 ;
   triage:snippet "response_types = [..., \"AckOutcome\", ...]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

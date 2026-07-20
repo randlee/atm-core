@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AG19-RBQA-R2-F001>
+  a triage:Finding ;
+  triage:findingId "AG19-RBQA-R2-F001" ;
+  triage:title "PostSendHookEvent.is_ack / LogicalMessage.is_ack hardcoded false at both production construction sites, breaking Acknowledge-kind hook/nudge template selection" ;
+  triage:description "ruthless-boundary-qa (AG19-FIX-1-QA-RECHECK-2, Important, repeatable): PostSendHookEvent.is_ack (and LogicalMessage.is_ack) is hardcoded false at both production construction sites in crates/atm-core/src/send/outcome.rs (build_send_delivery_plan, post_send_messages_from_persistence), even though finalize_send_outcome has request.acknowledges_message_id in scope and could set it correctly. This breaks Acknowledge-kind nudge/hook template selection -- a hidden-behavior regression. Does NOT affect ack-state correctness (verified separately as sound). Repeatable: needs a workspace-wide sweep of PostSendHookEvent/LogicalMessage construction sites for the same hardcoded-false pattern, not just these two." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace-wide sweep of PostSendHookEvent/LogicalMessage construction sites for hardcoded is_ack" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-R2-F001/pAG-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-R2-F001/pAG-s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "Newly discovered by AG19-FIX-1-QA-RECHECK-2 (ruthless-boundary-qa). Fix must wire request.acknowledges_message_id.is_some() into is_ack at both sites, then sweep the workspace for any other PostSendHookEvent/LogicalMessage construction site with the same hardcoded-false pattern." .
+
+<urn:atm:triage:occurrence/AG19-RBQA-R2-F001/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/outcome.rs" ;
+  triage:line 0 ;
+  triage:snippet "build_send_delivery_plan hardcodes PostSendHookEvent.is_ack = false despite request.acknowledges_message_id being in scope" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
+
+<urn:atm:triage:occurrence/AG19-RBQA-R2-F001/pAG-s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/outcome.rs" ;
+  triage:line 0 ;
+  triage:snippet "post_send_messages_from_persistence hardcodes LogicalMessage.is_ack = false, same pattern as build_send_delivery_plan" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
+
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:orderIndex 0 .

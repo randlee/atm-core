@@ -12,29 +12,29 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RBQA-F103/pAG-s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:notes "STILL OPEN per AG19-FIX-1-QA-RECHECK-1: relocated from crates/atm-core/src/dispatch_delivery.rs to crates/atm-daemon/src/runtime_health/dispatch_delivery.rs:62-67 (unchanged inline boolean expression, not extracted to a named function)." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "CLOSED per quality-mgr's AG19-FIX-1-QA-RECHECK-2 verdict, confirmed independently by req-qa and ruthless-boundary-qa: dispatch_delivery.rs's ack/send classifier is now the named function requires_acknowledgement_resolution()." .
 
 <urn:atm:triage:occurrence/AG19-RBQA-F103/pAG-s19/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs" ;
   triage:line 62 ;
   triage:lineEnd 67 ;
-  triage:snippet "inline boolean expression classifying ack-vs-plain-send requests, not extracted to a named function" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "extracted to named function requires_acknowledgement_resolution()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

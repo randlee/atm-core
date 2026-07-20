@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-R2-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-R2-004" ;
+  triage:title "docs/atm-daemon/protocol-icd.md Section 7.1/7.1.1 still documents the deleted AckRequest/AckOutcome wire contract" ;
+  triage:description "req-qa (AG19-FIX-1-QA-RECHECK-2, Blocking): docs/atm-daemon/protocol-icd.md Section 7.1 and 7.1.1 still document AckRequest/AckOutcome/SendRequestEnvelope/SendResponseEnvelope/send_acknowledge_request as the current wire contract. The actual current contract, per the AG.19 ack-path unification, is RequestEnvelope::Send(SendRequest) / ResponseEnvelope::Send(SendOutcome) with acknowledges_message_id as the ack discriminator. requirements.md names this ICD as the canonical daemon wire-contract doc, making this a real, blocking doc-drift defect -- same defect class as the now-closed ATM-QA-AG19-R1-001 (docs/architecture.md) but a different file that the R1 fix pass did not cover." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-daemon/protocol-icd.md sections 7.1 and 7.1.1" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R2-004/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "Newly discovered by AG19-FIX-1-QA-RECHECK-2 (req-qa). Do not conflate with the now-closed ATM-QA-AG19-R1-001 (docs/architecture.md) -- distinct file, same defect class, real remaining gap in the AG.19 doc-alignment sweep." .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-R2-004/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 0 ;
+  triage:snippet "Section 7.1/7.1.1 documents AckRequest/AckOutcome/SendRequestEnvelope/SendResponseEnvelope/send_acknowledge_request as current wire contract; actual contract is RequestEnvelope::Send(SendRequest)/ResponseEnvelope::Send(SendOutcome) with acknowledges_message_id" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
+
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:orderIndex 0 .

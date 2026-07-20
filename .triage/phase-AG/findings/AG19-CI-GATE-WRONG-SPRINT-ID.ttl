@@ -34,28 +34,28 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/check-ag-sprint-gates.sh, CI workflow invocation of the gate for PR #578" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-CI-GATE-WRONG-SPRINT-ID/pAG-s19/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:notes "arch-ctm's initial RCA (wrong base-SHA github.event.pull_request.base.sha vs documented ladder parent 12a45c6f) is RETRACTED per his follow-up message; do not dispatch that theory as the fix. The gate-prep-commit approach is preferred over ATM_ARCH_ALLOW_GATE_CHANGES=1 because it does not create a standing override any later sprint could reuse to bypass the gate legitimately-or-not." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "CLOSED per quality-mgr's AG19-FIX-1-QA-RECHECK-2 verdict (2026-07-20T05:11:33Z): CI now resolves the dotted 'AG.19' identifier, base=12a45c6f pinned, and quality-mgr independently ran `ATM_ARCH_ACTIVE_SPRINT=AG.19 bash scripts/check-ag-sprint-gates.sh AG.19 12a45c6f HEAD` against ef699b64 -> exit 0 PASS. Bootstrap-commit auto-detection (ca960772) confirmed legitimate; no ATM_ARCH_ALLOW_GATE_CHANGES bypass used. Confirmed independently by arch-qa and req-qa. arch-ctm's initial RCA (wrong base-SHA github.event.pull_request.base.sha vs documented ladder parent 12a45c6f) was RETRACTED per his follow-up message before this fix landed; the gate-prep-commit approach was used instead of ATM_ARCH_ALLOW_GATE_CHANGES=1." .
 
 <urn:atm:triage:occurrence/AG19-CI-GATE-WRONG-SPRINT-ID/pAG-s19/1>
   a triage:Occurrence ;
   triage:file "scripts/check-ag-sprint-gates.sh" ;
   triage:line 0 ;
   triage:snippet "CI invocation must pass sprint identifier 'AG.19' (dotted), and must land ag19.toml's own manifest addition in a gate-prep commit prior to the sprint's declared diff base rather than via ATM_ARCH_ALLOW_GATE_CHANGES=1" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

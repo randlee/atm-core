@@ -14,11 +14,11 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-004/pAG-s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:notes "STILL OPEN per AG19-FIX-1-QA-RECHECK-1: no fault-injection test found in mailbox_locking.rs or send/tests.rs covering finalize_acknowledgement_after_confirmed_send's local-commit-failure path (send/mod.rs:60-83)." .
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "STILL OPEN per AG19-FIX-1-QA-RECHECK-2 at ef699b64: no fault-injection test found in mailbox_locking.rs or send/tests.rs covering finalize_acknowledgement_after_confirmed_send's local-commit-failure path (send/mod.rs:60-83). Unchanged since RECHECK-1; arch-ctm's ef699b64 push did not add this test." .
 
 <urn:atm:triage:occurrence/AG19-RSH-004/pAG-s19/2>
   a triage:Occurrence ;
@@ -29,12 +29,12 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

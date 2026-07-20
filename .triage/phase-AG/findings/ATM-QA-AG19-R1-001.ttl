@@ -12,13 +12,14 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/architecture.md sections 6.3 and 18.4.1" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-20T04:45:00Z"^^xsd:dateTime ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "CLOSED per quality-mgr's AG19-FIX-1-QA-RECHECK-2 verdict (req-qa): docs/architecture.md now describes the unified SendRequest/acknowledges_message_id path; the old ack_mail<S>/AckOutcome section (sections 6.3 and 18.4.1) is gone. NOTE: a separate, distinct doc-drift finding of the same defect class was found this round in a different authoritative file -- see ATM-QA-AG19-R2-004 (docs/atm-daemon/protocol-icd.md) -- do not conflate; that file was not covered by this finding's original scope." .
 
 <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/1>
   a triage:Occurrence ;
@@ -26,11 +27,11 @@
   triage:line 1100 ;
   triage:lineEnd 1150 ;
   triage:snippet "section 6.3 documents ack_mail<S>(...) -> AckOutcome, a deleted function/type" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
 <urn:atm:triage:occurrence/ATM-QA-AG19-R1-001/pAG-s19/2>
   a triage:Occurrence ;
@@ -38,15 +39,15 @@
   triage:line 2126 ;
   triage:lineEnd 2147 ;
   triage:snippet "section 18.4.1 dedicated locking-contract subsection for ack_mail, a deleted function" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

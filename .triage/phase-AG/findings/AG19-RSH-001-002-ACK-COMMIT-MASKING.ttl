@@ -22,13 +22,13 @@
   triage:sweepScope "file_only" ;
   triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T19:42:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2> ;
-  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/dc05145b> ;
-  triage:notes "AG19-FIX-1-QA-RECHECK-1 verdict splits this: RSH-001 (masking) FIXED -- finalize_acknowledgement_after_confirmed_send (send/mod.rs:60-83) now pushes a WarningEntry on local-commit failure instead of masking a delivered reply as failed, outcome.outcome stays Sent, surfaced via output.rs. RSH-002 (retry idempotency) STILL OPEN -- downgraded critical->important by 2 of 3 reviewers; no idempotency key prevents a second real reply if an operator retries atm ack against the warning's own advice." .
+  triage:fixedOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "AG19-FIX-1-QA-RECHECK-1 verdict splits this: RSH-001 (masking) FIXED -- finalize_acknowledgement_after_confirmed_send (send/mod.rs:60-83) now pushes a WarningEntry on local-commit failure instead of masking a delivered reply as failed, outcome.outcome stays Sent, surfaced via output.rs. RECONFIRMED unregressed by AG19-FIX-1-QA-RECHECK-2 (req-qa + arch-qa) at ef699b64. RSH-002 (retry idempotency) STILL OPEN at ef699b64 per AG19-FIX-1-QA-RECHECK-2: dispatched again in AG19-FIX-1 required_fixes item 3, but arch-ctm's ef699b64 push did not add an idempotency key/guard; a retried atm ack after a local-commit-failure warning can still emit a second real reply." .
 
 # Occurrence 1: RSH-001 - commit_ack_mutation failure masks successful delivery -- FIXED at dc05145b
 <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/1>
@@ -43,10 +43,10 @@
   triage:status "fixed" ;
   triage:closed true ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
-# Occurrence 2: RSH-002 - no idempotency guard for retries -- STILL OPEN at dc05145b
+# Occurrence 2: RSH-002 - no idempotency guard for retries -- STILL OPEN at ef699b64
 <urn:atm:triage:occurrence/AG19-RSH-001-002/s19/2>
   a triage:Occurrence ;
   triage:findingId "AG19-RSH-001-002-ACK-COMMIT-MASKING" ;
@@ -59,13 +59,13 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
 
 # Worktree snapshot: feature/pAG-s19-delete-remote-ack-path
-<urn:atm:triage:worktree/pAG-s19/dc05145b>
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

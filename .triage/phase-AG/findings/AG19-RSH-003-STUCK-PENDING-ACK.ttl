@@ -14,27 +14,27 @@
   triage:sweepScope "crates/atm-daemon/src/peer_transport/replay_persistence.rs" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-19T00:00:00Z" ;
+  triage:triagedAt "2026-07-20T05:11:33Z" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/dc05145b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/dc05145b> ;
-  triage:notes "RELOCATED, still open. The original code shape (dropped AckMutation local variable) is gone -- replaced by a genuinely more robust durable replay/receipt mechanism (RemoteReplayStore + receipt finalization). But finalize_replay_receipt / complete_replay_record (replay_persistence.rs) only finalizes the sender-visible informational receipt message via finalize_remote_delivery_receipt_with_runtime and never calls finalize_acknowledgement_after_confirmed_send when the replayed request carries acknowledges_message_id -- so a deferred ack that later succeeds via background replay still leaves the source message stuck in PendingAck forever. Confirmed independently by req-qa, arch-qa (by implication), rust-service-hardening-agent, AND team-lead's own direct code trace at dc05145b." .
+  triage:openOn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> ;
+  triage:notes "NARROWED to test-gap-only per AG19-FIX-1-QA-RECHECK-2 at ef699b64: the code fix has landed -- complete_replay_record now calls finalize_acknowledgement_after_confirmed_delivery when the replayed record carries acknowledges_message_id, closing the original stuck-PendingAck defect. STILL OPEN only because no regression test proves replay eventually clears pending_ack_at for a deferred/replayed ack. Confirmed independently by req-qa, arch-qa, rust-service-hardening-agent." .
 
 <urn:atm:triage:occurrence/AG19-RSH-003-STUCK-PENDING-ACK/pAG-s19/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_transport/replay_persistence.rs" ;
   triage:line 155 ;
   triage:lineEnd 178 ;
-  triage:snippet "finalize_replay_receipt(...) / complete_replay_record(...) calls finalize_remote_delivery_receipt_with_runtime(...) with RemoteDeliveryReceiptStatus::Delivered but never re-invokes finalize_acknowledgement_after_confirmed_send for record.request.acknowledges_message_id" ;
+  triage:snippet "complete_replay_record now calls finalize_acknowledgement_after_confirmed_delivery for record.request.acknowledges_message_id, but no regression test proves replay clears pending_ack_at" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/dc05145b> .
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64> .
 
-<urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/dc05145b>
+<urn:atm:triage:worktree/pAG-s19-delete-remote-ack-path/ef699b64>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
-  triage:headSha "dc05145b" ;
+  triage:headSha "ef699b64" ;
   triage:orderIndex 0 .

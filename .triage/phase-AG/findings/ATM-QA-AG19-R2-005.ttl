@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-R2-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-R2-005" ;
+  triage:title "boundaries/atm-graft/shared-client-consumer.toml [contracts] block still lists deleted SendRequestEnvelope/SendResponseEnvelope types" ;
+  triage:description "arch-qa (AG19-FIX-1-QA-RECHECK-2, Important): boundaries/atm-graft/shared-client-consumer.toml's [contracts] block still lists stale SendRequestEnvelope/SendResponseEnvelope entries, deleted as part of the AG.19 ack-path unification. Same file, same pass that fixed ARCH-002-AG19's stale AckOutcome entry in response_types missed these adjacent stale types in the [contracts] block." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-graft/shared-client-consumer.toml [contracts] block" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T05:11:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-R2-005/pAG-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAG-s19/ef699b64> ;
+  triage:notes "Newly discovered by AG19-FIX-1-QA-RECHECK-2 (arch-qa). Cross-referenced from the now-closed ARCH-002-AG19 -- same file, adjacent stale entries in a different block ([contracts] vs response_types), missed by the same fix pass. Do not conflate." .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-R2-005/pAG-s19/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
+  triage:line 0 ;
+  triage:snippet "[contracts] block lists SendRequestEnvelope/SendResponseEnvelope, deleted types from the AG.19 ack-path unification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:occursIn <urn:atm:triage:worktree/pAG-s19/ef699b64> .
+
+<urn:atm:triage:worktree/pAG-s19/ef699b64>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "ef699b64" ;
+  triage:orderIndex 0 .
