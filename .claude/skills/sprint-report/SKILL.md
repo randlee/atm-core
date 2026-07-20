@@ -19,15 +19,15 @@ Default: `--table`
 
 ## Data Source
 
-**Always use `atm gh pr list` first** - single call, returns all open PRs with CI and merge state:
+**Use `gh pr list --json` directly** — single call, returns all open PRs with CI and merge state:
 
 ```bash
-atm gh pr list
+gh pr list --state open --json number,title,headRefName,mergeable,mergeStateStatus,statusCheckRollup
 ```
 
-This is faster and sufficient for populating `sprint_rows` and `integration_row`. Only drill into individual `gh run view` calls if you need failure details for a specific job.
+This is the primary source for populating `sprint_rows` and `integration_row`. Only drill into individual `gh run view` calls if you need failure details for a specific job (see CI Monitoring section above).
 
-**Dogfooding rule**: If `atm gh pr list` output is missing information needed to fill the report (e.g., no per-job failure detail, no QA state, truncated CI summary), **file a GitHub issue** describing what field or format change would make it sufficient, then improve the command. Do not silently work around gaps with extra `gh` CLI calls - surface them as product issues.
+**Dogfooding rule**: If `gh pr list --json` output is missing information needed to fill the report (e.g., no per-job failure detail, no QA state, truncated CI summary), **check the GitHub CLI documentation** for additional JSON fields. If the field exists but wasn't included in the query, add it. If the field doesn't exist in `gh pr list --json`, file a GitHub issue on the GitHub CLI repository describing what field would make it sufficient. Do not silently work around gaps - surface them as product issues.
 
 ## Render Command
 

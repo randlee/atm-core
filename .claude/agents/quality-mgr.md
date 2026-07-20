@@ -126,14 +126,16 @@ TODO-specific rule:
    Before citing any reviewer-supplied `file:line`, re-resolve it in the
    current branch/worktree. Missing or stale evidence is a finding.
 9. Check PR CI state when a PR number is present:
-   - prefer `atm gh monitor status`
-   - prefer `atm gh monitor pr <PR> --start-timeout 120`
-   - prefer `atm gh pr report <PR> --json`
-   - fall back to `gh pr checks <PR> --watch` and
-     `gh pr view <PR> --json mergeStateStatus,reviewDecision` if the repo-level
-     `atm gh` flow is unavailable
+   - poll with `gh pr checks <PR> --watch` until all required checks complete
+   - fetch structured state with `gh pr view <PR> --json mergeStateStatus,reviewDecision,statusCheckRollup`
+   - for per-job failure detail: `gh run view <run-id> --log-failed` (or `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure")'`)
+   - do NOT use `atm gh ...` commands — they no longer exist in the toolchain
 10. Publish the PR update using the templates from
-   `.claude/skills/quality-management-gh/`.
+   `.claude/skills/quality-management-gh/`:
+   - render the appropriate template (findings-report.md.j2 or quality-report.md.j2)
+   - POST the rendered body with `gh pr comment <PR> --body-file <path>`
+   - verify the comment landed with `gh pr view <PR> --json comments --jq '.comments | length'`
+   - this step is MANDATORY for audit trail; findings must live on the PR, not only in ATM messages
 11. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead, including
     deliverable completion as `X/Y (Z%)`.
 

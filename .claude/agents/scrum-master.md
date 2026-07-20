@@ -136,9 +136,10 @@ After QA passes:
 ### Phase 5: CI Monitoring
 
 After PR creation:
-- prefer `atm gh monitor pr <PR> --start-timeout 120`
-- fall back to `gh pr checks <PR> --watch` if repo-specific monitoring is not
-  available
+- poll CI with `gh pr checks <PR> --watch` until all required checks complete
+- fetch structured state with `gh pr view <PR> --json mergeStateStatus,reviewDecision,statusCheckRollup`
+- for long-running checks, use `gh pr view <PR> --json statusCheckRollup --jq '.statusCheckRollup[] | select(.status=="IN_PROGRESS")'`
+- do NOT use `atm gh ...` commands — they no longer exist in the toolchain
 
 ### Phase 6: CI Fix Loop
 

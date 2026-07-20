@@ -76,17 +76,13 @@ Do not treat QA as single-shot.
 
 ## CI Monitoring
 
-Preferred repo-specific flow:
-- use `atm gh monitor status` to verify monitor health when available
-- use `atm gh monitor pr <PR> --start-timeout 120` to start or attach a PR monitor when available
-- use `atm gh pr report <PR> --json` for one-shot structured status when available
+Use the native `gh` CLI — `atm gh ...` commands no longer exist in the toolchain:
+- poll CI with `gh pr checks <PR> --watch` until all required checks complete
+- fetch structured PR state: `gh pr view <PR> --json mergeStateStatus,reviewDecision,statusCheckRollup`
+- per-job failure detail: `gh run view <run-id> --log-failed` (or `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | {name,conclusion,steps: (.steps[] | select(.conclusion=="failure"))}'`)
+- long-running check: `gh run watch <run-id> --exit-status` (blocks until workflow finishes)
 
-Fallback when repo-specific `atm gh` tooling is unavailable or not yet wired:
-- `gh pr checks <PR> --watch`
-- `gh pr view <PR> --json mergeStateStatus,reviewDecision`
-
-If monitoring cannot start, include the failure in QA status and proceed with
-one-shot PR report data.
+If CI cannot be reached (network/auth failure), report the failure as a QA observation and proceed with whatever structured data is available.
 
 ## Findings Report to PR (Blocking)
 
