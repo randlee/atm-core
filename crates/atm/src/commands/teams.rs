@@ -339,7 +339,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
+    use atm_core::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
@@ -508,11 +508,7 @@ mod tests {
             ];
             assembly
                 .roster_store_arc()
-                .replace_roster(
-                    &team,
-                    &members,
-                    Some(&ReplaySource::new("teams-test").expect("source")),
-                )
+                .replace_roster(&team, &members)
                 .expect("seed roster");
 
             Self {

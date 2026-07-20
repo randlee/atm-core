@@ -217,7 +217,7 @@ impl GraftClient {
 
     fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match self.transport.send(request)? {
-            ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+            ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
     }
@@ -379,13 +379,7 @@ impl GraftSession {
             ready_latch.notifier(),
             stop_rx,
         )?;
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .map_err(|error| {
-                error.with_recovery(
-                    "Retry graft activation after the same-host receiver loop can bind and signal readiness within the bounded startup deadline.",
-                )
-            })?;
+        ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)?;
         Ok((stop_tx, join_handle))
     }
 
@@ -480,12 +474,8 @@ fn spawn_graft_receive_loop(
         .map_err(spawn_receive_loop_error)
 }
 
-fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
+fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError {
     AtmError::daemon_unavailable("failed to spawn graft receive loop")
-        .with_source(source)
-        .with_recovery(
-            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-        )
 }
 
 impl Drop for GraftSession {

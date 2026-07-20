@@ -330,8 +330,8 @@ Required `atm-core` crate rules:
 - canonical writes represent both send and acknowledgement. An ack differs
   only by a populated `acknowledges_message_id`, never by a second request or
   packet family.
-- `atm-core` owns the ingest replay/degradation contract and must not silently
-  drop parseable external rows
+- `atm-core` relies on durable message identity and idempotent writes; it owns
+  no ingest-replay or deferred-delivery persistence contract
 - `atm-core` must not let command/service code access SQLite, mailbox JSON,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` boundary traits are sealed by default; any boundary that must

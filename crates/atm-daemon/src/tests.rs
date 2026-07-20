@@ -111,9 +111,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         AtmError::daemon_unavailable(
                             "doctor round-trip test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
                     })
                 },
             },
@@ -254,14 +251,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .collect::<Vec<_>>();
     assembly
         .roster_store_arc()
-        .replace_roster(
-            test_team(),
-            &roster,
-            Some(
-                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
-                    .expect("replay source"),
-            ),
-        )
+        .replace_roster(test_team(), &roster)
         .expect("replace roster");
 }
 
@@ -551,9 +541,10 @@ fn heartbeat_rejects_live_pid_conflict() {
         .expect_err("live pid conflict");
 
     assert_eq!(error.code, AtmErrorCode::IdentityConflict);
-    assert_eq!(
-        error.message,
-        "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
+    assert!(
+        error
+            .message
+            .starts_with("ATM_IDENTITY_CONFLICT: stop and report to user immediately")
     );
     assert_eq!(
         status_cache.member_state_for_test(&team, &member),

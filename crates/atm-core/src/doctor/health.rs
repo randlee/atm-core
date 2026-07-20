@@ -102,9 +102,7 @@ pub fn observability_finding_from_error(error: &AtmError) -> DoctorFinding {
         severity: DoctorSeverity::Error,
         code: error.code,
         message: format!("shared observability health check failed: {error}"),
-        remediation: error.primary_recovery().map(str::to_owned).or(Some(
-            "Restore shared observability initialization and re-run `atm doctor`.".to_string(),
-        )),
+        remediation: Some(error.message.clone()),
     }
 }
 

@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use atm_core::GraftConfig;
 use atm_core::boundary::PostSendHookEvent;
-use atm_core::error::{AtmError, AtmErrorKind};
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, read_graft_post_send_message,
     write_graft_post_send_message,
@@ -138,21 +138,15 @@ impl ReceiverReadyLatch {
         match self.ready_rx.recv_timeout(timeout) {
             Ok(()) => Ok(()),
             Err(RecvTimeoutError::Timeout) => Err(AtmError::new(
-                AtmErrorKind::Timeout,
+                AtmErrorCode::WaitTimeout,
                 format!(
                     "graft receiver readiness was not signaled within {:?}",
                     timeout
                 ),
-            )
-            .with_recovery(
-                "Retry graft activation after the same-host receiver binds successfully and signals listener readiness within the bounded startup deadline.",
             )),
             Err(RecvTimeoutError::Disconnected) => Err(AtmError::new(
-                AtmErrorKind::Internal,
+                AtmErrorCode::InternalError,
                 "graft receiver readiness latch disconnected before signaling startup",
-            )
-            .with_recovery(
-                "Restart the graft-enabled host after fixing the receiver startup path so the readiness signal stays alive until the listener is bound.",
             )),
         }
     }
@@ -161,15 +155,13 @@ impl ReceiverReadyLatch {
 fn signal_ready_sender(ready_tx: &SyncSender<()>) -> Result<(), AtmError> {
     ready_tx.try_send(()).map_err(|error| match error {
         TrySendError::Full(()) => AtmError::new(
-            AtmErrorKind::Internal,
+            AtmErrorCode::InternalError,
             "graft receiver readiness was signaled more than once",
-        )
-        .with_recovery("Signal receiver readiness exactly once after the listener is bound."),
+        ),
         TrySendError::Disconnected(()) => AtmError::new(
-            AtmErrorKind::Internal,
+            AtmErrorCode::InternalError,
             "graft receiver readiness latch is unavailable",
-        )
-        .with_recovery("Keep the readiness latch alive until the listener startup path completes."),
+        ),
     })
 }
 
@@ -210,14 +202,11 @@ fn acquire_host_nudge_helper_permit(
 ) -> Result<HelperThreadPermit, AtmError> {
     helper_budget.try_acquire().ok_or_else(|| {
         let error = AtmError::new(
-            AtmErrorKind::Timeout,
+            AtmErrorCode::WaitTimeout,
             format!(
                 "graft host nudge helper budget is exhausted at {} in-flight helpers",
                 helper_budget.max_inflight()
             ),
-        )
-        .with_recovery(
-            "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
         );
         warn_host_nudge_result("helper_budget_exhausted", &error, helper_budget, None);
         error
@@ -243,15 +232,13 @@ fn spawn_host_nudge_helper(
             }
         })
         .map(|_| ())
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::new(
-                AtmErrorKind::Internal,
+                AtmErrorCode::InternalError,
                 "failed to spawn graft host nudge helper",
             )
-            .with_source(source)
-            .with_recovery(
-                "Retry graft activation after the embedding host can spawn one bounded nudge helper thread.",
-            )
+
+
         })
 }
 
@@ -263,14 +250,11 @@ fn receive_host_nudge_result(
         Ok(result) => result,
         Err(RecvTimeoutError::Timeout) => {
             let error = AtmError::new(
-                AtmErrorKind::Timeout,
+                AtmErrorCode::WaitTimeout,
                 format!(
                     "graft host nudge injection exceeded the {:?} delivery deadline",
                     HOST_NUDGE_INJECTION_DEADLINE
                 ),
-            )
-            .with_recovery(
-                "Fix or restart the embedding host nudge receiver before retrying graft delivery.",
             );
             warn_host_nudge_result(
                 "timeout",
@@ -282,10 +266,9 @@ fn receive_host_nudge_result(
         }
         Err(RecvTimeoutError::Disconnected) => {
             let error = AtmError::new(
-                AtmErrorKind::Internal,
+                AtmErrorCode::InternalError,
                 "graft host nudge helper disconnected before returning a delivery result",
-            )
-            .with_recovery("Restart the embedding host before retrying graft delivery.");
+            );
             warn_host_nudge_result("disconnected", &error, helper_budget, None);
             Err(error)
         }
@@ -326,22 +309,16 @@ pub(crate) fn read_snapshot(snapshot: &SharedSessionSnapshot) -> Result<SessionS
     snapshot
         .read()
         .map(|snapshot| snapshot.clone())
-        .map_err(|_| {
-            AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
-                "Restart the embedding host before retrying graft session lifecycle operations.",
-            )
-        })
+        .map_err(|_| AtmError::daemon_unavailable("graft session snapshot lock poisoned"))
 }
 
 fn write_snapshot(
     snapshot: &SharedSessionSnapshot,
     state: GraftSessionState,
 ) -> Result<(), AtmError> {
-    let mut snapshot = snapshot.write().map_err(|_| {
-        AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
-            "Restart the embedding host before retrying graft session lifecycle operations.",
-        )
-    })?;
+    let mut snapshot = snapshot
+        .write()
+        .map_err(|_| AtmError::daemon_unavailable("graft session snapshot lock poisoned"))?;
     snapshot.state = state;
     Ok(())
 }
@@ -416,25 +393,18 @@ fn handle_join_helper_disconnect(join_helper: JoinHandle<()>) -> Result<(), AtmE
 
 fn receive_loop_panic_error() -> AtmError {
     AtmError::daemon_unavailable("graft receiver loop panicked")
-        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
 }
 
-fn join_helper_spawn_error(source: std::io::Error) -> AtmError {
+fn join_helper_spawn_error(_source: std::io::Error) -> AtmError {
     AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
-        .with_source(source)
-        .with_recovery(
-            "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
-        )
 }
 
 fn join_helper_panic_error() -> AtmError {
     AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
 }
 
 fn join_helper_disconnect_error() -> AtmError {
     AtmError::daemon_unavailable("graft receive-loop join helper disconnected unexpectedly")
-        .with_recovery("Restart the embedding host and atm-daemon before retrying graft mode.")
 }
 
 fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId) -> AtmError {
@@ -447,9 +417,6 @@ fn join_receive_loop_timeout_error(join_helper_thread_id: std::thread::ThreadId)
         "graft receive loop shutdown exceeded the {:?} join deadline",
         RECEIVE_LOOP_JOIN_DEADLINE
     ))
-    .with_recovery(
-        "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
-    )
 }
 
 fn warn_runtime_error(action: &'static str, endpoint_path: Option<&Path>, error: &AtmError) {
@@ -481,9 +448,6 @@ fn listener_wake_budget_exhausted_error(endpoint_path: &Path) -> AtmError {
         helper_budget.max_inflight(),
         endpoint_path.display()
     ))
-    .with_recovery(
-        "Restart the graft-enabled host; repeated hung listener wake helpers exhausted the bounded same-host wake budget.",
-    )
 }
 
 fn listener_wake_helper_budget() -> &'static Arc<HelperThreadBudget> {
@@ -601,12 +565,8 @@ fn spawn_listener_wake_helper(
             let _ = result_tx.send(connect(name));
         })
         .map(|_| ())
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn graft listener wake worker")
-                .with_recovery(
-                    "Restart the graft-enabled host; the same-host listener wake path could not create its bounded connect helper.",
-                )
-                .with_source(source)
         })
 }
 
@@ -617,15 +577,11 @@ fn receive_listener_wake_result(
 ) -> Result<(), AtmError> {
     match result_rx.recv_timeout(LISTENER_WAKE_CONNECT_DEADLINE) {
         Ok(Ok(_stream)) => Ok(()),
-        Ok(Err(source)) => {
+        Ok(Err(_source)) => {
             let error = AtmError::daemon_unavailable(format!(
                 "failed to wake graft receiver listener at {}",
                 endpoint_path.display()
-            ))
-            .with_recovery(
-                "Restart the graft-enabled host; the receiver listener could not be nudged out of accept cleanly during shutdown.",
-            )
-            .with_source(source);
+            ));
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
         }
@@ -633,10 +589,7 @@ fn receive_listener_wake_result(
             let error = AtmError::daemon_unavailable(format!(
                 "timed out waking graft receiver listener at {}",
                 endpoint_path.display()
-            ))
-            .with_recovery(
-                "Restart the graft-enabled host; the listener wake connection exceeded the bounded shutdown budget.",
-            );
+            ));
             warn_listener_wake_result(
                 "timeout",
                 endpoint_path,
@@ -651,10 +604,7 @@ fn receive_listener_wake_result(
             let error = AtmError::daemon_unavailable(format!(
                 "graft listener wake worker disconnected unexpectedly for {}",
                 endpoint_path.display()
-            ))
-            .with_recovery(
-                "Restart the graft-enabled host; the local IPC wake path aborted before it could connect to the listener.",
-            );
+            ));
             warn_listener_wake_result("disconnected", endpoint_path, &error, helper_budget, None);
             warn_runtime_error("wake_graft_receiver_listener", Some(endpoint_path), &error);
             Err(error)
@@ -697,42 +647,30 @@ fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListe
             endpoint_path,
         )?)
         .create_sync()
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to bind graft receiver endpoint at {}",
                 endpoint_path.display()
             ))
-            .with_recovery(
-                "Confirm the graft receiver endpoint path is writable and no conflicting graft listener still owns the same-host address before retrying activation.",
-            )
-            .with_source(source)
         })
 }
 
 fn prepare_graft_receiver_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
     if let Some(parent) = endpoint_path.parent() {
-        fs::create_dir_all(parent).map_err(|source| {
+        fs::create_dir_all(parent).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to prepare graft receiver directory {}",
                 parent.display()
             ))
-            .with_recovery(
-                "Create the graft receiver runtime directory or repair its permissions before retrying activation.",
-            )
-            .with_source(source)
         })?;
     }
     #[cfg(unix)]
     if endpoint_path.exists() {
-        fs::remove_file(endpoint_path).map_err(|source| {
+        fs::remove_file(endpoint_path).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to remove stale graft receiver endpoint {}",
                 endpoint_path.display()
             ))
-            .with_recovery(
-                "Remove the stale graft receiver socket path or restart the graft-enabled host before retrying activation.",
-            )
-            .with_source(source)
         })?;
     }
     Ok(())
@@ -742,16 +680,16 @@ fn accept_graft_receiver_connection(
     listener: &LocalSocketListener,
     endpoint_path: &Path,
 ) -> Result<LocalSocketStream, AtmError> {
-    listener.accept().map_err(|source| {
+    listener.accept().map_err(|_source| {
         let error = AtmError::daemon_unavailable(format!(
             "failed while accepting graft receiver connection at {}",
             endpoint_path.display()
-        ))
-        .with_recovery(
-            "Restart the graft-enabled host; the same-host graft receiver listener stopped accepting connections unexpectedly.",
-        )
-        .with_source(source);
-        warn_runtime_error("accept_graft_receiver_connection", Some(endpoint_path), &error);
+        ));
+        warn_runtime_error(
+            "accept_graft_receiver_connection",
+            Some(endpoint_path),
+            &error,
+        );
         error
     })
 }
@@ -818,13 +756,13 @@ fn write_graft_post_send_response_with_deadline(
         "graft post-send response exceeded the bounded payload cap",
     )?;
     use std::io::Write as _;
-    stream.flush().map_err(|source| {
-        let error = AtmError::daemon_unavailable("failed to flush graft post-send response")
-            .with_recovery(
-                "Restart the graft-enabled host; the direct graft post-send response could not be flushed to the caller.",
-            )
-            .with_source(source);
-        warn_runtime_error("handle_graft_receiver_connection", Some(endpoint_path), &error);
+    stream.flush().map_err(|_source| {
+        let error = AtmError::daemon_unavailable("failed to flush graft post-send response");
+        warn_runtime_error(
+            "handle_graft_receiver_connection",
+            Some(endpoint_path),
+            &error,
+        );
         error
     })
 }
@@ -853,12 +791,8 @@ fn apply_receiver_deadline(
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
             Ok(LocalIpcDeadlineSupport::Unsupported)
         }
-        Err(source) => {
-            let error = AtmError::daemon_unavailable(message)
-                .with_recovery(
-                    "Restart the graft-enabled host; the graft receiver could not apply its bounded local-socket I/O deadline.",
-                )
-                .with_source(source);
+        Err(_source) => {
+            let error = AtmError::daemon_unavailable(message);
             warn_runtime_error("apply_receiver_deadline", None, &error);
             Err(error)
         }
@@ -888,10 +822,8 @@ fn read_graft_post_send_request_with_helper(
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn graft request-read helper")
-                .with_recovery(
-                    "Retry the graft request after the same-host receiver can create a bounded request-read helper.",
-                )
-                .with_source(source)
+
+
         })?;
 
     let started = Instant::now();
@@ -900,9 +832,6 @@ fn read_graft_post_send_request_with_helper(
         if remaining.is_zero() {
             return Err(AtmError::daemon_unavailable(
                 "timed out reading graft post-send request",
-            )
-            .with_recovery(
-                "Retry the graft request after the same-host receiver becomes responsive again.",
             ));
         }
         let poll = std::cmp::min(remaining, GRAFT_RECEIVER_HELPER_POLL_INTERVAL);
@@ -912,9 +841,6 @@ fn read_graft_post_send_request_with_helper(
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Err(AtmError::daemon_unavailable(
                     "graft request-read helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Retry the graft request after the same-host receiver can create a bounded request-read helper.",
                 ));
             }
         }
@@ -944,10 +870,8 @@ fn write_graft_post_send_response_with_helper(
                 use std::io::Write as _;
                 stream.flush().map_err(|source| {
                     let error = AtmError::daemon_unavailable("failed to flush graft post-send response")
-                        .with_recovery(
-                            "Restart the graft-enabled host; the direct graft post-send response could not be flushed to the caller.",
-                        )
-                        .with_source(source);
+
+                        ;
                     warn_runtime_error("handle_graft_receiver_connection", Some(endpoint.as_path()), &error);
                     error
                 })
@@ -961,10 +885,8 @@ fn write_graft_post_send_response_with_helper(
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn graft response-write helper")
-                .with_recovery(
-                    "Retry the graft response after the same-host receiver can create a bounded response-write helper.",
-                )
-                .with_source(source)
+
+
         })?;
 
     let started = Instant::now();
@@ -973,9 +895,6 @@ fn write_graft_post_send_response_with_helper(
         if remaining.is_zero() {
             return Err(AtmError::daemon_unavailable(
                 "timed out writing graft post-send response",
-            )
-            .with_recovery(
-                "Retry the graft request after the same-host receiver becomes responsive again.",
             ));
         }
         let poll = std::cmp::min(remaining, GRAFT_RECEIVER_HELPER_POLL_INTERVAL);
@@ -985,9 +904,6 @@ fn write_graft_post_send_response_with_helper(
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Err(AtmError::daemon_unavailable(
                     "graft response-write helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Retry the graft response after the same-host receiver can create a bounded response-write helper.",
                 ));
             }
         }
@@ -997,8 +913,7 @@ fn write_graft_post_send_response_with_helper(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::PostSendHookEvent;
-    use atm_core::error::{AtmError, AtmErrorKind};
-    use atm_core::error_codes::AtmErrorCode;
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::graft::{
         GraftPostSendRequest, GraftPostSendResponse, read_graft_post_send_message,
         write_graft_post_send_message,
@@ -1044,12 +959,7 @@ mod tests {
 
     impl HostNudgeInjector for FailingInjector {
         fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
-            Err(AtmError::new_with_code(
-                AtmErrorCode::PostSendGraftUnavailable,
-                AtmErrorKind::DaemonUnavailable,
-                "synthetic graft receiver unavailable",
-            )
-            .with_recovery("restart the graft host"))
+            Err(AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable))
         }
     }
 
@@ -1390,10 +1300,9 @@ mod tests {
             GraftPostSendResponse::Delivered => panic!("expected typed failure response"),
             GraftPostSendResponse::Error(error) => {
                 assert_eq!(error.code, AtmErrorCode::PostSendGraftUnavailable);
-                assert!(
-                    error
-                        .message
-                        .contains("synthetic graft receiver unavailable")
+                assert_eq!(
+                    error.message,
+                    "Repair the configured post-send target and retry if delivery is required."
                 );
             }
         }

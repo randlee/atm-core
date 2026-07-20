@@ -45,10 +45,7 @@ pub(crate) fn drain_active_connections_for_shutdown(
     if remaining_work_items > 0 {
         return Err(AtmError::daemon_unavailable(format!(
             "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
-        ))
-        .with_recovery(
-            "Restart the daemon after the wedged request workers are no longer holding the same-host runtime open.",
-        ));
+        )));
     }
     Ok(())
 }

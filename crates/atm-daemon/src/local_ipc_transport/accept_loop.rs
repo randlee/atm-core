@@ -9,7 +9,7 @@ use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
-use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+use atm_core::protocol::{JsonAtmProtocolCodec, ResponseEnvelope};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
@@ -132,15 +132,9 @@ pub(super) fn reject_connection_when_capped(
             .with_transport_context("connection_cap")
             .with_extra_string_field("active_connections", active_connections.to_string()),
     );
-    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::new_with_code(
-            AtmErrorCode::DaemonConnectionSaturated,
-            atm_storage::AtmErrorKind::DaemonUnavailable,
-            "daemon connection cap exceeded (max 64 concurrent accepts)",
-        )
-            .with_recovery(
-                "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
-            ),
+    let response = ResponseEnvelope::Error(AtmError::new(
+        AtmErrorCode::DaemonConnectionSaturated,
+        format!("daemon connection cap exceeded ({active_connections} active connections)"),
     ));
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
@@ -234,12 +228,10 @@ pub(super) fn spawn_connection_worker<'scope>(
             }
         })
         .map(|_| ())
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn local IPC connection worker")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can spawn same-host connection workers.",
-                )
-                .with_source(source)
+
+
         })
 }
 

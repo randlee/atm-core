@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
-use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+use atm_core::protocol::{JsonAtmProtocolCodec, ResponseEnvelope};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
@@ -82,9 +82,6 @@ impl ServeLoopSignals {
     fn record_accept_error(&self, error: AtmError) -> Result<(), AtmError> {
         let mut slot = self.accept_error.lock().map_err(|_| {
             AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
-                .with_recovery(
-                    "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
-                )
         })?;
         if slot.is_none() {
             *slot = Some(error);
@@ -97,9 +94,6 @@ impl ServeLoopSignals {
             .lock()
             .map_err(|_| {
                 AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
-                    )
             })
             .map(|mut slot| slot.take())
     }
@@ -306,15 +300,11 @@ impl PreparedRuntimeServer {
                 &endpoint_path,
             )?)
             .create_sync()
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to bind daemon local IPC endpoint at {}",
                     endpoint_path.display()
                 ))
-                .with_recovery(
-                    "Confirm the endpoint path is writable and no conflicting daemon still owns the same-host IPC address before restarting atm-daemon.",
-                )
-                .with_source(source)
             })?;
         tracing::info!(
             max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
@@ -414,10 +404,9 @@ impl PreparedRuntimeServer {
 
     pub(crate) fn take_endpoint_guard(&mut self) -> Result<SocketEndpointGuard, AtmError> {
         self.endpoint_guard.take().ok_or_else(|| {
-            AtmError::daemon_unavailable("daemon local IPC endpoint guard was missing during runtime handoff")
-                .with_recovery(
-                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the runtime began serving.",
-                )
+            AtmError::daemon_unavailable(
+                "daemon local IPC endpoint guard was missing during runtime handoff",
+            )
         })
     }
 }
@@ -544,28 +533,24 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 }
                 if lifecycle_control.take_reload_requested() {
                     signals.request_reload();
-                    if let Err(error) = wake_listener(&endpoint_path) {
+                    if let Err(_error) = wake_listener(&endpoint_path) {
                         record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                         let _ = signals.record_accept_error(
                             AtmError::daemon_lifecycle_wedge(
                                 "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
                             )
-                            .with_recovery(
-                                "Restart the daemon; lifecycle-control reload state could not interrupt the same-host listener cleanly.",
-                            )
-                            .with_source(error),
+
+                            ,
                         );
                         return;
                     }
                 }
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can spawn the same-host lifecycle waiter thread.",
-                )
-                .with_source(source)
+
+
         })
 }
 
@@ -642,13 +627,12 @@ where
         return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
             context.lifecycle_control,
             context.shutdown_beacon,
-            AtmError::daemon_unavailable("injected daemon local IPC accept error for test")
-                .with_recovery("Test-only injected accept failure."),
+            AtmError::daemon_unavailable("injected daemon local IPC accept error for test"),
         ))));
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
-        Err(source) => {
+        Err(_source) => {
             context.observability.emit_or_warn(
                 "accept_loop",
                 "failed",
@@ -657,11 +641,7 @@ where
             Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
                 context.lifecycle_control,
                 context.shutdown_beacon,
-                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection")
-                    .with_recovery(
-                        "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
-                    )
-                    .with_source(source),
+                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection"),
             ))))
         }
     }
@@ -787,9 +767,6 @@ impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
     fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
             "LocalIpcServerTransportAdapter::serve cannot bootstrap the daemon directly; use RuntimeComposition::start()",
-        )
-        .with_recovery(
-            "Enter the daemon through RuntimeComposition::start() so lifecycle state, host ownership, and shutdown handling stay consistent.",
         ))
     }
 }

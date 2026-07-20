@@ -1,6 +1,6 @@
 ---
 title: AI.2 storage boundary and composition topology
-status: proposed
+status: complete
 branch: feature/pAI-s2-storage-topology
 worktree: ../atm-core-worktrees/feature/pAI-s2-storage-topology
 target: integrate/phase-AI
@@ -26,13 +26,15 @@ target: integrate/phase-AI
 
 ```rust
 pub trait StorageFactory: Send + Sync {
-    fn open(&self, scope: &HostRuntimeScope) -> Result<Box<dyn MessageStore>, AtmError>;
+    fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError>;
 }
 ```
 
-`MessageStore` and its related storage traits are the only persistence types
-visible outside the selected backend. `atm-storage-rusqlite` alone owns
-`rusqlite`, SQL, schema, and migrations.
+`StorageHandles` contains only the canonical message, roster, and nudge
+override traits. Those traits are the only persistence types visible outside
+the selected backend. `atm-storage-rusqlite` alone owns `rusqlite`, SQL,
+schema, and migrations. `atm-runtime` passes the durable-state path to the
+factory but never imports a concrete backend crate.
 
 ## Acceptance criteria
 

@@ -4,13 +4,13 @@ use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, Socke
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
 use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_daemon_bootstrap::assemble_host_runtime;
+use atm_runtime::RuntimeAssembly;
 use std::fs::OpenOptions;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -63,12 +63,7 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
         let current = *state;
         if !matches!(
             (current, next),
@@ -91,8 +86,7 @@ impl RuntimeLifecycle {
         ) {
             return Err(AtmError::validation(format!(
                 "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            ))
-            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
+            )));
         }
         *state = next;
         Ok(next)
@@ -109,12 +103,7 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
         *state = RuntimeLifecycleState::Stopped;
         Ok(())
     }
@@ -156,25 +145,11 @@ impl RuntimeComposition {
         runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let sqlite_observer =
-            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-        let config_current_dir =
-            std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
-        let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-            sqlite_db_path: runtime_db_path,
-            config_current_dir: config_current_dir.clone(),
-            sqlite_observer,
-            non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-        })
-        .map_err(|error| {
-            runtime_assembly_failed(
-                error,
-                &SubsystemObservability::new(
-                    DaemonSubsystem::Composition,
-                    Arc::clone(&observability),
-                ),
-            )
-        })?;
+        let composition_observability =
+            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        let runtime_assembly =
+            crate::test_support::sqlite_runtime_assembly_for_test(&runtime_db_path)
+                .map_err(|error| runtime_assembly_failed(error, &composition_observability))?;
         Self::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
     }
 
@@ -220,9 +195,7 @@ impl RuntimeComposition {
 
     fn replace_endpoint_guard(&self, guard: Option<SocketEndpointGuard>) -> Result<(), AtmError> {
         let mut slot = self.endpoint_guard.lock().map_err(|_| {
-            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
-                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
-            )
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned")
         })?;
         *slot = guard;
         Ok(())
@@ -230,15 +203,12 @@ impl RuntimeComposition {
 
     fn take_endpoint_guard(&self) -> Result<SocketEndpointGuard, AtmError> {
         let mut slot = self.endpoint_guard.lock().map_err(|_| {
-            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
-                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
-            )
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned")
         })?;
         slot.take().ok_or_else(|| {
-            AtmError::daemon_unavailable("runtime endpoint guard was missing during daemon serve startup")
-                .with_recovery(
-                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the listener entered serving state.",
-                )
+            AtmError::daemon_unavailable(
+                "runtime endpoint guard was missing during daemon serve startup",
+            )
         })
     }
 
@@ -350,9 +320,6 @@ impl RuntimeComposition {
                     AtmError::daemon_unavailable(
                         "test runtime failed to publish the daemon ready signal",
                     )
-                    .with_recovery(
-                        "Restore the bounded ready-signal handshake before retrying the same-host daemon runtime test.",
-                    )
                 })?;
             }
             Ok(())
@@ -450,8 +417,6 @@ fn runtime_assembly_failed(error: AtmError, observability: &SubsystemObservabili
     AtmError::daemon_unavailable(
         "daemon runtime assembly is unavailable; atm-daemon startup is blocked",
     )
-    .with_recovery("Restore the daemon runtime storage and start atm-daemon again.")
-    .with_source(error)
 }
 
 fn build_request_dispatcher(
@@ -498,14 +463,10 @@ where
         .spawn(move || {
             let _ = result_tx.send(shutdown(lane));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to spawn daemon {lane_name} shutdown deadline helper"
             ))
-            .with_recovery(
-                "Restart atm-daemon; the bounded background-lane shutdown helper could not be created.",
-            )
-            .with_source(source)
         })?;
     let shutdown_thread_id = shutdown_handle.thread().id();
     match result_rx.recv_timeout(deadline) {
@@ -514,9 +475,6 @@ where
                 AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
-                )
             })?;
             result
         }
@@ -533,42 +491,29 @@ where
             );
             Err(AtmError::daemon_unavailable(format!(
                 "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"
-            ))
-            .with_recovery(
-                "Restart atm-daemon after the stalled background lane stops holding runtime shutdown open; the timed-out join helper was retained for later reap.",
-            ))
+            )))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
-                ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
-                ))
+                )))
             },
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker disconnected unexpectedly"
-                ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane stopped reporting progress during runtime teardown.",
-                ))
+                )))
             },
         ),
     }
 }
 
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
-    std::fs::create_dir_all(home_dir).map_err(|source| {
+    std::fs::create_dir_all(home_dir).map_err(|_source| {
         AtmError::daemon_unavailable(format!(
             "failed to create atm-daemon home directory at {}",
             home_dir.display()
         ))
-        .with_recovery(
-            "Grant write access to ATM_HOME or choose a writable daemon home directory before starting atm-daemon.",
-        )
-        .with_source(source)
     })?;
     let probe_path = home_dir.join(format!(".atm-daemon-home-probe-{}", std::process::id()));
     OpenOptions::new()
@@ -576,15 +521,11 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
         .write(true)
         .truncate(true)
         .open(&probe_path)
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "atm-daemon home directory is not writable at {}",
                 home_dir.display()
             ))
-            .with_recovery(
-                "Grant write access to ATM_HOME or point ATM_HOME at a writable directory before retrying.",
-            )
-            .with_source(source)
         })?;
     if let Err(error) = std::fs::remove_file(&probe_path) {
         tracing::warn!(
@@ -607,23 +548,15 @@ pub(crate) fn compose_runtime(
     // The daemon snapshots the startup cwd once for config discovery and does
     // not refresh it on SIGHUP; restart atm-daemon to adopt a different
     // workspace root after changing the launch directory.
-    let current_dir = std::env::current_dir().map_err(|source| {
+    let current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::daemon_unavailable(
             "failed to resolve the current working directory for daemon runtime assembly",
         )
-        .with_recovery(
-            "Start atm-daemon from a readable ATM workspace so runtime assembly and config inspection share one validated config root.",
-        )
-        .with_source(source)
     })?;
-    let runtime_db_path = atm_core::home::host_mail_db_path()?;
-    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-    let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: runtime_db_path,
-        config_current_dir: current_dir.clone(),
-        sqlite_observer,
-        non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-    })
+    let runtime_assembly = assemble_host_runtime(
+        current_dir.clone(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+    )
     .map_err(|error| {
         runtime_assembly_failed(
             error,

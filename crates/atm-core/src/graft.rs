@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use crate::ack::{AckOutcome, AckRequest};
 use crate::boundary::PostSendHookEvent;
 use crate::error::AtmError;
-use crate::protocol::ProtocolErrorEnvelope;
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, TeamName};
@@ -24,7 +23,7 @@ pub struct GraftPostSendRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum GraftPostSendResponse {
     Delivered,
-    Error(ProtocolErrorEnvelope),
+    Error(AtmError),
 }
 
 pub fn graft_receiver_socket_path_from_home(
@@ -47,14 +46,12 @@ pub fn write_graft_post_send_message<T: Serialize>(
 ) -> Result<(), AtmError> {
     let bytes = serde_json::to_vec(value)?;
     if bytes.len() > MAX_GRAFT_POST_SEND_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-            "Reduce the graft post-send payload size before retrying same-host graft delivery.",
-        ));
+        return Err(AtmError::daemon_unavailable(oversize_error));
     }
     writer
         .write_all(&(bytes.len() as u32).to_be_bytes())
         .and_then(|_| writer.write_all(&bytes))
-        .map_err(|source| AtmError::daemon_unavailable(write_error).with_source(source))
+        .map_err(|_source| AtmError::daemon_unavailable(write_error))
 }
 
 pub fn read_graft_post_send_message<T: DeserializeOwned>(
@@ -65,24 +62,17 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
     let payload_len = u32::from_be_bytes(header) as usize;
     if payload_len > MAX_GRAFT_POST_SEND_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-            "Reduce the graft post-send payload size before retrying same-host graft delivery.",
-        ));
+        return Err(AtmError::daemon_unavailable(oversize_error));
     }
     let mut bytes = vec![0u8; payload_len];
     reader
         .read_exact(&mut bytes)
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
-    serde_json::from_slice(&bytes).map_err(|source| {
-        AtmError::validation("failed to decode graft post-send message")
-            .with_recovery(
-                "Align the daemon and graft builds so both sides use the same graft post-send wire contract before retrying delivery.",
-            )
-            .with_source(source)
-    })
+        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|_source| AtmError::validation("failed to decode graft post-send message"))
 }
 
 /// Open unary client surface for embedded ATM consumers.

@@ -11,15 +11,11 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
     normalized
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to map daemon local IPC endpoint {} to a supported platform-local IPC name",
                 endpoint_path.display()
             ))
-            .with_source(source)
-            .with_recovery(
-                "Set ATM_DAEMON_SOCKET to a valid daemon local IPC endpoint and retry the ATM command.",
-            )
         })
 }
 

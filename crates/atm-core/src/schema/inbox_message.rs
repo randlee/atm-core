@@ -90,7 +90,6 @@ pub(crate) fn to_shared_inbox_value_with_policy(
             "failed to serialize shared inbox envelope for {} at {:?}: {error}",
             message.from, message.timestamp
         ))
-        .with_source(error)
     })?;
     let object = value
         .as_object_mut()
@@ -99,9 +98,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
                 "failed to serialize shared inbox envelope for {} at {:?}: envelope did not encode as a JSON object",
                 message.from, message.timestamp
             ))
-            .with_recovery(
-                "Preserve the ATM shared-inbox envelope shape so serialization produces one JSON object per message before retrying mailbox export.",
-            )
+
         })?;
     strip_metadata_atm_namespace(object);
     strip_removed_compatibility_fields(object);
@@ -109,9 +106,6 @@ pub(crate) fn to_shared_inbox_value_with_policy(
         let message_id = message.message_id.ok_or_else(|| {
             AtmError::mailbox_write(
                 "retrieval stub export requires an ATM-authored message_id on the source envelope",
-            )
-            .with_recovery(
-                "Preserve ATM-authored message ids on envelopes that export retrieval stubs before retrying shared inbox projection.",
             )
         })?;
         let retrieval_stub = retrieval_stub_text(message_id);
@@ -132,9 +126,7 @@ fn should_export_retrieval_stub(
                 "failed to compare ATM-authored export cap for {} at {:?}: configured byte cap does not fit into usize",
                 message.from, message.timestamp
             ))
-            .with_recovery(
-                "Lower [atm].claude_jsonl_body_export_max_bytes to a bounded value before retrying mailbox export.",
-            )
+
         })?;
 
     Ok(message.message_id.is_some()

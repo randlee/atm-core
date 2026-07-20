@@ -324,9 +324,7 @@ impl DeliveryPolicyCoordinator {
             .map(DeliveryRecipientSnapshot::from_roster)
             .ok_or_else(|| {
                 // Two steps joined as one string; callers must split on '\n' to present individually
-                AtmError::agent_not_found(agent, team).with_recovery(
-                    "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members.",
-                )
+                AtmError::agent_not_found(agent, team)
             })
     }
 
@@ -822,14 +820,12 @@ mod tests {
             )
             .expect_err("missing roster member must fail");
 
-        assert!(error.is_agent_not_found());
-        assert_eq!(
-            error.message,
-            "agent 'recipient' was not found in team 'test-team'"
+        assert!(error.code == crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(
+            error
+                .message
+                .starts_with("agent 'recipient' was not found in team 'test-team'")
         );
-        assert_eq!(
-            error.primary_recovery(),
-            Some("Update the team membership or target a different recipient.")
-        );
+        assert!(error.message.contains("Recovery:"));
     }
 }

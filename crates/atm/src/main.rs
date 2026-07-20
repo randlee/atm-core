@@ -170,9 +170,8 @@ fn run() -> Result<(), AtmError> {
                 error.kind(),
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) {
-                error.print().map_err(|source| {
+                error.print().map_err(|_source| {
                     AtmError::validation("failed to write ATM help/version output")
-                        .with_source(source)
                 })?;
                 return Ok(());
             }
@@ -221,9 +220,8 @@ fn dump_cli_surface(mode: &str) -> Result<(), AtmError> {
     match mode {
         "json" => {
             let surface = cli_surface::command_surface_json(&root);
-            let rendered = serde_json::to_string_pretty(&surface).map_err(|source| {
-                AtmError::validation("failed to render CLI-surface JSON").with_source(source)
-            })?;
+            let rendered = serde_json::to_string_pretty(&surface)
+                .map_err(|_source| AtmError::validation("failed to render CLI-surface JSON"))?;
             println!("{rendered}");
             Ok(())
         }
@@ -262,12 +260,11 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     } else {
         ConsoleLogRoute::Disabled
     };
-    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
-        AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|_source| {
+        AtmError::observability_bootstrap("failed to validate ATM service name")
     })?;
-    let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
+    let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|_source| {
         AtmError::observability_bootstrap("failed to validate ATM observability target")
-            .with_source(source)
     })?;
     let (logger, active_log_path) = build_logger(&log_dir, console_log_route, &service_name)?;
 
@@ -291,9 +288,8 @@ pub(crate) fn build_logger(
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
-    let mut builder = Logger::builder(config).map_err(|source| {
+    let mut builder = Logger::builder(config).map_err(|_source| {
         AtmError::observability_bootstrap("failed to initialize shared observability logger")
-            .with_source(source)
     })?;
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
@@ -306,24 +302,22 @@ pub(crate) fn build_logger(
 }
 
 fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
-    fs::create_dir_all(log_dir).map_err(|source| {
+    fs::create_dir_all(log_dir).map_err(|_source| {
         AtmError::observability_bootstrap(format!(
             "failed to create retained log directory {}",
             log_dir.display()
         ))
-        .with_source(source)
     })?;
     OpenOptions::new()
         .create(true)
         .append(true)
         .open(active_log_path)
         .map(|_| ())
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::observability_bootstrap(format!(
                 "failed to open retained log file {} during startup",
                 active_log_path.display()
             ))
-            .with_source(source)
         })
 }
 
@@ -355,9 +349,8 @@ fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
         .without_time()
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber).map_err(|source| {
+    tracing::subscriber::set_global_default(subscriber).map_err(|_source| {
         AtmError::observability_bootstrap("failed to initialize ATM tracing subscriber")
-            .with_source(source)
     })
 }
 
@@ -562,7 +555,6 @@ fn map_log_error(source: sc_observability::LogError) -> AtmError {
     AtmError::observability_emit(format!(
         "shared observability log admission failed ({code})"
     ))
-    .with_source(source)
 }
 
 fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
@@ -570,7 +562,6 @@ fn map_flush_error(source: sc_observability_types::FlushError) -> AtmError {
     AtmError::observability_emit(format!(
         "shared observability durability flush failed ({code})"
     ))
-    .with_source(source)
 }
 
 fn build_logging_health_detail(
@@ -705,35 +696,30 @@ fn map_command_event(
 ) -> Result<LogEvent, AtmError> {
     let schema_version =
         SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::observability_emit("failed to validate ATM observability schema version")
-                    .with_source(source)
             })?;
     let request_id = event
         .message_id
         .map(|value| CorrelationId::new(value.to_string()))
         .transpose()
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::observability_emit("failed to validate ATM observability request id")
-                .with_source(source)
         })?;
     let correlation_id = event
         .task_id
         .as_deref()
         .map(CorrelationId::new)
         .transpose()
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::observability_emit("failed to validate ATM observability correlation id")
-                .with_source(source)
         })?;
     let fields = build_command_event_fields(&event);
-    let action = ActionName::new(event.action.as_str()).map_err(|source| {
+    let action = ActionName::new(event.action.as_str()).map_err(|_source| {
         AtmError::observability_emit("failed to validate ATM observability action")
-            .with_source(source)
     })?;
-    let outcome = OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+    let outcome = OutcomeLabel::new(event.outcome.as_str()).map_err(|_source| {
         AtmError::observability_emit("failed to validate ATM observability outcome")
-            .with_source(source)
     })?;
     Ok(LogEvent {
         version: schema_version,
@@ -787,9 +773,8 @@ fn map_field_match(
     field_match: LogFieldMatch,
 ) -> Result<sc_observability_types::LogFieldMatch, AtmError> {
     let key = field_match.key.as_str().to_string();
-    let value = serde_json::to_value(&field_match.value).map_err(|source| {
+    let value = serde_json::to_value(&field_match.value).map_err(|_source| {
         AtmError::observability_query("failed to encode ATM log field match value")
-            .with_source(source)
     })?;
 
     Ok(sc_observability_types::LogFieldMatch::equals(key, value))
@@ -812,9 +797,8 @@ fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogS
 }
 
 fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
-    let encoded = serde_json::to_vec(&event).map_err(|source| {
+    let encoded = serde_json::to_vec(&event).map_err(|_source| {
         AtmError::observability_query("failed to encode shared retained log event")
-            .with_source(source)
     })?;
     if encoded.len() > MAX_RETAINED_QUERY_RECORD_BYTES {
         tracing::warn!(
@@ -828,9 +812,8 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
         return Ok(None);
     }
     let fields = serde_json::from_value::<LogFieldMap>(serde_json::Value::Object(event.fields))
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::observability_query("failed to project shared log fields into ATM types")
-                .with_source(source)
         })?;
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
@@ -848,9 +831,8 @@ fn map_timestamp(timestamp: atm_core::types::IsoTimestamp) -> Result<Timestamp, 
     let nanos = datetime.timestamp_nanos_opt().ok_or_else(|| {
         AtmError::observability_query("ATM timestamp could not be converted to nanoseconds")
     })?;
-    let offset = OffsetDateTime::from_unix_timestamp_nanos(nanos.into()).map_err(|source| {
+    let offset = OffsetDateTime::from_unix_timestamp_nanos(nanos.into()).map_err(|_source| {
         AtmError::observability_query("failed to convert ATM timestamp to shared timestamp")
-            .with_source(source)
     })?;
     Ok(Timestamp::from(offset))
 }
@@ -942,13 +924,12 @@ fn level_for_outcome(outcome: &str) -> Level {
     }
 }
 
-fn map_query_error(source: QueryError) -> AtmError {
-    AtmError::observability_query("shared observability query failed").with_source(source)
+fn map_query_error(_source: QueryError) -> AtmError {
+    AtmError::observability_query("shared observability query failed")
 }
 
-fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
+fn map_follow_error(phase: &str, _source: QueryError) -> AtmError {
     AtmError::observability_follow(format!("shared observability follow {phase} failed"))
-        .with_source(source)
 }
 
 fn map_diagnostic_summary(
@@ -975,12 +956,11 @@ pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
-        AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|_source| {
+        AtmError::observability_bootstrap("failed to validate ATM service name")
     })?;
-    let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
+    let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|_source| {
         AtmError::observability_bootstrap("failed to validate ATM observability target")
-            .with_source(source)
     })?;
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr

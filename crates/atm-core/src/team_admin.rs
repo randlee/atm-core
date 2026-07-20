@@ -415,15 +415,12 @@ pub fn clear_nudge_template_override_with_store(
 fn validate_nudge_template_override_team(
     caller_team: TeamName,
     team: TeamName,
-    action: &'static str,
+    _action: &'static str,
 ) -> Result<(), AtmError> {
     if caller_team != team {
         return Err(AtmError::validation(format!(
             "caller team '{}' does not match nudge-template target team '{}'",
             caller_team, team
-        ))
-        .with_recovery(format!(
-            "Run `atm teams {action}` from the same ATM team that owns the target override row.",
         )));
     }
     Ok(())
@@ -463,9 +460,9 @@ mod tests {
         update_member_with_roster_store,
     };
     use crate::boundary::{
-        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, ReplaySource, RosterEntry,
-        RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
+        RosterMemberKind, RosterStore, RosterStoreHealthSnapshot, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
@@ -505,7 +502,6 @@ mod tests {
             &self,
             team: &TeamName,
             members: &[RosterEntry],
-            _source: Option<&ReplaySource>,
         ) -> Result<(), crate::error::AtmError> {
             self.teams
                 .lock()

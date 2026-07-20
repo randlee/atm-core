@@ -75,20 +75,13 @@ impl ListQuery {
 
 fn normalize_limit(limit: Option<usize>) -> Result<Option<usize>, AtmError> {
     match limit {
-        Some(0) => Err(
-            AtmError::validation("list limit must be at least 1".to_string()).with_recovery(
-                "Use `--limit` with a positive integer before retrying `atm list`.",
-            ),
-        ),
-        Some(value) if value > MAX_LIST_LIMIT => Err(
-            AtmError::validation(format!(
-                "list limit exceeds the {} row maximum",
-                MAX_LIST_LIMIT
-            ))
-            .with_recovery(
-                "Use a smaller `--limit` value before retrying `atm list` so daemon responses remain bounded.",
-            ),
-        ),
+        Some(0) => Err(AtmError::validation(
+            "list limit must be at least 1".to_string(),
+        )),
+        Some(value) if value > MAX_LIST_LIMIT => Err(AtmError::validation(format!(
+            "list limit exceeds the {} row maximum",
+            MAX_LIST_LIMIT
+        ))),
         Some(value) => Ok(Some(value)),
         None => Ok(Some(DEFAULT_LIST_LIMIT)),
     }
@@ -209,11 +202,7 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Repair or reload the ATM roster, or list a different mailbox target.",
-            ),
-        );
+        return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
     Ok(())
@@ -601,7 +590,10 @@ mod tests {
         )
         .expect_err("missing ATM roster member should fail");
 
-        assert!(error.is_agent_not_found(), "{error:?}");
+        assert!(
+            error.code == crate::error_codes::AtmErrorCode::AgentNotFound,
+            "{error:?}"
+        );
     }
 
     #[test]

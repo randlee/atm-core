@@ -13,15 +13,9 @@ pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(
-    value: String,
-    subject: &str,
-    recovery: &'static str,
-) -> Result<String, AtmError> {
+fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
-        return Err(
-            AtmError::validation(format!("{subject} must not be blank")).with_recovery(recovery)
-        );
+        return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
     Ok(value)
 }
@@ -32,12 +26,7 @@ pub struct MessageKey(String);
 
 impl MessageKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "message key",
-            "Populate a stable ATM message key before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "message key").map(Self)
     }
 
     pub fn into_inner(self) -> String {
@@ -94,12 +83,7 @@ pub struct TaskState(String);
 
 impl TaskState {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "task state",
-            "Populate a non-empty task state before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "task state").map(Self)
     }
 }
 
@@ -143,12 +127,7 @@ pub struct AckTransition(String);
 
 impl AckTransition {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "ack transition",
-            "Populate a non-empty ack transition before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "ack transition").map(Self)
     }
 }
 
@@ -223,10 +202,7 @@ impl FromStr for BuiltInNudgeTemplateKind {
             "acknowledge_task" => Ok(Self::AcknowledgeTask),
             other => Err(AtmError::validation(format!(
                 "unsupported built-in nudge template kind `{other}`"
-            ))
-            .with_recovery(
-                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
-            )),
+            ))),
         }
     }
 }

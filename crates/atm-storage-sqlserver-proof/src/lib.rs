@@ -12,17 +12,14 @@
 //! `atm-core` dependency or another storage-architecture reset.
 
 use atm_storage::{
-    AtmError, AtmErrorKind, Message, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
+    AtmError, AtmErrorCode, Message, MessageKey, MessageQuery, MessageStore, RosterSnapshot,
     RosterStore, TeamName,
 };
 
 fn compile_only_error(surface: &str) -> AtmError {
     AtmError::new(
-        AtmErrorKind::Internal,
+        AtmErrorCode::InternalError,
         format!("{surface} is compile-only in atm-storage-sqlserver-proof"),
-    )
-    .with_recovery(
-        "Replace atm-storage-sqlserver-proof with a real atm-storage-sqlserver backend before using SQL Server at runtime.",
     )
 }
 

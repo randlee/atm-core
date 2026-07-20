@@ -17,8 +17,7 @@ use crate::boundary::{
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
-use crate::error::{AtmError, AtmErrorKind};
-use crate::error_codes::AtmErrorCode;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
@@ -163,12 +162,7 @@ impl PostSendHookEmitter for RecordingPostSendEmitter {
             .expect("post-send emitter lock")
             .push(dispatch.clone());
         if let Some(code) = self.fail_code {
-            return Err(AtmError::new_with_code(
-                code,
-                AtmErrorKind::DaemonUnavailable,
-                "test post-send emitter failure",
-            )
-            .with_recovery("Repair the test post-send emitter and retry."));
+            return Err(AtmError::for_code(code));
         }
         Ok(match dispatch.target {
             PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
@@ -753,15 +747,11 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     )
     .expect_err("empty atm roster must fail");
 
-    assert!(error.is_agent_not_found());
-    assert_eq!(
-        error.message,
-        format!("agent 'recipient' was not found in team '{TEST_TEAM}'")
-    );
-    assert_eq!(
-        error.primary_recovery(),
-        Some("Update the team membership or target a different recipient.")
-    );
+    assert!(error.code == crate::error_codes::AtmErrorCode::AgentNotFound);
+    assert!(error.message.starts_with(&format!(
+        "agent 'recipient' was not found in team '{TEST_TEAM}'"
+    )));
+    assert!(error.message.contains("Recovery:"));
     assert!(
         runtime
             .appended_messages
@@ -791,7 +781,6 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed send must fail");
 
-    assert!(error.is_validation());
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         error
@@ -829,7 +818,6 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
     )
     .expect_err("self-addressed task send must fail");
 
-    assert!(error.is_validation());
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
@@ -866,7 +854,6 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed dry-run must fail");
 
-    assert!(error.is_validation());
     assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
@@ -932,7 +919,7 @@ fn resolve_recipient_rejects_invalid_alias_target() {
     )
     .expect_err("invalid alias target");
 
-    assert!(error.is_address());
+    assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
 }
 
 #[test]

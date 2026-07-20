@@ -330,11 +330,7 @@ impl FromStr for TaskId {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(
-                AtmError::validation("task id must not be blank").with_recovery(
-                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
-                ),
-            );
+            return Err(AtmError::validation("task id must not be blank"));
         }
         Ok(Self(trimmed.to_string()))
     }

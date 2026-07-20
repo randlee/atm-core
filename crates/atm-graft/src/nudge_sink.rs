@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use atm_core::boundary::PostSendHookEvent;
-use atm_core::protocol::ProtocolErrorEnvelope;
+use atm_core::error::AtmError;
 
 use crate::runtime::read_snapshot;
 use crate::{GraftObservability, HostNudgeInjector, SessionSnapshot};
@@ -13,7 +13,7 @@ pub(crate) struct GraftNudgeSink<'a> {
 }
 
 impl GraftNudgeSink<'_> {
-    pub(crate) fn deliver(&self, event: PostSendHookEvent) -> Result<(), ProtocolErrorEnvelope> {
+    pub(crate) fn deliver(&self, event: PostSendHookEvent) -> Result<(), AtmError> {
         match self.injector.inject_nudge(&event) {
             Ok(()) => {
                 match read_snapshot(self.snapshot) {
@@ -46,7 +46,7 @@ impl GraftNudgeSink<'_> {
                         "graft nudge delivery failed and the session snapshot could not be read for observability"
                     ),
                 }
-                Err(ProtocolErrorEnvelope::from_error(&error))
+                Err(error)
             }
         }
     }
@@ -57,7 +57,7 @@ mod tests {
     use std::sync::{Arc, Mutex, RwLock};
 
     use atm_core::boundary::PostSendHookEvent;
-    use atm_core::error::{AtmError, AtmErrorKind};
+    use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
 
     use super::GraftNudgeSink;
@@ -80,7 +80,7 @@ mod tests {
     impl HostNudgeInjector for FailingInjector {
         fn inject_nudge(&self, _nudge: &PostSendHookEvent) -> Result<(), AtmError> {
             Err(AtmError::new(
-                AtmErrorKind::DaemonUnavailable,
+                AtmErrorCode::DaemonUnavailable,
                 "synthetic graft receiver unavailable",
             ))
         }

@@ -93,14 +93,13 @@ pub use boundary::{
     ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
     DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
-    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
-    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
-    PostSendHookEvent, RequestDispatcher, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness,
-    RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
-    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskState,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey, NotificationEvent,
+    NudgeTemplateOverrideStore, PostSendHookEmitter, PostSendHookEvent, RequestDispatcher,
+    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
+    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
+    ServerTransport, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
