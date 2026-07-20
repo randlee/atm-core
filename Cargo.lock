@@ -194,7 +194,6 @@ dependencies = [
  "agent-team-mail-core",
  "atm-storage",
  "atm-storage-rusqlite",
- "serde_json",
 ]
 
 [[package]]

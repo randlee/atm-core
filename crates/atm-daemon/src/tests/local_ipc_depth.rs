@@ -116,7 +116,6 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: || Ok(()),
             },
         );
@@ -173,7 +172,6 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
@@ -266,7 +264,6 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(

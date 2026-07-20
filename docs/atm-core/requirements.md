@@ -195,30 +195,33 @@ Initial crate requirement IDs:
   No graft-private lifecycle, session, queue, or stream identifier is reserved
   in shared `atm-core`; receiver-private runtime state belongs in the receiver
   implementation unless it is proven to be shared ATM semantics.
-- `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
-  used by client transport, server transport, and in-process test transport. Satisfies:
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the transport-neutral application
+  request/response types: `AgentAddress`, `WriteRequest`, read/query inputs,
+  and canonical message projections. Local UDS HTTP, remote HTTPS, and the
+  in-process test adapter decode to or encode from these same types. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
-  `ServerTransport` contracts plus route-selection semantics between local and
-  cross-host daemon paths. Satisfies:
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
+  and post-write routing contract. Exactly one post-write router chooses local
+  nudge for an empty host or HTTPS delivery for every present host, including
+  localhost and the daemon's own advertised or bound IP. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
-  retry semantics exposed at service boundaries. Satisfies:
-  `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
-  no-durable-remote-outbox semantics above transport implementations. Satisfies:
-  `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
-  contract used by production, fake, and loopback transports. The shared
-  `ClientTransport` boundary must remain object-safe and include `Send + Sync`
-  semantics so callers do not have to restate them ad hoc. Satisfies:
-  `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
-- `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
-  and framed encode/decode helpers used by same-host local IPC, cross-host
-  daemon transport, and in-process protocol tests. The canonical wire contract
-  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
-  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
-  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
+  delivery state: no replay store, outbox, retry queue, receipt, remote ack
+  state, or duplicate-delivery subsystem. Storage idempotency is by immutable
+  message ULID. Satisfies `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
+  canonical write. A failed remote attempt creates no remote recipient row or
+  delivery state; an already-persisted local sender record remains immutable.
+  Satisfies `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the sealed, object-safe, `Send + Sync`
+  `DaemonApiClient` contract used by CLI, graft, and test clients. It exposes
+  one application API; concrete UDS/HTTPS HTTP I/O is adapter-owned. A future
+  Python binding consumes this contract in its owning phase and must not create
+  a parallel ingress or client trait.
+  Satisfies `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
+- `REQ-CORE-TRANSPORT-006` is historical only. The custom ATM wire-frame
+  schema, frame codec, and `ClientTransport` framing contract are retired by
+  AI.6 and must not be extended; ADR-033's HTTP/OpenAPI contract replaces them.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
   ATM mail correctness must not depend on mailbox locks in the current
   SQLite/daemon architecture. Satisfies:
@@ -317,26 +320,16 @@ Required `atm-core` crate rules:
 - `atm-core` must model `message_key` as a semantic newtype at the service and
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
-- `ClientTransport` remains the shared request/response seam for:
-  - production same-host local IPC transport
-  - production remote daemon peer transport
-  - fake in-process transport doubles
-  - loopback in-process transport
-- `ClientTransport` must be strong enough for shared ownership and concurrent
-  request execution without downstream callers restating `Send + Sync`
-- `atm-core` owns one ATM frame contract for local IPC and remote daemon
-  request/response transport, as defined by
-  `docs/atm-daemon/protocol-icd.md`
-- the current shared daemon packet family covers:
-  - send compose
-  - send acknowledge
-  - receive
-  - clear
-  - doctor
-  - heartbeat
-- `atm-core` framed transport helpers must delimit packets explicitly rather
-  than relying on EOF/connection shutdown to mark request boundaries
-  rather than passing raw integer literals through the service boundary
+- `DaemonApiClient` is the shared request/response seam for the HTTP/UDS
+  production client, HTTPS peer client, and in-process HTTP test adapter.
+  It is object-safe and `Send + Sync` so clients do not restate concurrency
+  bounds.
+- `atm-core` owns transport-neutral request/response domain types only. HTTP
+  routes, framing, socket ownership, and response translation are adapter
+  concerns under ADR-033; the retired ATM frame ICD is not an accepted contract.
+- canonical writes represent both send and acknowledgement. An ack differs
+  only by a populated `acknowledges_message_id`, never by a second request or
+  packet family.
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
 - `atm-core` must not let command/service code access SQLite, mailbox JSON,
@@ -347,8 +340,8 @@ Required `atm-core` crate rules:
   private unless public exposure is required by a documented boundary contract
 - `atm-core` must keep business logic testable in-process without daemon
   process spawning
-- `atm-core` must model fallible runtime behavior with typed error enums and
-  `Result` propagation rather than panic/unwrap on routine failure paths
+- `atm-core` must model fallible runtime behavior with ADR-032's `AtmError`
+  and `Result` propagation rather than panic/unwrap on routine failure paths
 - `atm-core` must define ATM-owned structured event/error models that both the
   CLI and daemon layers emit through `sc-observability`
 - `atm-core` store implementations must enforce WAL-mode, foreign-key, and
@@ -401,8 +394,9 @@ Required boundary rules:
   - tail-session projection
   - doctor health projection
 - the boundary must remain synchronous and object-safe for service injection
-- shared query/follow and health failures must map to stable `AtmErrorKind`
-  variants without leaking shared error enums into `atm-core`
+- shared query/follow and health failures must map to stable `AtmErrorCode`
+  values through ADR-032's `AtmError` without leaking backend error enums into
+  `atm-core`
 - `atm-core` command-service failures and degraded recovery warnings must expose
   stable ATM-owned error codes for the CLI observability adapter to log
 - the corresponding source-of-truth code registry must live in one source file

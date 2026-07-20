@@ -20,7 +20,7 @@ roots = [
 ]
 
 [ownership]
-io_owns = ["runtime_dependency_assembly", "config_doctor_assembly", "replay_store_assembly"]
+io_owns = ["runtime_dependency_assembly", "config_doctor_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
@@ -38,7 +38,7 @@ forbidden = []
 
 [contracts]
 request_types = ["RuntimeAssemblyInputs"]
-response_types = ["RuntimeAssembly", "RuntimeDoctorPorts", "RuntimeStorageFinalizer"]
+response_types = ["RuntimeAssembly", "RuntimeDoctorPorts"]
 error_types = ["AtmError"]
 
 [testing]

@@ -49,14 +49,6 @@ class PhaseXGuardrailTests(unittest.TestCase):
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0].label, "legacy mailbox runtime type")
 
-    def test_capability_guardrail_allows_known_test_fixture(self) -> None:
-        self.assertTrue(
-            CAPABILITY_MODULE.is_allowed_test_match(
-                "crates/atm-daemon/src/peer_transport.rs",
-                "            replay_store: None,",
-            )
-        )
-
     def test_capability_guardrail_rejects_new_replay_store_none_assignment(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

@@ -177,16 +177,12 @@ Required subsystem boundaries:
 - `ConfigDoctor` boundary
 - `PostSendHookEmitter` boundary
 - `StatusSource` boundary
-- `RemoteReplayStore` boundary
-- `RuntimeStorageFinalizer` boundary
 
 Phase AA shared runtime-composition contracts:
 - `RuntimeDoctorPorts` is the `atm-core` DTO that groups the storage-neutral
   doctor handles consumed by daemon and direct-doctor callers
 - `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
   trait family
-- replay persistence ownership crosses the crate boundary through
-  `RemoteReplayStore`, not through daemon-private or SQLite-private helpers
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters

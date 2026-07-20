@@ -6,12 +6,8 @@
 //! Daemon runtime composition and portability adapters.
 
 mod active_connection_registry;
-mod boundary_adapters;
-#[cfg(test)]
-mod claude_compat;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
-mod direct_boundaries;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -22,7 +18,6 @@ mod local_ipc_connection;
 mod local_ipc_transport;
 mod local_ipc_wake;
 mod non_claude_outbound_runtime;
-mod peer_transport;
 mod post_send_emitter;
 mod runtime_health;
 mod runtime_sqlite_observer;
@@ -52,7 +47,6 @@ pub use daemon_runtime_observability::{
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
-pub(crate) use peer_transport::PeerTransportRuntime;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);

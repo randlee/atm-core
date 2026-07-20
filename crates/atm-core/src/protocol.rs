@@ -218,7 +218,6 @@ const fn observability_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErro
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
         | AtmErrorCode::WarningSqliteHealthDegraded
         | AtmErrorCode::PostSendAdvisoryDeliveryFailed => Some(AtmErrorKind::DaemonUnavailable),
         AtmErrorCode::ObservabilityEmitFailed => Some(AtmErrorKind::ObservabilityEmit),
@@ -897,19 +896,12 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 #[serde(rename_all = "snake_case")]
 pub enum NotificationKind {
     Delivery,
-    #[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
-    ReconcileComplete,
 }
 
 impl fmt::Display for NotificationKind {
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete transport strings remain stable for historical reconcile/watch decoding and formatting support."
-    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
             Self::Delivery => "delivery",
-            Self::ReconcileComplete => "reconcile_complete",
         };
         f.write_str(value)
     }
@@ -1006,40 +998,6 @@ pub struct RuntimeStatusSnapshot {
     #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
 }
-
-/// Watch subscription request payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
-pub struct WatchSubscriptionRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Watch event batch transport payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
-pub struct WatchEventBatch {
-    pub paths: Vec<PathBuf>,
-}
-
-/// Reconcile request transport payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
-pub struct ReconcileRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-    pub agent: AgentName,
-}
-
-/// Reconcile outcome transport payload.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[deprecated(note = "Phase AD obsolete: historical reconcile/watch only")]
-pub struct ReconcileResult {
-    pub observed_paths: usize,
-    pub imported_sources: usize,
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -1179,24 +1137,6 @@ mod tests {
     fn daemon_socket_path_rejects_override() {
         let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
         assert!(daemon_socket_path().is_err());
-    }
-
-    #[test]
-    fn protocol_error_envelope_preserves_remote_delivery_outcome_unknown_recovery() {
-        let error = AtmError::remote_delivery_outcome_unknown(
-            "remote peer delivery outcome is unknown and replay persistence failed",
-        )
-        .with_source(
-            AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
-                "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
-            ),
-        );
-        let envelope = ProtocolErrorEnvelope::from_error(&error);
-        let round_trip = envelope.into_atm_error();
-
-        assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
-        assert_eq!(round_trip.message, error.message);
-        assert_eq!(round_trip.recovery, error.recovery);
     }
 
     #[test]

@@ -949,6 +949,21 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [PLANNED]
+
+Planning branch: `plan/phase-ai-planning`
+Integration branch: `integrate/phase-AI`
+
+AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
+baseline. It retains only the local-IPC singleton while deleting peer transport,
+replay/store support, and retired boundary adapters. It supersedes the abandoned
+PR #590 line. AI.2 onward rebuild from that baseline: HTTP over UDS replaces the
+custom local frame protocol, and the same router later serves authenticated
+HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
+send/ack paths, or cross-host-specific mailbox logic.
+
+Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
+
 ## Publishing Improvements
 
 Implementation Branches:

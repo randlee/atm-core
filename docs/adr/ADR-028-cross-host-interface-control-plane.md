@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-028 |
-| Status | Proposed |
+| Status | Superseded by ADR-034 |
 | Scope | Repository-wide |
 | Deciders | ATM maintainers |
 | Relates to | ADR-026, ADR-027, Phase AG |
@@ -15,10 +15,10 @@ existing surface. The daemon had no durable operator-managed control plane for
 which interfaces it should bind or advertise, and env-driven peer wiring was
 too ad hoc to serve as the intended product contract.
 
-## Decision
+## Historical proposal (retired)
 
-ATM will add a SQLite-backed cross-host interface control plane managed through
-CLI commands rather than environment variables as the primary operator surface.
+Phase AG proposed a SQLite-backed cross-host interface control plane managed
+through CLI commands rather than environment variables.
 
 The control plane must define:
 
@@ -31,4 +31,5 @@ The control plane must define:
 
 - env-driven peer addressing remains historical/transitional only
 - daemon bind behavior becomes deny-by-default when no enabled rows exist
-- AG.4 owns the implementation closure for this ADR
+- This decision is retained as historical context. ADR-034 owns the integrated
+  HTTP/HTTPS interface-control contract.
