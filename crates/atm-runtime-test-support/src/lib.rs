@@ -6,11 +6,12 @@ use std::sync::{Mutex, OnceLock};
 
 use atm_core::error::AtmError;
 use atm_core::test_support::{lock_env, remove_env_var, set_env_var};
-use atm_core::{LocalFileNonClaudeOutbound, LocalServiceRuntime, home::atm_home};
-use atm_runtime::{
-    RuntimeAssembly, RuntimeAssemblyInputs, RuntimeSqliteEvent, RuntimeSqliteObserver,
-    assemble_sqlite_runtime,
+use atm_core::{
+    LocalFileNonClaudeOutbound, LocalServiceRuntime,
+    home::{atm_home, current_host_runtime_scope},
 };
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime};
+use atm_storage_rusqlite::SqliteStorageFactory;
 
 // Mutex required because sqlite retained runtimes are cached across concurrent
 // tests; bulk clear() is safe because entries are deterministic per path and
@@ -19,15 +20,6 @@ static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
 pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
-
-#[derive(Debug, Default)]
-struct NoopRuntimeSqliteObserver;
-
-impl RuntimeSqliteObserver for NoopRuntimeSqliteObserver {
-    fn emit_sqlite_event(&self, _event: RuntimeSqliteEvent) -> Result<(), AtmError> {
-        Ok(())
-    }
-}
 
 pub fn install_sqlite_retained_runtime_factory() {
     // The test runtime provider is process-global and production-style
@@ -74,10 +66,12 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, A
         let _env_lock = lock_env();
         let _ = atm_home()?;
     }
-    assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: path.as_ref().to_path_buf(),
+    assemble_runtime(RuntimeAssemblyInputs {
+        host_runtime_scope: current_host_runtime_scope()?,
+        storage_factory: std::sync::Arc::new(SqliteStorageFactory::at_path(
+            path.as_ref().to_path_buf(),
+        )),
         config_current_dir,
-        sqlite_observer: std::sync::Arc::new(NoopRuntimeSqliteObserver),
         non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
     })
 }

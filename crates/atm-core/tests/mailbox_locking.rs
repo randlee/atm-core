@@ -1464,11 +1464,7 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(
-            &team,
-            &members,
-            Some(&atm_core::boundary::ReplaySource::new("config.json").expect("source")),
-        )
+        .replace_roster(&team, &members)
         .expect("seed sqlite roster");
 }
 

@@ -4,6 +4,7 @@
 pub mod contract;
 pub mod error;
 pub mod error_codes;
+pub mod factory;
 pub mod schema;
 pub mod types;
 mod validation;
@@ -19,6 +20,7 @@ pub use contract::{
 };
 pub use error::{AtmError, AtmErrorKind};
 pub use error_codes::AtmErrorCode;
+pub use factory::{StorageFactory, StorageHandles};
 pub use schema::{AlertKind, AtmMessageId, InboxMessage, MessageEnvelope, PendingAck, ThreadMode};
 pub use types::{AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 pub use validation::{validate_agent_at_team, validate_path_segment};
