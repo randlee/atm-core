@@ -155,8 +155,9 @@ fn deleted_daemon_boundary_modules_must_be_retired() {
                 .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
             let boundary: BoundaryToml = toml::from_str(&contents)
                 .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
-            let source = daemon_boundary_module_source(&root, &boundary.implementation.module)?;
-            module_is_stale_if_missing(source.exists(), &boundary.status.state).then(|| {
+            let sources = daemon_boundary_module_sources(&root, &boundary.implementation.module)?;
+            let source_exists = sources.iter().any(|source| source.exists());
+            module_is_stale_if_missing(source_exists, &boundary.status.state).then(|| {
                 format!(
                     "{} declares missing module {} with status {}",
                     path.display(),
@@ -179,6 +180,46 @@ fn missing_daemon_module_requires_retired_boundary_state() {
     assert!(!module_is_stale_if_missing(false, "retired"));
 }
 
+#[test]
+fn bare_daemon_boundary_module_resolves_crate_entry_points() {
+    let root = workspace_root();
+    let sources = daemon_boundary_module_sources(&root, "atm_daemon")
+        .expect("atm_daemon must resolve to daemon crate entry points");
+
+    assert_eq!(
+        sources,
+        vec![
+            root.join("crates/atm-daemon/src/lib.rs"),
+            root.join("crates/atm-daemon/src/main.rs"),
+        ]
+    );
+    assert!(sources.iter().any(|source| source.exists()));
+}
+
+#[test]
+fn retired_bare_daemon_boundary_records_are_checked_against_entry_points() {
+    let root = workspace_root();
+    for file_name in [
+        "daemon-reconcile-coordinator.toml",
+        "file-watch-event-source.toml",
+    ] {
+        let path = root.join("boundaries/atm-daemon").join(file_name);
+        let contents = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        let boundary: BoundaryToml = toml::from_str(&contents)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+        let sources = daemon_boundary_module_sources(&root, &boundary.implementation.module)
+            .unwrap_or_else(|| panic!("{} must resolve a daemon module", path.display()));
+
+        assert_eq!(boundary.implementation.module, "atm_daemon");
+        assert!(sources.iter().any(|source| source.exists()));
+        assert!(!module_is_stale_if_missing(
+            sources.iter().any(|source| source.exists()),
+            &boundary.status.state
+        ));
+    }
+}
+
 fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(directory)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", directory.display()))
@@ -194,13 +235,22 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-fn daemon_boundary_module_source(root: &Path, module: &str) -> Option<PathBuf> {
-    let relative_module = module.strip_prefix("atm_daemon::")?;
-    Some(
-        root.join("crates/atm-daemon/src")
-            .join(relative_module.replace("::", "/"))
-            .with_extension("rs"),
-    )
+fn daemon_boundary_module_sources(root: &Path, module: &str) -> Option<Vec<PathBuf>> {
+    let relative_module = module.strip_prefix("atm_daemon")?;
+    let source_root = root.join("crates/atm-daemon/src");
+    if relative_module.is_empty() {
+        return Some(vec![
+            source_root.join("lib.rs"),
+            source_root.join("main.rs"),
+        ]);
+    }
+
+    let relative_module = relative_module.strip_prefix("::")?;
+    let module_path = source_root.join(relative_module.replace("::", "/"));
+    Some(vec![
+        module_path.with_extension("rs"),
+        module_path.join("mod.rs"),
+    ])
 }
 
 fn module_is_stale_if_missing(source_exists: bool, state: &str) -> bool {

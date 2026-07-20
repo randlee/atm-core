@@ -293,39 +293,40 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-ingress.toml](../../boundaries/atm-daemon/daemon-inbox-ingress.toml)
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
 
 Purpose:
-- Owns the daemon runtime adapter behind the SourceIngress contract.
+- Historically owned the daemon runtime adapter behind the SourceIngress
+  contract.
 
 Notes:
-- This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
+- The deleted adapter previously owned compatibility inbox import, fingerprint,
+  and diagnostic behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## DaemonInboxExportAdapter
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-export.toml](../../boundaries/atm-daemon/daemon-inbox-export.toml)
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
 
 Purpose:
-- Owns the daemon runtime adapter behind the ProjectionExport contract.
+- Historically owned the daemon runtime adapter behind the ProjectionExport
+  contract.
 
 Notes:
-- This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
-- Phase `Yb` tightens this adapter further:
-  - runtime compatibility export and repair/rebuild export must be reviewed as
-    separate caller classes
-  - only approved delivery executors may invoke normal runtime export
-  - repair/rebuild re-export must remain outside the normal send/ack path
-  - see:
-    - [../phase-Yb/plan-phase-Yb.md](../phase-Yb/plan-phase-Yb.md)
-    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
-- `Phase Yc` adds one final recovered-Claude seam requirement:
-  - `Y.12` must document the daemon-side adapter behavior for the recovered
-    logical-message-set seam through
-    `ProjectionExport::append_message_set(...)` rather than treating
-    `DaemonInboxExportAdapter` as append-only by implication
-  - the daemon adapter must expose the recovered Claude message-set export as
-    one owned `ProjectionExport` operation, not as repeated single-message appends
+- The deleted adapter previously owned compatibility export and write-bound
+  projection behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## Policy Placement
 
