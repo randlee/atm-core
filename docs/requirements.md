@@ -3586,9 +3586,9 @@ mail correctness.
   - remote peers use HTTPS over TCP
   - both adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
-    `/v1/atm/message/{message-id}`, `/v1/atm/doctor`, `/v1/atm/teams`, and
-    `/v1/atm/team/{team-name}`; their methods and schemas are the versioned
-    OpenAPI contract
+    `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`,
+    `/v1/atm/doctor`, `/v1/atm/teams`, and `/v1/atm/team/{team-name}`; their
+    methods and schemas are the versioned OpenAPI contract
   - the test adapter exercises the same router/handler contract without a live
     socket
   - HTTP adapters perform decode, authentication, and response translation

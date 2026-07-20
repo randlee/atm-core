@@ -15,8 +15,9 @@ remote daemon ─HTTPS/TCP───┼─> one REST router -> handlers -> SQLite
 test adapter ──────────────┘
 ```
 
-`/v1/atm/messages`, `/v1/atm/message/{message-id}`, `/v1/atm/doctor`,
-`/v1/atm/teams`, and `/v1/atm/team/{team-name}` are the durable resource roots.
+`/v1/atm/messages`, `/v1/atm/message/{message-id}`,
+`/v1/atm/message/{message-id}/read`, `/v1/atm/doctor`, `/v1/atm/teams`, and
+`/v1/atm/team/{team-name}` are the durable resource roots.
 An acknowledgement endpoint builds a write with `acknowledges_message_id`; no
 separate acknowledgment pipeline exists. The post-write router is the sole
 owner of local-versus-remote nudge routing.

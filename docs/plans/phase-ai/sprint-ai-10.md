@@ -32,14 +32,17 @@ target: integrate/phase-AI
      arity, and default; compare it to a checked-in pre-Phase-AI baseline;
    - put the generator/diff test beside the structural architecture gates and
      allow baseline regeneration only through an explicit `--bless`/update
-     command; removed subcommands, removed/renamed arguments, or changed
-     requiredness/arity hard-fail. New surface is allowed, but a baseline/live
-     mismatch in either direction fails until the same reviewed change updates
-     the baseline;
+     command. Bless may append additions only: a removed/renamed baseline
+     entry, or changed requiredness/arity/default, hard-fails even under
+     `--bless`. An intentional breaking change requires a separately
+     human-reviewed, versioned baseline reset before its implementation PR.
+     New surface is allowed, but a baseline/live mismatch in either direction
+     fails until the same reviewed change updates the baseline;
    - apply the same checked-in additions-only baseline-diff pattern to the
      OpenAPI artifact AI.6 emits: removed path, method, required field, or
-     response/error semantic hard-fails; additive paths, operations, and fields
-     are allowed. The OpenAPI gate consumes the schema, not rendered prose.
+     response/error semantic hard-fails, including during baseline update;
+     additive paths, operations, and fields are allowed. The OpenAPI gate
+     consumes the schema, not rendered prose.
 
 ## Proof record
 
