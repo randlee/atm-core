@@ -32,6 +32,12 @@ implementation. An acknowledgement endpoint builds the same internal canonical
 write whose `acknowledges_message_id: Option<MessageId>` is populated. It is
 not a separate envelope, transport, or persistence path.
 
+Source and destination use ADR-037's structured `AgentAddress`: `agent`,
+optional `chat_id`, `team`, and optional `host`. The API must preserve these
+fields exactly in a message projection. It must not reduce a chat-qualified
+address to its base agent or invent a session header as a parallel identity
+contract.
+
 Nudge is a post-write internal event. It is not committed as a third public
 verb or endpoint until an adapter inventory proves that a remotely invocable
 nudge endpoint is necessary. Any future endpoint must call the existing

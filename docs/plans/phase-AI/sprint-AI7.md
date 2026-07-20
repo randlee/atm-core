@@ -1,33 +1,39 @@
 ---
-title: AI.7 cross-host control plane
+title: AI.7 canonical write path
 status: proposed
-branch: feature/pAI-s7-crosshost-control-plane
-worktree: ../atm-core-worktrees/feature/pAI-s7-crosshost-control-plane
+branch: feature/pAI-s7-canonical-write-path
+worktree: ../atm-core-worktrees/feature/pAI-s7-canonical-write-path
 target: integrate/phase-AI
 ---
 
-# AI.7 — cross-host control plane
+# AI.7 — canonical write path
 
 ## Deliverables
 
-1. Add storage-trait-backed SQLite records for enabled HTTPS interfaces, local
-   certificate identity, and exact trusted peers (host identity + pinned
-   fingerprint).
-2. Add CLI lifecycle commands to list/manage interfaces, initialize/show the
-   local certificate, and explicitly add/replace/revoke trusted peers.
-3. Surface safe configured/bound/trust state in `atm doctor`.
-4. Forbid environment-controlled peer address, bind address, or trust state.
+1. Define one `WriteRequest` carrying immutable message data, full structured
+   source/destination addresses, and optional `acknowledges_message_id`.
+2. Route CLI send/ack, graft, and local UDS REST to one write handler and one
+   sealed storage method.
+3. Make the handler persist idempotently, apply optional receiver-side ack
+   mutation, then emit the post-write event exactly once.
+4. Preserve chat-qualified addresses through send, reply, and acknowledgement;
+   delete duplicate send/ack envelopes, handlers, persistence/nudge branches,
+   and host-routing decisions.
 
 ## Acceptance criteria
 
-- No enabled interface means no HTTPS listener.
-- A peer record cannot be added or fingerprint replaced without explicit
-  confirmation.
-- Configuration is behind the storage trait; HTTP/HTTPS adapters do not use
-  rusqlite types.
-- Doctor never exposes private key material.
+- The REST ack endpoint differs from send only by `acknowledges_message_id` on
+  `WriteRequest`.
+- One structural call graph reaches storage and post-write emission for all
+  write ingress sources.
+- Same-message ULID replay is idempotent and does not duplicate a nudge.
+- A chat-qualified reply or ack preserves the original address and does not
+  leak into a base-agent mailbox.
+- Self-send policy is checked once before write routing; no later special ack
+  exception exists.
 
 ## Required validation
 
-Storage migration/trait tests; CLI integration tests; doctor redaction tests;
-`just lint`; `just test`; configuration-boundary gate.
+CLI, graft, and REST send/ack integration tests; chat-address reply/ack tests;
+duplicate-ULID and failed-write tests; `just lint`; `just test`; canonical-write
+architecture gate.

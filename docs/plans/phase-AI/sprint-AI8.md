@@ -1,33 +1,33 @@
 ---
-title: AI.8 HTTPS peer transport
+title: AI.8 cross-host control plane
 status: proposed
-branch: feature/pAI-s8-https-peer-transport
-worktree: ../atm-core-worktrees/feature/pAI-s8-https-peer-transport
+branch: feature/pAI-s8-crosshost-control-plane
+worktree: ../atm-core-worktrees/feature/pAI-s8-crosshost-control-plane
 target: integrate/phase-AI
 ---
 
-# AI.8 — HTTPS peer transport
+# AI.8 — cross-host control plane
 
 ## Deliverables
 
-1. Bind enabled HTTPS listeners and establish outbound HTTPS connections using
-   AI.7 certificate/trust records.
-2. Enforce mTLS and exact peer identity/fingerprint before passing an inbound
-   request to the shared REST router.
-3. Make the post-write router the sole destination-host decision point:
-   local/current host -> local nudge; other host -> HTTPS message endpoint.
-4. Delete any remote replay, retry, receipt, remote-ack, host-specific
-   persistence, or inbound-special-handler code encountered during wiring.
+1. Add storage-trait-backed SQLite records for enabled HTTPS interfaces, local
+   certificate identity, and exact trusted peers (host identity + pinned
+   fingerprint).
+2. Add CLI lifecycle commands to list/manage interfaces, initialize/show the
+   local certificate, and explicitly add/replace/revoke trusted peers.
+3. Surface safe configured/bound/trust state in `atm doctor`.
+4. Forbid environment-controlled peer address, bind address, or trust state.
 
 ## Acceptance criteria
 
-- HTTPS inbound and UDS inbound call the same router and write handler.
-- Untrusted/incorrect-fingerprint peers are rejected before routing.
-- Unavailable peer returns a normal transport error and adds no transport
-  state; a repeated immutable message is the only retry mechanism.
-- `localhost` and own-IP use the HTTPS adapter without a special loopback path.
+- No enabled interface means no HTTPS listener.
+- A peer record cannot be added or fingerprint replaced without explicit
+  confirmation.
+- Configuration is behind the storage trait; HTTP/HTTPS adapters do not use
+  rusqlite types.
+- Doctor never exposes private key material.
 
 ## Required validation
 
-mTLS allow/reject integration tests; two-daemon in-process adapter test; own-IP
-HTTPS proof; `just lint`; `just test`; transport-only boundary gate.
+Storage migration/trait tests; CLI integration tests; doctor redaction tests;
+`just lint`; `just test`; configuration-boundary gate.

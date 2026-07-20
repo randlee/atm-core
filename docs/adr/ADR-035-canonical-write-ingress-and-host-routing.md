@@ -28,6 +28,12 @@ replace or rewrite the destination host. `localhost` and a daemon's own
 advertised address are ordinary host values and exercise the HTTPS route rather
 than a special loopback implementation.
 
+Source and destination chat IDs are stable address metadata under ADR-037. The
+write handler persists them unchanged; the post-write router ignores them when
+choosing local versus remote transport. This preserves `hendrix:12345` and
+`hendrix:98765` as independent reply and nudge targets without creating a
+second routing or acknowledgement path.
+
 ## Prohibitions
 
 - No Compose/DirectDeliver split or equivalent renamed pair.

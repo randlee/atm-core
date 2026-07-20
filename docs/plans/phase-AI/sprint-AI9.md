@@ -1,32 +1,37 @@
 ---
-title: AI.9 proof and closeout
+title: AI.9 HTTPS peer transport
 status: proposed
-branch: feature/pAI-s9-crosshost-proof-closeout
-worktree: ../atm-core-worktrees/feature/pAI-s9-crosshost-proof-closeout
+branch: feature/pAI-s9-https-peer-transport
+worktree: ../atm-core-worktrees/feature/pAI-s9-https-peer-transport
 target: integrate/phase-AI
 ---
 
-# AI.9 — proof and closeout
+# AI.9 — HTTPS peer transport
 
 ## Deliverables
 
-1. Automate the full local UDS, own-IP HTTPS, two-Mac, and Windows peer proof
-   matrix in the readiness record.
-2. Prove bidirectional send and ack, duplicate ULID idempotence, nudge, failed
-   remote ack non-mutation, unavailable peer, and mTLS/allowlist rejection.
-3. Remove obsolete Phase AG cross-host runbooks/claims and reconcile user,
-   developer, doctor, and architecture documentation with ADR-032–036.
-4. Run final architecture gates and publish one accepted-tip evidence set.
+1. Bind enabled HTTPS listeners and establish outbound HTTPS connections using
+   AI.8 certificate/trust records.
+2. Enforce mTLS and exact peer identity/fingerprint before passing an inbound
+   request to the shared REST router.
+3. Make the post-write router the sole destination-host decision point:
+   local/current host -> local nudge; other host -> HTTPS message endpoint.
+4. Preserve source/destination chat IDs unmodified across HTTPS; delete any
+   remote replay, retry, receipt, remote-ack, host-specific persistence, or
+   inbound-special-handler code encountered during wiring.
 
 ## Acceptance criteria
 
-- Every readiness row names command, exact commit, hosts, and result.
-- Cross-host success is a remote write acceptance plus receiver-visible message
-  and nudge; raw TCP reachability is insufficient.
-- No prior custom frame, named-pipe, peer/replay, duplicate write-path, or
-  runtime SQLite escape-hatch source remains.
+- HTTPS inbound and UDS inbound call the same router and write handler.
+- Untrusted/incorrect-fingerprint peers are rejected before routing.
+- Unavailable peer returns a normal transport error and adds no transport
+  state; a repeated immutable message is the only retry mechanism.
+- `localhost` and own-IP use the HTTPS adapter without a special loopback path.
+- A remote message and remote acknowledgement preserve the chat-qualified
+  source/destination addresses visible to the receiving agent.
 
 ## Required validation
 
-All readiness commands; `just lint`; `just test`; Windows CI; two-Mac and
-Windows-host evidence; final boundary/error/transport/storage gates.
+mTLS allow/reject integration tests; two-daemon in-process adapter test;
+chat-qualified HTTPS send/ack tests; own-IP HTTPS proof; `just lint`; `just
+test`; transport-only boundary gate.

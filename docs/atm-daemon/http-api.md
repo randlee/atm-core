@@ -15,6 +15,14 @@ cannot choose another identity through a request field, header, or query
 parameter. The router maps resources to shared application handlers only. It
 does not touch SQLite, choose a host, or emit nudges.
 
+Every message projection uses structured `from` and `to` addresses. Each has
+`agent`, optional `chat_id`, `team`, and optional `host`. Storage keeps the
+optional chat IDs in separate nullable source/destination columns; CLI, graft,
+Python, nudge, and read rendering show a present value as `agent:chat-id`.
+Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
+and reply identities. `chat_id` is not a daemon session or a message-thread
+field.
+
 Remote HTTPS requires mTLS plus the configured exact peer identity and pinned
 certificate fingerprint. Local UDS uses endpoint ownership/permissions. These
 are adapter concerns and do not alter endpoint schemas.
@@ -38,9 +46,17 @@ are adapter concerns and do not alter endpoint schemas.
 | `/v1/atm/team/{team-name}/members` | `GET` / `POST` | List/add members | roster administration |
 | `/v1/atm/team/{team-name}/member/{agent-name}` | `PATCH` / `DELETE` | Update/remove a member | roster administration |
 
+`GET /v1/atm/messages` accepts independent `agent` and `chat_id` query
+filters. `agent=hendrix` searches that base agent across every chat identity;
+`agent=hendrix&chat_id=12345` narrows to `hendrix:12345`. Filters apply to the
+selected participant direction when a direction is requested, otherwise to
+either message participant. They do not alter the authenticated caller.
+
 `POST /message/{message-id}/ack` constructs the same `WriteRequest` used by
 `POST /messages`, with only `acknowledges_message_id` populated. The receiver's
 canonical write handler owns both persistence and acknowledgement mutation.
+It carries the message's full chat-qualified source address as the reply
+destination without a separate acknowledgement route.
 
 ## Response rules
 

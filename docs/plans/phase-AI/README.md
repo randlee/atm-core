@@ -21,6 +21,12 @@ An acknowledgement endpoint builds a write with `acknowledges_message_id`; no
 separate acknowledgment pipeline exists. The post-write router is the sole
 owner of local-versus-remote nudge routing.
 
+An optional chat-id is part of a sender/recipient address, not a daemon session
+or message-thread field: `hendrix:12345@hermes`. Storage preserves it in its
+own nullable columns; every agent-facing `from`, `to`, nudge, reply, and ack
+uses the same rendered address. `atm read --agent hendrix` spans chats and
+`--agent hendrix --chat 12345` narrows to one context.
+
 The authoritative plan is [plan-phase-AI.md](./plan-phase-AI.md). Sprint
 closure is recorded in [readiness.md](./readiness.md).
 
