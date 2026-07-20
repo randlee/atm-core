@@ -310,7 +310,6 @@ Satisfied by:
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
 - same-host daemon API over cross-platform local IPC
-- cross-host daemon API over TCP/TLS
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - caller identity resolution through explicit CLI override or invoking-shell
