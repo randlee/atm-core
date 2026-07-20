@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "cli-surface-dump"))]
 mod cli_surface;
 mod commands;
 mod composition;
@@ -23,8 +24,10 @@ use atm_core::observability::{
     standard_level_for_outcome,
 };
 use chrono::{DateTime, Utc};
+#[cfg(any(test, feature = "cli-surface-dump"))]
+use clap::CommandFactory;
+use clap::Parser;
 use clap::error::ErrorKind;
-use clap::{CommandFactory, Parser};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::LogSink;
 #[cfg(any(test, feature = "fault-injection"))]
@@ -202,7 +205,8 @@ fn run() -> Result<(), AtmError> {
 /// Prints the live CLI-surface tree in the requested `mode` (`json` or
 /// `markdown`) to stdout. Called only by the hidden parsed
 /// `atm __dump-cli-surface --format <json|markdown>` command.
-pub(crate) fn dump_cli_surface(mode: &str) -> Result<(), AtmError> {
+#[cfg(any(test, feature = "cli-surface-dump"))]
+pub(crate) fn dump_cli_surface(mode: commands::CliSurfaceFormat) -> Result<(), AtmError> {
     let mut root = commands::Cli::command();
     // `Command::build()` finalizes derived properties (e.g. `num_args`,
     // default values) that clap otherwise only resolves lazily during
@@ -210,7 +214,7 @@ pub(crate) fn dump_cli_surface(mode: &str) -> Result<(), AtmError> {
     // values for those fields.
     root.build();
     match mode {
-        "json" => {
+        commands::CliSurfaceFormat::Json => {
             let surface = cli_surface::command_surface_json(&root);
             let rendered = serde_json::to_string_pretty(&surface).map_err(|source| {
                 AtmError::validation("failed to render CLI-surface JSON").with_source(source)
@@ -218,13 +222,10 @@ pub(crate) fn dump_cli_surface(mode: &str) -> Result<(), AtmError> {
             println!("{rendered}");
             Ok(())
         }
-        "markdown" => {
+        commands::CliSurfaceFormat::Markdown => {
             println!("{}", cli_surface::command_surface_markdown(&root));
             Ok(())
         }
-        other => Err(AtmError::validation(format!(
-            "unsupported CLI-surface format: {other} (expected \"json\" or \"markdown\")"
-        ))),
     }
 }
 

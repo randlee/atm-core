@@ -13,7 +13,7 @@
 //! # Usage
 //!
 //! ```text
-//! cargo run -p agent-team-mail --example gen_cli_docs
+//! cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs
 //! ```
 //!
 //! This regenerates:
@@ -62,7 +62,7 @@ fn ensure_atm_binary_built() -> PathBuf {
         .file_name()
         .is_some_and(|name| name == "release");
     let mut build = Command::new(env!("CARGO"));
-    build.args(["build", "--bin", "atm"]);
+    build.args(["build", "--bin", "atm", "--features", "cli-surface-dump"]);
     if release {
         build.arg("--release");
     }

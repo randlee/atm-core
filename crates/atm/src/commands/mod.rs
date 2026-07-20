@@ -1,5 +1,7 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand, ValueEnum};
+#[cfg(any(test, feature = "cli-surface-dump"))]
+use clap::ValueEnum;
+use clap::{Parser, Subcommand};
 
 pub mod ack;
 pub(crate) mod caller_context;
@@ -33,31 +35,25 @@ pub use teams::TeamsCommand;
 use crate::observability::CliObservability;
 
 /// Output format for the hidden maintainer CLI-surface dump command.
+#[cfg(any(test, feature = "cli-surface-dump"))]
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub(crate) enum CliSurfaceFormat {
     Json,
     Markdown,
 }
 
-impl CliSurfaceFormat {
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Json => "json",
-            Self::Markdown => "markdown",
-        }
-    }
-}
-
 /// Emit the live clap command tree for maintainers and the structural CLI gate.
+#[cfg(any(test, feature = "cli-surface-dump"))]
 #[derive(Debug, clap::Args)]
 pub(crate) struct DumpCliSurfaceCommand {
     #[arg(long, value_enum)]
     format: CliSurfaceFormat,
 }
 
+#[cfg(any(test, feature = "cli-surface-dump"))]
 impl DumpCliSurfaceCommand {
     fn run(self, _observability: &CliObservability) -> Result<()> {
-        crate::dump_cli_surface(self.format.as_str()).map_err(Into::into)
+        crate::dump_cli_surface(self.format).map_err(Into::into)
     }
 }
 
@@ -106,6 +102,7 @@ enum Command {
     Help(HelpCommand),
     #[command(hide = true)]
     InternalNudge(InternalNudgeCommand),
+    #[cfg(any(test, feature = "cli-surface-dump"))]
     #[command(name = "__dump-cli-surface", hide = true)]
     DumpCliSurface(DumpCliSurfaceCommand),
     Teams(TeamsCommand),
@@ -125,6 +122,7 @@ impl Command {
             Self::Doctor(command) => command.run(observability),
             Self::Help(command) => command.run(observability),
             Self::InternalNudge(command) => command.run(observability),
+            #[cfg(any(test, feature = "cli-surface-dump"))]
             Self::DumpCliSurface(command) => command.run(observability),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
