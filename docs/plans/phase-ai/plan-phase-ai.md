@@ -74,9 +74,13 @@ All clients use one application request model; transports only translate it:
 ```rust
 pub struct ChatId(/* validated safe segment */);
 
-pub struct AgentAddress {
+pub struct AgentIdentity {
     pub agent: AgentName,
     pub chat_id: Option<ChatId>,
+}
+
+pub struct AgentAddress {
+    pub identity: AgentIdentity,
     pub team: TeamName,
     pub host: Option<HostName>,
 }
@@ -113,8 +117,10 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 `DaemonApiClient` is introduced and owned by AI.6. All boundary traits in this
 plan are sealed unless their owning ADR explicitly authorizes an external
 implementation; clients consume the API contract but do not create another
-ingress trait. `AgentAddress` owns both parsing and `Display` rendering; no
-adapter concatenates address components. AI.6 constructs only the local form
+ingress trait. `AgentIdentity` owns `agent[:chat-id]` parsing and
+`AgentAddress` composes it with team/host and owns full-address parsing and
+`Display` rendering; no adapter concatenates address components. AI.6
+constructs only the local form
 of `AuthenticatedIngress`; AI.9 alone constructs `AuthenticatedPeer` after
 mTLS and exact trust validation.
 

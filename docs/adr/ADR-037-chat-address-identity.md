@@ -52,6 +52,18 @@ extends that one validator and does not reimplement validation in the CLI,
 graft, or HTTP adapter. A future Phase AH Python binding consumes this same
 validator and address type rather than adding its own policy.
 
+The shared identity parser is `AgentIdentity::from_str` for
+`agent[:chat-id]`; `agent:XXX` therefore always parses as agent `agent` with
+`chat_id=Some(XXX)`. `AgentAddress::from_str` parses the full address by
+splitting once at `@` and delegating its left component to `AgentIdentity`.
+CLI caller overrides, graft, HTTP, storage projection, and nudge rendering use
+these types rather than independently interpreting `:`.
+
+CLI composition follows that grammar: base agent plus `--team <team>` is the
+logical `agent@team`; adding `--chat-id XXX` is the logical
+`agent:XXX@team`. The adapter normalizes those parts to the same
+`AgentAddress` as the textual address before dispatch.
+
 Every persisted message has nullable `source_chat_id` and
 `destination_chat_id` columns beside its existing source/destination agent,
 team, and host columns. The columns are optional, independently preserved, and
@@ -68,6 +80,20 @@ synthetic session header. The local CLI and graft populate the same
 caller-address contract; a future Phase AH Python binding uses that contract.
 The canonical write handler and post-write router do not branch on chat-id.
 HTTPS preserves the same request schema.
+
+The CLI accepts a chat-qualified recipient only in the canonical spelling
+`<agent>:<chat-id>@<team>[.<host>]`. For caller context it accepts either
+`atm send <to> --chat-id <chat-id> <message>` or `atm send <to> --as
+<agent>:<chat-id> <message>`: with `ATM_IDENTITY=omega-prime`, both produce
+caller `omega-prime:<chat-id>`. `--chat-id` and `--as` are mutually exclusive;
+the caller team continues to come from `--team` or `ATM_TEAM`. `--from`
+remains a read/list sender filter and is never a write caller override. No
+variant creates a second parsing, wire, storage, or routing path.
+
+The same caller-context shorthand applies to owner-only reads: with
+`ATM_IDENTITY=omega-prime`, `atm read --chat-id <chat-id>` and `atm read --as
+omega-prime:<chat-id>` select the same context mailbox. This changes only the
+resolved `AgentAddress`; it does not create a chat-specific read path.
 
 Message search is explicitly broader than the caller's chat identity:
 `atm read --agent hendrix` searches messages involving `hendrix` across all
@@ -86,3 +112,5 @@ session-scoped mailbox contract is introduced.
   API cannot safely expose an identity it cannot persist and query exactly.
 - No separate chat delivery, reply, ack, nudge, or remote routing path is
   permitted.
+- `--chat-id` and its equivalent `--as` caller spelling must yield identical
+  request addresses before the shared write path.
