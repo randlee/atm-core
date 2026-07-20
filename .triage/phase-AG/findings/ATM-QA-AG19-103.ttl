@@ -1,0 +1,199 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-103>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-103" ;
+  triage:title "sprint doc names composition.rs as retention location for loopback/self-poison ack tests, but tests are absent with no pointer note left" ;
+  triage:description """sprint-AG19.md names composition.rs (crates/atm/src/composition.rs) specifically as the retention location for loopback/self-poison ack tests ("retained, but updated"); those tests are entirely absent from composition.rs. Equivalent-substance coverage exists (relocated to crates/atm-core/tests/mailbox_locking.rs and crates/atm-daemon/src/tests/runtime_root/self_ip.rs), satisfying "tests may relocate, never be deleted," but no pointer/note was left in composition.rs and the literal in-place-update instruction wasn't followed.""" ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:category "documentation-drift" ;
+  triage:severity "minor" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T01:01:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-103/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ;
+  triage:openOn <urn:atm:triage:worktree/s19/cdc33011> ;
+  triage:openOn <urn:atm:triage:worktree/s20/7f745f01> ;
+  triage:openOn <urn:atm:triage:worktree/s21/8652bdd3> ;
+  triage:openOn <urn:atm:triage:worktree/s22/c9aedbcc> ;
+  triage:openOn <urn:atm:triage:worktree/s23/ca3fb30f> ;
+  triage:openOn <urn:atm:triage:worktree/s24/81298e32> ;
+  triage:openOn <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/65593144> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/c245c2ea> ;
+  triage:notes """Full ordered sweep of crates/atm/src/composition.rs across all 9 supplied worktrees (feature/pAG-s18 through integrate/phase-AG) found zero occurrences of the terms 'loopback' or 'self poison'/'self_poison' anywhere in the file on any branch -- no test, no comment, no cross-reference pointer note. The pattern is fully repeatable and unchanged since AG.19 introduced it: every downstream sprint branch inherited the same silent absence with no intervening fix. Equivalent-substance coverage was independently confirmed present on all checked branches: crates/atm-core/tests/mailbox_locking.rs:843 retains a 'historical self poison' test case, and crates/atm-daemon/src/tests/runtime_root/self_ip.rs contains multiple loopback/self-ip discovery and configuration tests (e.g. discover_non_loopback_ipv4_for_test, configure_secure_loopback). This confirms 'tests may relocate, never be deleted' is satisfied in substance; the open gap is purely the missing pointer note in composition.rs and the sprint doc's literal (unfulfilled) in-place-update instruction. highest_open_branch by raw sweep order is integrate/phase-AG (order index 9), but per project convention fix dispatch never targets integrate directly, and the caller has confirmed integrate/phase-AG's current tip has not yet merge-forwarded AG.19's changes -- it sits outside the AG.19-AG.25 feature-branch merge-forward chain at time of this triage. promote_to_branch is therefore set to feature/pAG-s25-live-two-daemon-proof, the highest-order branch inside that chain; the fix will reach integrate/phase-AG via the normal sequential merge-forward once dispatched and merged there.""" .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present -- origin branch for this finding)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/cdc33011> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/7f745f01> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/8652bdd3> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/ca3fb30f> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present -- highest-order branch in the AG.19-AG.25 merge-forward chain)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-103/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 0 ;
+  triage:snippet "(no match for /loopback|self.?poison/i anywhere in file; no pointer note present -- tip does not yet include AG.19's merge-forward)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/65593144> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s19/cdc33011>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s20/7f745f01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate/65593144>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:orderIndex 9 .

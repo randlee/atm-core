@@ -1,0 +1,328 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AG19-102>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AG19-102" ;
+  triage:title "architecture.md still describes AckReplyDisposition::SuppressedSelfAck local-terminate behavior that hard-rejection replaced" ;
+  triage:description "docs/architecture.md ~lines 1114-1136 (§6.3) still documents local self-addressed pending-ack messages terminating at (Read, Acknowledged) via AckReplyDisposition::SuppressedSelfAck. Every swept worktree instead hard-rejects local self-ack in validate_reply_target (crates/atm-core/src/ack/mod.rs), returning a validation error and leaving the source message pending. Sweep shows this hard-reject behavior is NOT introduced by AG.19: it is already present, byte-identical in wording and effect, on feature/pAG-s18-unify-envelope-handler (the earliest worktree in this ordered set) and on integrate/phase-AG (which does not yet include AG.19's own commits). git log -S on the exact error string in the s18 worktree traces its introduction to an ancestor commit outside this sprint ladder ('Unify AG15 self-host ack and smoke coverage', ce2ab044), which is already merged into every worktree in this set including s18. docs/plans/phase-AG/sprint-AG19.md does not authorize a doc-only reconciliation: it lists removing AckReplyDisposition/SuppressedSelfAck machinery as an AG.19-scope deletion target ('any split ack outcome family that forces caller/test code to reason about SuppressedSelfAck vs Sent as distinct transport behaviors' under 'Logic / Branches / State That Do Not Belong'), consistent with the code already matching that direction since AG15, but neither sprint-AG15.md nor sprint-AG19.md lists docs/architecture.md as a target file or deliverable. This is pre-existing, uniform doc/code drift dating to AG15, silently carried forward unchanged through every subsequent sprint branch swept here -- not a new or varying state-machine change specific to AG.19." ;
+  triage:phaseId "phase-AG" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc-vs-code" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s20/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s20/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s21/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s21/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s22/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s22/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s23/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s23/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s24/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s24/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s25/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/s25/code> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate/doc> ,
+                       <urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate/code> ;
+
+  triage:openOn <urn:atm:triage:worktree/s18/1b25b36c> ,
+                <urn:atm:triage:worktree/s19/cdc33011> ,
+                <urn:atm:triage:worktree/s20/7f745f01> ,
+                <urn:atm:triage:worktree/s21/8652bdd3> ,
+                <urn:atm:triage:worktree/s22/c9aedbcc> ,
+                <urn:atm:triage:worktree/s23/ca3fb30f> ,
+                <urn:atm:triage:worktree/s24/81298e32> ,
+                <urn:atm:triage:worktree/s25/c245c2ea> ,
+                <urn:atm:triage:worktree/integrate/65593144> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/integrate/65593144> ;
+
+  triage:triagedAt "2026-07-20T01:01:32Z"^^xsd:dateTime .
+
+# --- s18 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s18/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 448 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1b25b36c> .
+
+<urn:atm:triage:worktree/s18/1b25b36c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s18-unify-envelope-handler" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s18-unify-envelope-handler" ;
+  triage:headSha "1b25b36c" ;
+  triage:orderIndex 1 .
+
+# --- s19 (origin of this finding) ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/cdc33011> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s19/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 348 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/cdc33011> .
+
+<urn:atm:triage:worktree/s19/cdc33011>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s19-delete-remote-ack-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s19-delete-remote-ack-path" ;
+  triage:headSha "cdc33011" ;
+  triage:orderIndex 2 .
+
+# --- s20 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s20/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/7f745f01> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s20/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 348 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/7f745f01> .
+
+<urn:atm:triage:worktree/s20/7f745f01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s20-move-deferred-policy-out-of-transport" ;
+  triage:headSha "7f745f01" ;
+  triage:orderIndex 3 .
+
+# --- s21 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s21/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/8652bdd3> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s21/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/8652bdd3> .
+
+<urn:atm:triage:worktree/s21/8652bdd3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s21-collapse-dispatch-routing" ;
+  triage:headSha "8652bdd3" ;
+  triage:orderIndex 4 .
+
+# --- s22 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s22/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s22/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/c9aedbcc> .
+
+<urn:atm:triage:worktree/s22/c9aedbcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s22-host-resolution-boundary" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s22-host-resolution-boundary" ;
+  triage:headSha "c9aedbcc" ;
+  triage:orderIndex 5 .
+
+# --- s23 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s23/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/ca3fb30f> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s23/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/ca3fb30f> .
+
+<urn:atm:triage:worktree/s23/ca3fb30f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s23-remove-synthetic-deferred-receipts" ;
+  triage:headSha "ca3fb30f" ;
+  triage:orderIndex 6 .
+
+# --- s24 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s24/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s24/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/81298e32> .
+
+<urn:atm:triage:worktree/s24/81298e32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s24-preserve-request-shape" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s24-preserve-request-shape" ;
+  triage:headSha "81298e32" ;
+  triage:orderIndex 7 .
+
+# --- s25 ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s25/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/s25/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/c245c2ea> .
+
+<urn:atm:triage:worktree/s25/c245c2ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAG-s25-live-two-daemon-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAG-s25-live-two-daemon-proof" ;
+  triage:headSha "c245c2ea" ;
+  triage:orderIndex 8 .
+
+# --- integrate/phase-AG ---
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate/doc>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1135 ;
+  triage:snippet "they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/65593144> .
+
+<urn:atm:triage:occurrence/ATM-QA-AG19-102/integrate/code>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 448 ;
+  triage:snippet "\"local self-ack is not allowed without an explicit host target\".to_string()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/65593144> .
+
+<urn:atm:triage:worktree/integrate/65593144>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AG" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AG" ;
+  triage:headSha "65593144" ;
+  triage:orderIndex 9 .
