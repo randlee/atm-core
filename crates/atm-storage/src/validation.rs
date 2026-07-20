@@ -25,18 +25,9 @@ pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmEr
         )));
     }
 
-    if value.contains('.') {
-        return Err(
-            AtmError::address_parse(format!("{kind} name must not contain '.'")).with_recovery(
-                "'.' is reserved for the team/host delimiter in cross-host addressing \
-             (`<agent>@<team>.<host>`); use '-' or '_' instead.",
-            ),
-        );
-    }
-
     if !value
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
     {
         return Err(AtmError::address_parse(format!(
             "{kind} name contains invalid characters"
@@ -81,19 +72,17 @@ mod tests {
         let error = validate_path_segment("bad name", "agent").expect_err("space");
         assert!(error.to_string().contains("invalid characters"));
 
-        validate_path_segment("valid_name-1", "agent").expect("valid");
+        validate_path_segment("valid_name-1.2", "agent").expect("valid");
     }
 
+    /// REQ-SEC-001 lists `.` as a valid local team/agent name character; the
+    /// `.` rejection is scoped to cross-host remote-target parsing
+    /// (ADR-031, `atm-core::send::parse_send_target_impl`), not this shared
+    /// local path-segment validator.
     #[test]
-    fn validate_path_segment_rejects_dotted_team_name() {
-        let error = validate_path_segment("dev.qa", "team").expect_err("dotted team name");
-        assert!(error.to_string().contains("must not contain '.'"));
-    }
-
-    #[test]
-    fn validate_path_segment_rejects_dotted_agent_name() {
-        let error = validate_path_segment("dev.win", "agent").expect_err("dotted agent name");
-        assert!(error.to_string().contains("must not contain '.'"));
+    fn validate_path_segment_accepts_dotted_team_and_agent_names() {
+        validate_path_segment("dev.qa", "team").expect("dotted team name is local-valid");
+        validate_path_segment("dev.win", "agent").expect("dotted agent name is local-valid");
     }
 
     #[test]

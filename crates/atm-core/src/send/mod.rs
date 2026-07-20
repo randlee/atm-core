@@ -153,7 +153,19 @@ fn parse_send_target_impl(
     validate_send_target_segment(raw_agent, "agent")?;
 
     if let Some(explicit_host) = explicit_host {
-        if raw_team_or_remote.contains('.') {
+        let looks_like_mixed_inline_host =
+            raw_team_or_remote
+                .split_once('.')
+                .is_some_and(|(_candidate_team, candidate_host)| {
+                    is_recognized_inline_remote_host(candidate_host)
+                });
+        if looks_like_mixed_inline_host {
+            // The trailing segment reads as a genuine inline `<host>` token
+            // (`localhost` or a literal IP, matching the same recognition
+            // `PeerLoopbackHost` uses), so the caller has supplied both
+            // inline `<team>.<host>` syntax *and* `--host`. Per ADR-031
+            // (`MixedInlineAndExplicitHost`) this combination is rejected
+            // rather than silently preferring one source.
             return Err(AtmError::address_parse(
                 "cannot combine inline remote host syntax with `--host`".to_string(),
             )
@@ -161,6 +173,9 @@ fn parse_send_target_impl(
                 "Use exactly one remote-target form: either `<agent>@<team>.<host>` or `<agent>@<team> --host <host>`.",
             ));
         }
+        // No recognizable inline host suffix: any '.' here is part of the
+        // team name itself. `validate_send_target_segment` raises the
+        // ADR-031 `InvalidTeamNameDot` rejection below.
         validate_send_target_segment(raw_team_or_remote, "team")?;
         return Ok(ParsedSendTarget {
             to: format!("{raw_agent}@{raw_team_or_remote}").parse()?,
@@ -183,8 +198,31 @@ fn parse_send_target_impl(
     })
 }
 
+/// True when `candidate_host` reads as a genuine inline remote-host token:
+/// the literal `localhost` keyword or a parseable IP address, matching the
+/// same recognition `PeerLoopbackHost` applies elsewhere in this crate.
+fn is_recognized_inline_remote_host(candidate_host: &str) -> bool {
+    candidate_host.eq_ignore_ascii_case("localhost")
+        || candidate_host.parse::<std::net::IpAddr>().is_ok()
+}
+
+/// Validates one `<agent>` or `<team>` segment of a remote-target string as
+/// parsed by [`parse_send_target_impl`]. Per ADR-031, `.` is reserved for
+/// the cross-host `<team>.<host>` delimiter and is rejected here
+/// (`InvalidAgentNameDot` / `InvalidTeamNameDot`), even though local team
+/// and agent names may contain `.` per REQ-SEC-001
+/// (`crate::address::validate_path_segment` is unaffected by this check).
 fn validate_send_target_segment(value: &str, kind: &str) -> Result<(), AtmError> {
-    crate::address::validate_path_segment(value, kind)
+    crate::address::validate_path_segment(value, kind)?;
+    if value.contains('.') {
+        return Err(AtmError::address_parse(format!(
+            "{kind} name must not contain `.`"
+        ))
+        .with_recovery(
+            "Use `-` or `_` in team/member names, and reserve `.` for the remote-host separator in `<agent>@<team>.<host>`.",
+        ));
+    }
+    Ok(())
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendRequest {
@@ -403,6 +441,67 @@ mod remote_target_parse_tests {
                 .message
                 .contains("cannot combine inline remote host syntax")
         );
+    }
+
+    /// ADR-031 regression: a dotted team name plus an explicit `--host`
+    /// must yield the `InvalidTeamNameDot` rejection, not
+    /// `MixedInlineAndExplicitHost`, since `"qa"` is not a recognized
+    /// inline host token.
+    #[test]
+    fn remote_target_reports_dotted_team_with_explicit_host_as_team_dot_error() {
+        let error = parse_send_target("dev-win@dev.qa", Some("192.168.1.146"))
+            .expect_err("dotted team with explicit host must fail");
+        assert!(
+            error.message.contains("team name must not contain"),
+            "expected team-dot rejection, got: {}",
+            error.message
+        );
+        assert!(
+            !error
+                .message
+                .contains("cannot combine inline remote host syntax"),
+            "must not misclassify as MixedInlineAndExplicitHost: {}",
+            error.message
+        );
+    }
+
+    /// A dot-free team plus a genuine inline host, combined with an
+    /// explicit `--host`, is still genuinely mixed input and must keep
+    /// reporting `MixedInlineAndExplicitHost`.
+    #[test]
+    fn remote_target_reports_dot_free_team_with_inline_and_explicit_host_as_mixed() {
+        let error = parse_send_target("qa-a@test-team.192.168.1.146", Some("127.0.0.1"))
+            .expect_err("mixed host forms must fail");
+        assert!(
+            error
+                .message
+                .contains("cannot combine inline remote host syntax")
+        );
+    }
+
+    #[test]
+    fn remote_target_rejects_dotted_agent_name() {
+        let error =
+            parse_send_target("dev.win@team", None).expect_err("dotted agent must be rejected");
+        assert!(error.message.contains("agent name must not contain"));
+    }
+
+    #[test]
+    fn remote_target_rejects_dotted_team_inline_extra_dot() {
+        // `dev.win.host` splits (first dot) into team `dev`, host
+        // `win.host`; a genuinely dotted team requires the ADR-031
+        // dot-in-team rejection, exercised via the explicit-host path in
+        // `remote_target_reports_dotted_team_with_explicit_host_as_team_dot_error`.
+        let error =
+            parse_send_target("agent@dev.qa", Some("192.168.1.1")).expect_err("dotted team");
+        assert!(error.message.contains("team name must not contain"));
+    }
+
+    #[test]
+    fn remote_target_accepts_dot_free_control_case() {
+        let parsed = parse_send_target("agent@team", None).expect("dot-free control case");
+        assert_eq!(parsed.to.to_string(), "agent@team");
+        assert!(parsed.remote_host.is_none());
     }
 }
 

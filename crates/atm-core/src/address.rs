@@ -68,18 +68,9 @@ pub(crate) fn validate_path_segment(value: &str, kind: &str) -> Result<(), AtmEr
         )));
     }
 
-    if value.contains('.') {
-        return Err(
-            AtmError::address_parse(format!("{kind} name must not contain '.'")).with_recovery(
-                "'.' is reserved for the team/host delimiter in cross-host addressing \
-             (`<agent>@<team>.<host>`); use '-' or '_' instead.",
-            ),
-        );
-    }
-
     if !value
         .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.'))
     {
         return Err(AtmError::address_parse(format!(
             "{kind} name contains invalid characters"
@@ -136,8 +127,8 @@ mod tests {
 
     #[test]
     fn accepts_valid_segment_characters() {
-        let parsed = AgentAddress::from_str("valid-team_name-1").expect("address");
-        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name-1"));
+        let parsed = AgentAddress::from_str("valid-team_name.1").expect("address");
+        assert_eq!(parsed.agent, AgentName::from_validated("valid-team_name.1"));
         assert_eq!(parsed.team, None);
 
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
@@ -145,13 +136,16 @@ mod tests {
         assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
     }
 
+    /// REQ-SEC-001 lists `.` as a valid local team/agent name character; the
+    /// `.` rejection lives solely in cross-host remote-target parsing
+    /// (ADR-031), scoped to `crate::send::parse_send_target_impl`, not here.
     #[test]
-    fn rejects_dotted_segment_characters() {
-        let error = AgentAddress::from_str("dev.win@team").expect_err("dotted agent");
-        assert!(error.to_string().contains("must not contain '.'"));
+    fn accepts_dotted_segment_characters_for_local_addressing() {
+        let parsed = AgentAddress::from_str("dev.win@team").expect("dotted agent is local-valid");
+        assert_eq!(parsed.agent, AgentName::from_validated("dev.win"));
 
-        let error = AgentAddress::from_str("dev@dev.qa").expect_err("dotted team");
-        assert!(error.to_string().contains("must not contain '.'"));
+        let parsed = AgentAddress::from_str("dev@dev.qa").expect("dotted team is local-valid");
+        assert_eq!(parsed.team, Some(TeamName::from_validated("dev.qa")));
     }
 
     #[test]

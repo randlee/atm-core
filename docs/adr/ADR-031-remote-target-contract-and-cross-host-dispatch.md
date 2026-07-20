@@ -96,6 +96,9 @@ Parser and normalization rules:
   - mixed inline-host plus `--host` => `MixedInlineAndExplicitHost`
   - malformed final-dot split / otherwise invalid inline form =>
     `MalformedInlineRemoteTarget`
+- this `.` rejection is scoped to the `<agent>`/`<team>` segments as parsed
+  by the remote-target parser; it does not apply to local team/agent name
+  validation, where `.` remains a valid character per `REQ-SEC-001`
 - `CrossHostDelivery::deliver_remote` must not use a generic outer error type;
   the outer `Err` arm is reserved for unclassified infrastructure failures and
   uses one dedicated typed error surface (`CrossHostDeliveryInfraError`)

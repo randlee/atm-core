@@ -471,6 +471,10 @@ Required behavior:
   - hyphen
   - underscore
   - period
+  - (period is scoped to local team/agent names; `REQ-CORE-TRANSPORT-002` /
+    ADR-031 separately reject `.` in the `<agent>` and `<team>` segments
+    parsed during cross-host remote-target dispatch, where `.` is reserved
+    for the `<team>.<host>` delimiter)
 - team/agent segments must reject:
   - empty strings
   - path separators
@@ -3562,7 +3566,10 @@ mail correctness.
   Required behavior:
   - native agent/plugin code talks only to the local daemon
   - cross-host delivery happens only between daemons
-  - agent/member names and team names must not contain `.`
+  - agent/member names and team names must not contain `.` (this rejection is
+    scoped to the `<agent>`/`<team>` segments parsed during cross-host
+    remote-target dispatch, per ADR-031; `REQ-SEC-001` separately allows `.`
+    in local team/agent names not involved in remote-target parsing)
   - the supported remote-send CLI forms are exactly:
     - `atm send <agent>@<team>.<host> ...`
     - `atm send <agent>@<team> --host <host> ...`
