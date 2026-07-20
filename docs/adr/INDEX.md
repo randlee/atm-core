@@ -45,6 +45,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-034 — Minimal Cross-Host HTTPS Transport](./ADR-034-minimal-cross-host-https-transport.md)
 - [ADR-035 — Canonical Write Ingress And Host Routing](./ADR-035-canonical-write-ingress-and-host-routing.md)
 - [ADR-036 — Storage Boundary And Composition Topology](./ADR-036-storage-boundary-and-composition-topology.md)
+- [ADR-037 — Chat Address Identity](./ADR-037-chat-address-identity.md)
 
 ## Extracted Crate-Local ADRs
 

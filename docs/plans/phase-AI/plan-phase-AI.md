@@ -23,12 +23,13 @@ the same read/write handlers. Cross-host code is transport-only.
 | Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
 | Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
+| Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
 | Host routing | One post-write router; local nudge for current host, HTTPS for another host |
 | Security | SQLite-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint |
 | Delivery state | No outbox, replay store, retry queue, deferred receipt, or remote ack state |
 | Idempotency | Immutable existing message ULID; storage accepts duplicate identity idempotently |
 
-The detailed decisions are ADR-032 through ADR-036. ADR-028 through ADR-031
+The detailed decisions are ADR-032 through ADR-037. ADR-028 through ADR-031
 are historical and superseded.
 
 ## Baseline and branch policy
@@ -74,11 +75,12 @@ name.
 | AI.2 | `feature/pAI-s2-storage-topology` | SQLite is confined to its backend; runtime replay/finalizer escape hatches are gone |
 | AI.3 | `feature/pAI-s3-error-contract-foundation` | One serializable `AtmError` and no protocol error envelope/kind hierarchy |
 | AI.4 | `feature/pAI-s4-error-consumer-migration` | All error producers/consumers use the unified contract; direct-construction gate active |
-| AI.5 | `feature/pAI-s5-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; named pipes/custom frames removed |
-| AI.6 | `feature/pAI-s6-canonical-write-path` | CLI, graft, local UDS, and ack use one canonical write handler and post-write router |
-| AI.7 | `feature/pAI-s7-crosshost-control-plane` | SQLite/CLI interface, certificate, and exact peer-trust control plane |
-| AI.8 | `feature/pAI-s8-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with no cross-host state subsystem |
-| AI.9 | `feature/pAI-s9-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
+| AI.5 | `feature/pAI-s5-chat-address-identity` | Optional chat-id is stored, parsed, rendered, and preserved as an independent agent context |
+| AI.6 | `feature/pAI-s6-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; named pipes/custom frames removed |
+| AI.7 | `feature/pAI-s7-canonical-write-path` | CLI, graft, local UDS, and ack use one canonical write handler and post-write router |
+| AI.8 | `feature/pAI-s8-crosshost-control-plane` | SQLite/CLI interface, certificate, and exact peer-trust control plane |
+| AI.9 | `feature/pAI-s9-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with no cross-host state subsystem |
+| AI.10 | `feature/pAI-s10-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
 
 Each sprint merges forward to the next sprint branch before the next sprint
 starts. Findings are fixed on their owning sprint before forward merge.
@@ -87,8 +89,8 @@ starts. Findings are fixed on their owning sprint before forward merge.
 
 | Layer | Required proof |
 | --- | --- |
-| Unit | error serialization; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
-| Integration | UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
+| Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
+| Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
 | Smoke | localhost UDS; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows UDS and peer participation |
 | Regression | `just lint`, `just test`, architecture checks, no named-pipe/custom-frame/peer-replay source remains |
 

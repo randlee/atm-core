@@ -1,37 +1,50 @@
 ---
-title: AI.5 REST router and local UDS
+title: AI.5 chat address identity
 status: proposed
-branch: feature/pAI-s5-http-uds-router
-worktree: ../atm-core-worktrees/feature/pAI-s5-http-uds-router
+branch: feature/pAI-s5-chat-address-identity
+worktree: ../atm-core-worktrees/feature/pAI-s5-chat-address-identity
 target: integrate/phase-AI
 ---
 
-# AI.5 — REST router and local UDS
+# AI.5 — chat address identity
 
 ## Deliverables
 
-1. Finalize the versioned OpenAPI 3.1 contract in
-   `docs/atm-daemon/http-api.md` rooted at `/v1/atm`: messages, message
-   detail/read/ack, doctor, teams, and team detail.
-2. Implement one REST router from that contract. It calls application handlers
-   and never SQLite or nudge code directly.
-3. Replace the current custom local framing/client codec with HTTP over UDS.
-   The same UDS contract must run on Unix and Windows AF_UNIX.
-4. Delete Windows named-pipe mapping/fallback and the custom ATM frame codec
-   after all retained operations are represented by the REST contract.
-5. Embed/publish the OpenAPI JSON through `atm api spec` and contract-test it
-   against router requests/responses.
+1. Introduce ADR-037's optional `ChatId` and canonical `AgentAddress` model:
+   `<agent>[:<chat-id>]@<team>[.<host>]`.
+   Cherry-pick Phase AG commit `924861da` into the Phase AI integration line
+   before this work and reuse its central `atm_storage::validate_path_segment`
+   for agent, team, and chat-id validation.
+2. Persist nullable source/destination chat-id columns independently from agent
+   names, migrate existing rows as null, and preserve both fields in canonical
+   message projections.
+3. Make read `from`, write `to`, nudge display, reply construction, inbox
+   visibility, owner-only mutation, and acknowledgement targeting use the same
+   full address. Agent-facing rendering concatenates a present value as
+   `agent:chat-id`.
+4. Add message search semantics: `--agent <agent>` spans all chat IDs and
+   `--agent <agent> --chat <chat-id>` narrows to one identity. Finalize the
+   matching structured address/filter schema in OpenAPI; do not create a
+   session header or a separate chat delivery path.
+5. Add structural tests rejecting chat-id parsing/rendering outside the
+   canonical address type.
 
 ## Acceptance criteria
 
-- `atm` and graft local daemon calls use HTTP/UDS; no production local client
-  uses the retired frame codec.
-- Windows CI proves AF_UNIX HTTP message and error behavior.
-- No source/dependency reference to named pipes or the retired custom frame
-  protocol remains.
-- Router tests prove adapters cannot reach storage or post-send boundaries.
+- `hendrix@hermes`, `hendrix:12345@hermes`, and
+  `hendrix:98765@hermes` are distinct identities for visibility and mutation.
+- A reply or acknowledgement targets the original full address, including its
+  chat-id; no chat-specific send/ack/nudge route exists.
+- Nullable source/destination columns are separate from agent-name columns;
+  existing rows remain readable.
+- The API, CLI, graft, Python-facing projection, and nudge render the same
+  chat-qualified address.
+- `--agent hendrix` finds all of Hendrix's messages regardless of chat ID;
+  `--agent hendrix --chat 12345` finds only `hendrix:12345`.
+- One validator rejects invalid agent, team, and chat-id segments; no adapter
+  owns a second identifier character policy.
 
 ## Required validation
 
-Unix and Windows UDS REST integration tests; OpenAPI contract tests; `just
-lint`; `just test`; local CLI send/read/ack smoke.
+Address parser negatives; migration tests; chat-separated inbox/read/ack/reply
+integration tests; OpenAPI schema tests; `just lint`; `just test`.

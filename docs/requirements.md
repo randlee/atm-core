@@ -486,6 +486,26 @@ Required behavior:
     home subtree
 - validation must happen before any path construction in address parsing or
   home/path helpers
+
+Product requirement ID:
+
+- `REQ-CORE-IDENTITY-CHAT-001` ATM must support an optional chat-id as an
+  independent component of a sender or recipient identity.
+
+Required behavior:
+
+- canonical address grammar is `<agent>[:<chat-id>]@<team>[.<host>]`
+- `agent`, `team`, and `chat-id` use the safe segment alphabet already
+  required above; only the address parser interprets `:` and `.` delimiters
+- storage keeps nullable source and destination chat-id columns rather than
+  concatenating a chat-id into an agent-name column
+- reads render a present source chat-id in `from` as `agent:chat-id`; writes,
+  nudges, replies, and acknowledgements preserve the full destination address
+- `agent` without a chat-id, `agent:chat-a`, and `agent:chat-b` are distinct
+  identities for inbox visibility and owner-only mutations
+- `atm read --agent <agent>` searches that agent across all chat IDs;
+  `atm read --agent <agent> --chat <chat-id>` narrows to one chat identity
+- chat-id is not a daemon session, transport-session, or message-thread field
 - JSON number normalization must cap exponent-driven string expansion at 64
   characters
 - if exponent expansion would exceed 64 characters, ATM must:

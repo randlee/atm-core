@@ -1,35 +1,38 @@
 ---
-title: AI.6 canonical write path
+title: AI.6 REST router and local UDS
 status: proposed
-branch: feature/pAI-s6-canonical-write-path
-worktree: ../atm-core-worktrees/feature/pAI-s6-canonical-write-path
+branch: feature/pAI-s6-http-uds-router
+worktree: ../atm-core-worktrees/feature/pAI-s6-http-uds-router
 target: integrate/phase-AI
 ---
 
-# AI.6 — canonical write path
+# AI.6 — REST router and local UDS
 
 ## Deliverables
 
-1. Define one `WriteRequest` carrying immutable message data and optional
-   `acknowledges_message_id`.
-2. Route CLI send/ack, graft, and local UDS REST to one write handler and one
-   sealed storage method.
-3. Make the handler persist idempotently, apply optional receiver-side ack
-   mutation, then emit the post-write event exactly once.
-4. Delete duplicate send/ack envelopes, handlers, persistence/nudge branches,
-   and host-routing decisions.
+1. Finalize the versioned OpenAPI 3.1 contract in
+   `docs/atm-daemon/http-api.md` rooted at `/v1/atm`: messages, message
+   detail/read/ack, doctor, teams, and team detail, including ADR-037's
+   structured addresses.
+2. Implement one REST router from that contract. It calls application handlers
+   and never SQLite or nudge code directly.
+3. Replace the current custom local framing/client codec with HTTP over UDS.
+   The same UDS contract must run on Unix and Windows AF_UNIX.
+4. Delete Windows named-pipe mapping/fallback and the custom ATM frame codec
+   after all retained operations are represented by the REST contract.
+5. Embed/publish the OpenAPI JSON through `atm api spec` and contract-test it
+   against router requests/responses.
 
 ## Acceptance criteria
 
-- The REST ack endpoint differs from send only by `acknowledges_message_id` on
-  `WriteRequest`.
-- One structural call graph reaches storage and post-write emission for all
-  write ingress sources.
-- Same-message ULID replay is idempotent and does not duplicate a nudge.
-- Self-send policy is checked once before write routing; no later special ack
-  exception exists.
+- `atm` and graft local daemon calls use HTTP/UDS; no production local client
+  uses the retired frame codec.
+- Windows CI proves AF_UNIX HTTP message, chat-address, and error behavior.
+- No source/dependency reference to named pipes or the retired custom frame
+  protocol remains.
+- Router tests prove adapters cannot reach storage or post-send boundaries.
 
 ## Required validation
 
-CLI, graft, and REST send/ack integration tests; duplicate-ULID and failed-write
-tests; `just lint`; `just test`; canonical-write architecture gate.
+Unix and Windows UDS REST integration tests; OpenAPI contract tests; `just
+lint`; `just test`; local CLI send/read/ack smoke.
