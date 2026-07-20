@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-I4-AI3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-I4-AI3" ;
+  triage:title "Doubled 'Recovery:' line in composed AtmError messages -- error_catalog::render() already appends 'Recovery: <guidance>' and send/mod.rs appends a second 'Recovery: <recovery>' on top" ;
+  triage:description "AI3-QA-1 (rust-best-practices-agent, important, systemic -- reported at 4 call sites: protocol.rs, caller_context.rs, discovery.rs, runtime_health.rs, one shared fix likely closes all 4). Root mechanism confirmed on feature/pAI-s3-error-contract-foundation: crates/atm-storage/src/error_catalog.rs:10 `render()` already produces `format!(\"{}\\n  Recovery: {}\", detail.into(), guidance(code))`, embedding a 'Recovery:' line into the message body. crates/atm-core/src/send/mod.rs:184 then does `Some(recovery) => format!(\"{message} Recovery: {recovery}\")`, appending a second 'Recovery:' segment when a caller-supplied recovery hint is present. Any call site that both uses catalog-rendered messages AND passes an explicit recovery hint through this send/mod.rs path produces a doubled 'Recovery: ... Recovery: ...' string. Direct grep for the literal 'recovery' identifier in the 4 named files (protocol.rs, caller_context.rs, discovery.rs, runtime_health.rs) returned no matches on this branch, meaning those call sites reach the bug indirectly (via a shared error-construction helper or trait method) rather than by literal string composition -- exact call chain needs arch-ctm confirmation before the fix lands." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "whole_phase" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-3/1>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-3/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
+  triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
+  triage:resolution "OPEN: dispatch-ready with a verification step. Fix on feature/pAI-s4-error-consumer-migration: pick exactly one composition point for the 'Recovery:' line -- either error_catalog::render() owns it (crates/atm-storage/src/error_catalog.rs:10) or the caller-supplied-hint path in crates/atm-core/src/send/mod.rs:184 owns it, not both. Before fixing, arch-ctm must trace protocol.rs/caller_context.rs/discovery.rs/runtime_health.rs to the actual shared helper that reaches this composition (grep for the literal string returned no hits, so it is behind indirection); once traced, add a regression test asserting exactly one 'Recovery:' occurrence in the composed message for a representative call at each of the 4 sites." ;
+  triage:triagedAt "2026-07-20T22:35:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_catalog.rs" ;
+  triage:line 10 ;
+  triage:snippet "format!(\"{}\\n  Recovery: {}\", detail.into(), guidance(code)) -- first 'Recovery:' composition point" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 184 ;
+  triage:snippet "Some(recovery) => format!(\"{message} Recovery: {recovery}\") -- second 'Recovery:' composition point, doubles the line when message already came from error_catalog::render()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/0d448efe> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/0d448efe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "0d448efe" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/3679a9b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "3679a9b3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/52252a32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "52252a32" ;
+  triage:orderIndex 0 .
