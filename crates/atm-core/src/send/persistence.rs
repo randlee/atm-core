@@ -31,7 +31,7 @@ pub(crate) fn persist_message(
 
     match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
         Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
-        Err(error) if error.code == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
+        Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
         Err(error) => Err(error),
@@ -52,7 +52,7 @@ fn recover_after_sqlite_failure(
         sqlite_error,
     );
     let warning = WarningEntry::with_code(
-        sqlite_error.code,
+        sqlite_error.code(),
         format!(
             "error: SQLite persistence failed for delivery to {}@{}: {}.",
             recipient.agent, recipient.team, sqlite_error

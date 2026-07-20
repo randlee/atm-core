@@ -449,7 +449,7 @@ mod tests {
         let error = command.run(&observability).expect_err("query error");
 
         assert_eq!(
-            error.downcast_ref::<AtmError>().map(|atm| atm.code),
+            error.downcast_ref::<AtmError>().map(|atm| atm.code()),
             Some(atm_core::error_codes::AtmErrorCode::ObservabilityQueryFailed)
         );
     }
@@ -521,7 +521,7 @@ mod tests {
         let error = command.run(&observability).expect_err("missing identity");
 
         assert_eq!(
-            error.downcast_ref::<AtmError>().map(|atm| atm.code),
+            error.downcast_ref::<AtmError>().map(|atm| atm.code()),
             Some(atm_core::error_codes::AtmErrorCode::IdentityUnavailable)
         );
     }

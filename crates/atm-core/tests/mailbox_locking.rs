@@ -605,7 +605,7 @@ fn send_times_out_under_bounded_lock_contention() {
         .expect_err("timeout");
     join.join().expect("join send thread");
 
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    assert_eq!(error.code(), AtmErrorCode::MailboxLockTimeout);
 }
 
 #[test]

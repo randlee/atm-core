@@ -300,7 +300,7 @@ mod tests {
             .expect_err("empty override");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_storage::error_codes::AtmErrorCode::EmptyNudgeTemplateBody
         );
     }

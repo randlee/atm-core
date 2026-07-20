@@ -230,7 +230,7 @@ impl<'a> BootstrapTraceability<'a> {
             outcome,
             team: self.team.clone(),
             agent: self.agent.clone(),
-            error_code: error.map(|error| error.code),
+            error_code: error.map(|error| error.code()),
             error_message: error.map(ToString::to_string),
         };
         if let Err(emit_error) = (self.emit_event)(event) {
@@ -351,7 +351,7 @@ impl BootstrapTraceState {
 }
 
 fn format_bootstrap_error_detail(error: &AtmError) -> String {
-    error.message.clone()
+    error.message().to_owned()
 }
 
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
@@ -1030,7 +1030,7 @@ mod tests {
             )
             .expect_err("spawn failure");
 
-        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         let recorded = events.events();
         assert!(recorded.iter().any(|event| {
             event.action == "daemon_auto_start" && event.outcome == "spawn_requested"
@@ -1072,7 +1072,7 @@ mod tests {
             DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint");
 
         let error = LaunchGateGuard::rejected_error(&endpoint);
-        assert_eq!(error.code, AtmErrorCode::DaemonLaunchGateRejected);
+        assert_eq!(error.code(), AtmErrorCode::DaemonLaunchGateRejected);
     }
 
     #[test]
@@ -1093,10 +1093,10 @@ mod tests {
             let error = result.expect_err(
                 "non-Windows local IPC transports should keep unsupported deadline setup as an error",
             );
-            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
             assert!(
                 error
-                    .message
+                    .message()
                     .contains("failed to configure daemon local IPC write timeout")
             );
         }
@@ -1113,10 +1113,10 @@ mod tests {
         )
         .expect_err("non-unsupported timeout errors should remain failures");
 
-        assert_eq!(result.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(result.code(), AtmErrorCode::DaemonUnavailable);
         assert!(
             result
-                .message
+                .message()
                 .contains("failed to configure daemon local IPC write timeout")
         );
     }

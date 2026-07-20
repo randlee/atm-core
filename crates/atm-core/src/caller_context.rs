@@ -136,7 +136,7 @@ fn parse_identity(raw: String) -> Result<AgentName, AtmError> {
 
     trimmed
         .parse::<AgentName>()
-        .map_err(|error| AtmError::identity_invalid(error.message))
+        .map_err(|error| AtmError::identity_invalid(error.message()))
 }
 
 fn parse_team(raw: String) -> Result<TeamName, AtmError> {
@@ -149,7 +149,7 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 
     trimmed
         .parse::<TeamName>()
-        .map_err(|error| AtmError::team_invalid(error.message))
+        .map_err(|error| AtmError::team_invalid(error.message()))
 }
 
 #[cfg(test)]
@@ -207,7 +207,7 @@ mod tests {
         let error = resolve_cli_mutation_caller_context(Some(CallerTeamOverride(TEST_TEAM)))
             .expect_err("missing identity");
 
-        assert_eq!(error.code, AtmErrorCode::IdentityUnavailable);
+        assert_eq!(error.code(), AtmErrorCode::IdentityUnavailable);
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod tests {
         })
         .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::TeamInvalid);
+        assert_eq!(error.code(), AtmErrorCode::TeamInvalid);
     }
 
     #[test]

@@ -693,10 +693,10 @@ mod tests {
 
         let error = prepare_restore_workspace(&team_dir, &backup_dir).expect_err("staging error");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::FilePolicyRejected);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::FilePolicyRejected);
         assert!(
             error
-                .message
+                .message()
                 .contains("restore staging directory already exists")
         );
         assert!(!restore_marker_path(&team_dir).exists());
@@ -913,7 +913,7 @@ mod tests {
 
         let error = result.expect_err("restore should fail on injected inbox stage error");
         assert_eq!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::MailboxWriteFailed
         );
         assert!(!restore_staging_dir(&team_dir).exists());

@@ -288,8 +288,8 @@ fn warn_host_nudge_result(
         timeout_ms,
         helper_budget_max = helper_budget.max_inflight(),
         helper_budget_inflight = helper_budget.inflight(),
-        error_code = %error.code,
-        error_message = %error.message,
+        error_code = %error.code(),
+        error_message = %error.message(),
         "graft host nudge helper error"
     );
 }
@@ -426,16 +426,16 @@ fn warn_runtime_error(action: &'static str, endpoint_path: Option<&Path>, error:
             action,
             outcome = "error",
             endpoint = %endpoint_path.display(),
-            error_code = %error.code,
-            error_message = %error.message,
+            error_code = %error.code(),
+            error_message = %error.message(),
             "graft receiver runtime error"
         ),
         None => tracing::warn!(
             subsystem = "atm_graft.receiver_loop",
             action,
             outcome = "error",
-            error_code = %error.code,
-            error_message = %error.message,
+            error_code = %error.code(),
+            error_message = %error.message(),
             "graft receiver runtime error"
         ),
     }
@@ -627,8 +627,8 @@ fn warn_listener_wake_result(
         timeout_ms,
         helper_budget_max = helper_budget.max_inflight(),
         helper_budget_inflight = helper_budget.inflight(),
-        error_code = %error.code,
-        error_message = %error.message,
+        error_code = %error.code(),
+        error_message = %error.message(),
         "graft listener wake helper error"
     );
 }
@@ -1138,7 +1138,7 @@ mod tests {
         let first_error = injector
             .inject_nudge(&request_event())
             .expect_err("first delivery should time out");
-        assert_eq!(first_error.code, AtmErrorCode::WaitTimeout);
+        assert_eq!(first_error.code(), AtmErrorCode::WaitTimeout);
 
         injector
             .inject_nudge(&request_event())
@@ -1162,16 +1162,16 @@ mod tests {
             let error = injector
                 .inject_nudge(&request_event())
                 .expect_err("blocked helper should time out");
-            assert_eq!(error.code, AtmErrorCode::WaitTimeout);
+            assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
         }
 
         let error = injector
             .inject_nudge(&request_event())
             .expect_err("helper budget should eventually cap repeated hangs");
-        assert_eq!(error.code, AtmErrorCode::WaitTimeout);
+        assert_eq!(error.code(), AtmErrorCode::WaitTimeout);
         assert!(
             error
-                .message
+                .message()
                 .contains("graft host nudge helper budget is exhausted"),
             "{error:?}"
         );
@@ -1206,10 +1206,10 @@ mod tests {
                 },
             )
             .expect_err("hung listener wake helper should time out");
-            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
             assert!(
                 error
-                    .message
+                    .message()
                     .contains("timed out waking graft receiver listener"),
                 "{error:?}"
             );
@@ -1221,10 +1221,10 @@ mod tests {
             |_name| panic!("helper budget should reject before connect"),
         )
         .expect_err("listener wake helper budget should cap repeated hangs");
-        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         assert!(
             error
-                .message
+                .message()
                 .contains("graft listener wake helper budget is exhausted"),
             "{error:?}"
         );
@@ -1299,9 +1299,9 @@ mod tests {
         match response {
             GraftPostSendResponse::Delivered => panic!("expected typed failure response"),
             GraftPostSendResponse::Error(error) => {
-                assert_eq!(error.code, AtmErrorCode::PostSendGraftUnavailable);
+                assert_eq!(error.code(), AtmErrorCode::PostSendGraftUnavailable);
                 assert_eq!(
-                    error.message,
+                    error.message(),
                     "Repair the configured post-send target and retry if delivery is required."
                 );
             }
@@ -1335,10 +1335,10 @@ mod tests {
             let error = result.expect_err(
                 "non-Windows transports should keep unsupported receiver deadlines as hard errors",
             );
-            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
             assert!(
                 error
-                    .message
+                    .message()
                     .contains("failed to apply graft receiver receive timeout")
             );
         }

@@ -540,10 +540,10 @@ fn heartbeat_rejects_live_pid_conflict() {
         }))
         .expect_err("live pid conflict");
 
-    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
+    assert_eq!(error.code(), AtmErrorCode::IdentityConflict);
     assert!(
         error
-            .message
+            .message()
             .starts_with("ATM_IDENTITY_CONFLICT: stop and report to user immediately")
     );
     assert_eq!(

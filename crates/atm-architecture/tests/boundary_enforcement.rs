@@ -54,9 +54,7 @@ fn production_code_cannot_restore_retired_error_contract_symbols() {
         .filter_map(|path| {
             let contents = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-            RETIRED_ERROR_CONTRACT_SYMBOLS
-                .iter()
-                .find(|symbol| contents.contains(**symbol))
+            retired_error_contract_symbol(&contents)
                 .map(|symbol| format!("{} contains retired `{symbol}`", path.display()))
         })
         .collect::<Vec<_>>();
@@ -65,6 +63,62 @@ fn production_code_cannot_restore_retired_error_contract_symbols() {
         violations.is_empty(),
         "AI.3's two-field error contract forbids retired error shapes: {violations:?}"
     );
+}
+
+fn retired_error_contract_symbol(source: &str) -> Option<&'static str> {
+    RETIRED_ERROR_CONTRACT_SYMBOLS
+        .iter()
+        .copied()
+        .find(|symbol| source.contains(symbol))
+}
+
+#[test]
+fn retired_error_contract_detector_rejects_duplicate_code_mapping_fixture() {
+    assert_eq!(
+        retired_error_contract_symbol("fn error_kind_for_code() {}"),
+        Some("error_kind_for_code")
+    );
+}
+
+#[test]
+fn only_the_error_contract_module_may_define_an_atm_error_literal() {
+    let root = workspace_root();
+    let contract_module = root.join("crates/atm-storage/src/error.rs");
+    let source_root = root.join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    let violations = files
+        .into_iter()
+        .filter(|path| path != &contract_module)
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            direct_atm_error_literal(&contents).then(|| path.display().to_string())
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        violations.is_empty(),
+        "AtmError literals bypass the canonical error catalog: {violations:?}"
+    );
+}
+
+fn direct_atm_error_literal(source: &str) -> bool {
+    source.split("AtmError").skip(1).any(|suffix| {
+        let Some(body) = suffix.trim_start().strip_prefix('{') else {
+            return false;
+        };
+        matches!(body.trim_start(), body if body.starts_with("code:") || body.starts_with("message:"))
+    })
+}
+
+#[test]
+fn direct_atm_error_literal_detector_rejects_constructor_fixture() {
+    let fixture = concat!("Atm", "Error", " {", " code: error_code, message: detail }");
+    assert!(direct_atm_error_literal(fixture));
+    assert!(!direct_atm_error_literal(
+        "fn error() -> AtmError { panic!() }"
+    ));
 }
 
 #[test]

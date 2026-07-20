@@ -868,7 +868,7 @@ mod tests {
         assert!(force_shutdown.load(Ordering::SeqCst));
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch worker exceeded the shutdown join deadline")
         );
         let _ = release_tx.send(());
@@ -911,7 +911,7 @@ mod tests {
         )
         .expect_err("a dispatch worker panic discovered during the shutdown drain must be fatal");
         assert!(
-            error.message.contains("daemon dispatch thread panicked"),
+            error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
         );
     }
@@ -951,7 +951,7 @@ mod tests {
             .expect_err("second handle should be rejected once the bounded registry is full");
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
             "unexpected error: {error:?}"
         );

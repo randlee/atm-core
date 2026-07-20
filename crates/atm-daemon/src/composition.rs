@@ -755,7 +755,7 @@ mod tests {
         .expect_err("runtime storage assembly should fail closed");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(

@@ -60,8 +60,8 @@ where
             subsystem = "local_ipc_transport",
             action = "reload_runtime_view",
             outcome = "rejected",
-            error_code = %error.code,
-            error_message = %error.message,
+            error_code = %error.code(),
+            error_message = %error.message(),
             "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
         ),
     }
@@ -315,8 +315,8 @@ mod tests {
         assert_eq!(response_id, request_id);
         match response {
             ResponseEnvelope::Error(error) => {
-                assert_eq!(error.code, AtmErrorCode::DaemonConnectionSaturated);
-                assert!(error.message.contains("connection cap exceeded"));
+                assert_eq!(error.code(), AtmErrorCode::DaemonConnectionSaturated);
+                assert!(error.message().contains("connection cap exceeded"));
             }
             other => panic!("unexpected response: {other:?}"),
         }

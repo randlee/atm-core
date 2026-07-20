@@ -194,8 +194,8 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
         )))
         .expect_err("self-addressed daemon send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
 }
 
 #[test]
@@ -246,8 +246,11 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
         ))
         .expect_err("cross-agent daemon read must fail");
 
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-    assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+    assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    assert!(
+        error.message().contains("owner-only `atm read`"),
+        "{error:?}"
+    );
 }
 
 #[test]

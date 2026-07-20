@@ -22,8 +22,8 @@ impl GraftNudgeSink<'_> {
                         subsystem = "atm_graft.nudge_sink",
                         action = "deliver",
                         outcome = "snapshot_unavailable",
-                        error_code = %error.code,
-                        error_message = %error.message,
+                        error_code = %error.code(),
+                        error_message = %error.message(),
                         "graft nudge delivery succeeded but the session snapshot could not be read for observability"
                     ),
                 }
@@ -39,10 +39,10 @@ impl GraftNudgeSink<'_> {
                         subsystem = "atm_graft.nudge_sink",
                         action = "deliver",
                         outcome = "snapshot_unavailable",
-                        error_code = %snapshot_error.code,
-                        error_message = %snapshot_error.message,
-                        delivery_error_code = %error.code,
-                        delivery_error_message = %error.message,
+                        error_code = %snapshot_error.code(),
+                        error_message = %snapshot_error.message(),
+                        delivery_error_code = %error.code(),
+                        delivery_error_message = %error.message(),
                         "graft nudge delivery failed and the session snapshot could not be read for observability"
                     ),
                 }
@@ -139,7 +139,7 @@ mod tests {
         let error = sink.deliver(request_event()).expect_err("typed error");
         assert!(
             error
-                .message
+                .message()
                 .contains("synthetic graft receiver unavailable")
         );
     }

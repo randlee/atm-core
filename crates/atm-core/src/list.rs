@@ -591,7 +591,7 @@ mod tests {
         .expect_err("missing ATM roster member should fail");
 
         assert!(
-            error.code == crate::error_codes::AtmErrorCode::AgentNotFound,
+            error.code() == crate::error_codes::AtmErrorCode::AgentNotFound,
             "{error:?}"
         );
     }
