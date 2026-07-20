@@ -1099,41 +1099,19 @@ view is a read projection, not a synthetic write target.
 
 ### 6.3 Ack Service
 
-Public entrypoint:
-
-`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
-
-`AckRequest` contains:
-- home directory
-- current directory
-- actor override
-- team override
-- source message id
-- reply body
-
-`AckOutcome` contains:
-- action
-- resolved team
-- resolved agent
-- source message id
-- optional task id from the acknowledged message
-- reply disposition
-  - `Sent { reply_message_id, reply_target }` when a reply message was emitted
-  - `SuppressedSelfAck` when a historical self-addressed pending-ack was
-    acknowledged without emitting a replacement reply
-- reply text
-- warnings: Vec<String>
-- Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
-  for `atm ack` without changing the successful acknowledgement state
-
-The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
+`atm ack` builds the canonical `SendRequest` used by every other outbound
+message, setting only `acknowledges_message_id`. The daemon resolves the
+original sender, makes the single local-or-remote routing decision, and writes
+the acknowledgement state only after a confirmed send outcome. Inbound ack
+messages use the normal receive/persistence path; their source host is
+metadata, not a separate ack transport.
 
 Phase R continuation rules:
 - `atm ack` emits exactly one visible reply and that reply must hardcode
   `requires_ack = false`
-- historical self-addressed pending-ack messages are the explicit exception:
-  they terminate at `(Read, Acknowledged)` with `AckReplyDisposition::SuppressedSelfAck`
-  and no replacement reply message
+- self-addressed messages without an explicit host target are rejected before
+  routing; explicit localhost or self-IP targets use the same transport path
+  as every other host
 - acknowledgement replies must never request acknowledgement themselves
 - compatibility/export surfaces encode successor metadata with
   `parentMessageId` and `threadMode`
@@ -2123,36 +2101,13 @@ for `read`, `ack`, and `clear`. Those commands are not allowed to degrade into
 partial-lock best-effort mutation, because doing so would mix snapshots from
 different logical times and make writeback correctness nondeterministic.
 
-### 18.4.1 Cooperative Locking Contract For `ack_mail`
-
-`ack_mail` sometimes needs to mutate a source inbox set and append the reply to
-another inbox that was not part of the initial actor-source set. The accepted
-implementation does not use a subset-lock then upgrade-to-superset sequence.
-Instead it uses:
-
-1. an unlocked observational snapshot of the actor-source set
-2. unlocked validation of the pending-ack state and reply inbox path
-3. one final acquisition of the full sorted superset that includes the reply
-   inbox
-4. re-discovery of source paths, reload of current source files, and
-   re-validation of the pending-ack state under that final lock set
-5. persistence of both the updated source message and reply while the superset
-   locks are still held
-
-This avoids the deadlock risk of trying to expand a held subset into a larger
-sorted lock set. The unlocked preflight is acceptable only because `ack_mail`
-does not mutate from that preflight snapshot: the shared commit helper reloads
-and re-validates both the source-path set and the pending-ack state under the
-final superset lock before writing anything. If the state drifted, `ack_mail`
-aborts instead of mutating a stale snapshot.
-
 | Caller | Lock required |
 |--------|--------------|
 | `append_message` | `locked_read_modify_write` |
 | `send` missing-config notice append | `append_message` coverage |
 | source discovery fault (`read` / `ack` / `clear`) | abort before lock acquisition; no partial lock set attempted |
 | `read` writeback | initial selection load is unlocked; acquire the multi-file lock set only for the reload + writeback phase |
-| `ack` transition + reply | unlocked preflight, then one final cooperative superset lock including reply inbox; see §18.4.1 |
+| `ack` transition | normal send persistence plus a confirmed-send state update; no dedicated ack locking path |
 | `clear` set replacement | multi-file lock set held from first read through persist |
 | `read_messages` (read-only, no writeback) | No |
 

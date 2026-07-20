@@ -25,7 +25,10 @@ jobs:
         run: |
           case "${GITHUB_HEAD_REF}" in
             feature/pAG-s18-*) echo "name=AG.18" >> "$GITHUB_OUTPUT" ;;
-            feature/pAG-s19-*) echo "name=AG.19" >> "$GITHUB_OUTPUT" ;;
+            feature/pAG-s19-*)
+              echo "name=AG.19" >> "$GITHUB_OUTPUT"
+              echo "base=12a45c6f" >> "$GITHUB_OUTPUT"
+              ;;
             feature/pAG-s20-*) echo "name=AG.20" >> "$GITHUB_OUTPUT" ;;
             feature/pAG-s21-*) echo "name=AG.21" >> "$GITHUB_OUTPUT" ;;
             feature/pAG-s22-*) echo "name=AG.22" >> "$GITHUB_OUTPUT" ;;
@@ -40,5 +43,5 @@ jobs:
         run: |
           scripts/check-ag-sprint-gates.sh \
             "${{ steps.sprint.outputs.name }}" \
-            "${{ github.event.pull_request.base.sha }}" \
+            "${{ steps.sprint.outputs.base || github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}"

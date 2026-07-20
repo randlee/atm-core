@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
-    ack::{ack_mail_with_runtime_and_post_send_emitter, ack_request_from_send_request},
-    boundary,
+    RequestEnvelope, ResponseEnvelope, boundary,
     clear::clear_mail_with_runtime,
     error::AtmError,
     list::list_mail,
@@ -11,8 +9,9 @@ use atm_core::{
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::AtmMessageId,
     send::{
-        SendCommandOutcome, SendOutcome, SendRequest, SendRequestRoute,
-        persist_remote_delivery_receipt_with_runtime, route_send_request,
+        SendCommandOutcome, SendOutcome, SendRequest,
+        finalize_acknowledgement_after_confirmed_send,
+        persist_remote_delivery_receipt_with_runtime, resolve_acknowledgement_request,
         send_mail_with_runtime_and_post_send_emitter,
     },
 };
@@ -60,27 +59,22 @@ impl DaemonRequestDispatcher {
         request: SendRequest,
         post_send_emitter: &DaemonPostSendHookEmitter,
     ) -> Result<ResponseEnvelope, AtmError> {
-        if request.acknowledges_message_id.is_some() && request.source_remote_host.is_none() {
-            return Ok(ResponseEnvelope::Ack(
-                ack_mail_with_runtime_and_post_send_emitter(
-                    ack_request_from_send_request(request)?,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    post_send_emitter,
-                )?,
-            ));
-        }
-        match route_send_request(&request) {
-            SendRequestRoute::Local => {
+        let request = if requires_acknowledgement_resolution(&request) {
+            resolve_acknowledgement_request(&self.service_runtime, request)?
+        } else {
+            request
+        };
+        let mut response = match request.remote_host.clone() {
+            None => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
+                    request.clone(),
                     self.observability.as_ref(),
                     &self.service_runtime,
                     post_send_emitter,
                 )?;
                 Ok(ResponseEnvelope::Send(outcome))
             }
-            SendRequestRoute::Remote(remote_host) => {
+            Some(remote_host) => {
                 match self
                     .service_runtime
                     .deliver_remote_send_request(request.clone(), remote_host.clone())?
@@ -108,7 +102,11 @@ impl DaemonRequestDispatcher {
                     )?)),
                 }
             }
+        }?;
+        if let ResponseEnvelope::Send(outcome) = &mut response {
+            finalize_acknowledgement_after_confirmed_send(&self.service_runtime, &request, outcome);
         }
+        Ok(response)
     }
 
     fn compatibility_verdict(
@@ -129,6 +127,10 @@ impl DaemonRequestDispatcher {
             code: atm_core::error_codes::AtmErrorCode::ClientDaemonVersionIncompatible,
         })
     }
+}
+
+fn requires_acknowledgement_resolution(request: &SendRequest) -> bool {
+    request.acknowledges_message_id.is_some() && request.source_remote_host.is_none()
 }
 
 fn build_remote_deferred_outcome(

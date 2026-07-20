@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::ack::{AckOutcome, AckRequest};
 use crate::boundary::PostSendHookEvent;
 use crate::error::AtmError;
 use crate::protocol::ProtocolErrorEnvelope;
@@ -107,20 +106,11 @@ pub trait AtmGraftClient: Send + Sync {
     /// Returns [`AtmError`] when the read request cannot be delivered or the
     /// daemon returns a typed failure.
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError>;
-
-    /// Execute one send-shaped ATM acknowledgement request.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the acknowledgement request cannot be
-    /// completed successfully.
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
 }
 
 #[cfg(test)]
 mod tests {
     use super::AtmGraftClient;
-    use crate::ack::{AckOutcome, AckRequest};
     use crate::error::AtmError;
     use crate::read::{ReadOutcome, ReadQuery};
     use crate::send::{SendOutcome, SendRequest};
@@ -135,10 +125,6 @@ mod tests {
 
         fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
             panic!("read_message should not be called in trait object test")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message should not be called in trait object test")
         }
     }
 

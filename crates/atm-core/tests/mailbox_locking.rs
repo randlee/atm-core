@@ -7,7 +7,6 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
 
-use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
 #[cfg(unix)]
 use atm_core::error::AtmErrorCode;
@@ -16,7 +15,10 @@ use atm_core::observability::NullObservability;
 use atm_core::read::{PeekQuery, ReadQuery, peek_mail, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
-use atm_core::send::{SendMessageSource, SendRequest, send_mail};
+use atm_core::send::{
+    SendMessageSource, SendOutcome, SendRequest, finalize_acknowledgement_after_confirmed_send,
+    resolve_acknowledgement_request, send_mail, send_mail_with_runtime,
+};
 #[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
@@ -51,6 +53,18 @@ const TEAM_LEAD: &str = ROLE_TEAM_LEAD;
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{PRIMARY_TEAM}")
+}
+
+fn acknowledge_through_canonical_send(
+    request: SendRequest,
+    observability: &dyn atm_core::observability::ObservabilityPort,
+) -> Result<SendOutcome, atm_core::error::AtmError> {
+    let runtime = open_sqlite_boundary(request.home_dir.join("runtime").join("mail.sqlite3"))?
+        .service_runtime;
+    let send = resolve_acknowledgement_request(&runtime, request)?;
+    let mut outcome = send_mail_with_runtime(send.clone(), observability, &runtime)?;
+    finalize_acknowledgement_after_confirmed_send(&runtime, &send, &mut outcome);
+    Ok(outcome)
 }
 
 #[test]
@@ -94,8 +108,11 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
         let observability = Arc::clone(&observability);
         thread::spawn(move || {
             barrier.wait();
-            tx.send((label, ack_mail(request, observability.as_ref())))
-                .expect("send result");
+            tx.send((
+                label,
+                acknowledge_through_canonical_send(request, observability.as_ref()),
+            ))
+            .expect("send result");
         });
     }
     drop(tx);
@@ -237,7 +254,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
             barrier.wait();
             tx.send((
                 "send-ack/ack",
-                ack_mail(ack_request, observability.as_ref()).map(|_| ()),
+                acknowledge_through_canonical_send(ack_request, observability.as_ref()).map(|_| ()),
             ))
             .expect("ack result");
         });
@@ -797,12 +814,12 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
         )],
     );
 
-    let ack_outcome = ack_mail(
+    let ack_outcome = acknowledge_through_canonical_send(
         fixture.ack_request(PRIMARY_AGENT, message_id, "ack reply"),
         &observability,
     )
     .expect("ack outcome");
-    assert_eq!(ack_outcome.message_id, message_id);
+    assert_ne!(ack_outcome.message_id, message_id);
 
     let query = ReadQuery::new(
         fixture.tempdir.path().to_path_buf(),
@@ -832,6 +849,70 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
 
 #[test]
 #[serial_test::serial(env)]
+fn retrying_a_delivered_acknowledgement_cannot_create_a_second_reply() {
+    let fixture = Fixture::new();
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    let runtime = open_sqlite_boundary(fixture.sqlite_db_path())
+        .expect("sqlite boundary")
+        .service_runtime;
+    let mut request = fixture.send_request(PRIMARY_AGENT, &qualified(TEAM_LEAD), "ack reply");
+    request.acknowledges_message_id = Some(message_id);
+
+    let first = send_mail_with_runtime(request.clone(), &observability, &runtime)
+        .expect("first acknowledgement reply delivery");
+    let retried = send_mail_with_runtime(request, &observability, &runtime)
+        .expect("retry returns the original acknowledgement delivery");
+
+    assert_eq!(retried.message_id, first.message_id);
+    assert_eq!(fixture.inbox_contents(TEAM_LEAD).len(), 1);
+}
+
+#[test]
+#[cfg(unix)]
+#[serial_test::serial(env)]
+fn confirmed_acknowledgement_surfaces_local_state_commit_failure_as_warning() {
+    let fixture = Fixture::new();
+    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
+    let observability = NullObservability;
+    let message_id = AtmMessageId::new();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message(
+            TEAM_LEAD,
+            "needs ack",
+            message_id,
+            PRIMARY_TEAM,
+        )],
+    );
+    let runtime = open_sqlite_boundary(fixture.sqlite_db_path())
+        .expect("sqlite boundary")
+        .service_runtime;
+    let request = fixture.ack_request(PRIMARY_AGENT, message_id, "ack reply");
+    let reply = resolve_acknowledgement_request(&runtime, request).expect("resolve ack reply");
+    let mut outcome =
+        send_mail_with_runtime(reply.clone(), &observability, &runtime).expect("deliver ack reply");
+
+    {
+        let _writer_lock =
+            hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
+        finalize_acknowledgement_after_confirmed_send(&runtime, &reply, &mut outcome);
+    }
+
+    assert_eq!(outcome.outcome.as_str(), "sent");
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(
+        outcome.warnings[0]
+            .message
+            .contains("could not update local acknowledgement state")
+    );
+    let source = fixture.inbox_contents(PRIMARY_AGENT);
+    assert!(source[0].pending_ack_at.is_some());
+    assert!(source[0].acknowledged_at.is_none());
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn ack_self_addressed_poison_message_requires_explicit_host() {
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -846,7 +927,7 @@ fn ack_self_addressed_poison_message_requires_explicit_host() {
         )],
     );
 
-    let error = ack_mail(
+    let error = acknowledge_through_canonical_send(
         fixture.ack_request(PRIMARY_AGENT, message_id, "resolved"),
         &observability,
     )
@@ -1184,15 +1265,16 @@ impl Fixture {
         }
     }
 
-    fn ack_request(&self, actor: &str, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
-        AckRequest {
-            home_dir: self.tempdir.path().to_path_buf(),
-            current_dir: self.tempdir.path().to_path_buf(),
-            caller_identity: actor.parse().expect("caller"),
-            caller_team: PRIMARY_TEAM.parse().expect("team"),
+    fn ack_request(&self, actor: &str, message_id: AtmMessageId, reply_body: &str) -> SendRequest {
+        SendRequest::acknowledgement(
+            self.tempdir.path().to_path_buf(),
+            self.tempdir.path().to_path_buf(),
+            actor.parse().expect("caller"),
+            PRIMARY_TEAM.parse().expect("team"),
             message_id,
-            reply_body: reply_body.to_string(),
-        }
+            reply_body.to_string(),
+        )
+        .expect("acknowledgement send request")
     }
 
     fn clear_query(&self, actor: &str) -> ClearQuery {

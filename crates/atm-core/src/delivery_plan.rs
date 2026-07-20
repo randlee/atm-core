@@ -1,17 +1,9 @@
-use std::fmt;
-use std::path::Path;
-
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::schema::{AtmMessageId, InboxMessage};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum DeliveryPlanKind {
-    Send,
-    Reply,
-}
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LogicalMessage {
@@ -74,35 +66,10 @@ pub(crate) fn logical_messages_from_persistence(
     Ok(messages)
 }
 
-pub(crate) fn delivery_target_for_snapshot(
-    _inbox_path: &Path,
-    delivery_snapshot: &DeliveryRecipientSnapshot,
-) -> DeliveryTarget {
-    DeliveryTarget::NonClaude {
-        recipient: delivery_snapshot.clone(),
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum DeliveryTarget {
-    NonClaude {
-        recipient: DeliveryRecipientSnapshot,
-    },
-}
-
-impl DeliveryTarget {
-    pub(crate) fn harness_path(&self) -> crate::delivery_policy::DeliveryHarnessPath {
-        match self {
-            Self::NonClaude { .. } => crate::delivery_policy::DeliveryHarnessPath::NonClaude,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DeliveryPlan {
-    pub(crate) kind: DeliveryPlanKind,
     pub(crate) disposition: DeliveryPersistenceDisposition,
-    pub(crate) delivery_target: DeliveryTarget,
+    pub(crate) recipient_snapshot: DeliveryRecipientSnapshot,
     pub(crate) recipient: ResolvedRecipient,
     pub(crate) messages: Vec<LogicalMessage>,
     pub(crate) warnings: Vec<WarningEntry>,
@@ -110,17 +77,15 @@ pub(crate) struct DeliveryPlan {
 
 impl DeliveryPlan {
     pub(crate) fn new(
-        kind: DeliveryPlanKind,
         disposition: DeliveryPersistenceDisposition,
-        delivery_target: DeliveryTarget,
+        recipient_snapshot: DeliveryRecipientSnapshot,
         recipient: ResolvedRecipient,
         messages: Vec<LogicalMessage>,
         warnings: Vec<WarningEntry>,
     ) -> Self {
         Self {
-            kind,
             disposition,
-            delivery_target,
+            recipient_snapshot,
             recipient,
             messages,
             warnings,

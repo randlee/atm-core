@@ -5,7 +5,10 @@ use atm_core::boundary::{MessageKey, RemoteReplayStateRecord, RemoteReplayStore}
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::RequestEnvelope;
 use atm_core::schema::AtmMessageId;
-use atm_core::send::{RemoteDeliveryReceiptStatus, finalize_remote_delivery_receipt_with_runtime};
+use atm_core::send::{
+    RemoteDeliveryReceiptStatus, finalize_acknowledgement_after_confirmed_delivery,
+    finalize_remote_delivery_receipt_with_runtime,
+};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::with_default_local_service_runtime;
 
@@ -162,6 +165,11 @@ pub(super) fn complete_replay_record(
         RemoteDeliveryReceiptStatus::Delivered,
         "ATM delivered the deferred remote message after replay resumed and the remote daemon accepted it.",
     )?;
+    if let RequestEnvelope::Send(send_request) = &record.request {
+        with_default_local_service_runtime(|runtime| {
+            finalize_acknowledgement_after_confirmed_delivery(runtime, send_request)
+        })?;
+    }
     replay_store.delete(&record.team, &record.agent, &record.message_key)?;
     tracing::info!(
         message_key = %record.message_key,

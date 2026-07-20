@@ -404,12 +404,12 @@ fn dispatcher_secure_loopback_requires_ack_round_trips_and_updates_reply_state()
             "ack from secure localhost",
         ))
         .expect("ack over secure localhost");
-    let ResponseEnvelope::Ack(outcome) = ack else {
+    let ResponseEnvelope::Send(outcome) = ack else {
         panic!("expected ack response");
     };
     assert!(matches!(
-        outcome.reply_disposition,
-        atm_core::ack::AckReplyDisposition::Sent { .. }
+        outcome.outcome,
+        atm_core::send::SendCommandOutcome::Sent
     ));
 
     let sender_read = dispatcher

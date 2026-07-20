@@ -9,7 +9,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use atm_core::ack::{AckOutcome, AckRequest, prepare_ack_send_request};
 use atm_core::boundary::{ClientTransport, PostSendHookEvent};
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
@@ -235,15 +234,6 @@ impl AtmGraftClient for GraftClient {
             other => Err(unexpected_response("read", other)),
         }
     }
-
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
-            request,
-        )?)))? {
-            ResponseEnvelope::Ack(outcome) => Ok(outcome),
-            other => Err(unexpected_response("ack", other)),
-        }
-    }
 }
 
 /// Concrete embedded graft session runtime.
@@ -399,10 +389,6 @@ impl GraftSession {
         self.client.read_message(query)
     }
 
-    pub fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
-    }
-
     /// # Errors
     ///
     /// Returns [`AtmError`] when the receive loop cannot join cleanly during
@@ -514,17 +500,13 @@ impl AtmGraftClient for GraftSession {
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         self.client.read_message(query)
     }
-
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        self.client.acknowledge_message(request)
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use atm_core::protocol::{
         RequestEnvelope as CoreRequestEnvelope, ResponseEnvelope as CoreResponseEnvelope,
@@ -534,7 +516,6 @@ mod tests {
     use atm_core::test_support::{EnvGuard, TEST_LEAD, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, CommandAction, ReadSelection, TeamName};
-    use serde_json::json;
     use tempfile::TempDir;
 
     use super::*;
@@ -558,10 +539,6 @@ mod tests {
 
         fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
             panic!("read_message should not run in inactive-session tests")
-        }
-
-        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
-            panic!("acknowledge_message should not run in inactive-session tests")
         }
     }
 
@@ -595,12 +572,16 @@ mod tests {
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
         let paths = test_paths();
+        let sent_acknowledgements = Arc::new(Mutex::new(Vec::new()));
+        let observed_acknowledgements = Arc::clone(&sent_acknowledgements);
         let transport = Arc::new(FakeClientTransport::new(Box::new(
-            |request| {
-                match request {
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_none() => Ok(
-                    CoreResponseEnvelope::Send(SendOutcome {
+            move |request| match request {
+                CoreRequestEnvelope::Send(request) => {
+                    observed_acknowledgements
+                        .lock()
+                        .expect("acknowledgement observations")
+                        .push(request.acknowledges_message_id);
+                    Ok(CoreResponseEnvelope::Send(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
                         agent: AgentName::from_validated(TEST_LEAD),
@@ -614,8 +595,8 @@ mod tests {
                         message: None,
                         warnings: Vec::new(),
                         dry_run: false,
-                    }),
-                ),
+                    }))
+                }
                 CoreRequestEnvelope::Peek(_) => {
                     Ok(CoreResponseEnvelope::Peek(Box::new(ReadOutcome {
                         action: CommandAction::Peek,
@@ -654,28 +635,7 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(request)
-                    if request.acknowledges_message_id.is_some() => Ok(
-                    CoreResponseEnvelope::Ack(
-                        serde_json::from_value(json!({
-                            "action": "ack",
-                            "team": TEST_TEAM,
-                            "agent": TEST_LEAD,
-                            "message_id": atm_core::schema::AtmMessageId::new().to_string(),
-                            "task_id": null,
-                            "reply_disposition": {
-                                "kind": "sent",
-                                "reply_target": format!("{TEST_LEAD}@{TEST_TEAM}"),
-                                "reply_message_id": atm_core::schema::AtmMessageId::new().to_string()
-                            },
-                            "reply_text": "ack",
-                            "warnings": [],
-                        }))
-                        .expect("ack outcome"),
-                    ),
-                ),
                 other => panic!("unexpected request: {other:?}"),
-                }
             },
         )));
         let client = GraftClient::from_transport(transport);
@@ -714,15 +674,29 @@ mod tests {
         .expect("read query");
         client.read_message(read_query).expect("read");
 
-        let ack_request = AckRequest {
-            home_dir: paths.home_dir.clone(),
-            current_dir: paths.workspace_root.clone(),
-            caller_identity: AgentName::from_validated(TEST_LEAD),
-            caller_team: TeamName::from_validated(TEST_TEAM),
-            message_id: atm_core::schema::AtmMessageId::new(),
-            reply_body: "ack".to_string(),
-        };
-        client.acknowledge_message(ack_request).expect("ack");
+        client
+            .send_message(
+                SendRequest::acknowledgement(
+                    paths.home_dir.clone(),
+                    paths.workspace_root.clone(),
+                    AgentName::from_validated(TEST_LEAD),
+                    TeamName::from_validated(TEST_TEAM),
+                    atm_core::schema::AtmMessageId::new(),
+                    "ack".to_string(),
+                )
+                .expect("acknowledgement send request"),
+            )
+            .expect("ack");
+
+        assert!(
+            sent_acknowledgements
+                .lock()
+                .expect("acknowledgement observations")
+                .as_slice()
+                .iter()
+                .any(Option::is_some),
+            "graft acknowledgement must remain a Send request with acknowledges_message_id"
+        );
     }
 
     #[test]

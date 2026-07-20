@@ -31,7 +31,7 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
 
 fn message(
     from: &str,
@@ -103,6 +103,7 @@ fn assert_recovered_payload_texts(
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
+    recipient_pane_id: Option<PaneId>,
     claude_roster_members: Vec<AgentName>,
     roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
@@ -142,6 +143,7 @@ impl TestRuntime {
         Self {
             commit_error_message,
             recipient_harness,
+            recipient_pane_id: None,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
@@ -247,7 +249,7 @@ impl RetainedServiceRuntime for TestRuntime {
             },
             agent_type: crate::schema::AgentType::default(),
             model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
+            recipient_pane_id: self.recipient_pane_id.clone(),
             metadata_json: Map::new(),
         }))
     }
@@ -269,7 +271,7 @@ impl RetainedServiceRuntime for TestRuntime {
             },
             agent_type: crate::schema::AgentType::default(),
             model: crate::types::ModelName::default(),
-            recipient_pane_id: None,
+            recipient_pane_id: self.recipient_pane_id.clone(),
             metadata_json: Map::new(),
         }])
     }
@@ -506,10 +508,8 @@ fn claude_harness_delivery_no_longer_has_append_degradation_path() {
         warnings: Vec::new(),
     };
     let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
-    let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
-    let execution = execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
-
-    assert!(execution.warnings.is_empty());
+    let plan = build_send_delivery_plan(&context, false, false, &persistence).expect("plan");
+    execute_delivery_plan(&runtime, None, &plan).expect("direct delivery");
 }
 
 #[test]
@@ -554,23 +554,23 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
         warnings: Vec::new(),
     };
     let claude_plan =
-        build_send_delivery_plan(&base_context, false, &persistence).expect("claude plan");
+        build_send_delivery_plan(&base_context, false, false, &persistence).expect("claude plan");
     let non_claude_context = SendExecutionContext {
         delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
         ..base_context
     };
-    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, &persistence)
+    let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, false, &persistence)
         .expect("non-claude plan");
 
     assert_eq!(claude_plan.messages, non_claude_plan.messages);
-    assert!(matches!(
-        claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
-    assert!(matches!(
-        non_claude_plan.delivery_target,
-        crate::delivery_plan::DeliveryTarget::NonClaude { .. }
-    ));
+    assert_eq!(
+        claude_plan.recipient_snapshot.harness,
+        DeliveryHarnessPath::ClaudeCode
+    );
+    assert_eq!(
+        non_claude_plan.recipient_snapshot.harness,
+        DeliveryHarnessPath::NonClaude
+    );
 }
 
 #[test]
@@ -593,7 +593,6 @@ fn recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound() {
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
     assert_non_claude_sqlite_failure_delivery(&runtime);
-    assert_notification_log_absent(&home_dir);
     assert_non_claude_sqlite_failure_observability(&observability);
 }
 
@@ -618,12 +617,6 @@ fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
         &deliveries[0].messages[1],
         "hello",
     );
-}
-
-fn assert_notification_log_absent(_home_dir: &Path) {
-    // The host-owned notification stream is shared by the sole daemon and may
-    // contain events from another command; the recording emitter proves this
-    // path itself did not emit one.
 }
 
 fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObservability) {
@@ -680,6 +673,34 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
 
 #[test]
 #[serial_test::serial(env)]
+fn acknowledgement_send_marks_post_send_delivery_as_acknowledgement() {
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    runtime.recipient_pane_id = Some(PaneId::from_cli("%19").expect("pane id"));
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let _env = install_home_env(&tempdir.path().join("home"));
+    let post_send_emitter = RecordingPostSendEmitter::succeed();
+    let mut request = send_request(tempdir.path());
+    request.acknowledges_message_id = Some(AtmMessageId::new());
+
+    super::send_mail_with_runtime_impl(request, &observability, &runtime, Some(&post_send_emitter))
+        .expect("acknowledgement send outcome");
+
+    let emitted = post_send_emitter.emitted();
+    assert_eq!(emitted.len(), 1);
+    assert!(emitted[0].event.is_ack);
+    match &emitted[0].target {
+        PostSendBuiltInTarget::LocalTmux(target) => {
+            assert_eq!(target.pane_id.as_str(), "%19");
+            assert!(target.rendered_nudge.contains("<atm kind=\"ack\""));
+            assert!(target.rendered_nudge.contains("task-id=\"task-123\""));
+        }
+        other => panic!("expected LocalTmux acknowledgement nudge, got {other:?}"),
+    }
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
     let observability = RecordingObservability::default();
@@ -712,7 +733,6 @@ fn send_claude_harness_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     drop(deliveries);
-    assert_notification_log_absent(&home_dir);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {

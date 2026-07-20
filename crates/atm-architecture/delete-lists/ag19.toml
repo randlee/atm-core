@@ -3,14 +3,59 @@ description = "Delete the separate remote-ack execution path and force ack repli
 min_net_crates_loc = -100
 
 scan_files = [
-  "crates/atm-core/src/ack/mod.rs",
+  "crates/atm-core/src/lib.rs",
   "crates/atm/src/composition.rs",
   "crates/atm-core/src/delivery_policy.rs",
+  "crates/atm-core/src/graft.rs",
+  "crates/atm-core/src/send/mod.rs",
+  "crates/atm-core/tests/mailbox_locking.rs",
+  "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs",
+  "crates/atm/src/commands/ack.rs",
+  "crates/atm/src/output.rs",
+  "crates/atm-graft/src/lib.rs",
+  "crates/atm-graft/examples/smoke_same_host.rs",
+  "crates/atm-daemon/src/tests/runtime_root/mod.rs",
+  "crates/atm-daemon/src/tests_post_send_graft_warning.rs",
+]
+
+forbidden_absent_paths = [
+  "crates/atm-core/src/ack/mod.rs",
 ]
 
 allowed_changed_files = [
+  "boundaries/atm-graft/shared-client-consumer.toml",
+  "crates/atm-architecture/delete-lists/ag19.toml",
+  "crates/atm-architecture/tests/boundary_enforcement.rs",
   "crates/atm-core/src/ack/mod.rs",
+  "crates/atm-core/src/delivery_execution.rs",
+  "crates/atm-core/src/delivery_plan.rs",
+  "crates/atm-core/src/delivery_policy.rs",
+  "crates/atm-core/src/graft.rs",
+  "crates/atm-core/src/lib.rs",
+  "crates/atm-core/src/send/mod.rs",
+  "crates/atm-core/src/send/delivery_persistence.rs",
+  "crates/atm-core/src/send/outcome.rs",
+  "crates/atm-core/src/send/persistence.rs",
+  "crates/atm-core/src/send/tests.rs",
+  "crates/atm-core/tests/mailbox_locking.rs",
+  "crates/atm-core/src/service_runtime.rs",
+  "crates/atm-daemon/src/runtime_health/dispatch_delivery.rs",
+  "crates/atm-daemon/src/local_ipc_transport.rs",
+  "crates/atm-daemon/src/local_ipc_transport/accept_loop.rs",
+  "crates/atm-daemon/src/peer_transport/replay_persistence.rs",
+  "crates/atm-daemon/src/peer_transport/tests/harness.rs",
+  "crates/atm-daemon/src/tests/runtime_root/local_ipc.rs",
+  "crates/atm-daemon/src/tests/runtime_root/mod.rs",
+  "crates/atm-daemon/src/tests/runtime_root/cross_host.rs",
+  "crates/atm-daemon/src/tests_post_send_graft_warning.rs",
   "crates/atm/src/composition.rs",
+  "crates/atm/src/commands/ack.rs",
+  "crates/atm/src/output.rs",
+  "crates/atm-graft/examples/smoke_same_host.rs",
+  "crates/atm-graft/src/lib.rs",
+  "docs/architecture.md",
+  "docs/atm-daemon/protocol-icd.md",
+  "scripts/smoke/run_thorough_shared_host.py",
 ]
 
 forbidden_type_definitions = [
@@ -29,6 +74,14 @@ forbidden_literals = [
   "finalize_sent_ack_outcome",
   "AckReplyDisposition",
   "route_send_request(&reply.reply_request)",
+  "AckOutcome",
+  "AckMutation",
+  "ack_mail",
+  "commit_ack_mutation",
+  "acknowledge_message",
+  "ack_reply_transitions",
+  "AckRequest",
+  "prepare_ack_send_request",
 ]
 
 forbidden_regexes = [
@@ -39,4 +92,8 @@ forbidden_regexes = [
   "fn\\s+finalize_(ack_outcome|suppressed_self_ack_outcome|sent_ack_outcome)\\b",
   "fn\\s+build_reply_delivery_plan\\b",
   "fn\\s+reply_post_send_messages\\b",
+  "fn\\s+acknowledge_message\\s*\\(",
+  "fn\\s+ack_mail\\s*\\(",
+  "struct\\s+AckRequest\\b",
+  "fn\\s+prepare_ack_send_request\\b",
 ]

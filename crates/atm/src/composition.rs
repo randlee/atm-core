@@ -7,7 +7,6 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
-use atm_core::ack::{AckOutcome, AckRequest, prepare_ack_send_request};
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
@@ -294,31 +293,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(Box::new(prepare_ack_send_request(
-            request,
-        )?)))? {
-            ResponseEnvelope::Ack(outcome) => {
-                self.observability_port.emit_command_event(CommandEvent {
-                    command: "ack",
-                    action: action_name("ack"),
-                    outcome: outcome_label("ok"),
-                    team: outcome.team.clone(),
-                    agent: outcome.agent.clone(),
-                    sender: outcome.agent.clone(),
-                    message_id: Some(outcome.message_id),
-                    requires_ack: false,
-                    dry_run: false,
-                    task_id: outcome.task_id.clone(),
-                    error_code: None,
-                    error_message: None,
-                });
-                Ok(outcome)
-            }
-            other => Err(unexpected_response("ack", other)),
-        }
-    }
-
     pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
             ResponseEnvelope::Receive(outcome) => {
@@ -507,10 +481,6 @@ impl AtmGraftClient for CliComposition<'_> {
 
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         CliComposition::receive(self, query)
-    }
-
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        CliComposition::ack(self, request)
     }
 }
 

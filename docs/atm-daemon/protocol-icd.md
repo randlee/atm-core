@@ -229,8 +229,7 @@ Phase S packet families:
 
 ### 6.1 Request Packet Kinds
 
-- `0x0001` `send_compose_request`
-- `0x0002` `send_acknowledge_request`
+- `0x0001` `send_request`
 - `0x0003` `heartbeat_request`
 - `0x0004` `list_request`
 - `0x0005` `receive_request`
@@ -239,8 +238,7 @@ Phase S packet families:
 
 ### 6.2 Success Response Packet Kinds
 
-- `0x1001` `send_sent_response`
-- `0x1002` `send_acknowledged_response`
+- `0x1001` `send_response`
 - `0x1003` `heartbeat_response`
 - `0x1004` `list_response`
 - `0x1005` `receive_response`
@@ -267,16 +265,14 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 
 | Kind value | Packet kind | Current source workflow | Notes |
 |---|---|---|---|
-| `0x0001` | `send_compose_request` | `atm send` | retained send workflow over daemon transport |
-| `0x0002` | `send_acknowledge_request` | `atm ack` | retained ack workflow is send-shaped, not a separate top-level ack packet family |
+| `0x0001` | `send_request` | `atm send` and `atm ack` | `atm ack` uses the same `SendRequest` with `acknowledges_message_id` populated |
 | `0x0003` | `heartbeat_request` | daemon/runtime heartbeat path | not a retained user CLI command; runtime/member liveness path |
 | `0x0004` | `list_request` | `atm list` | bounded metadata queue query workflow |
 | `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
 | `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
 | `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
 | `0x0009` | `compatibility_preflight_request` | write-path daemon compatibility gate | same-host preflight before `atm send` and `atm clear` dispatch a write-shaped request |
-| `0x1001` | `send_sent_response` | response to `atm send` | success response |
-| `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
+| `0x1001` | `send_response` | response to `atm send` and `atm ack` | `SendOutcome` response for the shared send request shape |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
 | `0x1004` | `list_response` | response to `atm list` | success response |
 | `0x1005` | `receive_response` | response to `atm read` | success response |
@@ -330,16 +326,14 @@ Field-authority rule:
 
 | Packet kind | Payload Rust type | Current envelope path |
 |---|---|---|
-| `send_compose_request` | `SendRequest` | `RequestEnvelope::Send(SendRequestEnvelope::Compose(...))` |
-| `send_acknowledge_request` | `AckRequest` | `RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(...))` |
+| `send_request` | `SendRequest` | `RequestEnvelope::Send(SendRequest)`; an acknowledgement sets `acknowledges_message_id` |
 | `heartbeat_request` | `TeamMemberHeartbeatRequest` | `RequestEnvelope::Heartbeat(...)` |
 | `list_request` | `ListQuery` | `RequestEnvelope::List(...)` |
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
 | `compatibility_preflight_request` | `CompatibilityPreflight` | `RequestEnvelope::CompatibilityPreflight(...)` |
-| `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
-| `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
+| `send_response` | `SendOutcome` | `ResponseEnvelope::Send(SendOutcome)` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
 | `list_response` | `ListOutcome` | `ResponseEnvelope::List(...)` |
 | `compatibility_verdict_response` | `CompatibilityVerdict` | `ResponseEnvelope::CompatibilityVerdict(...)` |
@@ -353,7 +347,6 @@ Field-authority rule:
 The current packet payload DTO definitions live in:
 - `crates/atm-core/src/protocol.rs`
   - `SendRequest`
-  - `AckRequest`
   - `TeamMemberHeartbeatRequest`
   - `ReadQuery`
   - `ClearQuery`
@@ -364,7 +357,6 @@ The current packet payload DTO definitions live in:
   - `AdvisoryDrainRequest`
   - `AdvisoryStreamRequest`
   - `SendOutcome`
-  - `AckOutcome`
   - `TeamMemberHeartbeatResponse`
   - `ReadOutcome`
   - `ClearOutcome`
@@ -380,10 +372,8 @@ The current packet payload DTO definitions live in:
 
 The current protocol-layer envelope mapping is:
 
-- `RequestEnvelope::Send(SendRequestEnvelope::Compose(...))`
-  - `send_compose_request`
-- `RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(...))`
-  - `send_acknowledge_request`
+- `RequestEnvelope::Send(SendRequest)`
+  - `send_request`; `acknowledges_message_id` distinguishes acknowledgement replies
 - `RequestEnvelope::Heartbeat(...)`
   - `heartbeat_request`
 - `RequestEnvelope::List(...)`
@@ -405,10 +395,8 @@ The current protocol-layer envelope mapping is:
 - `RequestEnvelope::AdvisoryStream(...)`
   - `advisory_stream_request`
 
-- `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))`
-  - `send_sent_response`
-- `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))`
-  - `send_acknowledged_response`
+- `ResponseEnvelope::Send(SendOutcome)`
+  - `send_response`
 - `ResponseEnvelope::Heartbeat(...)`
   - `heartbeat_response`
 - `ResponseEnvelope::List(...)`
@@ -472,8 +460,7 @@ Every request packet must receive exactly one response packet:
 - transport adapters must not rewrite `request_id`
 
 Success-family pairing rules:
-- `send_compose_request -> send_sent_response | error_response`
-- `send_acknowledge_request -> send_acknowledged_response | error_response`
+- `send_request -> send_response | error_response`
 - `heartbeat_request -> heartbeat_response | error_response`
 - `list_request -> list_response | error_response`
 - `receive_request -> receive_response | error_response`

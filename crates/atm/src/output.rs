@@ -1,6 +1,5 @@
 use crate::output_contract::{HelpResult, HelpResultKind};
 use anyhow::Result;
-use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
 use atm_core::doctor::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -167,33 +166,6 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Print one acknowledgement result in human-readable or JSON form.
-pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
-    if json {
-        println!("{}", serde_json::to_string_pretty(outcome)?);
-    } else {
-        println!("{}", render_ack_result_line(outcome));
-    }
-
-    for warning in &outcome.warnings {
-        eprintln!("{}", warning.render());
-    }
-
-    Ok(())
-}
-
-fn render_ack_result_line(outcome: &AckOutcome) -> String {
-    match &outcome.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id,
-            reply_target,
-        } => format!(
-            "Acknowledged {} for {}@{} and sent reply {} to {}",
-            outcome.message_id, outcome.agent, outcome.team, reply_message_id, reply_target
-        ),
-    }
 }
 
 /// Print one clear result in human-readable or JSON form.
@@ -929,12 +901,13 @@ fn append_cross_host_security(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
         BootstrapTraceReport, CrossHostAllowlistDoctorReport, CrossHostDoctorReport,
         CrossHostInterfaceDoctorRow, CrossHostSecurityDoctorReport,
     };
+    use atm_core::send::SendOutcome;
+    use atm_core::test_support::TEST_LEAD;
     use atm_runtime::PeerSecurityMode;
     use serde_json::json;
 
@@ -960,33 +933,26 @@ mod tests {
     }
 
     #[test]
-    fn ack_output_json_shape_preserves_sent_reply_disposition() {
-        let outcome: AckOutcome = serde_json::from_value(json!({
-            "action": "ack",
+    fn ack_output_json_uses_the_canonical_send_outcome() {
+        let outcome: SendOutcome = serde_json::from_value(json!({
+            "action": "send",
             "team": "test-team",
-            "agent": "sender-a",
-            "message_id": "01KX5TEST00000000000000002",
+            "agent": TEST_LEAD,
+            "sender": "sender-a",
+            "outcome": "sent",
+            "message_id": "01KX5TEST00000000000000003",
+            "receipt_message_id": null,
+            "requires_ack": false,
             "task_id": null,
-            "reply_disposition": {
-                "kind": "sent",
-                "reply_target": "team-lead@test-team",
-                "reply_message_id": "01KX5TEST00000000000000003"
-            },
-            "reply_text": "received",
+            "summary": "received",
+            "message": "received",
             "warnings": []
         }))
-        .expect("ack outcome");
+        .expect("send outcome");
 
         let rendered = serde_json::to_value(&outcome).expect("json outcome");
-        assert_eq!(rendered["reply_disposition"]["kind"], "sent");
-        assert_eq!(
-            rendered["reply_disposition"]["reply_target"],
-            "team-lead@test-team"
-        );
-        assert_eq!(
-            rendered["reply_disposition"]["reply_message_id"],
-            "01KX5TEST00000000000000003"
-        );
+        assert_eq!(rendered["action"], "send");
+        assert_eq!(rendered["agent"], TEST_LEAD);
     }
 
     #[test]

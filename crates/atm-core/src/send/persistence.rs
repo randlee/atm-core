@@ -27,6 +27,9 @@ pub(crate) fn persist_message(
     let mut prepared = envelope.clone();
     let inbox_messages =
         load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
+    if let Some(existing) = existing_acknowledgement_reply(&inbox_messages, &prepared) {
+        return Ok(DeliveryPersistenceResult::already_persisted(existing));
+    }
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
     match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
@@ -36,6 +39,17 @@ pub(crate) fn persist_message(
         }
         Err(error) => Err(error),
     }
+}
+
+fn existing_acknowledgement_reply(
+    inbox_messages: &[InboxMessage],
+    envelope: &InboxMessage,
+) -> Option<InboxMessage> {
+    let acknowledged_message_id = envelope.acknowledges_message_id?;
+    inbox_messages
+        .iter()
+        .find(|message| message.acknowledges_message_id == Some(acknowledged_message_id))
+        .cloned()
 }
 
 fn recover_after_sqlite_failure(

@@ -13,7 +13,6 @@ use serde_json::Value;
 pub(crate) enum DeliveryEventFamily {
     NewMessage,
     ThreadUpdate,
-    AckReply,
     InboxRepair,
     RestoreInboxRebuild,
 }
@@ -23,7 +22,6 @@ impl DeliveryEventFamily {
         match self {
             Self::NewMessage => "new_message",
             Self::ThreadUpdate => "thread_update",
-            Self::AckReply => "ack_reply",
             Self::InboxRepair => "inbox_repair",
             Self::RestoreInboxRebuild => "restore_inbox_rebuild",
         }
@@ -251,43 +249,6 @@ impl ThreadUpdateStateMachine {
 
 #[expect(
     dead_code,
-    reason = "Phase Y.4 keeps the full documented ack-reply state inventory explicit even before every failure branch is exercised by runtime callers."
-)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AckReplyStateMachine {
-    Received,
-    ValidateAckTargetExists,
-    ValidateReplyTargetAllowed,
-    PersistAckTransition,
-    BuildReplyDeliveryRequest,
-    DispatchReplyByHarness,
-    Delivered,
-    Rejected,
-    Failed,
-}
-
-impl AckReplyStateMachine {
-    fn transition_name(self) -> &'static str {
-        match self {
-            Self::Received => "delivery_policy.ack_reply.received",
-            Self::ValidateAckTargetExists => "delivery_policy.ack_reply.validate_ack_target_exists",
-            Self::ValidateReplyTargetAllowed => {
-                "delivery_policy.ack_reply.validate_reply_target_allowed"
-            }
-            Self::PersistAckTransition => "delivery_policy.ack_reply.persist_ack_transition",
-            Self::BuildReplyDeliveryRequest => {
-                "delivery_policy.ack_reply.build_reply_delivery_request"
-            }
-            Self::DispatchReplyByHarness => "delivery_policy.ack_reply.dispatch_reply_by_harness",
-            Self::Delivered => "delivery_policy.ack_reply.delivered",
-            Self::Rejected => "delivery_policy.ack_reply.rejected",
-            Self::Failed => "delivery_policy.ack_reply.failed",
-        }
-    }
-}
-
-#[expect(
-    dead_code,
     reason = "Phase Y.4 keeps the full documented inbox-repair state inventory explicit even before every branch is exercised by runtime callers."
 )]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -486,11 +447,6 @@ pub(crate) fn persisted_success_transition_names(
             .copied()
             .map(ThreadUpdateStateMachine::transition_name)
             .collect(),
-        DeliveryEventFamily::AckReply => ack_reply_transitions()
-            .iter()
-            .copied()
-            .map(AckReplyStateMachine::transition_name)
-            .collect(),
         DeliveryEventFamily::InboxRepair => inbox_repair_persisted_success_transitions(),
         DeliveryEventFamily::RestoreInboxRebuild => {
             restore_inbox_rebuild_persisted_success_transitions()
@@ -561,18 +517,6 @@ pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine]
     ]
 }
 
-pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
-    &[
-        AckReplyStateMachine::Received,
-        AckReplyStateMachine::ValidateAckTargetExists,
-        AckReplyStateMachine::ValidateReplyTargetAllowed,
-        AckReplyStateMachine::PersistAckTransition,
-        AckReplyStateMachine::BuildReplyDeliveryRequest,
-        AckReplyStateMachine::DispatchReplyByHarness,
-        AckReplyStateMachine::Delivered,
-    ]
-}
-
 pub(crate) fn inbox_repair_transitions() -> &'static [InboxRepairStateMachine] {
     &[
         InboxRepairStateMachine::Received,
@@ -600,12 +544,11 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
 #[cfg(test)]
 mod tests {
     use super::{
-        AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
+        DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
         DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
-        RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
-        inbox_repair_transitions, new_message_sqlite_failure_transitions,
-        new_message_success_transitions, restore_inbox_rebuild_transitions,
-        thread_update_transitions,
+        RestoreInboxRebuildStateMachine, append_failure_transitions, inbox_repair_transitions,
+        new_message_sqlite_failure_transitions, new_message_success_transitions,
+        restore_inbox_rebuild_transitions, thread_update_transitions,
     };
     use crate::error::AtmError;
     use crate::schema::ThreadMode;
@@ -779,18 +722,6 @@ mod tests {
                 super::ThreadUpdateStateMachine::PersistSqlite,
                 super::ThreadUpdateStateMachine::DispatchByHarness,
                 super::ThreadUpdateStateMachine::Delivered,
-            ]
-        );
-        assert_eq!(
-            ack_reply_transitions(),
-            &[
-                AckReplyStateMachine::Received,
-                AckReplyStateMachine::ValidateAckTargetExists,
-                AckReplyStateMachine::ValidateReplyTargetAllowed,
-                AckReplyStateMachine::PersistAckTransition,
-                AckReplyStateMachine::BuildReplyDeliveryRequest,
-                AckReplyStateMachine::DispatchReplyByHarness,
-                AckReplyStateMachine::Delivered,
             ]
         );
         assert_eq!(

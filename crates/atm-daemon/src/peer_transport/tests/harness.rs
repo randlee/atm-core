@@ -3,9 +3,9 @@ use super::*;
 fn canonical_ack_request(
     home_dir: &std::path::Path,
     current_dir: &std::path::Path,
+    recipient: &str,
     caller_identity: &str,
     caller_team: &str,
-    recipient: &str,
     message_id: atm_core::schema::AtmMessageId,
     body: &str,
 ) -> RequestEnvelope {
@@ -108,7 +108,6 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
     let endpoint = listener_transport
         .bound_addr_for_test()
         .expect("bound peer listener addr");
-
     let client_transport = PeerTransportRuntime::new_for_test(
         endpoint,
         PeerTransportConfig::default(),
@@ -170,9 +169,9 @@ fn local_peer_listener_harness_exercises_send_read_and_ack_request_path() {
         .send(canonical_ack_request(
             &atm_home,
             &workspace_dir,
+            &format!("{ROLE_TEAM_LEAD}@{}", test_team_name().as_str()),
             "qa-a",
             test_team_name().as_str(),
-            &format!("{ROLE_TEAM_LEAD}@{}", test_team_name().as_str()),
             source_message_id,
             "ack over peer listener",
         ))

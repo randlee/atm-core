@@ -151,12 +151,24 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         recipient_message_id,
         "cross-host ack success",
     );
-    match ack.reply_disposition {
-        atm_core::ack::AckReplyDisposition::Sent {
-            reply_message_id: _,
-            ..
-        } => {}
-    }
+    assert!(matches!(
+        ack.outcome,
+        atm_core::send::SendCommandOutcome::Sent
+    ));
+    let acknowledged_source = read_message_over_local_ipc(
+        &child_state.local_ipc_socket_path,
+        &cm5_home,
+        &cm5_workspace,
+        CM5,
+        CM5_TEAM,
+        ReadSelection::All,
+        Some(recipient_message_id),
+    );
+    let acknowledged_source = acknowledged_source
+        .message
+        .expect("source message after confirmed acknowledgement send");
+    assert!(acknowledged_source.envelope.pending_ack_at.is_none());
+    assert!(acknowledged_source.envelope.acknowledged_at.is_some());
 
     let ack_reply_message =
         wait_for_ack_reply(&arch_ctx, source_message_id, "cross-host ack success");
@@ -221,16 +233,13 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
         second_recipient_message_id,
         "cross-host ack should fail while source peer listener is down",
     );
-    assert_eq!(ack_outcome.warnings.len(), 1);
-    assert_eq!(
-        ack_outcome.warnings[0].code,
-        Some(atm_core::error_codes::AtmErrorCode::DaemonUnavailable)
-    );
+    assert!(matches!(
+        ack_outcome.outcome,
+        atm_core::send::SendCommandOutcome::Deferred
+    ));
     assert!(
-        ack_outcome.warnings[0]
-            .message
-            .contains("ATM deferred remote ack delivery"),
-        "{:#?}",
+        ack_outcome.warnings.is_empty(),
+        "ack uses the canonical deferred-send outcome, not an ack-only warning: {:#?}",
         ack_outcome.warnings
     );
 
@@ -245,13 +254,64 @@ fn cross_host_send_and_ack_round_trip_and_failed_ack_stays_pending() {
     );
     let still_pending_message = still_pending
         .message
-        .expect("acknowledged message after deferred remote ack");
+        .expect("pending message after deferred remote ack");
     assert_eq!(
         still_pending_message.envelope.message_id,
         Some(second_recipient_message_id)
     );
-    assert!(still_pending_message.envelope.pending_ack_at.is_none());
-    assert!(still_pending_message.envelope.acknowledged_at.is_some());
+    assert!(still_pending_message.envelope.pending_ack_at.is_some());
+    assert!(still_pending_message.envelope.acknowledged_at.is_none());
+
+    let restarted_arch = start_cross_host_dispatcher(&arch_home, &arch_db, self_ip, arch_port);
+    wait_for_peer_listener(
+        restarted_arch
+            .peer_transport
+            .bound_addr_for_test()
+            .expect("restarted arch bound addr"),
+    );
+    let started = std::time::Instant::now();
+    loop {
+        let replayed = read_message_over_local_ipc(
+            &child_state.local_ipc_socket_path,
+            &cm5_home,
+            &cm5_workspace,
+            CM5,
+            CM5_TEAM,
+            ReadSelection::All,
+            Some(second_recipient_message_id),
+        );
+        let replayed_acknowledgement = replayed.message.is_some_and(|message| {
+            message.envelope.pending_ack_at.is_none() && message.envelope.acknowledged_at.is_some()
+        });
+        if replayed_acknowledgement {
+            break;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "replayed acknowledgement did not clear pending ack state within the bounded retry window"
+        );
+        std::thread::park_timeout(Duration::from_millis(25));
+    }
+    let restarted_ctx = CallerContext::new(
+        &restarted_arch.dispatcher,
+        &arch_home,
+        &arch_workspace,
+        ARCH,
+        ARCH_TEAM,
+    );
+    let replayed_reply = wait_for_ack_reply(
+        &restarted_ctx,
+        second_send.message_id,
+        "cross-host ack should fail while source peer listener is down",
+    );
+    assert_eq!(
+        replayed_reply.acknowledges_message_id,
+        Some(second_send.message_id)
+    );
+    restarted_arch
+        .peer_transport
+        .shutdown()
+        .expect("shutdown restarted source peer listener");
 
     stop_cross_host_child(&child_state, &mut cm5_process);
 }
@@ -387,6 +447,12 @@ fn run_cross_host_child_process(state: CrossHostChildState) {
         state.bind_ip,
         state.bind_port,
     );
+    // Mirror the production composition: deferred remote delivery is resumed by
+    // the daemon-owned background lane, not by a separate acknowledgement path.
+    let replay_worker = harness
+        .peer_transport
+        .start_replay_resume_worker()
+        .expect("start child replay worker");
     let dispatch_for_runtime: Arc<dyn RequestDispatcher + Send + Sync> = harness.dispatcher.clone();
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
@@ -431,6 +497,11 @@ fn run_cross_host_child_process(state: CrossHostChildState) {
             },
         )
         .expect("serve child local ipc runtime");
+    let _ = replay_worker.stop_tx.send(());
+    replay_worker
+        .join_handle
+        .join()
+        .expect("join child replay worker");
     harness
         .peer_transport
         .shutdown()
@@ -681,7 +752,7 @@ fn send_ack_over_local_ipc(
     caller_team: &str,
     message_id: AtmMessageId,
     body: &str,
-) -> atm_core::ack::AckOutcome {
+) -> atm_core::send::SendOutcome {
     match dispatch_ack_over_local_ipc(
         socket_path,
         home,
@@ -693,7 +764,7 @@ fn send_ack_over_local_ipc(
     )
     .expect("ack over local ipc")
     {
-        ResponseEnvelope::Ack(outcome) => outcome,
+        ResponseEnvelope::Send(outcome) => outcome,
         other => panic!("unexpected local ipc ack response: {other:?}"),
     }
 }

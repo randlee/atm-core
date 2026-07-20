@@ -1,27 +1,15 @@
 use crate::config::AtmConfig;
 use crate::delivery_plan::{DeliveryPlan, LogicalMessage};
 use crate::delivery_policy::{
-    DeliveryEventFamily, persisted_success_transition_names, sqlite_failure_transition_names,
+    DeliveryEventFamily, DeliveryHarnessPath, persisted_success_transition_names,
+    sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
 use crate::schema::AtmMessageId;
-use crate::send::{DeliveryPersistenceDisposition, WarningEntry};
+use crate::send::DeliveryPersistenceDisposition;
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, TaskId, TeamName};
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DeliveryExecutionResult {
-    pub(crate) warnings: Vec<WarningEntry>,
-}
-
-impl DeliveryExecutionResult {
-    fn delivered() -> Self {
-        Self {
-            warnings: Vec::new(),
-        }
-    }
-}
 
 pub(crate) struct DeliveryTransitionContext<'a> {
     pub(crate) family: DeliveryEventFamily,
@@ -67,29 +55,26 @@ pub(crate) fn execute_delivery_plan<R>(
     runtime: &R,
     _config: Option<&AtmConfig>,
     plan: &DeliveryPlan,
-) -> Result<DeliveryExecutionResult, AtmError>
+) -> Result<(), AtmError>
 where
     R: NonClaudeOutboundDeliveryWriter,
 {
-    let crate::delivery_plan::DeliveryTarget::NonClaude { recipient } = &plan.delivery_target;
-    runtime.deliver_non_claude_payloads(recipient, &plan.messages)?;
-    Ok(DeliveryExecutionResult::delivered())
+    runtime.deliver_non_claude_payloads(&plan.recipient_snapshot, &plan.messages)?;
+    Ok(())
 }
-
-pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
 
 pub(crate) fn emit_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
     context: DeliveryTransitionContext<'_>,
     plan: &DeliveryPlan,
-    _execution: &DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
     let transitions = match plan.disposition {
         DeliveryPersistenceDisposition::SqliteFailedRecovered => {
-            sqlite_failure_transition_names(plan.delivery_target.harness_path()).to_vec()
+            sqlite_failure_transition_names(DeliveryHarnessPath::NonClaude).to_vec()
         }
-        DeliveryPersistenceDisposition::Persisted => {
-            persisted_success_transition_names(context.family, plan.delivery_target.harness_path())
+        DeliveryPersistenceDisposition::Persisted
+        | DeliveryPersistenceDisposition::AlreadyPersisted => {
+            persisted_success_transition_names(context.family, DeliveryHarnessPath::NonClaude)
         }
     };
     for transition in transitions {
@@ -111,8 +96,6 @@ pub(crate) fn emit_delivery_plan_transitions(
     Ok(())
 }
 
-pub(crate) use emit_delivery_plan_transitions as emit_reply_delivery_plan_transitions;
-
 #[cfg(test)]
 mod tests {
     use serde_json::Map;
@@ -121,7 +104,7 @@ mod tests {
         DeliveryTransitionContext, NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions,
         execute_delivery_plan,
     };
-    use crate::delivery_plan::{DeliveryPlan, DeliveryPlanKind, DeliveryTarget, LogicalMessage};
+    use crate::delivery_plan::{DeliveryPlan, LogicalMessage};
     use crate::delivery_policy::{
         DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot,
     };
@@ -268,11 +251,8 @@ mod tests {
         let runtime = NoopRuntime;
         let message = logical_message();
         let plan = DeliveryPlan::new(
-            DeliveryPlanKind::Send,
             DeliveryPersistenceDisposition::Persisted,
-            DeliveryTarget::NonClaude {
-                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
-            },
+            recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
             ResolvedRecipient {
                 agent: AgentName::from_validated("recipient"),
                 team: TeamName::from_validated(TEST_TEAM),
@@ -281,8 +261,7 @@ mod tests {
             Vec::new(),
         );
 
-        let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert!(result.warnings.is_empty());
+        execute_delivery_plan(&runtime, None, &plan).expect("delivery");
     }
 
     #[test]
@@ -291,11 +270,8 @@ mod tests {
         let message = logical_message();
         let message_id = message.message_id();
         let plan = DeliveryPlan::new(
-            DeliveryPlanKind::Send,
             DeliveryPersistenceDisposition::Persisted,
-            DeliveryTarget::NonClaude {
-                recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
-            },
+            recipient_snapshot(DeliveryHarnessPath::NonClaude),
             ResolvedRecipient {
                 agent: AgentName::from_validated("recipient"),
                 team: TeamName::from_validated(TEST_TEAM),
@@ -304,13 +280,8 @@ mod tests {
             Vec::new(),
         );
 
-        emit_delivery_plan_transitions(
-            &observability,
-            transition_context(message_id),
-            &plan,
-            &super::DeliveryExecutionResult::delivered(),
-        )
-        .expect("persisted transitions");
+        emit_delivery_plan_transitions(&observability, transition_context(message_id), &plan)
+            .expect("persisted transitions");
         let events = observability.events.lock().expect("events");
         assert!(events.iter().any(|event| {
             event.command == "delivery_policy"
@@ -322,11 +293,8 @@ mod tests {
     fn execute_delivery_plan_routes_recovered_message_sets_through_non_claude_outbound() {
         let runtime = RecordingRuntime::default();
         let plan = DeliveryPlan::new(
-            DeliveryPlanKind::Send,
             DeliveryPersistenceDisposition::SqliteFailedRecovered,
-            DeliveryTarget::NonClaude {
-                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
-            },
+            recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
             ResolvedRecipient {
                 agent: AgentName::from_validated("recipient"),
                 team: TeamName::from_validated(TEST_TEAM),
@@ -338,8 +306,7 @@ mod tests {
             Vec::new(),
         );
 
-        let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
-        assert!(result.warnings.is_empty());
+        execute_delivery_plan(&runtime, None, &plan).expect("delivery");
         assert_eq!(
             *runtime.delivered_texts.lock().expect("deliveries"),
             vec![

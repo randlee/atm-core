@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_policy::{
@@ -12,7 +13,7 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::observability::ObservabilityPort;
-use crate::schema::{AtmMessageId, ThreadMode};
+use crate::schema::{AtmMessageId, ThreadMode, remote_host as message_remote_host};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -49,6 +50,80 @@ pub(crate) use target::{
 };
 pub(crate) use threading_helpers::prepare_threaded_message;
 pub use warning::WarningEntry;
+
+/// Finalize the source mailbox state for a confirmed acknowledgement send.
+///
+/// An acknowledgement is a normal [`SendRequest`] whose only additional
+/// semantic field is `acknowledges_message_id`. The source daemon owns this
+/// state update; an inbound remote request has `source_remote_host` set and
+/// must only persist the received message.
+pub fn finalize_acknowledgement_after_confirmed_send(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+    outcome: &mut SendOutcome,
+) {
+    let Some(message_id) = request.acknowledges_message_id else {
+        return;
+    };
+    if !matches!(outcome.outcome, SendCommandOutcome::Sent) {
+        return;
+    }
+
+    if let Err(error) = finalize_acknowledgement_after_confirmed_delivery(runtime, request) {
+        outcome.warnings.push(WarningEntry::with_code(
+            error.code,
+            format!(
+                "ATM delivered acknowledgement reply {} but could not update local acknowledgement state for {}: {}.",
+                outcome.message_id, message_id, error
+            ),
+            Some("Retry `atm ack` only after repairing the local mailbox state; the sent reply was already delivered."),
+        ));
+    }
+}
+
+/// Apply the source-side state transition after a transport has confirmed an
+/// acknowledgement delivery. Both immediate and replayed sends use this one
+/// operation; inbound requests are excluded because they only persist mail.
+pub fn finalize_acknowledgement_after_confirmed_delivery(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+) -> Result<(), AtmError> {
+    let Some(message_id) = request.acknowledges_message_id else {
+        return Ok(());
+    };
+    if request.source_remote_host.is_some() {
+        return Ok(());
+    }
+    persist_acknowledged_source(runtime, request, message_id)
+}
+
+fn persist_acknowledged_source(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+    message_id: AtmMessageId,
+) -> Result<(), AtmError> {
+    let (source, message_key, _) = load_acknowledgement_source(runtime, request, message_id)?;
+    if !matches!(
+        crate::read::state::derive_ack_state(&source.envelope),
+        crate::types::AckState::PendingAck
+    ) {
+        return Ok(());
+    }
+
+    let timestamp = IsoTimestamp::now();
+    runtime.persist_message_state(boundary::MailMessageState {
+        team: request.caller_team.clone(),
+        agent: request.caller_identity.clone(),
+        actor: request.caller_identity.clone(),
+        message_key,
+        read: true,
+        pending_ack_at: None,
+        acknowledged_at: Some(timestamp),
+        expires_at: source.envelope.expires_at,
+        deleted_at: None,
+        updated_at: Some(timestamp),
+    })
+}
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -228,12 +303,6 @@ pub struct SendRequest {
     pub dry_run: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SendRequestRoute {
-    Local,
-    Remote(RemoteTargetHost),
-}
-
 impl SendRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -267,14 +336,141 @@ impl SendRequest {
             dry_run,
         })
     }
+
+    /// Build the canonical outbound message for `atm ack`.
+    ///
+    /// The acknowledgement command has no transport payload of its own: it is
+    /// a [`SendRequest`] with `acknowledges_message_id` populated. The daemon
+    /// resolves the original sender before the single routing decision.
+    pub fn acknowledgement(
+        home_dir: PathBuf,
+        current_dir: PathBuf,
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        message_id: AtmMessageId,
+        reply_body: String,
+    ) -> Result<Self, AtmError> {
+        let reply_text = input::validate_message_text(reply_body)?;
+        let mut request = Self::new(
+            home_dir,
+            current_dir,
+            caller_identity.clone(),
+            &format!("{caller_identity}@{caller_team}"),
+            caller_team,
+            SendMessageSource::Inline(reply_text.clone()),
+            Some(summary::build_summary(&reply_text, None)),
+            false,
+            None,
+            false,
+        )?;
+        request.acknowledges_message_id = Some(message_id);
+        Ok(request)
+    }
 }
 
-#[doc(hidden)]
-pub fn route_send_request(request: &SendRequest) -> SendRequestRoute {
-    match request.remote_host.clone() {
-        Some(remote_host) => SendRequestRoute::Remote(remote_host),
-        None => SendRequestRoute::Local,
+/// Resolve an acknowledgement's recipient while retaining the sole outbound
+/// payload shape. The daemon makes the single local-or-remote routing decision
+/// after this preparation step.
+pub fn resolve_acknowledgement_request(
+    runtime: &LocalServiceRuntime,
+    request: SendRequest,
+) -> Result<SendRequest, AtmError> {
+    let message_id = request.acknowledges_message_id.ok_or_else(|| {
+        AtmError::validation("ack send is missing acknowledges_message_id".to_string())
+    })?;
+    let actor = request.caller_identity.clone();
+    let team = request.caller_team.clone();
+    let (source, _, has_successor) = load_acknowledgement_source(runtime, &request, message_id)?;
+    if has_successor {
+        return Err(AtmError::validation(format!(
+            "message {message_id} has been updated; acknowledge the current terminal message instead"
+        )));
     }
+    if !matches!(
+        crate::read::state::derive_ack_state(&source.envelope),
+        crate::types::AckState::PendingAck
+    ) {
+        return Err(AtmError::validation(format!(
+            "message {message_id} is not pending acknowledgement"
+        )));
+    }
+    let (recipient, recipient_team, remote_host) =
+        resolve_ack_recipient(runtime, &source.envelope, &actor, &team)?;
+    // Keep acknowledgement requests on the canonical send shape.  The only
+    // send-specific data that resolution changes is its destination and task
+    // context; rebuilding a second request here would create an ack-only
+    // payload path.
+    let mut resolved = request;
+    resolved.caller_identity = actor;
+    resolved.caller_team = team;
+    resolved.to = format!("{recipient}@{recipient_team}").parse()?;
+    resolved.task_id = source.envelope.task_id.clone();
+    resolved.remote_host = remote_host
+        .map(|host| RemoteTargetHost::parse(&host))
+        .transpose()?;
+    Ok(resolved)
+}
+
+fn load_acknowledgement_source(
+    runtime: &LocalServiceRuntime,
+    request: &SendRequest,
+    message_id: AtmMessageId,
+) -> Result<(crate::boundary::Message, crate::boundary::MessageKey, bool), AtmError> {
+    let rows = runtime.query_mailbox_metadata_rows(
+        &request.home_dir,
+        &request.caller_team,
+        &request.caller_identity,
+        None,
+    )?;
+    let row = rows
+        .iter()
+        .find(|row| row.message_id == Some(message_id))
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {message_id} was not found in {}@{}",
+                request.caller_identity, request.caller_team
+            ))
+        })?;
+    let has_successor = rows
+        .iter()
+        .any(|row| row.parent_message_id == Some(message_id));
+    let source = runtime
+        .load_message_record(
+            &request.home_dir,
+            &request.caller_team,
+            &request.caller_identity,
+            &row.message_key,
+        )?
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {message_id} metadata could not be reloaded from sqlite"
+            ))
+        })?;
+    Ok((source, row.message_key.clone(), has_successor))
+}
+
+fn resolve_ack_recipient(
+    runtime: &LocalServiceRuntime,
+    source: &crate::schema::InboxMessage,
+    actor: &AgentName,
+    team: &TeamName,
+) -> Result<(AgentName, TeamName, Option<String>), AtmError> {
+    let recipient = crate::threading::canonical_sender_identity(source);
+    let recipient_team = source.source_team.clone().unwrap_or_else(|| team.clone());
+    let remote_host = message_remote_host(source).map(str::to_owned);
+    if remote_host.is_none() && recipient == *actor && recipient_team == *team {
+        return Err(AtmError::validation(
+            "local self-ack is not allowed without an explicit host target".to_string(),
+        ));
+    }
+    if remote_host.is_none()
+        && runtime
+            .load_roster_member(&recipient_team, &recipient)?
+            .is_none()
+    {
+        return Err(AtmError::agent_not_found(&recipient, &recipient_team));
+    }
+    Ok((recipient, recipient_team, remote_host))
 }
 
 /// Result of sending one ATM mailbox message.
@@ -409,6 +605,33 @@ fn send_mail_with_runtime_impl<
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+#[cfg(test)]
+mod acknowledgement_request_tests {
+    use super::{SendMessageSource, SendRequest};
+    use crate::schema::AtmMessageId;
+    use crate::types::{AgentName, TeamName};
+
+    #[test]
+    fn acknowledgement_is_a_canonical_send_request() {
+        let message_id = AtmMessageId::new();
+        let request = SendRequest::acknowledgement(
+            std::path::PathBuf::from("/tmp/home"),
+            std::path::PathBuf::from("/tmp/current"),
+            AgentName::from_validated("sender-a"),
+            TeamName::from_validated("test-team"),
+            message_id,
+            "received".to_string(),
+        )
+        .expect("canonical acknowledgement request");
+
+        assert_eq!(request.acknowledges_message_id, Some(message_id));
+        assert!(matches!(
+            request.message_source,
+            SendMessageSource::Inline(ref body) if body == "received"
+        ));
+    }
 }
 
 #[cfg(test)]
