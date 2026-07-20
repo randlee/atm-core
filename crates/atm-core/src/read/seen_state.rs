@@ -115,7 +115,7 @@ mod tests {
         let error =
             load_seen_watermark(tempdir.path(), "../evil", TEST_SENDER).expect_err("invalid team");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -131,6 +131,6 @@ mod tests {
         let error = save_seen_watermark(tempdir.path(), TEST_TEAM, "../evil", timestamp)
             .expect_err("invalid agent");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 }

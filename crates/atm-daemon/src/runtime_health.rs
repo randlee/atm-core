@@ -200,7 +200,7 @@ fn apply_graft_post_send_deadline(
 }
 
 fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    graft_recipient_unavailable_error(event, error.message)
+    graft_recipient_unavailable_error(event, error.message())
 }
 
 fn graft_recipient_unavailable_error(

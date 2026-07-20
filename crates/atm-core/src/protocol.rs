@@ -393,7 +393,7 @@ fn parse_required_caller_identity(
     raw.parse::<AgentName>().map_err(|error| {
         AtmError::caller_context_request_invalid(format!(
             "daemon request caller_identity is invalid: {}",
-            error.message
+            error.message()
         ))
     })
 }
@@ -410,7 +410,7 @@ fn parse_required_caller_team(
     raw.parse::<TeamName>().map_err(|error| {
         AtmError::caller_context_request_invalid(format!(
             "daemon request caller_team is invalid: {}",
-            error.message
+            error.message()
         ))
     })
 }
@@ -970,7 +970,7 @@ mod tests {
             panic!("expected error response");
         };
         assert_eq!(round_trip, error);
-        assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
+        assert_eq!(round_trip.code(), AtmErrorCode::MemberNotFound);
     }
 
     fn test_atm_home_dir() -> PathBuf {

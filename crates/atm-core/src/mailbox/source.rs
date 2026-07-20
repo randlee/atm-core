@@ -242,10 +242,10 @@ mod tests {
             io::Error::other("synthetic"),
         );
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to enumerate origin inbox entries")
         );
     }
@@ -289,7 +289,7 @@ mod tests {
         )
         .expect_err("invalid alias target");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -300,8 +300,8 @@ mod tests {
         std::fs::remove_file(&path).expect("remove");
 
         let error = load_source_files(&[path]).expect_err("missing mailbox");
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
-        assert!(error.message.contains("disappeared"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.message().contains("disappeared"));
     }
 
     #[test]
@@ -333,21 +333,21 @@ mod tests {
             &TEST_SENDER.parse().expect("sender"),
         )
         .expect_err("drift error");
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxLockFailed);
-        assert!(error.message.contains("source path set changed"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxLockFailed);
+        assert!(error.message().contains("source path set changed"));
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_team_segment() {
         let error = "../evil".parse::<TeamName>().expect_err("team");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_agent_segment() {
         let error = "../evil".parse::<AgentName>().expect_err("agent");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 }

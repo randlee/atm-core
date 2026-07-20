@@ -263,10 +263,10 @@ mod tests {
         .expect_err("parent sync failure");
 
         assert_eq!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::MailboxWriteFailed
         );
-        assert!(error.message.contains("failed to sync parent directory"));
+        assert!(error.message().contains("failed to sync parent directory"));
     }
 
     #[cfg(not(unix))]

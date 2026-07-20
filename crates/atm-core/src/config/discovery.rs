@@ -44,7 +44,7 @@ fn normalize_hook_recipient(recipient: &str) -> Result<HookRecipient, AtmError> 
         return Ok(HookRecipient::Wildcard);
     }
     validate_path_segment(recipient, "hook recipient")
-        .map_err(|error| AtmError::new(AtmErrorCode::ConfigParseFailed, error.message))?;
+        .map_err(|error| AtmError::new(AtmErrorCode::ConfigParseFailed, error.message()))?;
     Ok(HookRecipient::Named(AgentName::from_validated(recipient)))
 }
 
@@ -319,7 +319,7 @@ mod tests {
         )
         .expect_err("empty recipient should fail");
 
-        assert!(error.message.contains("recipient must not be empty"));
+        assert!(error.message().contains("recipient must not be empty"));
     }
 
     #[test]
@@ -336,7 +336,7 @@ mod tests {
 
         assert!(
             error
-                .message
+                .message()
                 .contains("hook recipient name must use only ASCII letters, digits, '-' or '_'")
         );
     }
@@ -353,7 +353,7 @@ mod tests {
         )
         .expect_err("empty command should fail");
 
-        assert!(error.message.contains("command must not be empty"));
+        assert!(error.message().contains("command must not be empty"));
     }
 
     #[test]
@@ -368,7 +368,11 @@ mod tests {
         )
         .expect_err("blank program should fail");
 
-        assert!(error.message.contains("command program must not be empty"));
+        assert!(
+            error
+                .message()
+                .contains("command program must not be empty")
+        );
     }
 
     #[test]
@@ -386,7 +390,7 @@ mod tests {
 
         assert!(
             error
-                .message
+                .message()
                 .contains("exceeds the maximum supported length")
         );
     }

@@ -186,12 +186,14 @@ fn ack_mail_with_runtime_sqlite<
             Err(error) => (
                 None,
                 vec![crate::send::WarningEntry::with_code(
-                    error.code,
+                    error.code(),
                     format!(
                         "warning: post-send hook config lookup failed for {}@{}: {}.",
-                        actor, team, error.message
+                        actor,
+                        team,
+                        error.message()
                     ),
-                    Some(error.message.clone()),
+                    Some(error.message().to_owned()),
                 )],
             ),
         };
@@ -1694,7 +1696,7 @@ mod tests {
         .expect_err("missing ATM roster member should fail");
 
         assert!(
-            error.code == crate::error_codes::AtmErrorCode::AgentNotFound,
+            error.code() == crate::error_codes::AtmErrorCode::AgentNotFound,
             "{error:?}"
         );
     }
@@ -1878,7 +1880,10 @@ mod tests {
         )
         .expect_err("stale pending metadata should be rejected after commit-time reload");
 
-        assert!(error.message.contains("already acknowledged"), "{error:?}");
+        assert!(
+            error.message().contains("already acknowledged"),
+            "{error:?}"
+        );
         assert!(
             runtime
                 .persisted_states

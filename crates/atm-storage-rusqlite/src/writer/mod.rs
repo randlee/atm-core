@@ -95,8 +95,8 @@ impl SqliteWriter {
                 observability.emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_start",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
                 error
             })?;
@@ -116,8 +116,8 @@ impl SqliteWriter {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_submit",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             error
         })?;
@@ -137,8 +137,8 @@ impl SqliteWriter {
                             .emit_or_warn(SqliteObservabilityEvent::new(
                                 "writer_submit",
                                 SqliteObservabilityOutcome::Timeout,
-                                error.message.clone(),
-                                Some(error.code),
+                                error.message().to_owned(),
+                                Some(error.code()),
                             ));
                         return Err(error);
                     }
@@ -151,8 +151,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_submit",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     return Err(error);
                 }
@@ -167,8 +167,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Timeout,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
@@ -178,8 +178,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
@@ -331,8 +331,8 @@ fn checkpoint_writer_connection(
         observability.emit_or_warn(SqliteObservabilityEvent::new(
             "writer_shutdown_checkpoint",
             SqliteObservabilityOutcome::Failed,
-            error.message.clone(),
-            Some(error.code),
+            error.message().to_owned(),
+            Some(error.code()),
         ));
     }
 }
