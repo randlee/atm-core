@@ -1,5 +1,11 @@
 # ATM CLI Architecture
 
+> **Phase AI supersession notice:** the planned daemon API is REST over HTTP:
+> local UDS on Unix and Windows AF_UNIX, and HTTPS/TCP for remote peers. Older
+> references to named pipes, custom ATM frames, remote replay/retry state, or
+> a separate peer runtime are historical only. ADR-032 through ADR-036 and
+> `REQ-CORE-TRANSPORT-*` govern new work.
+
 ## 1. Overview
 
 The current target architecture keeps the ATM CLI surface, but moves durable

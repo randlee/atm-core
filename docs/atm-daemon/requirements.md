@@ -1,5 +1,11 @@
 # ATM-Daemon Crate Requirements
 
+> **Phase AI supersession notice:** `REQ-DAEMON-TRANSPORT-001` through `008`
+> are the proposed target contract for local UDS HTTP and remote HTTPS. Any
+> older text in this document that permits named pipes, a custom ATM frame,
+> replay/retry state, or a peer-transport runtime is historical and will be
+> removed by the owning Phase AI sprint; it is not authority for new work.
+
 ## 1. Purpose
 
 This document defines the `atm-daemon` crate requirements.
@@ -132,48 +138,56 @@ Initial crate requirement IDs:
   Phase AD note:
   - daemon watch/reconcile lanes are retired from the accepted runtime rather
     than preserved as the active closure of this rule
-- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one same-host local IPC
-  protocol plus one test transport:
-  - one cross-platform local IPC contract for same-host
-    - Unix implementation: Unix domain socket
-    - Windows implementation: named-pipe-backed local IPC
-  - `test-socket` — implemented as `LoopbackClientTransport`; see ADR-003
-    §Tier 2 — for in-process transport-boundary tests
+- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one HTTP router with two
+  production adapters plus one test adapter:
+  - HTTP over Unix-domain sockets for same-host access on Unix and Windows
+    AF_UNIX; named pipes are unsupported
+  - HTTPS over TCP for cross-host daemon-to-daemon traffic
+  - an in-process HTTP adapter; see ADR-003 §Tier 2 — for transport-boundary
+    tests
   Satisfies:
-  `REQ-CORE-TRANSPORT-001`.
-- `REQ-DAEMON-TRANSPORT-002`, `REQ-DAEMON-TRANSPORT-002A`,
-  `REQ-DAEMON-TRANSPORT-002B`, and `REQ-DAEMON-TRANSPORT-002C` are superseded.
-  The daemon has no peer-delivery, listener configuration, allowlist, or
-  loopback-peer feature.
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`.
+- `REQ-DAEMON-TRANSPORT-002` `atm-daemon` owns no cross-host delivery state.
+  It must not create a replay store, remote outbox, retry queue, deferred
+  receipt, remote acknowledgement state, or duplicate-delivery subsystem.
+  Satisfies:
+  `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
+- `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
+  cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
+  `REQ-CORE-TRANSPORT-002A`.
+- `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
+  deny-by-default exact peer-identity and certificate-fingerprint allowlist
+  before routing. Satisfies:
+  `REQ-CORE-TRANSPORT-002B`.
+- `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
+  are ordinary HTTPS peer targets; no loopback-only transport branch exists.
+  Satisfies:
+  `REQ-CORE-TRANSPORT-002C`.
 - `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
-  policy for local IPC transport, store busy timeout, ingest batch, and doctor
-  query operations. Satisfies:
+  policy for HTTP(S), store busy timeout, ingest batch, and doctor query
+  operations. Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
   must remain tracked by runtime drain ownership until it finishes or is
   cancelled; detached untracked request execution is forbidden. Satisfies:
   `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
   `REQ-CORE-DAEMON-001`.
-- `REQ-DAEMON-TRANSPORT-005` same-host local IPC must use the shared ATM frame
-  header and typed request/response packet family defined by
-  `docs/atm-daemon/protocol-icd.md`. Satisfies:
-  `REQ-CORE-TRANSPORT-001`,
+- `REQ-DAEMON-TRANSPORT-005` UDS HTTP and HTTPS must call one router and one
+  canonical read/write application contract rather than separate local and
+  remote message systems. Satisfies:
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`,
   `REQ-P-CONTRACT-001`.
-- `REQ-DAEMON-TRANSPORT-006` the daemon request/response transport must use
-  explicit frame-length delimiting; EOF-delimited request framing and
-  mid-stream resynchronization after partial-frame failure are forbidden, as
-  defined by `docs/atm-daemon/protocol-icd.md`. Satisfies:
+- `REQ-DAEMON-TRANSPORT-006` HTTP framing is owned by the HTTP implementation;
+  ATM must not retain a second custom frame header, EOF-delimited request
+  protocol, or resynchronization state machine. Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-DAEMON-TRANSPORT-007` UDP is not an accepted same-host CLI-daemon
   request/response transport for the retained product surface. Satisfies:
   `REQ-P-RELIABILITY-001`, `REQ-P-CONTRACT-001`.
-- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose one logical ATM
-  endpoint contract and one same-user access-control policy across Unix and
-  Windows. Callers above the local-IPC adapter must not construct Unix socket
-  paths, Windows pipe names, or platform-specific ACL semantics directly.
-  Adapter-internal mapping from the logical endpoint contract to the concrete
-  Windows named-pipe name is allowed, but the mapping must be deterministic
-  and shared by the daemon and CLI.
+- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose one UDS HTTP
+  endpoint and same-user access-control policy across Unix and Windows.
+  Callers above the UDS adapter must not construct platform endpoint paths or
+  ACL semantics directly. Named-pipe mapping and fallback are forbidden.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and

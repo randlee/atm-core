@@ -308,7 +308,9 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- same-host daemon API over cross-platform local IPC
+- Phase AI target daemon API: HTTP over local UDS and HTTPS over TCP for remote
+  peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
+  HTTP target becomes live only through the ordered AI.5+ migration.
 - Claude-compatible JSONL inbox ingress and export
 - configuration resolution
 - caller identity resolution through explicit CLI override or invoking-shell
@@ -3358,6 +3360,20 @@ mail correctness.
   - no production mutating path may rely on implicit per-statement autocommit
     as the normal correctness model
 
+- `REQ-CORE-STORE-003` All database access must use the backend-neutral
+  storage-trait contract.
+
+  Required behavior:
+  - only `atm-storage-rusqlite` may import `rusqlite`, own schema/SQL, or
+    expose concrete SQLite behavior
+  - daemon, core, CLI, graft, and transport code must hold storage traits only
+  - `atm-runtime` may assemble selected backend trait objects but must not
+    expose SQLite types or introduce a daemon-specific persistence trait
+  - new backend selection occurs at composition without changing daemon,
+    transport, CLI, or graft source
+  - replay/outbox/finalizer traits created solely for daemon transport state are
+    forbidden
+
 - `REQ-CORE-INGEST-001` Inbox/config ingest must use one owned contract for
   replay, backpressure, and degradation.
 
@@ -3515,54 +3531,36 @@ mail correctness.
 
 ### 22.4 Transport And Routing Model
 
-- `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with one
-  same-host production transport and one test transport.
+- `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
+  one HTTP daemon API with two production
+  adapters and one test adapter.
 
   Required behavior:
-  - same-host transport: one cross-platform local IPC contract
-    - Unix implementation: Unix domain socket
-    - Windows implementation: named-pipe-backed local IPC
-  - test transport: in-process `test-socket` implementation of the same
-    protocol/interface for subsystem and daemon-boundary tests; this is the
-    Tier 2 `LoopbackClientTransport` shape in the testing guidelines
-  - these are implementations of one protocol/interface, not separate systems
-  - local-IPC receive logic must remain a small framed-message
-    loop that:
-    - reads one request frame
-    - parses it into a qualified request enum/value
-    - dispatches immediately to the owning handler boundary
-    - returns a typed response
-  - request-kind routing must live behind one dispatcher boundary with
-    injectable typed handlers for request families
-  - adding a new request family must not require embedding business logic into
-    same-host local-IPC transport adapters
-  - transport receive logic must not perform SQL, filesystem watch, or
-    post-send emission
-    business logic inline
-  - any violation of this transport isolation rule is a direct QA failure for
-    the current SQLite/daemon implementation line
-  - subsystem and runtime tests must be able to replace the local-IPC transport
-    adapters with the `test-socket` transport without changing business logic
-  - same-host daemon functionality must be production-complete on every
-    supported operating system; transport-specific non-Unix stubs are allowed
-    only as temporary intermediate implementation states and must not survive
-    the Phase S closeout line
-  - platform `cfg(...)` for same-host transport may appear only inside the
-    owned local-IPC adapter modules and their platform-specific tests
-  - shared test infrastructure must exercise the same handler/dispatcher
-    contract on Unix and Windows rather than maintaining separate product-level
-    transport semantics per platform
+  - same-host clients use HTTP over a Unix-domain socket on Unix and Windows
+    AF_UNIX; named-pipe support and fallback are forbidden
+  - remote peers use HTTPS over TCP
+  - both adapters call one HTTP router and the same application handlers
+  - the stable initial resources are `/v1/atm/messages`,
+    `/v1/atm/message/{message-id}`, `/v1/atm/doctor`, `/v1/atm/teams`, and
+    `/v1/atm/team/{team-name}`; their methods and schemas are the versioned
+    OpenAPI contract
+  - the test adapter exercises the same router/handler contract without a live
+    socket
+  - HTTP adapters perform decode, authentication, and response translation
+  only; they must not perform SQLite mutation, acknowledgement mutation,
+  recipient routing, or post-send emission
+  - Unix/Windows parity requires the same UDS HTTP tests on both platforms
 
-- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
-  dispatcher boundary with injectable typed handlers.
+- `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
+  router and injectable typed application handlers.
 
   Required behavior:
-  - transport adapters hand parsed qualified requests to the dispatcher
-  - the dispatcher owns request-kind routing only
+  - transport adapters hand authenticated HTTP requests to the router
+  - the router owns route selection only
   - concrete request-family behavior lives in injectable handlers behind the
     dispatcher
-  - adding a new request family must not require transport-adapter logic
-    growth beyond decode + dispatch
+  - adding a route must not duplicate an existing handler or require adapter
+    logic beyond decode + dispatch
   - any violation of this dispatcher/handler rule is a direct QA failure for
     the current SQLite/daemon implementation line
 
@@ -3584,17 +3582,98 @@ mail correctness.
     closed with typed backpressure instead of silently buffering unbounded
     plugin traffic
 
-- `REQ-CORE-TRANSPORT-002` is superseded. The accepted runtime is same-host
-  local IPC only; it has no cross-host listener, remote routing form, TCP/TLS
-  transport, remote retry, or remote outbox.
+- `REQ-CORE-TRANSPORT-002` After AI.8, cross-host traffic must be daemon-to-daemon HTTPS
+  only.
 
-- `REQ-CORE-TRANSPORT-003` is superseded with `REQ-CORE-TRANSPORT-002`.
+  Required behavior:
+  - native agent/plugin code talks only to the local daemon
+  - cross-host delivery happens only between daemons
+  - agent/member names and team names are path-segment-like identifiers, not
+    free-form labels
+  - the only allowed characters in agent/member names and team names are ASCII
+    letters, ASCII digits, `-`, and `_`
+  - agent/member names and team names must reject:
+    - path delimiters: `/` and `\`
+    - traversal forms: `.` and `..`
+    - reserved address delimiters: `.` and `:`
+    - whitespace
+    - wildcard or pattern characters that could be interpreted by current or
+      future parsers, including at minimum `*`, `?`, `[` and `]`
+  - the supported remote-send CLI forms are exactly:
+    - `atm send <agent>@<team>.<host> ...`
+    - `atm send <agent>@<team> --host <host> ...`
+  - those two forms are logically equivalent and must normalize into one typed
+    request field for the remote host
+  - the inline form splits on the final `.` after `@`
+  - mixed inline-host plus `--host` input is rejected instead of silently
+    preferring one source
+  - one post-write router selects local nudge for an empty/current destination
+    host and the HTTPS adapter for another destination host
+  - sender-side daemons must not write a remote recipient into their local
+    mailbox and must not maintain a separate remote-delivery queue
+
+- `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
+  peer-trust configuration must use durable daemon-owned SQLite state rather
+  than environment variables.
+
+  Required behavior:
+  - the daemon reads enabled bind/advertise interfaces, certificate identity,
+    and trusted peers from durable state
+  - CLI commands are the sole operator surface for adding, enabling,
+    disabling, replacing, removing, and listing those records
+  - if no enabled interface rows exist, no cross-host listener binds
+  - environment variables must not configure cross-host networking or trust
+
+- `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
+  a durable deny-by-default exact peer allowlist before routing.
+
+  Required behavior:
+  - inbound peers are rejected unless their authenticated host identity and
+    pinned certificate fingerprint match one enabled record
+  - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
+  - rejection happens before router, mailbox, acknowledgement, or roster work
+  - doctor output must surface listener, certificate, and trust state without
+    exposing private key material
+
+- `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
+  contract and must not be implemented as a special loopback-only send mode.
+
+  Required behavior:
+  - same-host transport proof uses the same daemon peer listener/send path as
+    any other remote host proof
+  - `localhost` and the host's own advertised or bound IP address are valid
+    ordinary remote-host targets
+  - same-host proof must not require a dedicated wire field, request flag, or
+    special-case routing branch outside the normal remote-host classifier
+  - successful same-host rows do not by themselves authorize second-host
+    release claims
+
+- `REQ-CORE-TRANSPORT-003` Cross-host transport owns no delivery state.
+
+  Required behavior:
+  - no replay store, outbox, retry queue, deferred receipt, remote
+    acknowledgement state, or duplicate-delivery subsystem may exist
+  - an unavailable peer returns one normal transport error for the attempted
+    write; retry is an ordinary repeat of the immutable message identity
+  - duplicate arrival is idempotent at storage by the existing message ULID
+
+- `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
+  accepts the canonical write request.
+
+  Required behavior:
+  - local admission alone is not remote success
+  - a failed HTTPS request leaves the prior local message state unchanged
+  - acknowledgement is an ordinary canonical write with
+    `acknowledges_message_id` populated; its state transition occurs only in
+    the receiver's shared write handler
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
   Required behavior:
   - same-host daemon request deadline: `3s`
+  - per-leg HTTPS connect/read/write deadline: `5s`
+  - remote synchronous wait deadline: `10s`
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
@@ -3605,6 +3684,13 @@ mail correctness.
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
     never silent drop
+  - outbound peer connections resolve/bind per attempted request so ordinary
+    local interface changes do not require daemon restart
+  - inbound HTTPS listeners bound to wildcard/unspecified local addresses must
+    survive ordinary interface rebinding without daemon restart
+  - if the configured listener bind address itself changes or disappears, the
+    daemon must require bounded reload/rebind through the documented reload
+    path and must surface degraded status until rebind succeeds
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

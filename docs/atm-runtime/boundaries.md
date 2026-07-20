@@ -1,5 +1,9 @@
 # `atm-runtime` Boundary Inventory
 
+> **Phase AI supersession notice:** ADR-036 retires runtime-owned replay and
+> finalizer persistence seams. `atm-runtime` assembles storage traits only; it
+> is not a SQLite service boundary.
+
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-runtime/runtime-composition.toml](../../boundaries/atm-runtime/runtime-composition.toml)
 

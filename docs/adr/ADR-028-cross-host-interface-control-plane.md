@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-028 |
-| Status | Proposed |
+| Status | Superseded by ADR-034 |
 | Scope | Repository-wide |
 | Deciders | ATM maintainers |
 | Relates to | ADR-026, ADR-027, Phase AG |
@@ -31,4 +31,5 @@ The control plane must define:
 
 - env-driven peer addressing remains historical/transitional only
 - daemon bind behavior becomes deny-by-default when no enabled rows exist
-- AG.4 owns the implementation closure for this ADR
+- This decision is retained as historical context. ADR-034 owns the integrated
+  HTTP/HTTPS interface-control contract.
