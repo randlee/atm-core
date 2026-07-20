@@ -45,7 +45,6 @@ pub enum AtmErrorCode {
     DaemonAdvisorySessionAlreadyRegistered,
     DaemonAdvisorySessionNotRegistered,
     DaemonAdvisorySessionCleanupFailed,
-    RemoteDeliveryOutcomeUnknown,
     AddressParseFailed,
     TeamUnavailable,
     TeamInvalid,
@@ -154,7 +153,6 @@ impl AtmErrorCode {
             Self::DaemonAdvisorySessionCleanupFailed => {
                 "ATM_DAEMON_ADVISORY_SESSION_CLEANUP_FAILED"
             }
-            Self::RemoteDeliveryOutcomeUnknown => "ATM_REMOTE_OUTCOME_UNKNOWN",
             Self::AddressParseFailed => "ATM_ADDRESS_PARSE_FAILED",
             Self::TeamUnavailable => "ATM_TEAM_UNAVAILABLE",
             Self::TeamInvalid => "ATM_TEAM_INVALID",
@@ -283,7 +281,6 @@ fn parse_daemon_or_address_code(value: &str) -> Option<AtmErrorCode> {
         "ATM_DAEMON_ADVISORY_SESSION_CLEANUP_FAILED" => {
             AtmErrorCode::DaemonAdvisorySessionCleanupFailed
         }
-        "ATM_REMOTE_OUTCOME_UNKNOWN" => AtmErrorCode::RemoteDeliveryOutcomeUnknown,
         "ATM_ADDRESS_PARSE_FAILED" => AtmErrorCode::AddressParseFailed,
         "ATM_TEAM_UNAVAILABLE" => AtmErrorCode::TeamUnavailable,
         "ATM_TEAM_INVALID" => AtmErrorCode::TeamInvalid,

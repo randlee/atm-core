@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `DAEMON-PREAG-RESET-1`: reset the daemon to a local-IPC-only singleton by
+  deleting the entire cross-host/peer-transport subsystem (`peer_transport`,
+  `claude_compat`, `boundary_adapters`, `direct_boundaries`, the
+  `SourceIngress`/`ProjectionExport` boundary contracts, and their
+  `replay_store`/config-layer supporting code), following the corrective
+  ruling that the prior cross-host ladder (`AG.16`-`AG.25`) was an
+  over-engineered dead end. Sprint `AI.1` carries this reset forward as the
+  Phase AI cross-host baseline.
+
 ## 1.3.0
 
 - complete the `AD.13` through `AD.30` corrective line by tightening caller

@@ -96,10 +96,9 @@ pub use boundary::{
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
     MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
-    PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
+    PostSendHookEvent, RequestDispatcher, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness,
+    RosterMemberKind, RosterStore, RosterStoreDoctor, RosterStoreDoctorReport,
+    RosterStoreHealthSnapshot, RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskState,
     TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
     UpsertMailMessageStateResponse,
 };

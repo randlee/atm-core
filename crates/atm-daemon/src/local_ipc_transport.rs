@@ -177,18 +177,12 @@ pub(crate) struct PreparedRuntimeServer {
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
-pub(crate) struct RuntimeServeHooks<
-    BeginShutdown,
-    ReloadRuntimeView,
-    FinalizeShutdown,
-    PublishReady,
-> {
+pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady> {
     pub(crate) endpoint_guard: SocketEndpointGuard,
     pub(crate) graceful_drain_deadline: Duration,
     pub(crate) force_cancel_deadline: Duration,
     pub(crate) begin_shutdown: BeginShutdown,
     pub(crate) reload_runtime_view: ReloadRuntimeView,
-    pub(crate) finalize_shutdown: FinalizeShutdown,
     pub(crate) publish_ready: PublishReady,
 }
 
@@ -240,13 +234,7 @@ struct ServeShutdownContext<'a> {
     lifecycle_control: &'a LifecycleControlSourceAdapter,
 }
 
-struct ServeRuntimeScopeContext<
-    'a,
-    BeginShutdown,
-    ReloadRuntimeView,
-    FinalizeShutdown,
-    PublishReady,
-> {
+struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishReady> {
     listener: &'a LocalSocketListener,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     endpoint_path: &'a Path,
@@ -262,7 +250,6 @@ struct ServeRuntimeScopeContext<
     force_cancel_deadline: Duration,
     begin_shutdown: BeginShutdown,
     reload_runtime_view: ReloadRuntimeView,
-    finalize_shutdown: FinalizeShutdown,
     publish_ready: PublishReady,
 }
 
@@ -360,39 +347,27 @@ impl PreparedRuntimeServer {
         })
     }
 
-    pub(crate) fn serve_with_runtime_hooks<
-        BeginShutdown,
-        ReloadRuntimeView,
-        FinalizeShutdown,
-        PublishReady,
-    >(
+    pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-        FinalizeShutdown: Fn(),
         PublishReady: Fn() -> Result<(), AtmError>,
     {
         self.serve_with_deadlines_and_accept_probe(dispatcher, hooks)
     }
 
-    fn serve_with_deadlines_and_accept_probe<
-        BeginShutdown,
-        ReloadRuntimeView,
-        FinalizeShutdown,
-        PublishReady,
-    >(
+    fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-        FinalizeShutdown: Fn(),
         PublishReady: Fn() -> Result<(), AtmError>,
     {
         let RuntimeServeHooks {
@@ -401,7 +376,6 @@ impl PreparedRuntimeServer {
             force_cancel_deadline,
             begin_shutdown,
             reload_runtime_view,
-            finalize_shutdown,
             publish_ready,
         } = hooks;
         let Self {
@@ -433,7 +407,6 @@ impl PreparedRuntimeServer {
             force_cancel_deadline,
             begin_shutdown,
             reload_runtime_view,
-            finalize_shutdown,
             publish_ready,
         };
         thread::scope(|scope| serve_runtime_scope(scope, serve_context))
@@ -449,20 +422,13 @@ impl PreparedRuntimeServer {
     }
 }
 
-fn serve_runtime_scope<'scope, BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>(
+fn serve_runtime_scope<'scope, BeginShutdown, ReloadRuntimeView, PublishReady>(
     scope: &'scope thread::Scope<'scope, '_>,
-    context: ServeRuntimeScopeContext<
-        '_,
-        BeginShutdown,
-        ReloadRuntimeView,
-        FinalizeShutdown,
-        PublishReady,
-    >,
+    context: ServeRuntimeScopeContext<'_, BeginShutdown, ReloadRuntimeView, PublishReady>,
 ) -> Result<(), AtmError>
 where
     BeginShutdown: Fn() -> Result<(), AtmError>,
     ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-    FinalizeShutdown: Fn(),
     PublishReady: Fn() -> Result<(), AtmError>,
 {
     let ServeRuntimeScopeContext {
@@ -481,7 +447,6 @@ where
         force_cancel_deadline,
         begin_shutdown,
         reload_runtime_view,
-        finalize_shutdown,
         publish_ready,
     } = context;
     let (shutdown_beacon, signals) = (
@@ -513,7 +478,6 @@ where
     let serve_error = capture_serve_error(scope, &mut accept_context, &reload_runtime_view);
     let shutdown_error = finalize_serve_loop(
         &begin_shutdown,
-        &finalize_shutdown,
         ServeShutdownContext {
             endpoint_guard,
             graceful_drain_deadline,

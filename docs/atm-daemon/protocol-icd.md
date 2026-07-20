@@ -696,7 +696,7 @@ Required ownership split:
   - framed read/write helpers
 - `atm-daemon`
   - local IPC server adapter
-  - remote peer transport adapter
+  - any future TCP adapter
   - runtime integration, deadlines, drain behavior, ownership semantics
 - `atm`
   - same-host local IPC client adapter using the shared frame helpers

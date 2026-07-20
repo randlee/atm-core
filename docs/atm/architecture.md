@@ -36,9 +36,8 @@ Phase R redesign notes:
   internals or SQLite adapters
 - retained user-facing workflows may still include `ack`, but thin-client
   transport shape should stay centered on `send` and `receive`
-- the CLI same-host client transport should use the same ATM frame helper layer
-  as daemon local IPC and remote peer transport rather than a CLI-only framing
-  path
+- the CLI same-host client transport should use the shared ATM frame helper
+  layer rather than a CLI-only framing path
 - the current daemon packet family serves `send`, `ack`, `read`, `clear`, and
   `doctor`; retained `log`, `teams`, and `members` stay outside the daemon
   request/response packet surface in the current Phase S line

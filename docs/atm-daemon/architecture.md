@@ -177,14 +177,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   shared mutable coordination locks to callers
 - daemon watch/reconcile lanes are historical only and are not part of the
   accepted runtime architecture
-- `atm-daemon` owns runtime implementations of one shared ATM protocol with
-  multiple transport implementations:
-  - cross-platform local IPC for same-host daemon access
-  - TCP/TLS
-  - in-process `LoopbackClientTransport` (`test-socket`)
-- same-host local IPC and cross-host daemon transport must use one shared ATM
-  frame header and request/response packet family rather than separate local
-  and remote message systems, as defined by `protocol-icd.md`
+- `atm-daemon` owns one cross-platform local IPC protocol and the in-process
+  `LoopbackClientTransport` (`test-socket`) used to test its handler boundary.
 - the accepted same-host Windows local-IPC depth contract is fail-fast and
   unary:
   - a dispatcher panic during shutdown must record one panic-path failure and
@@ -214,50 +208,10 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
     owned adapter modules
-  - runtime composition, dispatcher, replay, status cache, and runtime lanes
+  - runtime composition, dispatcher, status cache, and runtime lanes
     must not depend directly on Unix-only host APIs
-- cross-host delivery is daemon-to-daemon only.
-- remote delivery may use bounded transient retry for short intermittent
-  failures, but not a durable long-lived remote outbox.
-- remote send success is defined by remote daemon acceptance within the bounded
-  retry window.
-- bounded transient retry uses exponential backoff with jitter, an initial
-  delay of 250ms, a per-attempt maximum of 5s, jitter of +/-20%, and a hard
-  total retry ceiling within the documented timeout budget; it must not
-  collapse into fixed sleeps, unbounded churn, or tests that can wait
-  indefinitely for eventual success
-- retryable peer failures are limited to transient pre-acceptance socket
-  failures:
-  - timeout
-  - connection refused
-  - connection reset / aborted
-  - broken pipe
-  - host unreachable / network unreachable
-- non-retryable peer failures include protocol/frame corruption, TLS or
-  certificate mismatch, authentication mismatch, and explicit remote daemon
-  rejection
-- if the request body has been fully written but remote acceptance has not been
-  confirmed when the connection drops, the runtime returns one typed
-  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`) and
-  hands recovery to the bounded deferred-delivery retry window rather than
-  guessing success
-- outbound peer attempts resolve and dial per attempt so ordinary interface
-  changes on the sender host do not require daemon restart
-- inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
-  default; ordinary cable unplug / replug or Wi-Fi to ethernet rebinding must
-  not require restart in that default mode
-- if the configured listener bind address is an explicit local IP that later
-  disappears or changes, the runtime must enter degraded status and require
-  bounded reload/rebind via the runtime reload path
-- graceful shutdown finalization must remain bounded; best-effort SQLite WAL
-  checkpoint and observability flush steps must time out rather than block
-  daemon exit indefinitely
-- startup must run one bounded replay-resume sweep from the host-scoped SQLite
-  state root before serving requests so pending remote handoff rows keyed by
-  durable `message_key` are retried or retained with typed degraded status
-- replay-store assembly is therefore fail-closed at startup; atm-daemon must
-  not enter serving state without the SQLite-backed replay store required for
-  that bounded replay-resume sweep
+- graceful shutdown finalization must remain bounded; observability flush
+  steps must time out rather than block daemon exit indefinitely
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -479,7 +433,6 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
 - `advisory_runtime.rs`
-- `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
 - `runtime_status_cache.rs`
@@ -492,7 +445,7 @@ V.3 deletion targets:
   meaning after the fact
 
 Transport dispatcher rule:
-- local-IPC and TCP/TLS listener/connection receive loops are deliberately tiny
+- local-IPC listener/connection receive loops are deliberately tiny
 - they may:
   - read a framed request
   - parse a qualified request type
@@ -504,8 +457,7 @@ Transport dispatcher rule:
   - emit notifications directly
   - embed workflow/business-state transitions
 - the same dispatcher/handler contract must back the in-process `test-socket`
-  transport so handler behavior is testable without Unix-specific or TCP/TLS
-  host code
+  transport so handler behavior is testable without host socket code
 - same-host functional coverage must also exercise the real local-IPC adapter
   on Unix and Windows through one shared harness shape; a Unix-only host test
   suite is not sufficient for Phase S closeout
@@ -520,8 +472,7 @@ Dispatcher/handler rule:
   adapter
 - concrete request-family behavior belongs to injectable handlers behind that
   dispatcher
-- same-host local-IPC and TCP/TLS adapters share the same dispatcher/handler
-  contract
+- local IPC and the test transport share the same dispatcher/handler contract
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
@@ -545,9 +496,6 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_transport`
-  - owns remote delivery, replay, retry, and remote transport-specific failure
-    handling
 
 Historical-only retired partitions:
 - `watch_runtime`
@@ -687,7 +635,6 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 
@@ -698,7 +645,6 @@ Required saturation behavior:
   in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting through `DaemonIngestQueueSaturated`; no silent drop
-- retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
   removed entries project as explicit `unknown` on later snapshot/doctor reads
@@ -738,10 +684,6 @@ Architectural rules:
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
-- remote synchronous wait deadline: `10s`
-- deferred background retry window: `60s..120s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
@@ -808,16 +750,12 @@ Doctor health contract distinction:
 Crash recovery must preserve durable truth and compatibility export ordering.
 
 Required rules:
-- durable ordering is `SQLite commit -> Claude export / remote handoff`
+- durable ordering is `SQLite commit -> Claude export`
 - export/re-export must be keyed by durable `message_key`
 - if a crash occurs after SQLite commit but before export completes, recovery
   must resume from durable state keyed by `message_key`
-- bounded retry/re-export state required after daemon crash must be stored in
-  SQLite with an expiry/deadline, not only in RAM
 - WAL checkpoint is attempted on graceful shutdown, but crash recovery must not
   depend on graceful shutdown having completed
-- recovery must not turn bounded transient retry state into a long-lived
-  durable remote outbox; expired retry rows are purged/fail closed on replay
 
 ## 4. ADR Namespace
 
