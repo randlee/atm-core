@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
 use crate::boundary;
-use crate::boundary::PostSendHookEmitter;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, InboxMessage};
-use crate::send::{SendMessageSource, SendRequest};
+use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -162,28 +161,38 @@ pub fn ack_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime, None)
+    match crate::send::write_mail_with_runtime(
+        request.into_write_request(),
+        observability,
+        runtime,
+    )? {
+        WriteOutcome::Acknowledged(outcome) => Ok(outcome),
+        WriteOutcome::Sent(_) => Err(AtmError::validation(
+            "acknowledgement command produced a non-acknowledgement write outcome",
+        )),
+    }
 }
 
-pub(crate) fn ack_mail_with_runtime_and_post_send_emitter<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    request: AckRequest,
-    observability: &dyn ObservabilityPort,
-    runtime: &R,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<AckOutcome, AtmError> {
-    ack_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+/// Ack-specific source lookup is normalization only. The returned request is
+/// then executed by the one canonical write pipeline shared with `atm send`.
+pub(crate) struct ResolvedAcknowledgement {
+    canonical_request: SendRequest,
+    source: LoadedAckSource,
+    source_record: boundary::Message,
+    actor: AgentName,
+    team: TeamName,
+    reply_target: ReplyTarget,
+    reply_text: String,
+    acknowledged_message_id: AtmMessageId,
 }
 
-fn ack_mail_with_runtime_impl<
+pub(crate) fn resolve_acknowledgement_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
-    request: AckRequest,
-    observability: &dyn ObservabilityPort,
+    request: SendRequest,
     runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-) -> Result<AckOutcome, AtmError> {
+) -> Result<ResolvedAcknowledgement, AtmError> {
+    let request = AckRequest::from_unresolved_write(request)?;
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
     ensure_roster_member_exists(
@@ -192,33 +201,6 @@ fn ack_mail_with_runtime_impl<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    acknowledge_via_canonical_write(
-        request,
-        observability,
-        runtime,
-        post_send_emitter,
-        actor,
-        team,
-    )
-}
-
-/// Normalize an `atm ack` command into the same outbound write used by
-/// `atm send`.  The source message is consulted only to recover the reply
-/// address; the reply itself is persisted and emitted by `send_mail`.
-///
-/// The source acknowledgement state is deliberately updated *after* the
-/// canonical write returns successfully.  A failed write therefore cannot
-/// consume the pending acknowledgement.
-fn acknowledge_via_canonical_write<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    request: AckRequest,
-    observability: &dyn ObservabilityPort,
-    runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-    actor: AgentName,
-    team: TeamName,
-) -> Result<AckOutcome, AtmError> {
     let source = load_ack_source(
         runtime,
         &request.home_dir,
@@ -232,42 +214,61 @@ fn acknowledge_via_canonical_write<
     let reply_target = validate_reply_target(runtime, &source_record, &team)?;
     let canonical_request =
         canonical_ack_write_request(&request, &actor, &team, &reply_target, &source_record);
-    let send_outcome = crate::send::write_mail_persisted_with_runtime(
+    Ok(ResolvedAcknowledgement {
         canonical_request,
-        observability,
-        runtime,
-        post_send_emitter,
-    )?;
-
-    mark_source_acknowledged(
-        runtime,
-        &team,
-        &actor,
-        source.row.message_key,
-        source_record.envelope.expires_at,
-    )?;
-
-    let outcome = AckOutcome {
-        action: CommandAction::Ack,
-        team: team.clone(),
-        agent: actor.clone(),
-        message_id: request.message_id,
-        task_id: source_record.envelope.task_id.clone(),
-        reply_disposition: AckReplyDisposition::Sent {
-            reply_message_id: send_outcome.message_id,
-            reply_target,
-        },
-        reply_text: request.reply_body,
-        warnings: send_outcome.warnings,
-    };
-    record_ack_telemetry(
-        observability,
-        &actor,
+        source,
+        source_record,
+        actor,
         team,
-        request.message_id,
-        outcome.task_id.clone(),
-    );
-    Ok(outcome)
+        reply_target,
+        reply_text: request.reply_body,
+        acknowledged_message_id: request.message_id,
+    })
+}
+
+impl ResolvedAcknowledgement {
+    pub(crate) fn request(&self) -> SendRequest {
+        self.canonical_request.clone()
+    }
+
+    /// Receiver-side acknowledgement mutation occurs only after the canonical
+    /// write succeeded. A failed write leaves the source pending.
+    pub(crate) fn finish<R: RetainedMailboxRuntime>(
+        self,
+        runtime: &R,
+        observability: &dyn ObservabilityPort,
+        send_outcome: SendOutcome,
+    ) -> Result<AckOutcome, AtmError> {
+        mark_source_acknowledged(
+            runtime,
+            &self.team,
+            &self.actor,
+            self.source.row.message_key,
+            self.source_record.envelope.expires_at,
+        )?;
+
+        let outcome = AckOutcome {
+            action: CommandAction::Ack,
+            team: self.team.clone(),
+            agent: self.actor.clone(),
+            message_id: self.acknowledged_message_id,
+            task_id: self.source_record.envelope.task_id.clone(),
+            reply_disposition: AckReplyDisposition::Sent {
+                reply_message_id: send_outcome.message_id,
+                reply_target: self.reply_target,
+            },
+            reply_text: self.reply_text,
+            warnings: send_outcome.warnings,
+        };
+        record_ack_telemetry(
+            observability,
+            &self.actor,
+            self.team,
+            outcome.message_id,
+            outcome.task_id.clone(),
+        );
+        Ok(outcome)
+    }
 }
 
 fn canonical_ack_write_request(

@@ -40,6 +40,45 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
 ];
 
 #[test]
+fn acknowledgement_cannot_restore_a_second_write_pipeline() {
+    let root = workspace_root();
+    let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
+        .expect("canonical write module must be readable");
+    let acknowledgement = fs::read_to_string(root.join("crates/atm-core/src/ack/mod.rs"))
+        .expect("acknowledgement module must be readable");
+    let api = fs::read_to_string(root.join("crates/atm-core/src/api.rs"))
+        .expect("transport-neutral API module must be readable");
+    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
+        .expect("daemon dispatcher module must be readable");
+
+    assert!(
+        send.contains("fn write_mail_with_runtime_impl"),
+        "AI.7 requires one canonical write pipeline"
+    );
+    assert!(
+        send.contains("resolve_acknowledgement_write"),
+        "AI.7 acknowledgement normalization must enter the canonical write pipeline"
+    );
+    assert!(
+        acknowledgement.contains("crate::send::write_mail_with_runtime("),
+        "the ack command must invoke the canonical write entry point"
+    );
+    for retired in [
+        "ack_mail_with_runtime_and_post_send_emitter",
+        "acknowledge_via_canonical_write",
+    ] {
+        assert!(
+            !acknowledgement.contains(retired),
+            "AI.7 forbids the retired separate acknowledgement write path `{retired}`"
+        );
+    }
+    assert!(
+        !api.contains("MessageRequest") && !daemon.contains("ApiRequest::Message("),
+        "AI.7 forbids a second acknowledgement API/daemon-dispatch variant"
+    );
+}
+
+#[test]
 fn production_code_cannot_restore_retired_error_contract_symbols() {
     let root = workspace_root().join("crates");
     let mut files = Vec::new();

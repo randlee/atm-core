@@ -116,10 +116,12 @@ pub(super) fn prepare_local_ipc_endpoint(
             ))
         })?;
     }
+    #[cfg(unix)]
     remove_stale_endpoint(endpoint_path)?;
     Ok(LocalIpcEndpointPreparation::FilesystemEndpointPrepared)
 }
 
+#[cfg(unix)]
 pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
     if !endpoint_path.exists() {
         return Ok(());
