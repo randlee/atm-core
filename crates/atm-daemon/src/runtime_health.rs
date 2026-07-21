@@ -6,7 +6,6 @@ use std::time::Duration;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -22,12 +21,11 @@ use atm_core::{
     process::process_is_alive,
     protocol::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_post_send_emitter,
+    send::{WriteOutcome, write_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -532,25 +530,20 @@ impl DaemonRequestDispatcher {
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    *request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    &post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
-                        request,
-                        self.observability.as_ref(),
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )))
-            }
+            RequestEnvelope::Write(request) => write_mail_with_runtime_and_post_send_emitter(
+                *request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                &post_send_emitter,
+            )
+            .map(|outcome| match outcome {
+                WriteOutcome::Sent(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                }
+                WriteOutcome::Acknowledged(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                }
+            }),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }

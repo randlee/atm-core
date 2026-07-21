@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
 use crate::error::AtmError;
-use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use crate::protocol::{RequestEnvelope, ResponseEnvelope};
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
@@ -23,12 +23,10 @@ pub struct HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
-        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => {
-            ("POST", "/v1/atm/messages".to_string())
-        }
-        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(ack)) => {
-            ("POST", format!("/v1/atm/message/{}/ack", ack.message_id))
-        }
+        RequestEnvelope::Write(request) => match request.acknowledges_message_id {
+            Some(message_id) => ("POST", format!("/v1/atm/message/{message_id}/ack")),
+            None => ("POST", "/v1/atm/messages".to_string()),
+        },
         RequestEnvelope::List(_) | RequestEnvelope::Peek(_) | RequestEnvelope::Receive(_) => {
             ("GET", "/v1/atm/messages".to_string())
         }

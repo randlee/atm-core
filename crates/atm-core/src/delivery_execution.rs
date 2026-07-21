@@ -83,8 +83,6 @@ where
     Ok(DeliveryExecutionResult::delivered())
 }
 
-pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
-
 pub(crate) fn emit_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
     context: DeliveryTransitionContext<'_>,
@@ -117,8 +115,6 @@ pub(crate) fn emit_delivery_plan_transitions(
     }
     Ok(())
 }
-
-pub(crate) use emit_delivery_plan_transitions as emit_reply_delivery_plan_transitions;
 
 #[cfg(test)]
 mod tests {

@@ -15,7 +15,6 @@ pub(crate) enum DeliveryPlanDisposition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanKind {
     Send,
-    Reply,
 }
 
 #[derive(Debug, Clone, PartialEq)]

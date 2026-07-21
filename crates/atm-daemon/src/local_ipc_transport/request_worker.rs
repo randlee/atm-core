@@ -238,7 +238,7 @@ fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
         | RequestEnvelope::Receive(_)
         | RequestEnvelope::Doctor(_) => RequestExecutionRisk::ReadOnly,
         RequestEnvelope::CompatibilityPreflight(_) => RequestExecutionRisk::ReadOnly,
-        RequestEnvelope::Send(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
+        RequestEnvelope::Write(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
             RequestExecutionRisk::SideEffecting
         }
     }
