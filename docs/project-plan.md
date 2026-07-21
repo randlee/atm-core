@@ -962,6 +962,13 @@ custom local frame protocol, and the same router later serves authenticated
 HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
 send/ack paths, or cross-host-specific mailbox logic.
 
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AI.1` | `complete` | `feature/pAI-1-daemon-preag-reset` | deleted peer transport/replay state and retired daemon compatibility adapters |
+| `AI.2` | `complete` | `feature/pAI-s2-storage-topology` | storage topology cleanup, backend-neutral runtime factory, atm-core boundary retirement gate |
+
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
 ## Publishing Improvements
