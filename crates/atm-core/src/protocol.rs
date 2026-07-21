@@ -27,6 +27,13 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    windows,
+    allow(
+        clippy::large_enum_variant,
+        reason = "Windows target layout makes SendRequest materially larger than AckRequest; this shared protocol DTO preserves the stable request shape across platforms."
+    )
+)]
 pub enum SendRequestEnvelope {
     Compose(SendRequest),
     Acknowledge(AckRequest),
