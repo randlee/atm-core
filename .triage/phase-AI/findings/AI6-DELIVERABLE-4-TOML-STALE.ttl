@@ -12,9 +12,11 @@
   triage:severity "critical" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:resolution "FIXED: all 7 named boundary TOML files now carry state=\"retired\" with ADR-033 notes; boundary_enforcement.rs 22/22 tests pass. Fixed on feature/pAI-s6-http-uds-router @ 3dd7e6e2, merge-forwarded through AI7 6fc4009a, AI8 1a99ee2c, AI9 87c5a1f7, AI10 b43c0b1b. quality-mgr independently re-verified against source (AI-FIXROUND-3 recheck): PASS." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/3> ;
