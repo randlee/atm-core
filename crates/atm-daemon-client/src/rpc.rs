@@ -170,10 +170,12 @@ mod tests {
             message_key: MessageKey::from(AtmMessageId::new()),
             envelope: InboxMessage {
                 from: ROLE_TEAM_LEAD.parse().expect("from"),
+                source_chat_id: None,
                 text: "body".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(RPC_TEST_TEAM.parse().expect("source team")),
+                destination_chat_id: None,
                 summary: Some("body".to_string()),
                 message_id: None,
                 requires_ack: false,
@@ -219,10 +221,11 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let home_dir = temp.path().join("home");
         let current_dir = temp.path().join("cwd");
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
+        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(SendRequest {
             home_dir: home_dir.clone(),
             current_dir: current_dir.clone(),
             caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
+            caller_chat_id: None,
             caller_team: RPC_TEST_TEAM.parse().expect("team"),
             to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
             message_source: SendMessageSource::Inline("body".to_string()),
@@ -233,7 +236,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             dry_run: false,
-        }));
+        })));
 
         let envelope = RpcEnvelope::encode_request(request.clone()).expect("encode request");
         let (_, decoded) = envelope.decode_request().expect("decode request");
@@ -258,10 +261,11 @@ mod tests {
         }
 
         let temp = tempdir().expect("tempdir");
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(SendRequest {
+        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(SendRequest {
             home_dir: temp.path().join("home"),
             current_dir: temp.path().join("cwd"),
             caller_identity: RPC_TEST_ARCH_CTM.parse().expect("caller"),
+            caller_chat_id: None,
             caller_team: RPC_TEST_TEAM.parse().expect("team"),
             to: RPC_TEST_QUALITY_MGR_ADDRESS.parse().expect("address"),
             message_source: SendMessageSource::Inline("stdin materialized locally".to_string()),
@@ -272,7 +276,7 @@ mod tests {
             thread_mode: None,
             expires_at: None,
             dry_run: false,
-        }));
+        })));
 
         let envelope = RpcEnvelope::encode_request(request).expect("encode request");
         let frame = envelope.into_frame_payload();

@@ -58,7 +58,7 @@ pub fn read_hook_identity() -> Result<Option<AgentName>, AtmError> {
                     format!(
                         "invalid hook agent_name in {}: {}",
                         path.display(),
-                        error.message()
+                        error.detail()
                     ),
                 )
             })

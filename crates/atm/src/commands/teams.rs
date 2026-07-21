@@ -593,6 +593,7 @@ mod tests {
         let error = command
             .build_request(CallerContext {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
             })
             .expect_err("invalid kind");
@@ -613,6 +614,7 @@ mod tests {
         let error = command
             .build_request(CallerContext {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
             })
             .expect_err("empty body");
@@ -697,6 +699,7 @@ mod tests {
         let request = command
             .build_request(CallerContext {
                 caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
             })
             .expect("request");

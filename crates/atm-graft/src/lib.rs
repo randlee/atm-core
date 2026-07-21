@@ -193,8 +193,9 @@ impl GraftClient {
         })
     }
 
-    #[cfg(test)]
-    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
+    pub fn from_transport_for_test(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
         Self { transport }
     }
 
@@ -225,7 +226,9 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }
@@ -667,7 +670,7 @@ mod tests {
             }
             },
         )));
-        let client = GraftClient::from_transport(transport);
+        let client = GraftClient::from_transport_for_test(transport);
 
         let send_request = SendRequest::new(
             paths.home_dir.clone(),

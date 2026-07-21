@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_key TEXT NOT NULL,
     envelope_json TEXT NOT NULL,
     from_agent TEXT NOT NULL,
+    source_chat_id TEXT NULL,
+    destination_chat_id TEXT NULL,
     message_text TEXT NOT NULL,
     summary TEXT NULL,
     message_at TEXT NOT NULL,
@@ -462,6 +464,20 @@ fn ensure_mail_message_columns(
         "mail_messages",
         "from_agent",
         "ALTER TABLE mail_messages ADD COLUMN from_agent TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "source_chat_id",
+        "ALTER TABLE mail_messages ADD COLUMN source_chat_id TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "destination_chat_id",
+        "ALTER TABLE mail_messages ADD COLUMN destination_chat_id TEXT NULL;",
     )?;
     ensure_column(
         connection,

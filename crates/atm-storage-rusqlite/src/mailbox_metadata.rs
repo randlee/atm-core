@@ -3,13 +3,15 @@ use crate::shared_db::SharedDb;
 use atm_storage::AtmError;
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
-use atm_storage::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use atm_storage::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 use atm_storage::{AckRequirementState, InboxMessage, derive_ack_requirement};
 use rusqlite::params;
 use serde_json::Map;
 
 type MetadataQueryRow = (
     String,
+    Option<String>,
+    Option<String>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -36,20 +38,35 @@ fn parse_optional_timestamp(
         })
 }
 
+fn parse_optional_chat_id(
+    raw: Option<String>,
+    field_name: &str,
+) -> Result<Option<ChatId>, AtmError> {
+    raw.map(|value| value.parse::<ChatId>())
+        .transpose()
+        .map_err(|error| {
+            AtmError::validation(format!(
+                "failed to parse sqlite mailbox metadata {field_name}: {error}"
+            ))
+        })
+}
+
 fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MetadataQueryRow> {
     Ok((
         row.get::<_, String>(0)?,
         row.get::<_, Option<String>>(1)?,
         row.get::<_, Option<String>>(2)?,
         row.get::<_, Option<String>>(3)?,
-        row.get::<_, String>(4)?,
+        row.get::<_, Option<String>>(4)?,
         row.get::<_, Option<String>>(5)?,
         row.get::<_, String>(6)?,
-        row.get::<_, i64>(7)?,
-        row.get::<_, i64>(8)?,
-        row.get::<_, Option<String>>(9)?,
-        row.get::<_, Option<String>>(10)?,
+        row.get::<_, Option<String>>(7)?,
+        row.get::<_, String>(8)?,
+        row.get::<_, i64>(9)?,
+        row.get::<_, i64>(10)?,
         row.get::<_, Option<String>>(11)?,
+        row.get::<_, Option<String>>(12)?,
+        row.get::<_, Option<String>>(13)?,
     ))
 }
 
@@ -121,6 +138,8 @@ fn decode_mailbox_metadata_row(
         message_id,
         parent_message_id,
         thread_mode,
+        source_chat_id,
+        destination_chat_id,
         from_agent,
         summary,
         message_at,
@@ -136,6 +155,9 @@ fn decode_mailbox_metadata_row(
         parse_optional_message_id(parent_message_id, "parent_message_id")?;
     let parsed_thread_mode = parse_thread_mode(thread_mode)?;
     let parsed_from_agent = parse_from_agent(&from_agent, &message_key)?;
+    let parsed_source_chat_id = parse_optional_chat_id(source_chat_id, "source_chat_id")?;
+    let parsed_destination_chat_id =
+        parse_optional_chat_id(destination_chat_id, "destination_chat_id")?;
     let parsed_message_at = parse_message_at(&message_at)?;
     let parsed_acknowledged_at =
         parse_optional_timestamp(acknowledged_at, "acknowledged_at timestamp")?;
@@ -143,10 +165,12 @@ fn decode_mailbox_metadata_row(
     let parsed_task_id = parse_task_id(task_id, &message_key)?;
     let ack_requirement = derive_ack_requirement(&InboxMessage {
         from: parsed_from_agent.clone(),
+        source_chat_id: parsed_source_chat_id.clone(),
         text: String::new(),
         timestamp: parsed_message_at,
         read: read != 0,
         source_team: None,
+        destination_chat_id: parsed_destination_chat_id.clone(),
         summary: summary.clone(),
         message_id: parsed_message_id,
         requires_ack: requires_ack != 0,
@@ -165,6 +189,8 @@ fn decode_mailbox_metadata_row(
         parent_message_id: parsed_parent_message_id,
         thread_mode: parsed_thread_mode,
         from_agent: parsed_from_agent,
+        source_chat_id: parsed_source_chat_id,
+        destination_chat_id: parsed_destination_chat_id,
         summary,
         message_at: parsed_message_at,
         read: read != 0,
@@ -194,6 +220,8 @@ pub(crate) fn query_mailbox_metadata_rows(
                  mail_messages.message_id,
                  mail_messages.parent_message_id,
                  mail_messages.thread_mode,
+                 mail_messages.source_chat_id,
+                 mail_messages.destination_chat_id,
                  mail_messages.from_agent,
                  mail_messages.summary,
                  mail_messages.message_at,

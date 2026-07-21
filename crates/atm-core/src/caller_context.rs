@@ -1,11 +1,12 @@
 use std::env;
 
 use crate::error::AtmError;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentIdentity, AgentName, ChatId, TeamName};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallerContext {
     pub caller_identity: AgentName,
+    pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
 }
 
@@ -15,20 +16,33 @@ pub struct CallerIdentityOverride<'a>(pub &'a str);
 #[derive(Debug, Clone, Copy)]
 pub struct CallerTeamOverride<'a>(pub &'a str);
 
+#[derive(Debug, Clone, Copy)]
+pub struct CallerChatIdOverride<'a>(pub &'a str);
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CallerContextOverrides<'a> {
     pub identity_override: Option<CallerIdentityOverride<'a>>,
+    pub chat_id_override: Option<CallerChatIdOverride<'a>>,
     pub team_override: Option<CallerTeamOverride<'a>>,
 }
 
 pub fn resolve_cli_inspection_caller_context(
     overrides: CallerContextOverrides<'_>,
 ) -> Result<CallerContext, AtmError> {
-    let caller_identity =
+    if overrides.identity_override.is_some() && overrides.chat_id_override.is_some() {
+        return Err(AtmError::validation(
+            "--as and --chat-id are mutually exclusive",
+        ));
+    }
+    let mut caller_identity =
         resolve_identity_component(overrides.identity_override.map(|value| value.0))?;
+    if let Some(chat_id) = overrides.chat_id_override {
+        caller_identity.chat_id = Some(chat_id.0.parse()?);
+    }
     let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
     Ok(CallerContext {
-        caller_identity,
+        caller_identity: caller_identity.agent,
+        caller_chat_id: caller_identity.chat_id,
         caller_team,
     })
 }
@@ -36,10 +50,25 @@ pub fn resolve_cli_inspection_caller_context(
 pub fn resolve_cli_mutation_caller_context(
     team_override: Option<CallerTeamOverride<'_>>,
 ) -> Result<CallerContext, AtmError> {
-    resolve_cli_inspection_caller_context(CallerContextOverrides {
+    resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
         identity_override: None,
+        chat_id_override: None,
         team_override,
     })
+}
+
+/// Resolves a caller for a mutating command without allowing impersonation.
+pub fn resolve_cli_mutation_caller_context_with_overrides(
+    overrides: CallerContextOverrides<'_>,
+) -> Result<CallerContext, AtmError> {
+    let ambient = read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)?;
+    let caller = resolve_cli_inspection_caller_context(overrides)?;
+    if overrides.identity_override.is_some() && caller.caller_identity != ambient {
+        return Err(AtmError::validation(
+            "--as must use the same base agent as ATM_IDENTITY for mutating commands",
+        ));
+    }
+    Ok(caller)
 }
 
 pub fn resolve_cli_caller_context(
@@ -51,6 +80,7 @@ pub fn resolve_cli_caller_context(
 pub fn read_cli_identity_from_env() -> Result<Option<AgentName>, AtmError> {
     read_env_raw("ATM_IDENTITY")?
         .map(parse_identity)
+        .map(|result| result.map(|identity| identity.agent))
         .transpose()
 }
 
@@ -88,11 +118,11 @@ pub fn read_cli_team_from_env_or_warn(warning_site: &'static str) -> Option<Team
     }
 }
 
-fn resolve_identity_component(explicit: Option<&str>) -> Result<AgentName, AtmError> {
+fn resolve_identity_component(explicit: Option<&str>) -> Result<AgentIdentity, AtmError> {
     let raw = match explicit {
         Some(value) => value.to_string(),
         None => match read_cli_identity_from_env()? {
-            Some(value) => return Ok(value),
+            Some(value) => return Ok(AgentIdentity::new(value, None)),
             None => return Err(AtmError::identity_unavailable()),
         },
     };
@@ -126,7 +156,7 @@ fn read_env_raw(key: &str) -> Result<Option<String>, AtmError> {
     }
 }
 
-fn parse_identity(raw: String) -> Result<AgentName, AtmError> {
+fn parse_identity(raw: String) -> Result<AgentIdentity, AtmError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Err(AtmError::identity_invalid(
@@ -135,8 +165,8 @@ fn parse_identity(raw: String) -> Result<AgentName, AtmError> {
     }
 
     trimmed
-        .parse::<AgentName>()
-        .map_err(|error| AtmError::identity_invalid(error.message()))
+        .parse::<AgentIdentity>()
+        .map_err(|error| AtmError::identity_invalid(error.detail()))
 }
 
 fn parse_team(raw: String) -> Result<TeamName, AtmError> {
@@ -149,7 +179,7 @@ fn parse_team(raw: String) -> Result<TeamName, AtmError> {
 
     trimmed
         .parse::<TeamName>()
-        .map_err(|error| AtmError::team_invalid(error.message()))
+        .map_err(|error| AtmError::team_invalid(error.detail()))
 }
 
 #[cfg(test)]
@@ -176,6 +206,7 @@ mod tests {
 
         let context = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
+            chat_id_override: None,
             team_override: Some(CallerTeamOverride(override_team.as_str())),
         })
         .expect("caller context");
@@ -220,6 +251,7 @@ mod tests {
 
         let error = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: None,
+            chat_id_override: None,
             team_override: Some(CallerTeamOverride("../bad")),
         })
         .expect_err("invalid team");

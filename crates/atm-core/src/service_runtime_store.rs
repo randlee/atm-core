@@ -186,6 +186,8 @@ fn shared_message_to_metadata_row(message: SharedMessage) -> boundary::MailStore
         parent_message_id: message.envelope.parent_message_id,
         thread_mode: message.envelope.thread_mode,
         from_agent: message.envelope.from,
+        source_chat_id: message.envelope.source_chat_id,
+        destination_chat_id: message.envelope.destination_chat_id,
         summary: message.envelope.summary,
         message_at: message.envelope.timestamp,
         read: message.envelope.read,

@@ -40,6 +40,7 @@ impl MembersCommand {
         let current_dir = home::command_invocation_dir()?;
         let caller_context = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: None,
+            chat_id_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         Ok(MembersQuery {

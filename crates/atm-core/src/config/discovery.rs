@@ -44,7 +44,7 @@ fn normalize_hook_recipient(recipient: &str) -> Result<HookRecipient, AtmError> 
         return Ok(HookRecipient::Wildcard);
     }
     validate_path_segment(recipient, "hook recipient")
-        .map_err(|error| AtmError::new(AtmErrorCode::ConfigParseFailed, error.message()))?;
+        .map_err(|error| AtmError::new(AtmErrorCode::ConfigParseFailed, error.detail()))?;
     Ok(HookRecipient::Named(AgentName::from_validated(recipient)))
 }
 

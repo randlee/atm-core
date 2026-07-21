@@ -73,6 +73,7 @@ impl ListCommand {
     ) -> Result<ListQuery> {
         let caller_context = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            chat_id_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         let selection_mode = self.selection_mode();
