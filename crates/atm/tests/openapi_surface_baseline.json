@@ -1,0 +1,265 @@
+{
+  "paths": {
+    "/doctor": {
+      "get": {
+        "operation_id": "doctor",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/message/{messageId}": {
+      "delete": {
+        "operation_id": "clearMessage",
+        "request_required": false,
+        "responses": {
+          "204": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "get": {
+        "operation_id": "getMessage",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/message/{messageId}/ack": {
+      "post": {
+        "operation_id": "acknowledgeMessage",
+        "request_required": false,
+        "responses": {
+          "201": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/message/{messageId}/read": {
+      "post": {
+        "operation_id": "markMessageRead",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages": {
+      "get": {
+        "operation_id": "listMessages",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "post": {
+        "operation_id": "writeMessage",
+        "request_required": true,
+        "responses": {
+          "201": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/team/{teamName}": {
+      "delete": {
+        "operation_id": "deleteTeam",
+        "request_required": false,
+        "responses": {
+          "204": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "get": {
+        "operation_id": "getTeam",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/Team"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "patch": {
+        "operation_id": "updateTeam",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/Team"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/teams": {
+      "get": {
+        "operation_id": "listTeams",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      },
+      "post": {
+        "operation_id": "createTeam",
+        "request_required": true,
+        "responses": {
+          "201": {
+            "error": false,
+            "schema": "#/components/schemas/Team"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "AckRequest": {
+      "properties": [
+        "body"
+      ],
+      "required": []
+    },
+    "AgentAddress": {
+      "properties": [
+        "agent",
+        "chat_id",
+        "host",
+        "team"
+      ],
+      "required": [
+        "agent",
+        "team"
+      ]
+    },
+    "AtmError": {
+      "properties": [
+        "code",
+        "message"
+      ],
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "Message": {
+      "properties": [
+        "acknowledges_message_id",
+        "body",
+        "from",
+        "message_id",
+        "requires_ack",
+        "to"
+      ],
+      "required": [
+        "body",
+        "from",
+        "message_id",
+        "to"
+      ]
+    },
+    "MessageList": {
+      "properties": [
+        "cursor",
+        "messages"
+      ],
+      "required": [
+        "messages"
+      ]
+    },
+    "Team": {
+      "properties": [
+        "name"
+      ],
+      "required": [
+        "name"
+      ]
+    },
+    "WriteRequest": {
+      "properties": [
+        "acknowledges_message_id",
+        "body",
+        "from",
+        "message_id",
+        "requires_ack",
+        "to"
+      ],
+      "required": [
+        "body",
+        "from",
+        "message_id",
+        "to"
+      ]
+    }
+  }
+}

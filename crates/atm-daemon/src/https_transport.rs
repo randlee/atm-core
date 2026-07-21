@@ -8,7 +8,7 @@
 use std::fmt;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -154,6 +154,7 @@ impl HttpsMessageTransport for HttpsTransport {
 pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
+    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 
 struct HttpsListener {
@@ -168,30 +169,48 @@ impl HttpsListenerSet {
         peers: Vec<TrustedPeer>,
         router: Arc<dyn ApiRouter + Send + Sync>,
     ) -> Result<Self, AtmError> {
-        let enabled = interfaces.iter().filter(|interface| interface.enabled);
         let identity = TlsIdentity::load(certificate)?;
         let server_config = Arc::new(server_config(&identity, peers)?);
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // Bind every enabled endpoint before any accept loop starts. A bad
+        // later row therefore cannot leave an earlier listener partially live.
+        let bound = interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .map(|interface| {
+                let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
+                    AtmError::daemon_unavailable(format!(
+                        "failed to bind configured HTTPS listener {}",
+                        interface.bind_addr
+                    ))
+                })?;
+                listener.set_nonblocking(true).map_err(|_source| {
+                    AtmError::daemon_unavailable("failed to configure HTTPS listener")
+                })?;
+                let address = listener.local_addr().map_err(|_source| {
+                    AtmError::daemon_unavailable("failed to inspect configured HTTPS listener")
+                })?;
+                Ok((listener, address))
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
+        let requests = Arc::new(Mutex::new(Vec::new()));
         let mut listeners = Vec::new();
-        for interface in enabled {
-            let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to bind configured HTTPS listener {}",
-                    interface.bind_addr
-                ))
-            })?;
-            listener.set_nonblocking(true).map_err(|_source| {
-                AtmError::daemon_unavailable("failed to configure HTTPS listener")
-            })?;
-            let address = listener.local_addr().map_err(|_source| {
-                AtmError::daemon_unavailable("failed to inspect configured HTTPS listener")
-            })?;
+        for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
             let thread_config = Arc::clone(&server_config);
+            let thread_requests = Arc::clone(&requests);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
-                .spawn(move || accept_loop(listener, thread_stop, thread_config, thread_router))
+                .spawn(move || {
+                    accept_loop(
+                        listener,
+                        thread_stop,
+                        thread_config,
+                        thread_router,
+                        thread_requests,
+                    )
+                })
                 .map_err(|_source| {
                     AtmError::daemon_unavailable("failed to start HTTPS listener")
                 })?;
@@ -200,7 +219,11 @@ impl HttpsListenerSet {
                 thread: Some(thread),
             });
         }
-        Ok(Self { stop, listeners })
+        Ok(Self {
+            stop,
+            listeners,
+            requests,
+        })
     }
 
     pub(crate) fn shutdown(mut self) -> Result<(), AtmError> {
@@ -215,6 +238,15 @@ impl HttpsListenerSet {
                 })?;
             }
         }
+        let requests =
+            std::mem::take(&mut *self.requests.lock().map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS request registry lock poisoned")
+            })?);
+        for request in requests {
+            request.join().map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS request worker panicked during shutdown")
+            })?;
+        }
         Ok(())
     }
 }
@@ -224,6 +256,7 @@ fn accept_loop(
     stop: Arc<std::sync::atomic::AtomicBool>,
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
+    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
@@ -240,7 +273,7 @@ fn accept_loop(
                 }
                 let config = Arc::clone(&config);
                 let router = Arc::clone(&router);
-                let _ = std::thread::Builder::new()
+                let request = std::thread::Builder::new()
                     .name("atm-https-peer-request".to_string())
                     .spawn(move || {
                         if let Err(error) = handle_peer_connection(stream, config, router) {
@@ -253,7 +286,28 @@ fn accept_loop(
                                 "HTTPS peer request was rejected before or during shared API routing"
                             );
                         }
+                    })
+                    .map_err(|_source| {
+                        AtmError::daemon_unavailable("failed to start HTTPS request worker")
                     });
+                match request {
+                    Ok(request) => match requests.lock() {
+                        Ok(mut active) => active.push(request),
+                        Err(_) => tracing::error!(
+                            subsystem = "https_transport",
+                            action = "track_connection",
+                            outcome = "failed",
+                            "HTTPS request worker could not be tracked for shutdown"
+                        ),
+                    },
+                    Err(error) => tracing::warn!(
+                        subsystem = "https_transport",
+                        action = "start_request",
+                        outcome = "failed",
+                        error_code = %error.code(),
+                        "HTTPS listener rejected connection because request worker startup failed"
+                    ),
+                }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -518,7 +572,7 @@ fn normalize_fingerprint(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::net::TcpStream;
+    use std::net::{TcpListener, TcpStream};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -661,6 +715,40 @@ mod tests {
         assert!(read_http_response(&mut tls).is_err());
         assert!(!router.0.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn invalid_enabled_interface_leaves_no_partial_listener() {
+        let certificate = test_certificate();
+        let first = TcpListener::bind("127.0.0.1:0")
+            .expect("reserve first address")
+            .local_addr()
+            .expect("first address");
+        let blocker = TcpListener::bind("127.0.0.1:0").expect("reserve blocking address");
+        let blocked = blocker.local_addr().expect("blocking address");
+        drop(TcpListener::bind(first).expect("first address remains available"));
+        let result = HttpsListenerSet::bind_enabled(
+            &[
+                HttpsInterface {
+                    bind_addr: first,
+                    advertise_host: "localhost".parse().expect("host"),
+                    enabled: true,
+                },
+                HttpsInterface {
+                    bind_addr: blocked,
+                    advertise_host: "localhost".parse().expect("host"),
+                    enabled: true,
+                },
+            ],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        );
+        assert!(
+            result.is_err(),
+            "occupied enabled interface must reject startup"
+        );
+        TcpListener::bind(first).expect("failed startup must release earlier bound interface");
     }
 
     fn test_certificate() -> LocalCertificate {
