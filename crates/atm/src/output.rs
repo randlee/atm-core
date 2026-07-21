@@ -268,12 +268,40 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
+    print_doctor_peer_config(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_peer_config(report: &DoctorReport) {
+    let Some(peer_config) = report
+        .daemon_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.peer_config.as_ref())
+    else {
+        return;
+    };
+    println!(
+        "Peer HTTPS: interfaces={}/{} trusted_peers={}/{} certificate={}",
+        peer_config.enabled_interface_count,
+        peer_config.configured_interface_count,
+        peer_config.enabled_trusted_peer_count,
+        peer_config.trusted_peer_count,
+        peer_config
+            .certificate_fingerprint
+            .as_deref()
+            .unwrap_or("<not configured>")
+    );
+    if let Some(failure) = &peer_config.validation_failure {
+        println!(
+            "  peer configuration failure: [{}] {}",
+            failure.code, failure.message
+        );
+    }
 }
 
 fn print_doctor_post_send(report: &DoctorReport) {

@@ -10,5 +10,6 @@ mod legacy_storage_adapters;
 
 pub use atm_storage::{StorageFactory, StorageHandles};
 pub use composition::{
-    RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, with_installed_roster_store,
+    RuntimeAssembly, RuntimeAssemblyInputs, assemble_runtime, validate_enabled_peer_configuration,
+    with_installed_roster_store,
 };

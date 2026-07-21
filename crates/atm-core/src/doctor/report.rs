@@ -115,6 +115,8 @@ pub struct PeerConfigDoctorReport {
     pub certificate_fingerprint: Option<String>,
     pub trusted_peer_count: usize,
     pub enabled_trusted_peer_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_failure: Option<DoctorFinding>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

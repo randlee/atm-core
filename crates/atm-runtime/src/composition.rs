@@ -89,7 +89,6 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
     };
     let nudge_template_override_store = storage.nudge_template_override_store();
     let peer_config_store = storage.peer_config_store();
-    validate_enabled_peer_configuration(peer_config_store.as_ref())?;
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         storage_backends.messages.clone(),
         storage_backends.rosters.clone(),
@@ -111,12 +110,15 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
 /// Validate all enabled HTTPS configuration before the daemon publishes any
 /// HTTPS service. AI.8 performs a bind preflight only; AI.9 owns the actual
 /// listener lifetime and request handling.
-fn validate_enabled_peer_configuration(
+/// Validate the peer-listener configuration immediately before daemon startup.
+/// Ordinary CLI commands intentionally do not call this: they use the shared
+/// runtime assembly only to reach durable configuration and mailbox boundaries.
+pub fn validate_enabled_peer_configuration(
     store: &(dyn PeerConfigStore + Send + Sync),
 ) -> Result<(), AtmError> {
     for peer in store.list_trusted_peers()? {
-        if peer.enabled && peer.fingerprint.trim().is_empty() {
-            return Err(AtmError::validation(
+        if peer.enabled && peer.fingerprint.as_str().trim().is_empty() {
+            return Err(AtmError::peer_config_validation(
                 "enabled trusted peers require a non-empty pinned fingerprint",
             ));
         }
@@ -130,18 +132,20 @@ fn validate_enabled_peer_configuration(
         return Ok(());
     }
     let certificate = store.local_certificate()?.ok_or_else(|| {
-        AtmError::validation(
+        AtmError::peer_config_validation(
             "enabled HTTPS interfaces require a configured local certificate reference",
         )
     })?;
-    if certificate.fingerprint.trim().is_empty() || certificate.private_key_ref.trim().is_empty() {
-        return Err(AtmError::validation(
+    if certificate.fingerprint.as_str().trim().is_empty()
+        || certificate.private_key_ref.as_str().trim().is_empty()
+    {
+        return Err(AtmError::peer_config_validation(
             "enabled HTTPS interfaces require a non-empty certificate fingerprint and key reference",
         ));
     }
     for interface in enabled {
         TcpListener::bind(interface.bind_addr).map_err(|error| {
-            AtmError::daemon_unavailable(format!(
+            AtmError::bind_preflight(format!(
                 "HTTPS bind preflight failed for {}: {error}",
                 interface.bind_addr
             ))
@@ -181,4 +185,114 @@ pub fn with_installed_roster_store<T>(
         let roster_store = boundary_roster_store_view(runtime.shared_roster_store_arc());
         f(roster_store.as_ref())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_storage::{
+        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+        PrivateKeyRef, TrustedPeer,
+    };
+
+    use super::validate_enabled_peer_configuration;
+
+    #[derive(Default)]
+    struct TestPeerConfigStore {
+        interfaces: Vec<HttpsInterface>,
+        certificate: Option<LocalCertificate>,
+        peers: Vec<TrustedPeer>,
+    }
+
+    impl PeerConfigStore for TestPeerConfigStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
+            Ok(self.interfaces.clone())
+        }
+
+        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn remove_interface(
+            &self,
+            _bind_addr: std::net::SocketAddr,
+        ) -> Result<bool, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, atm_storage::AtmError> {
+            Ok(self.certificate.clone())
+        }
+
+        fn save_local_certificate(
+            &self,
+            _certificate: &LocalCertificate,
+        ) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, atm_storage::AtmError> {
+            Ok(self.peers.clone())
+        }
+
+        fn trusted_peer(
+            &self,
+            _host: &HostName,
+        ) -> Result<Option<TrustedPeer>, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+
+        fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, atm_storage::AtmError> {
+            unreachable!("validation fixture is read-only")
+        }
+    }
+
+    fn enabled_interface() -> HttpsInterface {
+        HttpsInterface {
+            bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+            advertise_host: "localhost".parse().expect("host"),
+            enabled: true,
+        }
+    }
+
+    fn certificate() -> LocalCertificate {
+        LocalCertificate {
+            fingerprint: "sha256:test"
+                .parse::<CertificateFingerprint>()
+                .expect("fingerprint"),
+            private_key_ref: "keychain://atm/test"
+                .parse::<PrivateKeyRef>()
+                .expect("key ref"),
+        }
+    }
+
+    #[test]
+    fn enabled_peer_configuration_accepts_complete_configuration() {
+        let store = TestPeerConfigStore {
+            interfaces: vec![enabled_interface()],
+            certificate: Some(certificate()),
+            peers: Vec::new(),
+        };
+        validate_enabled_peer_configuration(&store).expect("complete peer config");
+    }
+
+    #[test]
+    fn enabled_peer_configuration_rejects_missing_certificate() {
+        let store = TestPeerConfigStore {
+            interfaces: vec![enabled_interface()],
+            certificate: None,
+            peers: Vec::new(),
+        };
+        let error = validate_enabled_peer_configuration(&store).expect_err("missing cert");
+        assert!(error.message().contains("configured local certificate"));
+    }
+
+    #[test]
+    fn disabled_peer_configuration_requires_no_certificate() {
+        validate_enabled_peer_configuration(&TestPeerConfigStore::default())
+            .expect("disabled peer configuration");
+    }
 }

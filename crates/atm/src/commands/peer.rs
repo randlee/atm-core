@@ -1,6 +1,8 @@
 use anyhow::{Context, Result, bail};
 use atm_daemon_bootstrap::with_default_peer_config_store;
-use atm_storage::{HostName, HttpsInterface, LocalCertificate, TrustedPeer};
+use atm_storage::{
+    CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, TrustedPeer,
+};
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
@@ -165,8 +167,10 @@ impl CertificateCommand {
             } => {
                 require_confirmation(yes, "initializing the local certificate")?;
                 let certificate = LocalCertificate {
-                    fingerprint,
-                    private_key_ref,
+                    fingerprint: fingerprint.parse().context("invalid --fingerprint")?,
+                    private_key_ref: private_key_ref
+                        .parse()
+                        .context("invalid --private-key-ref")?,
                 };
                 with_default_peer_config_store(|store| store.save_local_certificate(&certificate))?;
                 println!(
@@ -211,7 +215,14 @@ impl TrustCommand {
             } => {
                 require_confirmation(yes, "replacing a trusted-peer fingerprint")?;
                 let peer = peer(host, fingerprint)?;
-                with_default_peer_config_store(|store| store.save_trusted_peer(&peer))?;
+                with_default_peer_config_store(|store| {
+                    if store.trusted_peer(&peer.host)?.is_none() {
+                        return Err(atm_storage::AtmError::validation(
+                            "trusted peer does not exist; use `atm peer trust add --yes`",
+                        ));
+                    }
+                    store.save_trusted_peer(&peer)
+                })?;
                 println!("replaced trusted peer {}", peer.host);
                 Ok(())
             }
@@ -232,12 +243,11 @@ impl TrustCommand {
 }
 
 fn peer(host: String, fingerprint: String) -> Result<TrustedPeer> {
-    if fingerprint.trim().is_empty() {
-        bail!("--fingerprint must not be blank");
-    }
     Ok(TrustedPeer {
         host: host.parse().context("invalid --host")?,
-        fingerprint,
+        fingerprint: fingerprint
+            .parse::<CertificateFingerprint>()
+            .context("invalid --fingerprint")?,
         enabled: true,
     })
 }
@@ -250,7 +260,34 @@ fn require_confirmation(confirmed: bool, operation: &str) -> Result<()> {
     }
 }
 
-fn print_output<T: Serialize>(value: &T, _json: bool) -> Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
+fn print_output<T: Serialize>(value: &T, json: bool) -> Result<()> {
+    println!("{}", render_output(value, json)?);
     Ok(())
+}
+
+fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String> {
+    if json {
+        Ok(serde_json::to_string(value)?)
+    } else {
+        Ok(serde_json::to_string_pretty(value)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{render_output, require_confirmation};
+
+    #[test]
+    fn json_flag_selects_compact_machine_output() {
+        let compact = render_output(&vec!["peer.example"], true).expect("compact JSON");
+        let pretty = render_output(&vec!["peer.example"], false).expect("pretty JSON");
+        assert_eq!(compact, "[\"peer.example\"]");
+        assert!(pretty.contains('\n'));
+    }
+
+    #[test]
+    fn mutations_require_explicit_confirmation() {
+        assert!(require_confirmation(false, "test mutation").is_err());
+        require_confirmation(true, "test mutation").expect("explicit confirmation");
+    }
 }

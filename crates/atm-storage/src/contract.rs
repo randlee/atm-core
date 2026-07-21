@@ -466,6 +466,85 @@ pub trait RosterStore {
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
+/// A non-empty, opaque certificate fingerprint. It cannot be confused with a
+/// private-key reference at storage and transport boundaries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct CertificateFingerprint(String);
+
+impl CertificateFingerprint {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CertificateFingerprint {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for CertificateFingerprint {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate fingerprint").map(Self)
+    }
+}
+
+impl TryFrom<String> for CertificateFingerprint {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<CertificateFingerprint> for String {
+    fn from(value: CertificateFingerprint) -> Self {
+        value.0
+    }
+}
+
+/// A non-empty opaque reference to locally held private-key material.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct PrivateKeyRef(String);
+
+impl PrivateKeyRef {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrivateKeyRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PrivateKeyRef {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate key reference").map(Self)
+    }
+}
+
+impl TryFrom<String> for PrivateKeyRef {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<PrivateKeyRef> for String {
+    fn from(value: PrivateKeyRef) -> Self {
+        value.0
+    }
+}
+
 /// One durable HTTPS listener configuration. This is control-plane state only;
 /// it contains no delivery, retry, or mailbox data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -479,15 +558,15 @@ pub struct HttpsInterface {
 /// indirectly so doctor and callers cannot read secret material from storage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocalCertificate {
-    pub fingerprint: String,
-    pub private_key_ref: String,
+    pub fingerprint: CertificateFingerprint,
+    pub private_key_ref: PrivateKeyRef,
 }
 
 /// One exact, pinned peer allowed to use the cross-host HTTPS listener.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TrustedPeer {
     pub host: HostName,
-    pub fingerprint: String,
+    pub fingerprint: CertificateFingerprint,
     pub enabled: bool,
 }
 
@@ -543,11 +622,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-        derive_ack_requirement, sealed,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -801,5 +880,11 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn security_reference_newtypes_reject_blank_deserialization() {
+        assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
+        assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
     }
 }

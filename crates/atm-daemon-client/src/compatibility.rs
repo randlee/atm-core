@@ -24,7 +24,8 @@ pub struct VersionVerified {
 ///     client_release: ReleaseVersion::parse("1.3.1").unwrap(),
 ///     wire_version: 1,
 /// });
-/// let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new("/tmp/atm-daemon.sock".into()).unwrap();
+/// let endpoint_path = std::env::temp_dir().join("atm-daemon.sock");
+/// let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new(endpoint_path).unwrap();
 /// let request = atm_core::protocol::RequestEnvelope::CompatibilityPreflight(CompatibilityPreflight {
 ///         client_release: ReleaseVersion::parse("1.3.1").unwrap(),
 ///         wire_version: 1,

@@ -62,13 +62,8 @@ review_gates = [
 ]
 
 [status]
-state = "concrete_landed"
+state = "retired"
 notes = [
-  "thin clients must stop at ClientTransport and AtmProtocol",
-  "the stable boundary id retains its historical socket name, but the target same-host surface is one cross-platform local IPC contract",
-  "the adapter must use the shared ATM frame header and request/response packet family rather than EOF-delimited JSON streams",
-  "the adapter owns logical endpoint naming and same-user access-control semantics across Unix and Windows",
-  "the daemon and CLI now share one endpoint-to-local-socket-name mapping while the adapter keeps Unix socket and Windows named-pipe details private",
-  "the Unix and Windows implementations now both live behind atm_daemon::local_ipc_transport and are assembled through atm_daemon::composition",
-  "S.4 restored full Windows workspace clippy and added a dedicated same-host-portability lint guard for the shared host shell",
+  "Historical custom frame socket boundary retired by AI.6.",
+  "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family.",
 ]
