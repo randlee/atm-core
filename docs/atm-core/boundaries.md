@@ -30,6 +30,10 @@ remains empty for the `atm-core` contract-owner records below.
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/atm-protocol.toml](../../boundaries/atm-core/atm-protocol.toml)
 
+Historical status:
+- retired by AI.6 in favor of ADR-033's HTTP/OpenAPI request contract
+- retained protocol DTOs in `atm_core::protocol` are data contracts, not a
+  live `AtmProtocol` trait boundary
 
 Purpose:
 - Historically owned the custom framed request/response contract. AI.6 retires
@@ -54,6 +58,10 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/client-transport.toml](../../boundaries/atm-core/client-transport.toml)
 
+Historical status:
+- retired by AI.6 in favor of one HTTP/UDS `DaemonApiClient` adapter
+- retained daemon launch/bootstrap helpers live below `atm-daemon-client`, not
+  this atm-core boundary
 
 Purpose:
 - Historically owned the outbound custom-frame client path. AI.6 replaces it
@@ -111,6 +119,10 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/server-transport.toml](../../boundaries/atm-core/server-transport.toml)
 
+Historical status:
+- retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing
+- runtime adapters translate HTTP and call `ApiRouter`; this is not a live
+  atm-core trait boundary
 
 Purpose:
 - Historically owned inbound custom-frame serving. AI.6 replaces it with an
@@ -124,6 +136,9 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/request-dispatcher.toml](../../boundaries/atm-core/request-dispatcher.toml)
 
+Historical status:
+- retired by AI.6 in favor of `ApiRouter` and the canonical typed handler path
+- retained references are historical boundary inventory only
 
 Purpose:
 - Historically routed custom-frame protocol requests. AI.6 replaces it with
@@ -265,6 +280,9 @@ Purpose:
 
 Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
+- `atm-daemon-client` may consume this boundary only for canonical ATM-owned
+  caller/environment/config and daemon-endpoint resolution used by shared
+  same-host bootstrap.
 - canonical ATM roster truth does not live here; normal retained runtime
   membership checks must use `RosterStore` / `ProjectionRoster` instead
 - the `Z.6` send warning path is allowed to mention the underlying
