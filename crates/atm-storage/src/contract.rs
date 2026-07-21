@@ -453,20 +453,20 @@ pub struct RosterChangedEvent {
     pub timestamp: IsoTimestamp,
 }
 
-pub trait MessageStore {
+pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
-pub trait RosterStore {
+pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
-pub trait StorageNotifier {
+pub trait StorageNotifier: sealed::Sealed + Send + Sync {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
@@ -519,6 +519,8 @@ mod tests {
 
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
+
+    impl sealed::Sealed for DummyStore {}
 
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {

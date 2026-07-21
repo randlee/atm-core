@@ -669,11 +669,12 @@ The exact design is owned by:
 
 ## 6. Error-Code Registry Boundary
 
-`atm-core` owns the single source registry of ATM-owned error codes in source.
+`atm-storage` owns the single source registry of ATM-owned error codes in source;
+`atm-core` re-exports it for core consumers.
 
 Architectural rules:
 
-- the source registry must live in `crates/atm-core/src/error_codes.rs`
+- the source registry must live in `crates/atm-storage/src/error_codes.rs`
 - `AtmError` must carry an `AtmErrorCode`
 - coarse `AtmErrorKind` classification must not replace the stable code
 - warning diagnostics emitted by `atm-core` must also select a registry code

@@ -198,6 +198,9 @@ impl SqliteRosterStore {
     }
 }
 
+impl atm_storage::contract::sealed::Sealed for SqliteMessageStore {}
+impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
+
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
         self.db.submit_upsert_message(message.clone())
