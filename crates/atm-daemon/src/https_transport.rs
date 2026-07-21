@@ -18,6 +18,7 @@ use atm_core::api::{
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::send::WriteRequest;
+use atm_core::types::HostName;
 use atm_storage::{HttpsInterface, LocalCertificate, TrustedPeer};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime, pem::PemObject};
@@ -169,29 +170,39 @@ impl HttpsListenerSet {
         peers: Vec<TrustedPeer>,
         router: Arc<dyn ApiRouter + Send + Sync>,
     ) -> Result<Self, AtmError> {
-        let enabled = interfaces.iter().filter(|interface| interface.enabled);
         let identity = TlsIdentity::load(certificate)?;
-        let server_config = Arc::new(server_config(&identity, peers)?);
+        let peer_verifier = Arc::new(PinnedClientVerifier::new(peers));
+        let server_config = Arc::new(server_config(&identity, Arc::clone(&peer_verifier))?);
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // Bind every enabled endpoint before any accept loop starts. A bad
+        // later row therefore cannot leave an earlier listener partially live.
+        let bound = interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .map(|interface| {
+                let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
+                    AtmError::daemon_unavailable(format!(
+                        "failed to bind configured HTTPS listener {}",
+                        interface.bind_addr
+                    ))
+                })?;
+                listener.set_nonblocking(true).map_err(|_source| {
+                    AtmError::daemon_unavailable("failed to configure HTTPS listener")
+                })?;
+                let address = listener.local_addr().map_err(|_source| {
+                    AtmError::daemon_unavailable("failed to inspect configured HTTPS listener")
+                })?;
+                Ok((listener, address))
+            })
+            .collect::<Result<Vec<_>, AtmError>>()?;
         let requests = Arc::new(Mutex::new(Vec::new()));
         let mut listeners = Vec::new();
-        for interface in enabled {
-            let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to bind configured HTTPS listener {}",
-                    interface.bind_addr
-                ))
-            })?;
-            listener.set_nonblocking(true).map_err(|_source| {
-                AtmError::daemon_unavailable("failed to configure HTTPS listener")
-            })?;
-            let address = listener.local_addr().map_err(|_source| {
-                AtmError::daemon_unavailable("failed to inspect configured HTTPS listener")
-            })?;
+        for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
             let thread_config = Arc::clone(&server_config);
             let thread_requests = Arc::clone(&requests);
+            let thread_peer_verifier = Arc::clone(&peer_verifier);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
                 .spawn(move || {
@@ -201,6 +212,7 @@ impl HttpsListenerSet {
                         thread_config,
                         thread_router,
                         thread_requests,
+                        thread_peer_verifier,
                     )
                 })
                 .map_err(|_source| {
@@ -249,54 +261,12 @@ fn accept_loop(
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    peer_verifier: Arc<PinnedClientVerifier>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                if let Err(error) = stream.set_nonblocking(false) {
-                    tracing::warn!(
-                        subsystem = "https_transport",
-                        action = "configure_connection",
-                        outcome = "failed",
-                        %error,
-                        "HTTPS peer listener could not configure an accepted connection"
-                    );
-                    continue;
-                }
-                let config = Arc::clone(&config);
-                let router = Arc::clone(&router);
-                let request = std::thread::Builder::new()
-                    .name("atm-https-peer-request".to_string())
-                    .spawn(move || {
-                        if let Err(error) = handle_peer_connection(stream, config, router) {
-                            tracing::warn!(
-                                subsystem = "https_transport",
-                                action = "request",
-                                outcome = "rejected",
-                                error_code = %error.code(),
-                                error_message = %error.message(),
-                                "HTTPS peer request was rejected before or during shared API routing"
-                            );
-                        }
-                    });
-                match request {
-                    Ok(request) => match requests.lock() {
-                        Ok(mut active) => active.push(request),
-                        Err(_) => tracing::error!(
-                            subsystem = "https_transport",
-                            action = "track_connection",
-                            outcome = "failed",
-                            "HTTPS request worker could not be tracked for shutdown"
-                        ),
-                    },
-                    Err(error) => tracing::warn!(
-                        subsystem = "https_transport",
-                        action = "start_request",
-                        outcome = "failed",
-                        %error,
-                        "HTTPS listener rejected connection because request worker startup failed"
-                    ),
-                }
+                spawn_request_worker(stream, &config, &router, &requests, &peer_verifier);
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -315,10 +285,84 @@ fn accept_loop(
     }
 }
 
+fn spawn_request_worker(
+    stream: TcpStream,
+    config: &Arc<ServerConfig>,
+    router: &Arc<dyn ApiRouter + Send + Sync>,
+    requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    peer_verifier: &Arc<PinnedClientVerifier>,
+) {
+    if let Err(error) = stream.set_nonblocking(false) {
+        tracing::warn!(
+            subsystem = "https_transport",
+            action = "configure_connection",
+            outcome = "failed",
+            %error,
+            "HTTPS peer listener could not configure an accepted connection"
+        );
+        return;
+    }
+    let request = std::thread::Builder::new()
+        .name("atm-https-peer-request".to_string())
+        .spawn({
+            let config = Arc::clone(config);
+            let router = Arc::clone(router);
+            let peer_verifier = Arc::clone(peer_verifier);
+            move || {
+                log_peer_request_result(handle_peer_connection(
+                    stream,
+                    config,
+                    router,
+                    peer_verifier,
+                ))
+            }
+        })
+        .map_err(|_source| AtmError::daemon_unavailable("failed to start HTTPS request worker"));
+    match request {
+        Ok(request) => track_request_worker(requests, request),
+        Err(error) => tracing::warn!(
+            subsystem = "https_transport",
+            action = "start_request",
+            outcome = "failed",
+            error_code = %error.code(),
+            "HTTPS listener rejected connection because request worker startup failed"
+        ),
+    }
+}
+
+fn log_peer_request_result(result: Result<(), AtmError>) {
+    if let Err(error) = result {
+        tracing::warn!(
+            subsystem = "https_transport",
+            action = "request",
+            outcome = "rejected",
+            error_code = %error.code(),
+            error_message = %error.message(),
+            "HTTPS peer request was rejected before or during shared API routing"
+        );
+    }
+}
+
+fn track_request_worker(
+    requests: &Mutex<Vec<std::thread::JoinHandle<()>>>,
+    request: std::thread::JoinHandle<()>,
+) {
+    match requests.lock() {
+        Ok(mut active) => active.push(request),
+        Err(_) => tracing::error!(
+            subsystem = "https_transport",
+            action = "track_connection",
+            outcome = "failed",
+            "HTTPS request worker could not be tracked for shutdown"
+        ),
+    }
+}
+
 fn handle_peer_connection(
     stream: TcpStream,
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
+    peer_verifier: Arc<PinnedClientVerifier>,
 ) -> Result<(), AtmError> {
     apply_deadline(&stream, HTTPS_TIMEOUT)?;
     let connection = ServerConnection::new(config).map_err(|_source| {
@@ -326,6 +370,7 @@ fn handle_peer_connection(
     })?;
     let mut tls = StreamOwned::new(connection, stream);
     complete_server_handshake(&mut tls)?;
+    let authenticated_source_host = peer_verifier.authenticated_host(&tls.conn)?;
     let request = match read_http_request(&mut tls)? {
         Some(request) => request,
         None => return Ok(()),
@@ -333,7 +378,7 @@ fn handle_peer_connection(
     // The custom client verifier completed during the read above. Routing is
     // intentionally impossible before that mTLS + exact fingerprint check.
     let mut request = decode_request(request)?;
-    normalize_peer_write_for_local_delivery(&mut request);
+    normalize_peer_write_for_local_delivery(&mut request, authenticated_source_host);
     let response = router
         .route(
             request,
@@ -348,11 +393,12 @@ fn handle_peer_connection(
 /// The authenticated HTTPS adapter has already selected this daemon. It drops
 /// only the transport destination before submitting the same canonical write
 /// request used by local UDS and graft clients.
-fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest) {
-    if let ApiRequest::Write(write) = request
-        && let Some(destination) = write.to.as_mut()
-    {
-        destination.host = None;
+fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest, source_host: HostName) {
+    if let ApiRequest::Write(write) = request {
+        if let Some(destination) = write.to.as_mut() {
+            destination.host = None;
+        }
+        write.authenticated_source_host = Some(source_host);
     }
 }
 
@@ -422,12 +468,11 @@ fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientCon
 
 fn server_config(
     identity: &TlsIdentity,
-    peers: Vec<TrustedPeer>,
+    peer_verifier: Arc<PinnedClientVerifier>,
 ) -> Result<ServerConfig, AtmError> {
     install_tls_provider();
-    let verifier = Arc::new(PinnedClientVerifier::new(peers));
     ServerConfig::builder()
-        .with_client_cert_verifier(verifier)
+        .with_client_cert_verifier(peer_verifier)
         .with_single_cert(
             identity.certificates.clone(),
             identity.private_key.clone_key(),
@@ -497,18 +542,14 @@ impl ServerCertVerifier for PinnedServerVerifier {
 
 #[derive(Debug)]
 struct PinnedClientVerifier {
-    fingerprints: Vec<String>,
+    peers: Vec<TrustedPeer>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
 impl PinnedClientVerifier {
     fn new(peers: Vec<TrustedPeer>) -> Self {
         Self {
-            fingerprints: peers
-                .into_iter()
-                .filter(|peer| peer.enabled)
-                .map(|peer| normalize_fingerprint(peer.fingerprint.as_str()))
-                .collect(),
+            peers: peers.into_iter().filter(|peer| peer.enabled).collect(),
             algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
         }
     }
@@ -525,11 +566,7 @@ impl ClientCertVerifier for PinnedClientVerifier {
         _intermediates: &[CertificateDer<'_>],
         _now: UnixTime,
     ) -> Result<ClientCertVerified, Error> {
-        if self
-            .fingerprints
-            .iter()
-            .any(|fingerprint| fingerprint == &certificate_fingerprint(end_entity))
-        {
+        if self.host_for_certificate(end_entity).is_some() {
             Ok(ClientCertVerified::assertion())
         } else {
             Err(rustls::CertificateError::UnknownIssuer.into())
@@ -559,6 +596,28 @@ impl ClientCertVerifier for PinnedClientVerifier {
     }
 }
 
+impl PinnedClientVerifier {
+    fn authenticated_host(&self, connection: &ServerConnection) -> Result<HostName, AtmError> {
+        let certificate = connection
+            .peer_certificates()
+            .and_then(|certificates| certificates.first())
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer provided no client certificate")
+            })?;
+        self.host_for_certificate(certificate).ok_or_else(|| {
+            AtmError::daemon_unavailable("HTTPS peer certificate is not a configured trusted peer")
+        })
+    }
+
+    fn host_for_certificate(&self, certificate: &CertificateDer<'_>) -> Option<HostName> {
+        let fingerprint = certificate_fingerprint(certificate);
+        self.peers
+            .iter()
+            .find(|peer| normalize_fingerprint(peer.fingerprint.as_str()) == fingerprint)
+            .map(|peer| peer.host.clone())
+    }
+}
+
 fn certificate_fingerprint(certificate: &CertificateDer<'_>) -> String {
     format!("{:x}", Sha256::digest(certificate.as_ref()))
 }
@@ -573,10 +632,10 @@ fn normalize_fingerprint(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::net::TcpStream;
+    use std::net::{TcpListener, TcpStream};
     use std::str::FromStr as _;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     use atm_core::api::{
@@ -586,6 +645,7 @@ mod tests {
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::HostName;
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
@@ -600,7 +660,10 @@ mod tests {
     };
 
     #[derive(Default)]
-    struct RecordingRouter(AtomicBool);
+    struct RecordingRouter {
+        routed: AtomicBool,
+        request: Mutex<Option<ApiRequest>>,
+    }
 
     impl atm_core::boundary::sealed::Sealed for RecordingRouter {}
 
@@ -612,7 +675,8 @@ mod tests {
             _deadline: RequestDeadline,
         ) -> Result<ApiResponse, AtmError> {
             assert_eq!(ingress, AuthenticatedIngress::Peer);
-            self.0.store(true, Ordering::SeqCst);
+            self.routed.store(true, Ordering::SeqCst);
+            *self.request.lock().expect("recorded request") = Some(_request);
             Ok(ApiResponse::new(ResponseEnvelope::Error(
                 AtmError::validation("test router response"),
             )))
@@ -674,7 +738,7 @@ mod tests {
         write_http_request(&mut tls, &RequestEnvelope::Doctor(DoctorQuery::default()))
             .expect("write shared request");
         let _ = read_http_response(&mut tls).expect("shared router response");
-        assert!(router.0.load(Ordering::SeqCst));
+        assert!(router.routed.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
     }
 
@@ -757,8 +821,141 @@ mod tests {
         write_http_request(&mut tls, &RequestEnvelope::Doctor(DoctorQuery::default()))
             .expect("client writes request before server alert");
         assert!(read_http_response(&mut tls).is_err());
-        assert!(!router.0.load(Ordering::SeqCst));
+        assert!(!router.routed.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn authenticated_peer_host_overwrites_wire_source_host_on_shared_write() {
+        let certificate = test_certificate();
+        let identity = TlsIdentity::load(&certificate).expect("load test identity");
+        let router = Arc::new(RecordingRouter::default());
+        let peer = TrustedPeer {
+            host: "localhost".parse().expect("host"),
+            fingerprint: certificate.fingerprint.clone(),
+            enabled: true,
+        };
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![peer.clone()],
+            router.clone(),
+        )
+        .expect("start listener");
+        let stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("mutual TLS handshake");
+        let mut write = WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team.example.invalid",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("message".to_string()),
+            None,
+            true,
+            None,
+            false,
+        )
+        .expect("write request");
+        write.authenticated_source_host = Some("spoofed.invalid".parse().expect("host"));
+        write_http_request(&mut tls, &RequestEnvelope::Write(Box::new(write)))
+            .expect("write shared request");
+        let _ = read_http_response(&mut tls).expect("shared router response");
+        let request = router
+            .request
+            .lock()
+            .expect("recorded request")
+            .clone()
+            .expect("router request");
+        let ApiRequest::Write(write) = request else {
+            panic!("expected canonical write request");
+        };
+        assert_eq!(write.authenticated_source_host, Some(peer.host));
+        assert!(write.to.expect("destination").host.is_none());
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn invalid_enabled_interface_leaves_no_partial_listener() {
+        let certificate = test_certificate();
+        let first = TcpListener::bind("127.0.0.1:0")
+            .expect("reserve first address")
+            .local_addr()
+            .expect("first address");
+        let blocker = TcpListener::bind("127.0.0.1:0").expect("reserve blocking address");
+        let blocked = blocker.local_addr().expect("blocking address");
+        drop(TcpListener::bind(first).expect("first address remains available"));
+        let result = HttpsListenerSet::bind_enabled(
+            &[
+                HttpsInterface {
+                    bind_addr: first,
+                    advertise_host: "localhost".parse().expect("host"),
+                    enabled: true,
+                },
+                HttpsInterface {
+                    bind_addr: blocked,
+                    advertise_host: "localhost".parse().expect("host"),
+                    enabled: true,
+                },
+            ],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        );
+        assert!(
+            result.is_err(),
+            "occupied enabled interface must reject startup"
+        );
+        TcpListener::bind(first).expect("failed startup must release earlier bound interface");
+    }
+
+    #[test]
+    fn shutdown_bounds_an_incomplete_peer_handshake() {
+        let certificate = test_certificate();
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        )
+        .expect("start listener");
+        let _incomplete = TcpStream::connect(listener.listeners[0].address)
+            .expect("open incomplete peer connection");
+        let wait_started = Instant::now();
+        while listener
+            .requests
+            .lock()
+            .expect("request registry")
+            .is_empty()
+        {
+            assert!(
+                wait_started.elapsed() < Duration::from_secs(1),
+                "listener must retain the accepted request before shutdown"
+            );
+            std::thread::yield_now();
+        }
+
+        let started = Instant::now();
+        listener.shutdown().expect("shutdown listener");
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "shutdown must not wait beyond the bounded peer I/O deadline"
+        );
     }
 
     fn test_certificate() -> LocalCertificate {

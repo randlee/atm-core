@@ -685,7 +685,7 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 - **Phase Z: Smoke, Dogfood, And Release Sign-Off [COMPLETE]** — Validated the first daemon + SQLite mail-SSOT release with real-binary smoke, roster truth cutover, watcher-owned Claude config ingest, boundary lint gates, `atm-dev` canary and dogfood, and final release sign-off; verdict `READY` on `feature/pZ-smoke-atm-graft @ 84935774` authorized in `docs/phase-Z/readiness.md` (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`). (Sprints Z.1–Z.24 and Z.3–Z.4; integration branch: `integrate/phase-Z`)
 
-## 37. Phase AG Windows/macOS Cross-Host Validation
+## 37. Phase AG Windows/macOS Cross-Host Validation [HISTORICAL]
 
 Status summary:
 - `Phase Z` is complete and remains the accepted same-host release-readiness
@@ -700,8 +700,9 @@ Status summary:
   - CLI management for both
   - `atm doctor` visibility for both
   - retained loopback self-test support
-- `Phase AG` remains the active planning line, but now as a product-completion
-  plus validation phase rather than a validation-only phase.
+- Phase AG is retired. It documents the rejected custom-frame/TCP design and
+  must not be used for implementation or release evidence; Phase AI owns the
+  replacement HTTP/UDS and HTTPS proof line.
 - `Phase AB` remains historical source material only.
 
 Planning branch:
@@ -764,9 +765,6 @@ Execution shape:
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
-- `docs/plans/phase-AG/cross-host-setup-runbook.md`
-- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
-- `docs/plans/phase-AG/cross-host-findings-ledger.md`
 - `docs/plans/phase-AG/readiness.md`
 - `docs/plans/phase-AG/sprint-AG1.md`
 - `docs/plans/phase-AG/sprint-AG2.md`

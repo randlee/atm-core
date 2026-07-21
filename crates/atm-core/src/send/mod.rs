@@ -23,11 +23,13 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, ChatId, CommandAction, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 
 mod delivery_persistence;
 pub(crate) mod file_policy;
@@ -60,6 +62,10 @@ pub struct WriteRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
+    /// Set only by the authenticated HTTPS ingress before the shared writer
+    /// persists an inbound record. It is not trusted from wire JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_source_host: Option<HostName>,
     /// Destination is omitted only by an `atm ack` command.  The daemon
     /// resolves that destination from the acknowledged source before calling
     /// the canonical writer.
@@ -98,6 +104,7 @@ impl WriteRequest {
             caller_identity,
             caller_chat_id: None,
             caller_team,
+            authenticated_source_host: None,
             to: Some(to.parse()?),
             message_source,
             summary_override,
@@ -615,7 +622,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
+        let mut envelope = InboxMessage {
             from: context.canonical_sender.clone(),
             source_chat_id: request.caller_chat_id.clone(),
             text: body.to_string(),
@@ -637,9 +644,11 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             expires_at: request.expires_at,
             task_id: task_id.clone(),
             extra: Map::new(),
-        }));
+        };
+        set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
-    let envelope = InboxMessage {
+    let mut envelope = InboxMessage {
         from: context.canonical_sender.clone(),
         source_chat_id: request.caller_chat_id.clone(),
         text: body.to_string(),
@@ -662,6 +671,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
+    set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
     let persistence = persist_message(
         runtime,
         &request.home_dir,
