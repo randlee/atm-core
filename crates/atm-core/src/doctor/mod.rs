@@ -627,6 +627,9 @@ mod tests {
     }
     struct NoopNudgeTemplateOverrideStore;
 
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
+
     #[allow(
         deprecated,
         reason = "doctor tests intentionally exercise the transitional shared storage traits"

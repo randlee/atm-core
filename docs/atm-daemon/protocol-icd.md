@@ -346,7 +346,7 @@ Field-authority rule:
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
-| `error_response` | `ProtocolErrorEnvelope` | `ResponseEnvelope::Error(...)` |
+| `error_response` | `AtmError` (`{ code, message }`) | `ResponseEnvelope::Error(...)` |
 
 ### 7.1.1 DTO Definition References
 
@@ -374,7 +374,7 @@ The current packet payload DTO definitions live in:
   - `AdvisoryFetchResponse`
   - `AdvisoryDrainResponse`
   - `AdvisoryStreamResponse`
-  - `ProtocolErrorEnvelope`
+  - `AtmError` (`{ code, message }`)
 
 ### 7.2 Current Shared Envelope Mapping
 
