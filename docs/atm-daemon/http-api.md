@@ -47,13 +47,6 @@ tracked requests within the daemon shutdown deadline.
 | `/v1/atm/message/{message-id}/read` | `POST` | Owner-only read-state mutation | read mutation |
 | `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
-| `/v1/atm/teams` | `GET` | List teams visible to the caller | team query |
-| `/v1/atm/teams` | `POST` | Create a team where authorized | team administration |
-| `/v1/atm/team/{team-name}` | `GET` | Fetch one team and its safe metadata | team query |
-| `/v1/atm/team/{team-name}` | `PATCH` | Authorized team metadata update | team administration |
-| `/v1/atm/team/{team-name}` | `DELETE` | Authorized team removal | team administration |
-| `/v1/atm/team/{team-name}/members` | `GET` / `POST` | List/add members | roster administration |
-| `/v1/atm/team/{team-name}/member/{agent-name}` | `PATCH` / `DELETE` | Update/remove a member | roster administration |
 
 `GET /v1/atm/messages` accepts independent `agent` and `chat_id` query
 filters. `agent=hendrix` searches that base agent across every chat identity;
