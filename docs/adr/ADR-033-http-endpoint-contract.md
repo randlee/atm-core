@@ -9,9 +9,10 @@
 
 ## Decision
 
-ATM uses one daemon HTTP router. Local clients use HTTP over a Unix-domain
-socket (including Windows AF_UNIX); remote peers use HTTPS over TCP. Both
-transports call the same router and the same application handlers.
+ATM uses one daemon HTTP router. Unix local clients use HTTP over UDS and may
+use HTTP over loopback TCP; Windows local clients use HTTP over loopback TCP
+only. Remote peers use HTTPS over TCP. Every transport calls the same router
+and the same application handlers.
 
 The initial stable application surface is resource-oriented REST under
 `/v1/atm`:
@@ -23,14 +24,14 @@ The initial stable application surface is resource-oriented REST under
 | `/message/{message-id}/read` | `POST` owner-only read-state mutation |
 | `/message/{message-id}/ack` | `POST` acknowledgement |
 | `/doctor` | `GET` doctor report |
-| `/teams` | `GET` team list and collection administration |
-| `/team/{team-name}` | `GET` team detail and authorized team administration |
 
-The exact request/response schemas, status codes, pagination, and conditional
-mutation semantics are defined in the checked-in OpenAPI 3.1 document before
-implementation. An acknowledgement endpoint builds the same internal canonical
-write whose `acknowledges_message_id: Option<MessageId>` is populated. It is
-not a separate envelope, transport, or persistence path.
+The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,
+status codes, pagination, and conditional mutation semantics before
+implementation. The HTTP wire body is never a generic
+`RequestEnvelope`/`ResponseEnvelope`; failures use ADR-032's `{code,message}`
+body with the route's HTTP status. An acknowledgement endpoint builds the same
+internal canonical write whose `acknowledges_message_id: Option<MessageId>` is
+populated. It is not a separate envelope, transport, or persistence path.
 
 The canonical write request contains ADR-037's structured caller and
 destination `AgentAddress`: `agent`, optional `chat_id`, `team`, and optional
@@ -57,9 +58,19 @@ dispatch; they must not preserve legacy framing merely to avoid the decision.
 
 ## Consequences
 
-CLI aliases and graft are presentation clients of these resource endpoints. The
-HTTP adapter owns HTTP status/header translation only. It cannot perform
-recipient routing, storage mutation, acknowledgement mutation, or nudging.
+CLI aliases and graft are presentation clients of these resource endpoints.
 
-Named pipes are not supported. Windows uses AF_UNIX under the same local UDS
-contract and must prove it in Windows CI. There is no named-pipe fallback.
+The HTTP adapter owns HTTP status/header translation and ingress authentication
+only. Local loopback TCP authenticates with a daemon-created, owner-readable
+runtime endpoint record and a 32-byte base64url capability in
+`X-ATM-Local-Capability`; it binds only a loopback address. Unix UDS uses
+owner-only endpoint permissions. HTTPS uses mTLS plus the exact allowlist. The
+router receives `AuthenticatedIngress::Local` only after local capability or
+UDS ownership authentication, and `AuthenticatedIngress::Peer` only after
+mTLS verification; socket family and address never classify an ingress. The
+adapter cannot perform recipient routing, storage mutation, acknowledgement
+mutation, or nudging.
+
+Named pipes and Windows AF_UNIX are not supported. Windows CI proves local
+loopback-TCP HTTP; Unix CI proves both UDS and loopback-TCP HTTP. There is no
+named-pipe, AF_UNIX, or address-based fallback on Windows.

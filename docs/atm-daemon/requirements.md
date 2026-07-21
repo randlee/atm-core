@@ -1,7 +1,8 @@
 # ATM-Daemon Crate Requirements
 
 > **Phase AI supersession notice:** `REQ-DAEMON-TRANSPORT-001` through `008`
-> are the proposed target contract for local UDS HTTP and remote HTTPS. Any
+> are the proposed target contract for Unix UDS/loopback-TCP HTTP, Windows
+> loopback-TCP HTTP, and remote HTTPS. Any
 > older text in this document that permits named pipes, a custom ATM frame,
 > replay/retry state, or a peer-transport runtime is historical and will be
 > removed by the owning Phase AI sprint; it is not authority for new work.
@@ -138,10 +139,12 @@ Initial crate requirement IDs:
   Phase AD note:
   - daemon watch/reconcile lanes are retired from the accepted runtime rather
     than preserved as the active closure of this rule
-- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one HTTP router with two
-  production adapters plus one test adapter:
-  - HTTP over Unix-domain sockets for same-host access on Unix and Windows
-    AF_UNIX; named pipes are unsupported
+- `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one HTTP router with local,
+  peer, and test adapters:
+  - Unix: HTTP over UDS and supported HTTP over loopback TCP for same-host
+    access
+  - Windows: HTTP over loopback TCP only for same-host access; named pipes and
+    Windows AF_UNIX are unsupported
   - HTTPS over TCP for cross-host daemon-to-daemon traffic
   - an in-process HTTP adapter; see ADR-003 §Tier 2 — for transport-boundary
     tests
@@ -152,6 +155,12 @@ Initial crate requirement IDs:
   receipt, remote acknowledgement state, or duplicate-delivery subsystem.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` may invoke the one bounded peer
+  reconciliation scan defined by `PeerSyncPolicy` after a successful peer
+  write or on an explicit operator request. The query belongs to the storage
+  trait and submits unchanged canonical records to the ordinary HTTPS adapter;
+  it must not create a queue, outbox, retry worker, checkpoint, receipt, or
+  per-message delivery state. Satisfies: `REQ-CORE-TRANSPORT-003A`.
 - `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
   cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
@@ -172,7 +181,7 @@ Initial crate requirement IDs:
   cancelled; detached untracked request execution is forbidden. Satisfies:
   `REQ-DAEMON-RUNTIME-003`, `REQ-P-DAEMON-DISPATCHER-001`,
   `REQ-CORE-DAEMON-001`.
-- `REQ-DAEMON-TRANSPORT-005` UDS HTTP and HTTPS must call one router and one
+- `REQ-DAEMON-TRANSPORT-005` Unix UDS HTTP, loopback-TCP HTTP, and HTTPS must call one router and one
   canonical read/write application contract rather than separate local and
   remote message systems. Satisfies:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`,
@@ -184,10 +193,13 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-TRANSPORT-007` UDP is not an accepted same-host CLI-daemon
   request/response transport for the retained product surface. Satisfies:
   `REQ-P-RELIABILITY-001`, `REQ-P-CONTRACT-001`.
-- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose one UDS HTTP
-  endpoint and same-user access-control policy across Unix and Windows.
-  Callers above the UDS adapter must not construct platform endpoint paths or
-  ACL semantics directly. Named-pipe mapping and fallback are forbidden.
+- `REQ-DAEMON-TRANSPORT-008` same-host local IPC must expose owner-authenticated
+  HTTP: Unix UDS plus loopback TCP, and Windows loopback TCP only. Loopback
+  TCP binds only loopback and requires a daemon-created owner-readable endpoint
+  record plus local capability; Unix UDS uses owner-only endpoint permissions.
+  Callers above adapters must not construct endpoint paths, ports, capabilities,
+  or ACL semantics directly. Named-pipe mapping, Windows AF_UNIX, and fallback
+  are forbidden.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
@@ -418,8 +430,9 @@ Required runtime rules:
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - **Historical local-frame contract:** the retired ATM frame ICD, its header
-  fields, frame decoder, and named-pipe mapping are not accepted runtime
-  behavior. Phase AI replaces them with the HTTP/UDS contract in
+  fields, frame decoder, named-pipe mapping, and Windows AF_UNIX mapping are
+  not accepted runtime behavior. Phase AI replaces them with Unix UDS/loopback
+  TCP and Windows loopback-TCP HTTP in
   `REQ-DAEMON-TRANSPORT-001`, `005`, `006`, and `008`.
 - daemon-private runtime control must be partitioned into explicit ownership
   modules for these accepted runtime partitions:
@@ -445,8 +458,9 @@ Required runtime rules:
   supported operating system; compile-only support or typed unsupported-path
   stubs are not a releasable end state
 - the same-host transport boundary must remain platform-neutral above the
-  adapter layer: Unix and Windows use AF_UNIX HTTP; caller-visible runtime
-  code must not depend on platform socket-path or listener types
+  adapter layer: Unix uses UDS HTTP plus loopback TCP; Windows uses loopback
+  TCP only; caller-visible runtime code must not depend on platform socket-path
+  or listener types
 - platform cfg is allowed only inside owned daemon adapter modules; composition,
   dispatcher, health, and runtime-lane code must not embed transport-
   or control-source-specific OS branching

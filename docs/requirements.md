@@ -308,7 +308,8 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- Phase AI target daemon API: HTTP over local UDS and HTTPS over TCP for remote
+- Phase AI target daemon API: Unix HTTP over local UDS and loopback TCP,
+  Windows HTTP over loopback TCP, and HTTPS over TCP for remote
   peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
   local HTTP target becomes live in AI.6 and the remote HTTPS target in AI.9.
 - Claude-compatible JSONL inbox ingress and export
@@ -3577,24 +3578,32 @@ mail correctness.
 ### 22.4 Transport And Routing Model
 
 - `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
-  one HTTP daemon API with two production
-  adapters and one test adapter.
+  one HTTP daemon API with local and peer production ingress classes plus one
+  test adapter.
 
   Required behavior:
-  - same-host clients use HTTP over a Unix-domain socket on Unix and Windows
-    AF_UNIX; named-pipe support and fallback are forbidden
+  - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
+    Windows same-host clients use HTTP over loopback TCP only
   - remote peers use HTTPS over TCP
-  - both adapters call one HTTP router and the same application handlers
+  - all production adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
-    `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`,
-    `/v1/atm/doctor`, `/v1/atm/teams`, and `/v1/atm/team/{team-name}`; their
-    methods and schemas are the versioned OpenAPI contract
+    `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
+    `/v1/atm/doctor`; their typed route-specific schemas and methods are the
+    versioned OpenAPI contract
   - the test adapter exercises the same router/handler contract without a live
     socket
   - HTTP adapters perform decode, authentication, and response translation
   only; they must not perform SQLite mutation, acknowledgement mutation,
   recipient routing, or post-send emission
-  - Unix/Windows parity requires the same UDS HTTP tests on both platforms
+  - Windows loopback TCP binds only a loopback address and requires a daemon
+    created owner-readable endpoint record plus a 32-byte base64url local
+    capability; Unix UDS uses owner-only endpoint permissions
+  - ingress authentication creates `AuthenticatedIngress::Local` only after
+    the local capability or UDS ownership check, and
+    `AuthenticatedIngress::Peer` only after mTLS plus allowlist verification;
+    adapters must not infer local/peer status from socket family or address
+  - Unix/Windows parity requires equivalent local HTTP request/response tests:
+    UDS plus loopback TCP on Unix and loopback TCP on Windows
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
   router and injectable typed application handlers.
@@ -3657,6 +3666,12 @@ mail correctness.
   - one post-write router selects local nudge for an empty destination host and
     the HTTPS adapter for every present destination host, including `localhost`
     and the daemon's own advertised or bound IP address
+  - every canonical write orders idempotent persistence, optional receiver-side
+    acknowledgement mutation, and exactly one post-write router dispatch;
+    nudge or peer delivery must never occur before persistence
+  - a destination host is consumed as an origin-side routing selector before
+    an authenticated peer request reaches receiver-side routing; source host is
+    durable provenance shown by read/nudge/ack projections
   - the canonical local write may persist the sender's immutable outbound
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
@@ -3705,6 +3720,27 @@ mail correctness.
   - an unavailable peer returns one normal transport error for the attempted
     write; retry is an ordinary repeat of the immutable message identity
   - duplicate arrival is idempotent at storage by the existing message ULID
+  - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
+    reconciliation scan; it creates no delivery state
+
+- `REQ-CORE-TRANSPORT-003A` Bounded peer reconciliation may re-send canonical
+  immutable records after a peer reconnects without adding delivery state.
+
+  Required behavior:
+  - a durable backend-neutral `PeerSyncPolicy.max_message_age` controls the
+    feature; zero disables it by default
+  - an operator can enable policy and request a one-shot sync; after a normal
+    HTTPS write succeeds the daemon may run the same bounded sync for that peer
+  - storage queries locally persisted outbound records for the exact peer newer
+    than the configured age and returns their original ULID and immutable
+    payload through a storage trait
+  - every selected record uses the ordinary canonical HTTPS write request; no
+    receiver-specific replay path exists
+  - no outbox, replay store, retry queue, background monitor, checkpoint,
+    cursor, receipt, retry budget, or per-message delivery state is allowed
+  - an exact duplicate ULID/payload is a no-op; same ULID with different
+    immutable data returns a typed conflict, logs the discrepancy, preserves
+    the original record, and has no side effect or panic
 
 - `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
   accepts the canonical write request.
@@ -3721,6 +3757,9 @@ mail correctness.
   - acknowledgement is an ordinary canonical write with
     `acknowledges_message_id` populated; its state transition occurs only in
     the receiver's shared write handler
+  - the origin-created message ULID and all immutable fields are preserved on
+    the receiver; exact duplicates do not repeat a nudge or acknowledgement
+    transition, while a conflicting payload for the same ULID is a typed error
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -3746,8 +3785,8 @@ mail correctness.
   - if the configured listener bind address itself changes or disappears, the
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
-  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS and
-    HTTPS shutdown stop accepts then drain or cancel tracked requests within
+  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
+    loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
     the one documented daemon shutdown deadline
 
 ### 22.5 Direct Post-Send And Native Agent Path

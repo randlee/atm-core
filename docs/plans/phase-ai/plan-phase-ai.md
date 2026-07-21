@@ -10,26 +10,28 @@ target: integrate/phase-AI
 
 ## Goal
 
-Provide one production-ready daemon API: HTTP over UDS for every local client
-and HTTPS over TCP for an authenticated remote daemon. Every ingress reaches
+Provide one production-ready daemon API: Unix HTTP over UDS and loopback TCP,
+Windows HTTP over loopback TCP, and HTTPS over TCP for an authenticated remote
+daemon. Every ingress reaches
 the same read/write handlers. Cross-host code is transport-only.
 
 ## Accepted design
 
 | Concern | Decision |
 | --- | --- |
-| Local client transport | HTTP over UDS on Unix and Windows AF_UNIX; no named pipes |
+| Local client transport | Unix HTTP/UDS plus supported loopback HTTP/TCP; Windows loopback HTTP/TCP only; no named pipes |
 | Remote transport | HTTPS/TCP to the same daemon router |
-| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
+| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/message/{id}/ack`, and `/doctor` endpoints; teams routes are an accepted Phase AI waiver |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
 | Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
 | Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
 | Host routing | One post-write router; empty host emits local nudge, every present host uses HTTPS |
 | Security | Storage-trait-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint; SQLite is the initial backend |
-| Delivery state | No outbox, replay store, retry queue, deferred receipt, or remote ack state |
+| Delivery state | No outbox, replay store, retry queue, deferred receipt, or remote ack state; AI.16's disabled-by-default bounded canonical resend scan is the sole exception |
+| Offline reconciliation | AI.16 adds an operator-bounded scan of canonical immutable outbound records; it has no cursor, queue, receipt, retry budget, or per-message delivery state |
 | Idempotency | Immutable existing message ULID; storage accepts duplicate identity idempotently |
 
-The detailed decisions are ADR-032 through ADR-037. ADR-028 through ADR-031
+The detailed decisions are ADR-032 through ADR-038. ADR-028 through ADR-031
 are historical and superseded.
 
 ## Baseline and branch policy
@@ -56,10 +58,11 @@ Each sprint extends and runs the following checks against its own merge base:
    encode/decode HTTP, connect/listen, and call the router. It may not depend
    on SQLite, mailbox mutation, acknowledgement state, nudge sinks, replay,
    receipt, or retry types.
-4. **Storage boundary:** HTTP/HTTPS/UDS adapters may not use rusqlite or schema
+4. **Storage boundary:** HTTP/HTTPS/UDS/loopback-TCP adapters may not use rusqlite or schema
    types; only the sealed storage trait reaches SQLite.
 5. **No retired parallel protocol:** source and dependency checks reject the
-   custom ATM frame codec and Windows named-pipe support after AI.6. Structural
+   custom ATM frame codec, Windows named-pipe support, and Windows AF_UNIX
+   support after AI.11. Structural
    tests verify the retained router/handler graph, so identifier renaming cannot
    satisfy the gate.
 6. **Append-only published surfaces:** CLI and OpenAPI baseline regeneration
@@ -147,11 +150,17 @@ contract later and are not a Phase AI implementation deliverable.
 | AI.3 | `feature/pAI-s3-error-contract-foundation` | One serializable `AtmError` and no protocol error envelope/kind hierarchy |
 | AI.4 | `feature/pAI-s4-error-consumer-migration` | All error producers/consumers use the unified contract; direct-construction gate active |
 | AI.5 | `feature/pAI-s5-chat-address-identity` | Optional chat-id is stored, parsed, rendered, and preserved as an independent agent context |
-| AI.6 | `feature/pAI-s6-http-uds-router` | Local HTTP-over-UDS router works on Unix and Windows; `DaemonApiClient`, bounded request admission, body limits, and graceful UDS draining are live; named pipes/custom frames removed |
+| AI.6 | `feature/pAI-s6-http-uds-router` | Initial HTTP/UDS router landing; AI.11 corrects its incomplete resource contract and Windows local-transport closure |
 | AI.7 | `feature/pAI-s7-canonical-write-path` | CLI, graft, local UDS, and ack use one canonical write handler and post-write router |
 | AI.8 | `feature/pAI-s8-crosshost-control-plane` | Storage/CLI interface, certificate, exact peer-trust control plane, and fail-closed listener startup validation |
 | AI.9 | `feature/pAI-s9-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with bounded per-leg timeouts, body limits, and graceful HTTPS draining; no cross-host state subsystem |
 | AI.10 | `feature/pAI-s10-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
+| AI.11 | `feature/pAI-s11-post-merge-remediation` | Real resource HTTP contract plus Windows loopback-TCP local transport; named pipe and Windows AF_UNIX removed |
+| AI.12 | `feature/pAI-s12-post-write-router` | Every write persists before one post-write router selects exactly one nudge or peer delivery action |
+| AI.13 | `feature/pAI-s13-peer-smoke-contract` | Reusable peer-pair release smoke runner and evidence contract |
+| AI.14 | `feature/pAI-s14-mac-peer-smoke` | Physical Mac↔Mac peer-pair proof |
+| AI.15 | `feature/pAI-s15-windows-peer-smoke` | Physical Mac↔Windows peer-pair proof |
+| AI.16 | `feature/pAI-s16-offline-reconciliation` | Durable-age-bounded canonical-message reconciliation with no delivery-state subsystem |
 
 Each sprint merges forward to the next sprint branch before the next sprint
 starts. Findings are fixed on their owning sprint before forward merge.
@@ -162,7 +171,7 @@ starts. Findings are fixed on their owning sprint before forward merge.
 | --- | --- |
 | Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
 | Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
-| Smoke | localhost UDS; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows UDS and peer participation |
+| Smoke | Unix UDS and loopback TCP; Windows loopback TCP; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows peer participation |
 | Regression | `just lint`, `just test`, architecture checks, no named-pipe/custom-frame/peer-replay source remains |
 
 ## Explicit non-goals

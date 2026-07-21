@@ -26,6 +26,11 @@ backend-neutral factory/assembly input. A new backend therefore implements the
 same storage traits and is selected at composition; daemon, CLI, graft, and
 transport source remain unchanged.
 
+Storage-owned domain contracts include canonical-message lookup by exact ULID
+and the bounded peer/direction/age query required by ADR-038. These are
+backend-neutral query methods, not SQLite tables or a daemon-owned persistence
+trait. Transport adapters receive canonical records only through those traits.
+
 ## Consequences
 
 The prior runtime indirection is not a justification for SQLite-backed daemon

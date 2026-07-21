@@ -111,18 +111,20 @@ Canonical machine-readable boundary source:
 
 Purpose:
 - Historically owned the same-host listener for the custom-frame contract.
-  AI.6 replaces it with an HTTP-over-UDS adapter that calls `ApiRouter`.
+  AI.11 replaces it with Unix HTTP-over-UDS and loopback TCP, plus Windows
+  loopback-TCP, adapters that call `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The target boundary is one cross-platform HTTP-over-AF_UNIX contract on Unix
-  and Windows. Named pipes, custom frame headers, and frame decoders are
-  retired and must not be retained as fallback.
+- The target boundary is Unix HTTP-over-UDS plus loopback TCP, and Windows
+  loopback TCP only. Named pipes, Windows AF_UNIX, custom frame headers, and
+  frame decoders are retired and must not be retained as fallback.
 - The adapter owns HTTP decode/response translation and same-user endpoint
   ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
-  Windows pipe names, or platform-specific ACL details directly
+  loopback ports/capabilities, Windows pipe names, or platform-specific ACL
+  details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
 - the current integrate/phase-S branch still keeps `handle_connection(...)`

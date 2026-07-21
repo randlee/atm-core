@@ -1,12 +1,17 @@
 ---
 title: AI.6 REST router and local UDS
-status: proposed
+status: historical-superseded-by-ai-11
 branch: feature/pAI-s6-http-uds-router
 worktree: ../atm-core-worktrees/feature/pAI-s6-http-uds-router
 target: integrate/phase-AI
 ---
 
-# AI.6 — REST router and local UDS
+# AI.6 — REST router and local UDS (historical)
+
+> **Superseded local-platform target:** AI.11 replaces this sprint's Windows
+> AF_UNIX/UDS assumptions with loopback-TCP-only local HTTP. AI.6 records the
+> initial router landing; it is not authority for the accepted local transport
+> contract, resource inventory, or validation matrix.
 
 ## Deliverables
 
@@ -16,8 +21,9 @@ target: integrate/phase-AI
    structured addresses.
 2. Implement one REST router from that contract. It calls application handlers
    and never SQLite or nudge code directly.
-3. Replace the current custom local framing/client codec with HTTP over UDS.
-   The same UDS contract must run on Unix and Windows AF_UNIX.
+3. **Historical original target:** replace the custom local framing/client
+   codec with HTTP over UDS. AI.11 supersedes the Windows AF_UNIX portion with
+   Windows loopback-TCP local HTTP.
 4. Delete Windows named-pipe mapping/fallback and the custom ATM frame codec
    after all retained operations are represented by the REST contract. The
    deletion inventory includes the `AtmProtocol`, `ClientTransport`,
@@ -81,7 +87,8 @@ still dispatches one application handler.
 
 - `atm` and graft local daemon calls use HTTP/UDS; no production local client
   uses the retired frame codec.
-- Windows CI proves AF_UNIX HTTP message, chat-address, and error behavior.
+- **Historical original proof:** Windows AF_UNIX HTTP behavior. AI.11 replaces
+  this acceptance item with Windows loopback-TCP HTTP proof.
 - No source/dependency reference to named pipes or the retired custom frame
   protocol remains.
 - Router tests prove adapters cannot reach storage or post-send boundaries.
@@ -96,5 +103,7 @@ not introduce a temporary second write handler.
 
 ## Required validation
 
-Unix and Windows UDS REST integration tests; OpenAPI contract tests; `just
-lint`; `just test`; local CLI send/read/ack smoke.
+Historical validation was Unix and Windows UDS REST integration tests. The
+accepted validation is AI.11's Unix UDS plus loopback-TCP and Windows
+loopback-TCP matrix, OpenAPI contract tests, `just lint`, `just test`, and
+local CLI send/read/ack smoke.
