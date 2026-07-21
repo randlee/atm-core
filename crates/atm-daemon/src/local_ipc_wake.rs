@@ -1,12 +1,13 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use atm_core::error::AtmError;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::prelude::*;
 
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+const LISTENER_WAKE_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,12 +27,37 @@ pub(crate) fn schedule_delayed_listener_wake(
         .name("delayed-listener-wake".to_owned())
         .spawn(move || {
             std::thread::sleep(delay);
-            let _ = wake_listener(&endpoint_path);
+            let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
         })
         .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn delayed listener wake helper")
         })?;
     Ok(())
+}
+
+pub(crate) fn wake_listener_until(
+    endpoint_path: &Path,
+    retry_for: Duration,
+) -> Result<(), AtmError> {
+    let started = Instant::now();
+    let mut last_error = match wake_listener(endpoint_path) {
+        Ok(()) => return Ok(()),
+        Err(error) => error,
+    };
+    loop {
+        let elapsed = started.elapsed();
+        if elapsed >= retry_for {
+            return Err(last_error);
+        }
+        std::thread::sleep(std::cmp::min(
+            LISTENER_WAKE_RETRY_INTERVAL,
+            retry_for.saturating_sub(elapsed),
+        ));
+        match wake_listener(endpoint_path) {
+            Ok(()) => return Ok(()),
+            Err(error) => last_error = error,
+        }
+    }
 }
 
 pub(crate) fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {

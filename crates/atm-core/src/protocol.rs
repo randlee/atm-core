@@ -183,8 +183,7 @@ pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
 /// Returns [`AtmError`] when the endpoint cannot be represented by the current
 /// platform-local IPC implementation.
 pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
-    endpoint_path
-        .to_path_buf()
+    platform_local_ipc_endpoint_path(endpoint_path.to_path_buf())
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
         .map_err(|_source| {
@@ -193,6 +192,38 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
                 endpoint_path.display()
             ))
         })
+}
+
+#[cfg(windows)]
+fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
+    const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
+
+    let raw = path.to_string_lossy();
+    if raw.starts_with(WINDOWS_PIPE_PREFIX) {
+        return path;
+    }
+
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in raw.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+
+    let mut leaf = path
+        .file_stem()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "atm-daemon".to_string());
+    leaf.retain(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
+    if leaf.is_empty() {
+        leaf = "atm-daemon".to_string();
+    }
+
+    PathBuf::from(format!(r"\\.\pipe\atm-{}-{hash:016x}", leaf))
+}
+
+#[cfg(not(windows))]
+fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 /// Shared notification event payload.
