@@ -18,8 +18,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-RSH-001/pAI-s6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
   triage:relatedFinding "AI6-RSH-002" ;
-  triage:reviewedBy "rust-service-hardening-agent" .
+  triage:reviewedBy "rust-service-hardening-agent" ;
+  triage:resolution "FIXED: apply_primary_request_deadline is now the first statement in handle_connection (request_worker.rs:46), applying set_recv_timeout/set_send_timeout on the primary request path (not just the connection-cap-rejection/shutdown-probe paths). Fixed on feature/pAI-s6-http-uds-router @ 3dd7e6e2, merge-forwarded through AI7 6fc4009a, AI8 1a99ee2c, AI9 87c5a1f7, AI10 b43c0b1b. quality-mgr independently re-verified against source (AI-FIXROUND-3 recheck): PASS. Note: the causally-linked AI6-RSH-002 (force-close on shutdown) remains OPEN — its interrupt_all() still only signals a condvar, no socket is force-closed." .
 
 <urn:atm:triage:occurrence/AI6-RSH-001/pAI-s6/1>
   a triage:Occurrence ;

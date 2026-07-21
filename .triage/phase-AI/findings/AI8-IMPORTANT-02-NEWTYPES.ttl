@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-IMPORTANT-02-NEWTYPES>
+  a triage:Finding ;
+  triage:findingId "AI8-IMPORTANT-02-NEWTYPES" ;
+  triage:title "Contract's typed newtypes CertificateFingerprint/PrivateKeyRef downgraded to raw String" ;
+  triage:description "AI8-QA-1 (ruthless-boundary RBQA-F003, rust-best-practices RBP-F001 — 2 independent confirmations). The approved sprint contract declares CertificateFingerprint/PrivateKeyRef newtypes; the shipped HttpsInterface/LocalCertificate/TrustedPeer (crates/atm-storage/src/contract.rs:472-492) use plain String with the same non-blank check re-implemented independently in 4+ places (storage, runtime composition, CLI). This loses the compile-time guarantee that a fingerprint can't be passed where a key-ref is expected — exactly the two fields the sprint calls 'security-sensitive.' Using raw String prevents type-system enforcement of the semantic difference between these security-critical values." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-IMPORTANT-02-NEWTYPES/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Fix: either (1) adopt CertificateFingerprint/PrivateKeyRef newtypes per the documented contract and thread them through HttpsInterface/LocalCertificate/TrustedPeer, or (2) record an explicit deviation note in the requirements explaining why the newtypes were abandoned. Newtypes are strongly preferred for security-sensitive values." .
+
+<urn:atm:triage:occurrence/AI8-IMPORTANT-02-NEWTYPES/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 472 ;
+  triage:snippet "pub struct HttpsInterface { pub advertise_host: String, pub bind_port: u16 }\npub struct LocalCertificate { pub fingerprint: String, pub certificate_pem: String }\npub struct TrustedPeer { pub advertise_host: String, pub fingerprint: String, pub private_key_ref: String }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .

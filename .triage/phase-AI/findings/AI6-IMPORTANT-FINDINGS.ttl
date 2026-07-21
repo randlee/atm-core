@@ -12,15 +12,18 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s10-crosshost-proof-closeout" ;
   triage:reviewedBy "req-qa" ;
   triage:reviewedBy "rust-qa-agent" ;
   triage:reviewedBy "rust-best-practices-agent" ;
-  triage:reviewedBy "ruthless-boundary-qa" .
+  triage:reviewedBy "ruthless-boundary-qa" ;
+  triage:reviewedBy "team-lead" ;
+  triage:resolution "FIXED: all 9 sub-items closed across AI-FIXROUND-3/4/5, independently verified by quality-mgr against source at each step. (2) contract test upgraded to real route↔schema-declaration correspondence via openapi_declares_the_implemented_doctor_exchange (crates/atm/src/commands/api.rs:55-73); (3) AuthenticatedIngress genuinely matched in runtime_health.rs:777; (4) docs/architecture.md + docs/atm-daemon/boundaries.md now describe the current ApiRequest/ApiResponse/ApiRouter architecture; (6) AtmError now carries a real cause field, ~15 io::Error call sites in atm-daemon-client/src/lib.rs no longer discard the source; (7) daemon_local_ipc_name_from_path deduped; (8) try_connect_with_traceability simplified to plain bool; (9) hardcoded socket path literal removed. (1) OpenAPI /teams + /team/{teamName}: AI-FIXROUND-5 fully deleted the orphaned Teams routing dead code (route_is_teams(), decode_request()'s special-case, and the now-false runtime_health.rs error message) — workspace-wide grep for ApiRequest::Teams/route_is_teams confirms zero remnants (git show 5464b652 --stat: api.rs -40 lines, runtime_health.rs -4 lines). (5) LoopbackClientTransport gated via #[cfg(feature = \"test-utils\")] in crates/atm-core/src/transport/mod.rs, feature is off-by-default and only enabled under [dev-dependencies] in crates/atm/Cargo.toml and crates/atm-daemon/Cargo.toml — confirmed absent from release binaries via `strings target/release/{atm,atm-daemon} | grep -c LoopbackClientTransport` returning 0 on both. A downstream AI10 CI-facing regression surfaced by this closure (additions-only openapi_surface_is_additions_only test refusing the intentional /teams removal) was fixed via a scoped, explicitly-reviewed removals allowlist (crates/atm/tests/openapi_surface_reviewed_removals.json, exactly the 3 approved entries) rather than weakening the gate — verified the gate still hard-fails any unlisted or non-removal breaking change (new test reviewed_removals_allow_only_exact_removed_entries). Fixed on feature/pAI-s6-http-uds-router @ 5464b652, merge-forwarded through AI7 821ca362, AI8 4423dae8, AI9 8486d940 (2-parent merge with concurrent AI9 HTTPS-transport work, verified both change sets coexist cleanly, zero conflict markers), AI10 16730370 (includes the openapi bless fix). Chain closed." .
 
 <urn:atm:triage:worktree/pAI-s6/764bdd32>
   a triage:WorktreeSnapshot ;
