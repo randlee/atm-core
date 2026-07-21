@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-SPRINT-DOC-WAIVER-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI6-SPRINT-DOC-WAIVER-MISSING" ;
+  triage:title "Sprint-doc frontmatter status:proposed with no waiver; project-plan.md has zero AI.6 rows" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-6.md frontmatter is status: proposed, not status: complete. No waiver record exists under .triage/phase-AI/. Also docs/project-plan.md has zero AI.6 rows despite AI.6 being the current sprint. Both are unwaived acceptance-gate blockers that gate merge to integrate/phase-AI." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-SPRINT-DOC-WAIVER-MISSING/pAI-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-SPRINT-DOC-WAIVER-MISSING/pAI-s6/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:reviewedBy "req-qa" ;
+  triage:reviewedBy "team-lead" ;
+  triage:resolution "FIXED (verified directly by team-lead, docs-only): docs/plans/phase-ai/sprint-ai-6.md frontmatter now status: complete, with an explicit 'Closure waiver' section (lines 102-109) recording the deferral of Deliverable 8's full AST graph (MessageWriter::write/PostWriteRouter::dispatch, AI.7-scope types) to AI.7, while AI.6 closes the buildable part via a real ApiRequest::Write discriminant. docs/project-plan.md now carries an AI.6 row (line 974: complete, feature/pAI-s6-http-uds-router, notes the AI.7 write-graph waiver). Verified present at branch tip 6b4645df on feature/pAI-s6-http-uds-router." ;
+
+<urn:atm:triage:occurrence/AI6-SPRINT-DOC-WAIVER-MISSING/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-6.md" ;
+  triage:line 1 ;
+  triage:snippet "status: proposed (should be complete or have explicit waiver)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-SPRINT-DOC-WAIVER-MISSING/pAI-s6/2>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1 ;
+  triage:snippet "AI.6 rows missing entirely (should list sprint deliverables/owners)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
