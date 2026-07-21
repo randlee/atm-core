@@ -18,7 +18,7 @@ io_owns = ["protocol_request_routing"]
 io_forbidden = ["socket_io", "sqlite", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-DISPATCHER-REFERENCES"]
 review_gates = ["no_socket_specific_dispatch_logic"]
 
 [status]
-state = "stub_landed"
-notes = ["stub trait plus request/response shells landed in atm_core::boundary", "dispatcher is a service boundary, not a socket adapter"]
+state = "retired"
+notes = ["Historical custom-frame dispatcher boundary retired by AI.6 in favor of ADR-033 ApiRouter handling.", "Dispatcher semantics are now represented by the HTTP/OpenAPI router and canonical typed handler path, not this atm-core trait boundary."]
