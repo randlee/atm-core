@@ -160,10 +160,11 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
     if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
         return DaemonBinaryPath::new(PathBuf::from(path));
     }
-    let current = std::env::current_exe().map_err(|_source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to resolve the current {current_host_label} executable path"
-        ))
+    let current = std::env::current_exe().map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
+            format!("failed to resolve the current {current_host_label} executable path"),
+            source,
+        )
     })?;
     DaemonBinaryPath::new(
         current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
@@ -358,17 +359,21 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStrea
                 );
             }
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn bounded daemon local IPC connect worker")
-
-
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to spawn bounded daemon local IPC connect worker",
+                source,
+            )
         })?;
     match result_rx.recv_timeout(LOCAL_IPC_CONNECT_DEADLINE) {
         Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(_source)) => Err(AtmError::daemon_unavailable(format!(
-            "failed to connect to daemon local IPC endpoint at {}",
-            endpoint.display()
-        ))),
+        Ok(Err(source)) => Err(AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to connect to daemon local IPC endpoint at {}",
+                endpoint.display()
+            ),
+            source,
+        )),
         Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(format!(
             "timed out connecting to daemon local IPC endpoint at {}",
             endpoint.display()
@@ -429,8 +434,11 @@ fn read_http_response_with_helper(
                 tracing::debug!("daemon HTTP response reader timed out before helper completion");
             }
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn daemon HTTP response read helper")
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to spawn daemon HTTP response read helper",
+                source,
+            )
         })?;
     result_rx
         .recv_timeout(request_deadline)
@@ -454,7 +462,7 @@ fn apply_local_ipc_deadline(
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
             Ok(LocalIpcDeadlineSupport::Unsupported)
         }
-        Err(_source) => Err(AtmError::daemon_unavailable(message)),
+        Err(source) => Err(AtmError::daemon_unavailable_with_cause(message, source)),
     }
 }
 
@@ -755,9 +763,9 @@ impl DaemonSupervisor {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
-        command.spawn().map_err(|_source| {
+        command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
-                "failed to spawn daemon binary at {}",
+                "failed to spawn daemon binary at {}: {source}",
                 self.daemon_bin.display()
             ))
         })?;
@@ -785,11 +793,14 @@ impl LaunchGateGuard {
 
     pub fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
         if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|_source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon launch lock directory at {}",
-                    parent.display()
-                ))
+            fs::create_dir_all(parent).map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to create daemon launch lock directory at {}",
+                        parent.display()
+                    ),
+                    source,
+                )
             })?;
         }
         let file = OpenOptions::new()
@@ -798,20 +809,26 @@ impl LaunchGateGuard {
             .write(true)
             .truncate(false)
             .open(&lock_path)
-            .map_err(|_source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to open daemon launch gate at {}",
-                    lock_path.display()
-                ))
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to open daemon launch gate at {}",
+                        lock_path.display()
+                    ),
+                    source,
+                )
             })?;
 
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { file })),
             Err(error) if is_launch_gate_contention_error(&error) => Ok(None),
-            Err(_source) => Err(AtmError::daemon_unavailable(format!(
-                "failed to acquire daemon launch gate at {}",
-                lock_path.display()
-            ))),
+            Err(source) => Err(AtmError::daemon_unavailable_with_cause(
+                format!(
+                    "failed to acquire daemon launch gate at {}",
+                    lock_path.display()
+                ),
+                source,
+            )),
         }
     }
 }

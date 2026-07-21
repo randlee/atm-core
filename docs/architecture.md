@@ -243,11 +243,10 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-storage-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current Phase R boundary direction:
-- shared protocol contract: `AtmProtocol` in `atm-core`
-- outbound transport boundary: `ClientTransport`
-- inbound transport boundary: `ServerTransport`
-- request routing boundary: `RequestDispatcher`
+Current daemon boundary direction:
+- shared request/response contract: `ApiRequest` and `ApiResponse` in `atm-core`
+- client boundary: `DaemonApiClient`, used by CLI, graft, and test adapters
+- ingress routing boundary: `ApiRouter`, reached from HTTP-over-UDS locally
 - outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
 - current production composition ownership:
