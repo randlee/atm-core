@@ -166,10 +166,12 @@ fn decode_mailbox_metadata_row(
     let parsed_task_id = parse_task_id(task_id, &message_key)?;
     let ack_requirement = derive_ack_requirement(&InboxMessage {
         from: parsed_from_agent.clone(),
+        source_chat_id: None,
         text: String::new(),
         timestamp: parsed_message_at,
         read: read != 0,
         source_team: None,
+        destination_chat_id: None,
         summary: summary.clone(),
         message_id: parsed_message_id,
         requires_ack: requires_ack != 0,

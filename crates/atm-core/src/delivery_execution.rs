@@ -83,8 +83,6 @@ where
     Ok(DeliveryExecutionResult::delivered())
 }
 
-pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
-
 pub(crate) fn emit_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
     context: DeliveryTransitionContext<'_>,
@@ -117,8 +115,6 @@ pub(crate) fn emit_delivery_plan_transitions(
     }
     Ok(())
 }
-
-pub(crate) use emit_delivery_plan_transitions as emit_reply_delivery_plan_transitions;
 
 #[cfg(test)]
 mod tests {
@@ -199,10 +195,12 @@ mod tests {
         LogicalMessage::new(
             InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TeamName::from_validated(TEST_TEAM)),
+                destination_chat_id: None,
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,

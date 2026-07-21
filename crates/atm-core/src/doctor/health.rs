@@ -100,9 +100,9 @@ pub fn observability_finding(health: &AtmObservabilityHealth) -> DoctorFinding {
 pub fn observability_finding_from_error(error: &AtmError) -> DoctorFinding {
     DoctorFinding {
         severity: DoctorSeverity::Error,
-        code: error.code,
+        code: error.code(),
         message: format!("shared observability health check failed: {error}"),
-        remediation: Some(error.message.clone()),
+        remediation: Some(error.message().to_owned()),
     }
 }
 

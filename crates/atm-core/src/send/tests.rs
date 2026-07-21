@@ -41,10 +41,12 @@ fn message(
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -106,12 +108,12 @@ fn warning_render_keeps_catalog_recovery_singleton() {
         "post-send hook configuration is invalid",
     );
     let warning = WarningEntry::with_code(
-        error.code,
+        error.code(),
         format!(
             "warning: post-send hook config lookup failed: {}.",
-            error.message
+            error.message()
         ),
-        Some(error.message),
+        Some(error.message()),
     );
 
     assert_eq!(warning.render().matches("Recovery:").count(), 1);
@@ -334,10 +336,12 @@ fn outbound_message() -> InboxMessage {
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,
@@ -358,7 +362,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         current_dir: home_dir.to_path_buf(),
         caller_identity: AgentName::from_validated(TEST_SENDER),
         caller_team: TeamName::from_validated(TEST_TEAM),
-        to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
+        to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),
         requires_ack: false,
@@ -366,15 +370,18 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
+        acknowledges_message_id: None,
         dry_run: false,
     }
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     let mut request = send_request(home_dir);
-    request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
-        .parse()
-        .expect("self address");
+    request.to = Some(
+        format!("{TEST_SENDER}@{TEST_TEAM}")
+            .parse()
+            .expect("self address"),
+    );
     request
 }
 
@@ -520,10 +527,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let ack_intent = AckIntentFields::not_required();
     let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
+        source_chat_id: None,
         text: "sqlite failed".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,
@@ -765,11 +774,11 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     )
     .expect_err("empty atm roster must fail");
 
-    assert!(error.code == crate::error_codes::AtmErrorCode::AgentNotFound);
-    assert!(error.message.starts_with(&format!(
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
+    assert!(error.message().starts_with(&format!(
         "agent 'recipient' was not found in team '{TEST_TEAM}'"
     )));
-    assert!(error.message.contains("Recovery:"));
+    assert!(error.message().contains("Recovery:"));
     assert!(
         runtime
             .appended_messages
@@ -799,10 +808,10 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         error
-            .message
+            .message()
             .contains("self-addressed messages are invalid ATM input")
     );
     assert!(
@@ -836,7 +845,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
     )
     .expect_err("self-addressed task send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -860,19 +869,21 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = self_addressed_send_request(tempdir.path());
-    request.to = format!(
-        "{}@{}",
-        TEST_SENDER.to_ascii_uppercase(),
-        TEST_TEAM.to_ascii_uppercase()
-    )
-    .parse()
-    .expect("case-variant self address");
+    request.to = Some(
+        format!(
+            "{}@{}",
+            TEST_SENDER.to_ascii_uppercase(),
+            TEST_TEAM.to_ascii_uppercase()
+        )
+        .parse()
+        .expect("case-variant self address"),
+    );
     request.dry_run = true;
 
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed dry-run must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -911,14 +922,14 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
     )
     .expect_err("invalid address");
 
-    assert!(error.message.contains("agent name"));
+    assert!(error.message().contains("agent name"));
 }
 
 #[test]
 fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
     let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
-    assert!(error.message.contains("team name"));
+    assert!(error.message().contains("team name"));
 }
 
 #[test]
@@ -937,7 +948,7 @@ fn resolve_recipient_rejects_invalid_alias_target() {
     )
     .expect_err("invalid alias target");
 
-    assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
 }
 
 #[test]
@@ -991,5 +1002,5 @@ fn prepare_threaded_message_rejects_non_originating_sender() {
 
     let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
 
-    assert!(error.message.contains("original sender"));
+    assert!(error.message().contains("original sender"));
 }

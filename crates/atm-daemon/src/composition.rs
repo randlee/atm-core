@@ -7,7 +7,7 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
 use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
 use atm_runtime::RuntimeAssembly;
@@ -189,7 +189,7 @@ impl RuntimeComposition {
         })
     }
 
-    fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
+    fn request_dispatcher(&self) -> Arc<dyn ApiRouter + Send + Sync> {
         self.request_dispatcher.clone()
     }
 
@@ -568,7 +568,6 @@ pub(crate) fn compose_runtime(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::ServerTransport;
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -711,27 +710,6 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
-    fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
-
-        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
-
-        let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
-            .expect_err("direct transport bootstrap should be rejected");
-
-        assert!(error.is_daemon_unavailable());
-        assert!(
-            error
-                .to_string()
-                .contains("cannot bootstrap the daemon directly")
-        );
-        assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
     fn runtime_composition_fails_closed_when_runtime_storage_cannot_open() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().join("atm-home");
@@ -755,7 +733,7 @@ mod tests {
         .expect_err("runtime storage assembly should fail closed");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(

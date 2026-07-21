@@ -297,6 +297,6 @@ mod tests {
         };
 
         let error = store.save_roster(&roster).expect_err("mismatch");
-        assert!(error.message.contains("did not match request team"));
+        assert!(error.message().contains("did not match request team"));
     }
 }

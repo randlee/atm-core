@@ -13,7 +13,7 @@ The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
 The canonical daemon packet contract lives in:
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2. Ownership
 
@@ -237,7 +237,7 @@ The `atm` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - [`../project-plan.md`](../project-plan.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)

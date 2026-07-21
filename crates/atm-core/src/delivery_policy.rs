@@ -820,12 +820,12 @@ mod tests {
             )
             .expect_err("missing roster member must fail");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
         assert!(
             error
-                .message
+                .message()
                 .starts_with("agent 'recipient' was not found in team 'test-team'")
         );
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.message().contains("Recovery:"));
     }
 }

@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI4-ACCEPT-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI4-ACCEPT-001" ;
+  triage:title "Missing cross-surface JSON/error-shape parity test for AI.4 acceptance criterion" ;
+  triage:description "AI4-QA-1 (req-qa, blocking). AI.4's own sprint-doc acceptance criterion requires that CLI, graft, UDS-client, and daemon surfaces observe an identical composed JSON/error shape for the same underlying error. No supporting test exists that asserts this cross-surface parity -- existing tests validate each surface's error handling independently but never assert the four surfaces produce byte-for-byte (or field-for-field) equivalent error output for the same triggering condition. Open/unverifiable as an acceptance criterion. Verified via req-qa's direct sprint-doc cross-check against the AI4-QA-1 test inventory; team-lead confirmed no such test exists on feature/pAI-s4-error-consumer-migration @ baf86e22." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_site" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI4-ACCEPT-001/pAI-4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-4/baf86e22> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
+  triage:highestOpenBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:resolution "OPEN, dispatch-ready. Add a regression test that triggers one representative underlying error condition and asserts the CLI, graft, UDS-client, and daemon surfaces all produce the same composed error shape (same error code, same message structure, same single 'Recovery:' line per ATM-QA-I4-AI3). This test should be added alongside the ATM-QA-I4-AI3 fix so it also guards against the doubled-Recovery regression. Dispatch on feature/pAI-s5-chat-address-identity per fix-dispatch-latest-branch policy." ;
+  triage:triagedAt "2026-07-20T23:10:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI4-ACCEPT-001/pAI-4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-AI/sprint-AI4.md" ;
+  triage:line 0 ;
+  triage:snippet "Acceptance criterion: CLI/graft/UDS-client/daemon error surfaces must observe identical JSON/error shape for the same underlying error -- no supporting test found in AI4-QA-1 test inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "baf86e22" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-4/baf86e22> .

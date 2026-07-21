@@ -60,7 +60,7 @@ impl CliObservability {
         error: &(dyn std::error::Error + 'static),
     ) {
         let (code, message) = if let Some(atm_error) = error.downcast_ref::<AtmError>() {
-            (atm_error.code, atm_error.to_string())
+            (atm_error.code(), atm_error.to_string())
         } else {
             (AtmErrorCode::InternalError, error.to_string())
         };
@@ -371,7 +371,7 @@ mod tests {
         let error = CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
             .expect_err("invalid ATM_LOG_DIR should fail closed");
         assert!(error.is_config());
-        assert!(error.message.contains("absolute path"));
+        assert!(error.message().contains("absolute path"));
     }
 
     #[test]
