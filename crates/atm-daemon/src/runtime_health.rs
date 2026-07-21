@@ -799,10 +799,6 @@ impl DaemonRequestDispatcher {
             ),
             ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
             ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
-            ApiRequest::Teams(request) => Err(AtmError::daemon_unavailable(format!(
-                "daemon API route {} {} is declared in OpenAPI but team administration routing remains outside the AI.6 runtime router",
-                request.method, request.path
-            ))),
             ApiRequest::CompatibilityPreflight(preflight) => {
                 self.dispatch(RequestEnvelope::CompatibilityPreflight(preflight))
             }
