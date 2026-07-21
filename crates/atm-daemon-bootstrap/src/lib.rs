@@ -79,3 +79,14 @@ pub fn with_default_nudge_template_override_store<T>(
     let assembly = assemble_default_runtime()?;
     f(assembly.nudge_template_override_store.as_ref())
 }
+
+/// Open the default durable cross-host configuration boundary.
+///
+/// The returned trait owns only listener, certificate-reference, and exact
+/// trusted-peer configuration; it exposes no transport or mailbox state.
+pub fn with_default_peer_config_store<T>(
+    f: impl FnOnce(&(dyn atm_storage::PeerConfigStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let assembly = assemble_default_runtime()?;
+    f(assembly.peer_config_store().as_ref())
+}

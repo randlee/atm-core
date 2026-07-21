@@ -268,12 +268,45 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
+    print_doctor_peer_config(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_peer_config(report: &DoctorReport) {
+    let Some(peer_config) = report
+        .daemon_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.peer_config.as_ref())
+    else {
+        return;
+    };
+    println!("{}", render_doctor_peer_config(peer_config));
+}
+
+fn render_doctor_peer_config(peer_config: &atm_core::doctor::PeerConfigDoctorReport) -> String {
+    let mut rendered = format!(
+        "Peer HTTPS: interfaces={}/{} trusted_peers={}/{} certificate={}",
+        peer_config.enabled_interface_count,
+        peer_config.configured_interface_count,
+        peer_config.enabled_trusted_peer_count,
+        peer_config.trusted_peer_count,
+        peer_config
+            .certificate_fingerprint
+            .as_deref()
+            .unwrap_or("<not configured>")
+    );
+    if let Some(failure) = &peer_config.validation_failure {
+        rendered.push_str(&format!(
+            "\n  peer configuration failure: [{}] {}",
+            failure.code, failure.message
+        ));
+    }
+    rendered
 }
 
 fn print_doctor_post_send(report: &DoctorReport) {
@@ -797,11 +830,11 @@ mod tests {
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport,
+        BootstrapTraceReport, PeerConfigDoctorReport,
     };
     use serde_json::json;
 
-    use super::render_bootstrap_trace_section;
+    use super::{render_bootstrap_trace_section, render_doctor_peer_config};
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -850,5 +883,21 @@ mod tests {
             rendered["reply_disposition"]["reply_message_id"],
             "01KX5TEST00000000000000003"
         );
+    }
+
+    #[test]
+    fn doctor_peer_text_redacts_private_key_material() {
+        let rendered = render_doctor_peer_config(&PeerConfigDoctorReport {
+            configured_interface_count: 2,
+            enabled_interface_count: 1,
+            certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
+            trusted_peer_count: 3,
+            enabled_trusted_peer_count: 2,
+            validation_failure: None,
+        });
+
+        assert!(rendered.contains("sha256:public-fingerprint"));
+        assert!(!rendered.contains("private_key_ref"));
+        assert!(!rendered.contains("keychain:secret"));
     }
 }

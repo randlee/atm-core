@@ -12,6 +12,9 @@ use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::error_codes::AtmErrorCode::{
+    BindPreflightFailed, CertificateOperationFailed, PeerConfigValidationFailed,
+};
 use atm_core::home;
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_core::observability::RetainedSinkFaultMode;
@@ -78,8 +81,13 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
         .map_or(1, exit_code_for_atm_error)
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "centralized stable CLI error-code mapping"
+)]
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     match error.code() {
+        PeerConfigValidationFailed | CertificateOperationFailed | BindPreflightFailed => 3,
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed

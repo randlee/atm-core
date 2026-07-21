@@ -155,6 +155,18 @@ impl AtmError {
         Self::new(AtmErrorCode::DaemonUnavailable, message)
     }
 
+    pub fn peer_config_validation(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerConfigValidationFailed, message)
+    }
+
+    pub fn certificate_operation(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::CertificateOperationFailed, message)
+    }
+
+    pub fn bind_preflight(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::BindPreflightFailed, message)
+    }
+
     /// Builds an unavailable-daemon error while preserving its adapter-level cause.
     pub fn daemon_unavailable_with_cause(
         message: impl Into<String>,

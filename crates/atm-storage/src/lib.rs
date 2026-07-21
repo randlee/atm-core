@@ -13,11 +13,13 @@ mod validation;
 // Protocol role identity for worker agents used in shared storage fixtures.
 pub const ROLE_WORKER: &str = "worker";
 pub use contract::{
-    AckRequirementState, AckTransition, AgentType, BuiltInNudgeTemplateKind, MailMessageState,
-    Message, MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
-    NudgeTemplateOverrideStore, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-    RosterSnapshot, RosterStore, StorageNotifier, TaskState, TeamNudgeTemplateOverrideMode,
-    TeamNudgeTemplateOverrideRow, derive_ack_requirement,
+    AckRequirementState, AckTransition, AgentType, BuiltInNudgeTemplateKind,
+    CertificateFingerprint, HttpsInterface, LocalCertificate, MailMessageState, Message,
+    MessageFingerprint, MessageKey, MessageQuery, MessageReceivedEvent, MessageStore,
+    NudgeTemplateOverrideStore, PeerConfigStore, PrivateKeyRef, RosterChangedEvent, RosterHarness,
+    RosterMember, RosterMemberKind, RosterSnapshot, RosterStore, StorageNotifier, TaskState,
+    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, TrustedPeer,
+    derive_ack_requirement,
 };
 pub use error::AtmError;
 pub use error_codes::AtmErrorCode;

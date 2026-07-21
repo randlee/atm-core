@@ -91,6 +91,24 @@ CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     PRIMARY KEY (team_name, template_kind)
 );
 
+CREATE TABLE IF NOT EXISTS peer_https_interfaces (
+    bind_addr TEXT NOT NULL PRIMARY KEY,
+    advertise_host TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+);
+
+CREATE TABLE IF NOT EXISTS peer_local_certificate (
+    singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+    fingerprint TEXT NOT NULL,
+    private_key_ref TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS peer_trusted_peers (
+    host TEXT NOT NULL PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -110,6 +128,12 @@ CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
 
 CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
     ON team_nudge_template_overrides(team_name);
+
+CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
+    ON peer_https_interfaces(enabled);
+
+CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
+    ON peer_trusted_peers(enabled);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
