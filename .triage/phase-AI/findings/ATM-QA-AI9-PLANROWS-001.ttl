@@ -12,8 +12,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-PLANROWS-001/pAI-9/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-PLANROWS-001/pAI-10/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-10/d461c936> ;
@@ -21,7 +21,7 @@
   triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
   triage:highestFixedBranch "none" ;
   triage:triagedAt "2026-07-20T13:45:00Z"^^xsd:dateTime ;
-  triage:notes "Fix scope: Best addressed once, covering all AI.4-AI.10 rows simultaneously. All Phase AI sprints (AI.1-AI.10) are missing per-sprint status table rows in docs/project-plan.md, unlike prior phases (AA/AC/AD/AG). This is a phase-level documentation defect, not a per-sprint regression." .
+  triage:notes "FIXED: added `| Sprint | Status | Branch |` table under docs/project-plan.md's ## 40. Phase AI section on plan/phase-ai-planning @ 749bf621, covering all AI.1-AI.10 rows with true current status (AI.1/2/3/9 complete, AI.4-8/10 proposed) -- not fabricating completion for sprints still mid-fix-round. Will propagate via merge-forward." .
 
 <urn:atm:triage:occurrence/ATM-QA-AI9-PLANROWS-001/pAI-9/1>
   a triage:Occurrence ;
