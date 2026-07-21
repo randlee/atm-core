@@ -25,7 +25,7 @@ use atm_core::{
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::{WriteOutcome, write_mail_with_runtime_and_post_send_emitter},
+    send::{WriteOutcome, WriteRequest, write_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -554,38 +554,61 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
+struct MessageRecord {
+    response: ResponseEnvelope,
+}
+
+trait MessageWriter: Send + Sync {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
+}
+
+trait PostWriteRouter: Send + Sync {
+    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
+}
+
 impl DaemonRequestDispatcher {
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        if let RequestEnvelope::Write(write) = &request
-            && write
-                .to
-                .as_ref()
-                .is_some_and(|address| address.host.is_some())
-        {
-            return self.dispatch_peer_write((**write).clone());
+        match request {
+            RequestEnvelope::Write(request) => self.route_write(*request),
+            request => self.dispatch_non_write(request),
         }
-        self.dispatch_local(request)
     }
 
-    fn dispatch_local(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+        if request
+            .to
+            .as_ref()
+            .is_some_and(|address| address.host.is_some())
+        {
+            return self.dispatch_remote_write(request);
+        }
+        let message = MessageWriter::write(self, request.clone())?;
+        PostWriteRouter::dispatch(self, &request, &message)?;
+        Ok(message.response)
+    }
+
+    fn persist_local_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+        write_mail_with_runtime_and_post_send_emitter(
+            request,
+            self.observability.as_ref(),
+            &self.service_runtime,
+            &post_send_emitter,
+        )
+        .map(|outcome| match outcome {
+            WriteOutcome::Sent(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            }
+            WriteOutcome::Acknowledged(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            }
+        })
+    }
+
+    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Write(request) => write_mail_with_runtime_and_post_send_emitter(
-                *request,
-                self.observability.as_ref(),
-                &self.service_runtime,
-                &post_send_emitter,
-            )
-            .map(|outcome| match outcome {
-                WriteOutcome::Sent(outcome) => {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-                }
-                WriteOutcome::Acknowledged(outcome) => {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-                }
-            }),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
@@ -610,13 +633,11 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
+            RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
 
-    fn dispatch_peer_write(
-        &self,
-        request: atm_core::send::WriteRequest,
-    ) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let host = request
             .to
             .as_ref()
@@ -635,19 +656,25 @@ impl DaemonRequestDispatcher {
             })?;
         transport.deliver(request, &peer, HttpsRequestDeadline::default())
     }
+}
 
-    fn dispatch_peer_ingress(
-        &self,
-        mut request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, AtmError> {
-        if let RequestEnvelope::Write(write) = &mut request
-            && let Some(destination) = write.to.as_mut()
-        {
-            // One routing decision has already occurred at the sender. The
-            // receiving daemon now follows the canonical local write path.
-            destination.host = None;
-        }
-        self.dispatch_local(request)
+impl MessageWriter for DaemonRequestDispatcher {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
+        self.persist_local_write(request)
+            .map(|response| MessageRecord { response })
+    }
+}
+
+impl PostWriteRouter for DaemonRequestDispatcher {
+    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> {
+        debug_assert!(
+            request
+                .to
+                .as_ref()
+                .is_none_or(|address| address.host.is_none())
+        );
+        let _ = message;
+        Ok(())
     }
 }
 
@@ -856,11 +883,8 @@ impl ApiRouter for DaemonRequestDispatcher {
             ));
         }
         let request = request.into_inner();
-        match ingress {
-            AuthenticatedIngress::Local => self.dispatch(request),
-            AuthenticatedIngress::Peer => self.dispatch_peer_ingress(request),
-        }
-        .map(ApiResponse::new)
+        let _ = ingress;
+        self.dispatch(request).map(ApiResponse::new)
     }
 }
 

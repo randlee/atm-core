@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request, read_http_request,
-    read_http_response, write_http_request, write_http_response,
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
+    read_http_request, read_http_response, write_http_request, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -343,7 +343,8 @@ fn handle_peer_connection(
     };
     // The custom client verifier completed during the read above. Routing is
     // intentionally impossible before that mTLS + exact fingerprint check.
-    let request = decode_request(request)?;
+    let mut request = decode_request(request)?;
+    normalize_peer_write_for_local_delivery(&mut request);
     let response = router
         .route(
             request,
@@ -353,6 +354,17 @@ fn handle_peer_connection(
         .map(|response| response.into_inner())
         .unwrap_or_else(ResponseEnvelope::Error);
     write_http_response(&mut tls, &response)
+}
+
+/// The authenticated HTTPS adapter has already selected this daemon. It drops
+/// only the transport destination before submitting the same canonical write
+/// request used by local UDS and graft clients.
+fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest) {
+    if let ApiRequest::Write(write) = request
+        && let Some(destination) = write.to.as_mut()
+    {
+        destination.host = None;
+    }
 }
 
 fn complete_server_handshake(

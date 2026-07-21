@@ -79,6 +79,39 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
 }
 
 #[test]
+fn canonical_write_router_has_one_host_routing_decision() {
+    let source =
+        fs::read_to_string(workspace_root().join("crates/atm-daemon/src/runtime_health.rs"))
+            .expect("daemon request dispatcher source must be readable");
+
+    for required in [
+        "struct MessageRecord",
+        "trait MessageWriter",
+        "trait PostWriteRouter",
+        "fn route_write(",
+        "fn persist_local_write(",
+        "fn dispatch_remote_write(",
+    ] {
+        assert!(source.contains(required), "AI.7 requires `{required}`");
+    }
+    assert_eq!(
+        source.matches("address.host.is_some()").count(),
+        1,
+        "only route_write may select local or remote write dispatch"
+    );
+    for retired in [
+        "dispatch_peer_write",
+        "dispatch_peer_ingress",
+        "dispatch_local",
+    ] {
+        assert!(
+            !source.contains(retired),
+            "AI.7 forbids the retired duplicate write dispatch `{retired}`"
+        );
+    }
+}
+
+#[test]
 fn production_code_cannot_restore_retired_error_contract_symbols() {
     let root = workspace_root().join("crates");
     let mut files = Vec::new();
