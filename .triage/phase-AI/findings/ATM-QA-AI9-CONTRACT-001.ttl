@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI9-CONTRACT-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI9-CONTRACT-001" ;
+  triage:title "AI.9 sprint doc names PostWriteRouter type that does not exist; actual mechanism is DaemonRequestDispatcher::dispatch" ;
+  triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports a contract-fidelity gap: the sprint doc (docs/plans/phase-ai/sprint-ai-9.md) names a `PostWriteRouter` type that doesn't exist in the workspace. The actual mechanism is `DaemonRequestDispatcher::dispatch` in runtime_health.rs (lines 558-568), which examines write.to.host and routes to dispatch_peer_write or dispatch_local. This echoes the same MessageWriter/PostWriteRouter naming gap already known from AI.6/AI.7 (see ATM-QA-AI6-DELIVERABLE-8 and the AI.7 FAIL 2/17 finding referencing the same missing types). Both AI.9 and AI.10 sprint docs inherit this reference from the shared AI.9 deliverable text." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s9/7cf40edd> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s10/d461c936> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s10/d461c936> ;
+  triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T21:00:00Z"^^xsd:dateTime ;
+  triage:notes "Resolution requires decision between: (1) rename sprint doc references from 'PostWriteRouter' to 'DaemonRequestDispatcher::dispatch', or (2) add thin 'PostWriteRouter' type alias in atm-runtime if AI.7's contract test requires explicit type-level identity. Both options valid; team-lead should flag to arch-ctm for selection. Pattern repeatable across sprint docs in same phase." .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 18 ;
+  triage:snippet "Make the post-write router the sole destination-host decision point" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s9/7cf40edd> .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-CONTRACT-001/pAI-s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 52 ;
+  triage:snippet "outbound delivery is selected only by `PostWriteRouter`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s10/d461c936> .
+
+<urn:atm:triage:worktree/pAI-s9/7cf40edd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:orderIndex 9 ;
+  triage:prNumber 604 ;
+  triage:targetBranch "integrate/phase-AI" .
+
+<urn:atm:triage:worktree/pAI-s10/d461c936>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:orderIndex 10 ;
+  triage:targetBranch "integrate/phase-AI" .
