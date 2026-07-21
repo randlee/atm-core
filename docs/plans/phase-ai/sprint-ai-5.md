@@ -1,6 +1,6 @@
 ---
 title: AI.5 chat address identity
-status: complete
+status: proposed
 branch: feature/pAI-s5-chat-address-identity
 worktree: ../atm-core-worktrees/feature/pAI-s5-chat-address-identity
 target: integrate/phase-AI
