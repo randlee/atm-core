@@ -618,7 +618,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use super::ordered_member_summaries;
+    use super::{ordered_member_summaries, peer_config_doctor_report};
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
     use crate::doctor::{
@@ -636,6 +636,10 @@ mod tests {
     use crate::team_admin::MembersList;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
+    use atm_storage::{
+        CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+        PrivateKeyRef, TrustedPeer,
+    };
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),
@@ -674,6 +678,81 @@ mod tests {
         members: Vec<atm_storage::RosterMember>,
     }
     struct NoopNudgeTemplateOverrideStore;
+
+    struct StubPeerConfigStore {
+        failure: Option<AtmError>,
+    }
+
+    impl StubPeerConfigStore {
+        fn healthy() -> Self {
+            Self { failure: None }
+        }
+
+        fn failing(error: AtmError) -> Self {
+            Self {
+                failure: Some(error),
+            }
+        }
+
+        fn result<T>(&self, value: T) -> Result<T, AtmError> {
+            self.failure.clone().map_or(Ok(value), Err)
+        }
+    }
+
+    impl PeerConfigStore for StubPeerConfigStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            self.result(vec![HttpsInterface {
+                bind_addr: "127.0.0.1:43101".parse().expect("socket address"),
+                advertise_host: "localhost".parse().expect("host name"),
+                enabled: true,
+            }])
+        }
+
+        fn save_interface(&self, _interface: &HttpsInterface) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_interface(&self, _bind_addr: std::net::SocketAddr) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            self.result(Some(LocalCertificate {
+                fingerprint: "sha256:local"
+                    .parse::<CertificateFingerprint>()
+                    .expect("fingerprint"),
+                private_key_ref: "keychain:secret"
+                    .parse::<PrivateKeyRef>()
+                    .expect("key reference"),
+            }))
+        }
+
+        fn save_local_certificate(&self, _certificate: &LocalCertificate) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            self.result(vec![TrustedPeer {
+                host: "peer.example".parse::<HostName>().expect("host name"),
+                fingerprint: "sha256:peer"
+                    .parse::<CertificateFingerprint>()
+                    .expect("fingerprint"),
+                enabled: true,
+            }])
+        }
+
+        fn trusted_peer(&self, _host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
+            unreachable!("doctor test never reads an individual peer")
+        }
+
+        fn save_trusted_peer(&self, _peer: &TrustedPeer) -> Result<(), AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+
+        fn remove_trusted_peer(&self, _host: &HostName) -> Result<bool, AtmError> {
+            unreachable!("doctor test never mutates peer configuration")
+        }
+    }
 
     #[allow(
         deprecated,
@@ -1424,6 +1503,43 @@ mod tests {
         assert_eq!(
             report.client_context.team.as_ref().map(TeamName::as_str),
             Some(override_team.as_str())
+        );
+    }
+
+    #[test]
+    fn peer_config_doctor_projection_is_healthy_and_redacts_key_reference() {
+        let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::healthy());
+
+        assert!(findings.is_empty());
+        assert_eq!(report.configured_interface_count, 1);
+        assert_eq!(report.enabled_interface_count, 1);
+        assert_eq!(report.trusted_peer_count, 1);
+        assert_eq!(report.enabled_trusted_peer_count, 1);
+        assert_eq!(
+            report.certificate_fingerprint.as_deref(),
+            Some("sha256:local")
+        );
+        assert!(report.validation_failure.is_none());
+
+        let serialized = serde_json::to_string(&report).expect("serialize doctor projection");
+        assert!(!serialized.contains("keychain:secret"));
+        assert!(!serialized.contains("private_key_ref"));
+    }
+
+    #[test]
+    fn peer_config_doctor_projects_configuration_failure_without_aborting() {
+        let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::failing(
+            AtmError::peer_config_validation("missing certificate reference"),
+        ));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, AtmErrorCode::PeerConfigValidationFailed);
+        assert_eq!(
+            report
+                .validation_failure
+                .as_ref()
+                .map(|finding| finding.code),
+            Some(AtmErrorCode::PeerConfigValidationFailed)
         );
     }
 }
