@@ -1803,16 +1803,13 @@ Root public error:
 ```rust
 pub struct AtmError {
     pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
     pub message: String,
-    pub recovery: Option<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 ```
 
 ```rust
 pub enum AtmErrorCode {
-    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+    // single central registry defined in crates/atm-storage/src/error_codes.rs
 }
 ```
 

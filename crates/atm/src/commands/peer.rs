@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
-    CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, TrustedPeer,
+    AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, TrustedPeer,
 };
 use clap::{Args, Subcommand};
 use serde::Serialize;
@@ -166,12 +166,7 @@ impl CertificateCommand {
                 yes,
             } => {
                 require_confirmation(yes, "initializing the local certificate")?;
-                let certificate = LocalCertificate {
-                    fingerprint: fingerprint.parse().context("invalid --fingerprint")?,
-                    private_key_ref: private_key_ref
-                        .parse()
-                        .context("invalid --private-key-ref")?,
-                };
+                let certificate = certificate(fingerprint, private_key_ref)?;
                 with_default_peer_config_store(|store| store.save_local_certificate(&certificate))?;
                 println!(
                     "saved local certificate fingerprint {}",
@@ -252,6 +247,19 @@ fn peer(host: String, fingerprint: String) -> Result<TrustedPeer> {
     })
 }
 
+fn certificate(fingerprint: String, private_key_ref: String) -> Result<LocalCertificate> {
+    let fingerprint = fingerprint.parse().map_err(|error| {
+        AtmError::certificate_operation(format!("invalid --fingerprint: {error}"))
+    })?;
+    let private_key_ref = private_key_ref.parse().map_err(|error| {
+        AtmError::certificate_operation(format!("invalid --private-key-ref: {error}"))
+    })?;
+    Ok(LocalCertificate {
+        fingerprint,
+        private_key_ref,
+    })
+}
+
 fn require_confirmation(confirmed: bool, operation: &str) -> Result<()> {
     if confirmed {
         Ok(())
@@ -275,7 +283,15 @@ fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_output, require_confirmation};
+    use super::{certificate, render_output, require_confirmation};
+    use atm_storage::AtmErrorCode;
+    use clap::Parser;
+
+    #[derive(Debug, Parser)]
+    struct PeerCli {
+        #[command(flatten)]
+        peer: super::PeerCommand,
+    }
 
     #[test]
     fn json_flag_selects_compact_machine_output() {
@@ -289,5 +305,71 @@ mod tests {
     fn mutations_require_explicit_confirmation() {
         assert!(require_confirmation(false, "test mutation").is_err());
         require_confirmation(true, "test mutation").expect("explicit confirmation");
+    }
+
+    #[test]
+    fn parses_complete_peer_control_plane_lifecycle() {
+        let commands = [
+            vec!["atm", "interface", "list", "--json"],
+            vec![
+                "atm",
+                "interface",
+                "set",
+                "--bind",
+                "127.0.0.1:43101",
+                "--advertise-host",
+                "localhost",
+            ],
+            vec!["atm", "interface", "remove", "--bind", "127.0.0.1:43101"],
+            vec!["atm", "certificate", "show", "--json"],
+            vec![
+                "atm",
+                "certificate",
+                "init",
+                "--fingerprint",
+                "sha256:local",
+                "--private-key-ref",
+                "keychain:atm",
+                "--yes",
+            ],
+            vec!["atm", "trust", "list", "--json"],
+            vec![
+                "atm",
+                "trust",
+                "add",
+                "--host",
+                "peer.example",
+                "--fingerprint",
+                "sha256:peer",
+                "--yes",
+            ],
+            vec![
+                "atm",
+                "trust",
+                "replace",
+                "--host",
+                "peer.example",
+                "--fingerprint",
+                "sha256:replacement",
+                "--yes",
+            ],
+            vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
+        ];
+
+        for command in commands {
+            PeerCli::try_parse_from(command).expect("documented peer command must parse");
+        }
+    }
+
+    #[test]
+    fn certificate_input_uses_the_semantic_certificate_error() {
+        let error = certificate("   ".to_string(), "keychain:atm".to_string())
+            .expect_err("blank certificate fingerprint must fail");
+        assert_eq!(
+            error
+                .downcast_ref::<atm_storage::AtmError>()
+                .map(atm_storage::AtmError::code),
+            Some(AtmErrorCode::CertificateOperationFailed)
+        );
     }
 }
