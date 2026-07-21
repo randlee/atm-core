@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-IMPORTANT-05-TRUST-ASYMMETRY>
+  a triage:Finding ;
+  triage:findingId "AI8-IMPORTANT-05-TRUST-ASYMMETRY" ;
+  triage:title "atm peer trust add vs replace answer existence check inconsistently — replace never checks" ;
+  triage:description "AI8-QA-1 (ruthless-boundary RBQA-F001). The 'atm peer trust add' command checks peer existence and refuses if a peer already exists; the 'replace' command never checks, so it silently adds a peer that was never trusted. This asymmetry violates the principle of least surprise and breaks idempotency guarantees for automation scripts." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-IMPORTANT-05-TRUST-ASYMMETRY/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Fix: add peer existence check to 'trust replace' command, matching the behavior of 'trust add'. Both commands should validate that the peer exists (for add: must NOT exist; for replace: must exist)." .
+
+<urn:atm:triage:occurrence/AI8-IMPORTANT-05-TRUST-ASYMMETRY/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 1 ;
+  triage:snippet "trust add checks peer existence; trust replace does not check before replacing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .

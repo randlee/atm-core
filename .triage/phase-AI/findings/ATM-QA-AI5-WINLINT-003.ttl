@@ -12,13 +12,14 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "single_file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI5-WINLINT-003/pAI-6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-6/545578b0> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-6/545578b0> ;
   triage:highestOpenBranch "feature/pAI-s6-http-uds-router" ;
-  triage:resolution "OPEN, dispatch-ready, CI-red-everywhere early-fix exception (blocks windows-latest just lint on PR #600 and will block AI.6's PR). Fix: box the large variant -- change crates/atm-core/src/protocol.rs:30 `SendRequestEnvelope::Compose(SendRequest)` to `Compose(Box<SendRequest>)`. Update the ~4 known construction/match sites: protocol.rs:571 (match, no change needed -- Box derefs transparently in match ergonomics only if using box patterns, otherwise use `.as_ref()` or `**boxed`), protocol.rs:986 (construction -- wrap in `Box::new(..)`), protocol.rs:1007 (match/binding -- adjust to bound `Box<SendRequest>` or deref), transport/testing.rs:72 (match/binding -- same adjustment). arch-ctm must verify against Windows CI, not local macOS lint -- local lint cannot detect this class of bug (confirmed: threshold-adjacent size difference only crosses clippy's 200-byte cutoff under Windows struct layout)." ;
+  triage:highestFixedBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:resolution "FIXED: SendRequestEnvelope::Compose boxed at crates/atm-core/src/protocol.rs:30 -> Compose(Box<SendRequest>), following precedent commit ef9aeb31 (AG14-CI-FIX-WIN-1). Fixed on feature/pAI-s5-chat-address-identity @ ad8a6021, merge-forwarded through AI10 @ 8775de8d. quality-mgr grepped all ~15 construction/match sites workspace-wide (atm-daemon-client/rpc.rs, atm-core/protocol.rs, atm-core/transport/testing.rs, atm-daemon/runtime_health.rs, atm-daemon/tests*, atm/composition.rs, atm-graft/lib.rs) -- all consistently use Box::new(...) or bind the boxed value, no leftover unboxed usage. Independently re-verified (AI-fixround-2-QA-recheck, message 01KY1F2ZSX9CNYGMMNXFKVKNWX): PASS." ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-AI5-WINLINT-003/pAI-6/1>

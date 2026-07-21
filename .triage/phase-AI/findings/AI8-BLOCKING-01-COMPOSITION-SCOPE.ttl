@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-BLOCKING-01-COMPOSITION-SCOPE>
+  a triage:Finding ;
+  triage:findingId "AI8-BLOCKING-01-COMPOSITION-SCOPE" ;
+  triage:title "Fail-closed peer-config validation scoped too broadly — can break CLI commands, not just daemon startup" ;
+  triage:description "AI8-QA-1 (req-qa ATM-QA-001, rust-service-hardening RSH-001 — 2 independent confirmations). The validate_enabled_peer_configuration() function (crates/atm-runtime/src/composition.rs:82-151) is wired into assemble_runtime(), the shared composition root used by every local-runtime CLI path (send, read, ack, doctor) — not scoped to daemon startup as the deliverable specifies ('fails daemon startup'). An invalid enabled peer config, or once AI.9 lands a live daemon already holding the bind on an enabled interface, will make ordinary message commands and atm doctor/atm peer * self-deadlock trying to rebind the same socket. Deliverable 5 requires 'daemon startup only' scoping." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "critical" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-BLOCKING-01-COMPOSITION-SCOPE/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Pattern repeatable across any branch where assemble_runtime() is used outside daemon-startup context. Sweep scope: crate (atm-runtime). Root cause: composition.rs uses runtime assembly for all CLI paths; daemon-specific validation must be scoped to daemon-startup-only code path, not shared composition." .
+
+<urn:atm:triage:occurrence/AI8-BLOCKING-01-COMPOSITION-SCOPE/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:line 82 ;
+  triage:snippet "pub fn assemble_runtime(...) { ... validate_enabled_peer_configuration() ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .

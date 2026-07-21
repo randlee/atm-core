@@ -12,13 +12,13 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "single_file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/1>, <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/2>, <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/3> ;
   triage:openOn <urn:atm:triage:worktree/pAI-3/72b416f4>, <urn:atm:triage:worktree/pAI-4/ddbb4495>, <urn:atm:triage:worktree/pAI-5/319d08b3>, <urn:atm:triage:worktree/pAI-6/545578b0> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-6/545578b0> ;
   triage:highestOpenBranch "feature/pAI-s6-http-uds-router" ;
-  triage:resolution "OPEN, dispatch-ready, CI-red-everywhere early-fix exception (blocks windows-latest just lint on PRs #598/#599/#600 and will block AI.6's first PR). One-line-per-site fix: rename the closure parameter from `source` to `_source` at crates/atm-graft/src/runtime.rs:823, :871, :886 (all #[cfg(windows)] blocks). Dispatch on feature/pAI-s6-http-uds-router per fix-dispatch-latest-branch policy (AI.6 is the latest active branch and inherits this file unchanged via merge-forward through AI.4/AI.5). arch-ctm must verify against Windows CI, not local macOS lint -- local lint cannot detect this class of bug." ;
+  triage:resolution "FIXED: confirmed on feature/pAI-s6-http-uds-router @ aab3f315 -- crates/atm-graft/src/runtime.rs:823,871,886 all use `_source` closure parameter. Verified by team-lead direct grep, 2026-07-21." ;
   triage:triagedAt "2026-07-20T23:55:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/1>
