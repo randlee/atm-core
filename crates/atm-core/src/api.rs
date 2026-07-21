@@ -330,12 +330,9 @@ impl ApiResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticatedIngress {
     Local,
-    Peer(AuthenticatedPeer),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AuthenticatedPeer {
-    _private: (),
+    /// A peer that completed the HTTPS adapter's mutual-TLS and exact-pin
+    /// checks. The application router receives no socket or peer configuration.
+    Peer,
 }
 
 #[derive(Debug, Clone, Copy)]

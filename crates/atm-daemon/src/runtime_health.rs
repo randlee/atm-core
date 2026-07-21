@@ -6,7 +6,6 @@ use std::time::Duration;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope,
-    api::MessageCollectionRequest,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -35,6 +34,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -229,6 +229,7 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -240,6 +241,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("https_transport", &"dyn HttpsMessageTransport")
             .finish()
     }
 }
@@ -499,7 +501,29 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
+            https_transport: std::sync::Mutex::new(None),
         }
+    }
+
+    pub(crate) fn install_https_transport(
+        &self,
+        transport: Arc<dyn HttpsMessageTransport>,
+    ) -> Result<(), AtmError> {
+        let mut slot = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = Some(transport);
+        Ok(())
+    }
+
+    pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
+        let mut slot = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = None;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -530,20 +554,14 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-/// Result of the one durable local write. It is intentionally opaque to
-/// transports: socket adapters submit `WriteRequest` and never receive a
-/// storage capability.
 struct MessageRecord {
     response: ResponseEnvelope,
 }
 
-/// The only daemon capability that performs a durable local write.
 trait MessageWriter: Send + Sync {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
 }
 
-/// The post-write seam. AI.7 owns the routing decision; AI.9 supplies the
-/// concrete HTTPS remote arm. A local record reaches this hook exactly once.
 trait PostWriteRouter: Send + Sync {
     fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
 }
@@ -556,9 +574,6 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    /// The sole host-routing decision. Empty hosts use the local canonical
-    /// writer; a present host enters the remote seam, whose HTTPS binding is
-    /// deliberately supplied by AI.9 rather than this sprint.
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         if request
             .to
@@ -570,12 +585,6 @@ impl DaemonRequestDispatcher {
         let message = MessageWriter::write(self, request.clone())?;
         PostWriteRouter::dispatch(self, &request, &message)?;
         Ok(message.response)
-    }
-
-    fn dispatch_remote_write(&self, _request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "remote HTTPS write dispatch is not bound until AI.9",
-        ))
     }
 
     fn persist_local_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
@@ -626,6 +635,26 @@ impl DaemonRequestDispatcher {
             ))),
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
+    }
+
+    fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+        let host = request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+            .ok_or_else(|| AtmError::validation("peer write requires a destination host"))?;
+        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
+            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
+        })?;
+        let transport = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
+            })?;
+        transport.deliver(request, &peer, HttpsRequestDeadline::default())
     }
 }
 
@@ -853,40 +882,9 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        match ingress {
-            AuthenticatedIngress::Local => {}
-            AuthenticatedIngress::Peer(_) => {
-                return Err(AtmError::daemon_unavailable(
-                    "authenticated peer ingress is declared for AI.9 and is not accepted by the AI.6 local router",
-                ));
-            }
-        }
-        self.route_api_request(request).map(ApiResponse::new)
-    }
-}
-
-impl DaemonRequestDispatcher {
-    fn route_api_request(&self, request: ApiRequest) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            ApiRequest::Messages(request) => match *request {
-                MessageCollectionRequest::List(query) => {
-                    self.dispatch(RequestEnvelope::List(query))
-                }
-                MessageCollectionRequest::Peek(query) => {
-                    self.dispatch(RequestEnvelope::Peek(query))
-                }
-                MessageCollectionRequest::Receive(query) => {
-                    self.dispatch(RequestEnvelope::Receive(query))
-                }
-            },
-            ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Write(request)),
-            ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
-            ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
-            ApiRequest::CompatibilityPreflight(preflight) => {
-                self.dispatch(RequestEnvelope::CompatibilityPreflight(preflight))
-            }
-            ApiRequest::Heartbeat(request) => self.dispatch(RequestEnvelope::Heartbeat(request)),
-        }
+        let request = request.into_inner();
+        let _ = ingress;
+        self.dispatch(request).map(ApiResponse::new)
     }
 }
 
@@ -1014,6 +1012,7 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
+            https_transport: std::sync::Mutex::new(None),
         }
     }
 }

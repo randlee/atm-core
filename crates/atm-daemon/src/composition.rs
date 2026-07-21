@@ -1,5 +1,6 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
+use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
@@ -11,6 +12,7 @@ use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
 use atm_runtime::{RuntimeAssembly, validate_enabled_peer_configuration};
+use atm_storage::PeerConfigStore;
 use std::fs::OpenOptions;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -110,7 +112,6 @@ impl RuntimeLifecycle {
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
     // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
@@ -121,9 +122,27 @@ pub(crate) struct RuntimeComposition {
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
+    peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    // This is deliberately a transport-only capability. The canonical writer
+    // chooses when to call it; this composition root never passes storage or
+    // post-write state into the HTTPS adapter.
+    https_transport: Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    https_listeners: Mutex<Option<HttpsListenerSet>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
+}
+
+impl std::fmt::Debug for RuntimeComposition {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RuntimeComposition")
+            .field("lifecycle", &self.lifecycle)
+            .field("server_transport", &self.server_transport)
+            .field("request_dispatcher", &self.request_dispatcher)
+            .field("peer_config_store", &"dyn PeerConfigStore")
+            .finish_non_exhaustive()
+    }
 }
 
 impl RuntimeComposition {
@@ -170,6 +189,7 @@ impl RuntimeComposition {
             runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
+        let peer_config_store = runtime_assembly.peer_config_store();
         let request_dispatcher = build_request_dispatcher(
             home_dir,
             &status_cache,
@@ -183,6 +203,9 @@ impl RuntimeComposition {
             endpoint_guard: Mutex::new(None),
             server_transport,
             request_dispatcher,
+            peer_config_store,
+            https_transport: Mutex::new(None),
+            https_listeners: Mutex::new(None),
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
@@ -220,6 +243,53 @@ impl RuntimeComposition {
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
         Ok(())
+    }
+
+    fn start_https_listeners(&self) -> Result<(), AtmError> {
+        let interfaces = self.peer_config_store.list_interfaces()?;
+        if !interfaces.iter().any(|interface| interface.enabled) {
+            return Ok(());
+        }
+        let certificate = self.peer_config_store.local_certificate()?.ok_or_else(|| {
+            AtmError::validation("enabled HTTPS interfaces require a configured local certificate")
+        })?;
+        let https_transport: Arc<dyn HttpsMessageTransport> =
+            Arc::new(HttpsTransport::from_local_certificate(&certificate)?);
+        let listeners = HttpsListenerSet::bind_enabled(
+            &interfaces,
+            &certificate,
+            self.peer_config_store.list_trusted_peers()?,
+            self.request_dispatcher(),
+        )?;
+        let mut slot = self.https_listeners.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+        })?;
+        *slot = Some(listeners);
+        let mut transport_slot = self.https_transport.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
+        })?;
+        self.request_dispatcher
+            .install_https_transport(Arc::clone(&https_transport))?;
+        *transport_slot = Some(https_transport);
+        Ok(())
+    }
+
+    fn stop_https_listeners(&self) -> Result<(), AtmError> {
+        let listener_set = self
+            .https_listeners
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+            })?
+            .take();
+        if let Some(listeners) = listener_set {
+            listeners.shutdown()?;
+        }
+        let mut transport_slot = self.https_transport.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
+        })?;
+        *transport_slot = None;
+        self.request_dispatcher.clear_https_transport()
     }
 
     fn begin_startup(&self) -> Result<(), AtmError> {
@@ -292,6 +362,8 @@ impl RuntimeComposition {
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
             .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.start_https_listeners()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
@@ -374,8 +446,13 @@ impl RuntimeComposition {
                 );
             }
         }
+        let peer_shutdown = self.stop_https_listeners();
         self.request_dispatcher.finalize_observability_shutdown();
-        result
+        match (result, peer_shutdown) {
+            (Err(error), _) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+            (Ok(()), Err(error)) => Err(error),
+        }
     }
 }
 
