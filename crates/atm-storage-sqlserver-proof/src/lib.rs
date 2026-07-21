@@ -26,6 +26,8 @@ fn compile_only_error(surface: &str) -> AtmError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SqlServerMessageStore;
 
+impl atm_storage::contract::sealed::Sealed for SqlServerMessageStore {}
+
 impl MessageStore for SqlServerMessageStore {
     fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
         Err(compile_only_error("SqlServerMessageStore::save_message"))
@@ -46,6 +48,8 @@ impl MessageStore for SqlServerMessageStore {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SqlServerRosterStore;
+
+impl atm_storage::contract::sealed::Sealed for SqlServerRosterStore {}
 
 impl RosterStore for SqlServerRosterStore {
     fn load_roster(&self, _team: &TeamName) -> Result<RosterSnapshot, AtmError> {
