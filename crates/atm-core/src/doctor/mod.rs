@@ -679,6 +679,9 @@ mod tests {
     }
     struct NoopNudgeTemplateOverrideStore;
 
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
+
     struct StubPeerConfigStore {
         failure: Option<AtmError>,
     }
