@@ -22,6 +22,21 @@ Acknowledge one pending-ack message and emit a reply when required
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+### `atm api`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm api spec`
+
+Print the versioned daemon OpenAPI contract
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--format` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
 ### `atm clear`
 
 Clear read or acknowledged messages from a mailbox
@@ -158,6 +173,104 @@ Inspect one ATM mailbox message without mutating mailbox state
 | `--json` |  | no |  |
 | `--timeout` |  | no |  |
 | `--as` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+### `atm peer`
+
+Manage durable cross-host HTTPS control-plane configuration
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm peer certificate`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer certificate init`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--fingerprint` |  | yes |  |
+| `--private-key-ref` |  | yes |  |
+| `--yes` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer certificate show`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm peer interface`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer interface list`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer interface remove`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--bind` |  | yes |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer interface set`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--bind` |  | yes |  |
+| `--advertise-host` |  | yes |  |
+| `--enabled` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm peer trust`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer trust add`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--host` |  | yes |  |
+| `--fingerprint` |  | yes |  |
+| `--yes` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer trust list`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--json` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer trust replace`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--host` |  | yes |  |
+| `--fingerprint` |  | yes |  |
+| `--yes` |  | no |  |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+##### `atm peer trust revoke`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--host` |  | yes |  |
+| `--yes` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
 ### `atm read`

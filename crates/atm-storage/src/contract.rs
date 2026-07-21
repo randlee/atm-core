@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
 pub mod sealed {
@@ -464,6 +464,48 @@ pub trait RosterStore {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
+}
+
+/// One durable HTTPS listener configuration. This is control-plane state only;
+/// it contains no delivery, retry, or mailbox data.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HttpsInterface {
+    pub bind_addr: std::net::SocketAddr,
+    pub advertise_host: HostName,
+    pub enabled: bool,
+}
+
+/// Public identity of the local TLS certificate. The private key is referenced
+/// indirectly so doctor and callers cannot read secret material from storage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalCertificate {
+    pub fingerprint: String,
+    pub private_key_ref: String,
+}
+
+/// One exact, pinned peer allowed to use the cross-host HTTPS listener.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedPeer {
+    pub host: HostName,
+    pub fingerprint: String,
+    pub enabled: bool,
+}
+
+/// Backend-neutral durable cross-host configuration.
+///
+/// This boundary deliberately excludes transport state, retries, receipts,
+/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// implementation types.
+pub trait PeerConfigStore: Send + Sync {
+    fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
+    fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
+    fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
+    fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError>;
+    fn save_local_certificate(&self, certificate: &LocalCertificate) -> Result<(), AtmError>;
+    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError>;
+    fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
+    fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
+    fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
 }
 
 pub trait StorageNotifier {

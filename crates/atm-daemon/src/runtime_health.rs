@@ -10,7 +10,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerConfigDoctorReport,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -40,6 +40,7 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
+use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -226,6 +227,7 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
+    peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -236,6 +238,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("service_runtime", &self.service_runtime)
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
+            .field("peer_config_store", &"dyn PeerConfigStore")
             .finish()
     }
 }
@@ -468,6 +471,7 @@ impl DaemonRequestDispatcher {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
+        let peer_config_store = runtime_assembly.peer_config_store();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -493,6 +497,7 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
+            peer_config_store,
         }
     }
 
@@ -680,6 +685,7 @@ impl DaemonRequestDispatcher {
         };
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: vec![daemon_observability_finding],
+            peer_config: Some(peer_config_doctor_report(self.peer_config_store.as_ref())?),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -704,43 +710,12 @@ impl DaemonRequestDispatcher {
         } else {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
+                peer_config: None,
             });
         }
-        report.recommendations = report
-            .findings
-            .iter()
-            .filter_map(|finding| finding.remediation.clone())
-            .collect();
-        let status = doctor::health::status_from_findings(&report.findings);
-        let (info_count, warning_count, error_count) = report.findings.iter().fold(
-            (0usize, 0usize, 0usize),
-            |(info, warning, error), finding| match finding.severity {
-                DoctorSeverity::Info => (info + 1, warning, error),
-                DoctorSeverity::Warning => (info, warning + 1, error),
-                DoctorSeverity::Error => (info, warning, error + 1),
-            },
-        );
-        let message = match status {
-            DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-            DoctorStatus::Warning => "ATM doctor completed with warnings",
-            DoctorStatus::Error => "ATM doctor found critical issues",
-        };
-        report.summary = DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        };
         report.runtime_status = Some(runtime_status);
-        // `daemon_context` reports the daemon process's own launch-time
-        // environment, which is frozen when the singleton starts and does NOT
-        // track the requesting shell. It is deliberately distinct from
-        // `client_context` (threaded through the request payload in
-        // `DoctorQuery::caller_*`), which reflects the invoking CLI process.
-        // Surfacing the daemon's launch-time identity is diagnostically useful:
-        // it explains why an earlier release appeared to report a stale team or
-        // identity for every caller (see issue #548).
+        // This is existing doctor-only launch context. Client context remains
+        // request-scoped and is reported separately.
         report.daemon_context = Some(DoctorExecutionContext {
             team: atm_core::caller_context::read_cli_team_from_env_or_warn(
                 "atm_daemon::runtime_health::daemon_context",
@@ -750,7 +725,44 @@ impl DaemonRequestDispatcher {
             ),
             version: Some(ReleaseVersion::current()),
         });
+        finalize_doctor_report(&mut report);
         Ok(report)
+    }
+}
+
+fn finalize_doctor_report(report: &mut DoctorReport) {
+    report.recommendations = report
+        .findings
+        .iter()
+        .filter_map(|finding| finding.remediation.clone())
+        .collect();
+    let status = doctor::health::status_from_findings(&report.findings);
+    let (info_count, warning_count, error_count) = doctor_finding_counts(&report.findings);
+    report.summary = DoctorSummary {
+        status,
+        message: doctor_summary_message(status).to_string(),
+        info_count,
+        warning_count,
+        error_count,
+    };
+}
+
+fn doctor_finding_counts(findings: &[DoctorFinding]) -> (usize, usize, usize) {
+    findings.iter().fold(
+        (0usize, 0usize, 0usize),
+        |(info, warning, error), finding| match finding.severity {
+            DoctorSeverity::Info => (info + 1, warning, error),
+            DoctorSeverity::Warning => (info, warning + 1, error),
+            DoctorSeverity::Error => (info, warning, error + 1),
+        },
+    )
+}
+
+fn doctor_summary_message(status: DoctorStatus) -> &'static str {
+    match status {
+        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Warning => "ATM doctor completed with warnings",
+        DoctorStatus::Error => "ATM doctor found critical issues",
     }
 }
 
@@ -815,6 +827,24 @@ fn daemon_observability_finding(
             ),
         },
     }
+}
+
+fn peer_config_doctor_report(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<PeerConfigDoctorReport, AtmError> {
+    let interfaces = store.list_interfaces()?;
+    let peers = store.list_trusted_peers()?;
+    let certificate = store.local_certificate()?;
+    Ok(PeerConfigDoctorReport {
+        configured_interface_count: interfaces.len(),
+        enabled_interface_count: interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .count(),
+        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint),
+        trusted_peer_count: peers.len(),
+        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -893,6 +923,7 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
+            peer_config_store: runtime_assembly.peer_config_store(),
         }
     }
 }

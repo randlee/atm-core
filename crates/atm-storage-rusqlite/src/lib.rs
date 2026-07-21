@@ -10,6 +10,7 @@
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
+mod peer_config_store;
 mod roster_store;
 mod shared_db;
 mod writer;
@@ -19,7 +20,9 @@ pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
-use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
+use atm_storage::contract::{
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
 use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
@@ -161,6 +164,11 @@ struct SqliteRosterStore {
 
 #[derive(Debug)]
 struct SqliteNudgeTemplateOverrideStore {
+    db: Arc<SharedDb>,
+}
+
+#[derive(Debug)]
+struct SqlitePeerConfigStore {
     db: Arc<SharedDb>,
 }
 
@@ -416,6 +424,7 @@ pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
+    peer_config_store: Arc<SqlitePeerConfigStore>,
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -451,6 +460,7 @@ impl StorageFactory for SqliteStorageFactory {
             backend.message_store(),
             backend.roster_store(),
             backend.nudge_template_override_store(),
+            backend.peer_config_store(),
         ))
     }
 }
@@ -468,7 +478,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
         })
     }
 
@@ -478,7 +491,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
         })
     }
 
@@ -524,6 +540,10 @@ impl SqliteStorageBackend {
         &self,
     ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
+    }
+
+    pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
+        self.peer_config_store.clone()
     }
 
     #[cfg(test)]
