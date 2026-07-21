@@ -51,6 +51,15 @@ difference.
    the same canonical handler validates its own recipient roster before it
    persists the recipient record. This distinction is derived from
    `AuthenticatedIngress`, never socket family or a second write path.
+8. Rewrite—not supplement—
+   `crates/atm-architecture/tests/boundary_enforcement.rs::canonical_write_router_has_one_host_routing_decision`.
+   Its AST assertion and failure text must change from "only `route_write` may
+   select local or remote write dispatch" to proving that only
+   `PostWriteRouter::dispatch` selects local nudge versus peer delivery after
+   the canonical writer. The replacement rejects a `route_write` host branch,
+   direct `PeerHttpTransport::deliver`, or direct nudge call outside that
+   router. This closes `AI11-BLOCKING-03-POSTWRITEROUTER-NOOP` rather than
+   creating a second overlapping architecture gate.
 
 ## Invariants
 
@@ -131,5 +140,6 @@ host check outside the router.
 ## Required validation
 
 Run the ordering, idempotency/conflict, local, peer, inbound-peer, failure, and
-ingress-parity tests listed above; run the AST boundary negatives; then run
-`just lint` and `just test`.
+ingress-parity tests listed above; run the AST boundary negatives and
+`cargo test -p atm-architecture canonical_write_router_has_one_host_routing_decision`;
+then run `just lint` and `just test`.

@@ -16,6 +16,7 @@ is controlled by a durable, backend-neutral peer policy:
 ```rust
 pub struct PeerSyncPolicy {
     pub max_message_age: Duration, // zero disables reconciliation
+    pub max_batch_messages: NonZeroU16, // default: 100
 }
 ```
 
@@ -25,6 +26,13 @@ may run the same bounded sync for that peer. A sync queries storage for local
 outbound canonical records addressed to that exact peer and newer than
 `now - max_message_age`, then submits each unchanged record to
 `PeerHttpTransport`.
+
+Each scan selects at most `max_batch_messages`, oldest first. Automatic scans
+are rate-limited to once per peer per 60 seconds by a bounded in-memory
+`HostName -> Instant` cooldown map with no message IDs or payloads. The map is
+not durable delivery state and is discarded on restart. Explicit one-shot sync
+executes one bounded batch immediately. There is no automatic retry, backoff,
+or background schedule.
 
 The storage trait—not the daemon or transport—owns the backend-neutral query.
 There is no outbox, replay store, retry queue, background monitor, cursor,

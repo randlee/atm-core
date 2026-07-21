@@ -27,6 +27,7 @@ outbox, replay store, queue, receipt, checkpoint, or per-message delivery state.
 ```rust
 pub struct PeerSyncPolicy {
     pub max_message_age: Duration,
+    pub max_batch_messages: NonZeroU16,
 }
 
 pub trait PeerConfigStore {
@@ -36,10 +37,21 @@ pub trait PeerConfigStore {
 ```
 
    The initial default is disabled (`max_message_age = 0`) until an operator
-   explicitly enables it through CLI. It is never environment-driven.
-3. Add operator commands to show/set the maximum reconciliation age and to
-   request a one-shot peer sync. The command validates a known trusted peer and
-   emits ordinary progress/error output; it does not create a persistent job.
+   explicitly enables it through CLI. `max_batch_messages` defaults to `100`
+   and is a hard upper bound. It is never environment-driven.
+3. Add these exact additions-only CLI forms; `<peer>` is an exact configured
+   trusted host identity and `<age>` is a positive whole-second duration:
+
+```text
+atm peer sync-policy show <peer>
+atm peer sync-policy set <peer> --max-message-age <age>
+atm peer sync <peer>
+```
+
+   `set ... --max-message-age 0s` disables automatic and explicit sync for that
+   peer. `sync` is synchronous, returns the ordinary structured error on an
+   unknown/untrusted peer or failed transport, and never creates a persistent
+   job.
 4. After a successful ordinary peer request, and for an explicit one-shot sync,
    query canonical local outbound records whose destination host is that peer
    and whose creation time is within `max_message_age`. Re-send each exact
@@ -48,6 +60,11 @@ pub trait PeerConfigStore {
    cursor, or suppress/rewrite a conflict. Exact duplicate arrival is storage
    idempotent; a same-ULID/different-payload conflict follows AI.12's typed
    error/log/no-side-effect rule.
+6. Add/update `boundaries/atm-storage/peer-config-store.toml` for
+   `PeerConfigStore` and add `boundaries/atm-storage/outbound-message-query.toml`
+   for `OutboundMessageQuery`. Both boundary records allow only
+   backend-neutral domain types and reject SQLite, transport, nudge, or router
+   dependencies.
 
 ## Boundary contract
 
@@ -64,9 +81,12 @@ pub trait OutboundMessageQuery: Send + Sync {
 Only the selected storage backend implements the query. The reconciliation
 coordinator may choose a peer and invoke `PeerHttpTransport`; it may not use
 SQLite types, inspect schema, own a worker queue, or decide normal write
-routing. It has no connection-health state: every successful ordinary peer
-response may trigger the bounded scan, while the explicit sync command provides
-an operator trigger when no new write exists.
+routing. It has no connection-health state. It selects at most
+`max_batch_messages`, ordered oldest-first by creation time. Automatic sync may
+run at most once per peer per 60 seconds using a bounded in-memory
+`HostName -> Instant` cooldown map containing no message IDs or payloads; it
+does not retry, back off, schedule work, or survive daemon restart. Explicit
+`atm peer sync` remains an immediate one-batch operator trigger.
 
 ## Acceptance criteria
 
@@ -76,6 +96,8 @@ an operator trigger when no new write exists.
 - A reconnect/success followed by reconciliation delivers messages missed while
   offline; duplicate receiver arrival creates no second row/nudge/ack mutation.
 - Older records, other peers, and local-recipient records are excluded.
+- One trigger sends no more than `max_batch_messages`; repeated successful
+  writes inside the 60-second automatic cooldown do not start another scan.
 - Failure returns typed errors/logs and leaves no persistent delivery state.
 - CLI, daemon, and transport access configuration/storage only through traits;
   no environment setting or direct SQLite access is added.
@@ -85,7 +107,7 @@ an operator trigger when no new write exists.
 | Level | Proof |
 | --- | --- |
 | Storage | age/peer/direction filtering; exact stored payload/ULID returned; backend-neutral contract tests. |
-| Unit | disabled policy; successful-request trigger; explicit-sync trigger; no cursor/queue mutation. |
+| Unit | disabled policy; successful-request trigger; explicit-sync trigger; 100-message batch cap; 60-second cooldown; no cursor/queue mutation. |
 | Integration | offline peer then available peer delivers recent message; duplicate arrival is one record/one nudge; stale and wrong-peer records excluded. |
 | Negative | payload conflict logs/returns typed error with no side effect; untrusted peer is rejected before scan delivery. |
 | Smoke | Extend the AI.13 runner and execute offline→online reconciliation with an enabled bounded policy on the already-proven Mac↔Mac and Mac↔Windows pairs; record evidence. |

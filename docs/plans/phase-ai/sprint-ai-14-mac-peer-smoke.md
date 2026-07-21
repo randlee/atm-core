@@ -23,6 +23,8 @@ release candidate without code changes or manual database intervention.
    evidence artifact in the readiness record.
 3. Record and resolve any product defect uncovered by the run on its owning
    follow-up sprint; do not relabel a failed row as TCP/environment success.
+4. Run AI.13 teardown on both Macs even after a failed case; capture the
+   listener/PID cleanup result and do not leave a test daemon running.
 
 ## Acceptance criteria
 

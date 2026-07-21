@@ -204,9 +204,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - same-host local IPC endpoint naming and same-user access-control semantics
   must be owned by the local-IPC adapter rather than by callers constructing
   platform-specific socket paths, pipe names, or ACL details
-- the shared endpoint helper may derive a Windows named-pipe path from the
-  logical ATM endpoint contract, but that mapping must stay inside the
-  same-host transport boundary and remain identical for the daemon and CLI
+- the shared endpoint helper may publish a Windows loopback-TCP endpoint record
+  and local capability from the logical ATM endpoint contract; callers must
+  consume that record rather than derive a path, port, or capability
 - same-host daemon functionality must ship with feature parity on every
   supported operating system; Windows is not a compile-only or degraded-host
   target

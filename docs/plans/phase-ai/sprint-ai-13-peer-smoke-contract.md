@@ -29,6 +29,12 @@ the daemon protocol, not raw TCP reachability.
    sanitized log window. Raw socket success is never a passing case.
 4. Add release documentation requiring this runner for every release that
    changes daemon, HTTP, TLS, storage write, acknowledgement, or transport code.
+5. The runner owns deterministic teardown. On success, failure, interruption,
+   or timeout it stops only daemons it launched, waits for their recorded PIDs,
+   verifies no listener remains, and removes only runtime metadata owned by
+   those stopped PIDs. It records teardown success/failure in evidence and
+   never deletes an owner lock, socket, or endpoint record belonging to an
+   unrelated live singleton.
 
 ## Shared smoke rules
 
@@ -40,6 +46,8 @@ the daemon protocol, not raw TCP reachability.
   typed error and no prohibited delivery/ack state is created.
 - Each host must run a persistent daemon and pass its local send/read/ack smoke
   before peer-pair tests begin.
+- Test failure is not complete until runner-owned daemons/listeners are gone or
+  a typed cleanup failure with the retained PID/listener evidence is reported.
 
 ## Acceptance criteria
 
@@ -49,6 +57,8 @@ the daemon protocol, not raw TCP reachability.
 - Its negative cases prove mTLS and allowlist rejection occur before routing.
 - A release operator can execute the document from a clean checkout without
   inferring addresses, roles, or expected results.
+- Injected runner failure leaves no runner-owned daemon, listener, socket, or
+  endpoint record after deterministic cleanup.
 
 ## Required validation
 

@@ -160,7 +160,10 @@ Initial crate requirement IDs:
   write or on an explicit operator request. The query belongs to the storage
   trait and submits unchanged canonical records to the ordinary HTTPS adapter;
   it must not create a queue, outbox, retry worker, checkpoint, receipt, or
-  per-message delivery state. Satisfies: `REQ-CORE-TRANSPORT-003A`.
+  per-message delivery state. Each scan uses the durable 100-message-default
+  cap; automatic scans are at most once per peer per 60 seconds through a
+  bounded non-durable cooldown with no payload/message-ID state. Satisfies:
+  `REQ-CORE-TRANSPORT-003A`.
 - `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
   cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.

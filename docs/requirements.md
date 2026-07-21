@@ -3727,8 +3727,9 @@ mail correctness.
   immutable records after a peer reconnects without adding delivery state.
 
   Required behavior:
-  - a durable backend-neutral `PeerSyncPolicy.max_message_age` controls the
-    feature; zero disables it by default
+  - durable backend-neutral `PeerSyncPolicy.max_message_age` and
+    `max_batch_messages` control the feature; zero age disables it by default
+    and the batch cap defaults to 100
   - an operator can enable policy and request a one-shot sync; after a normal
     HTTPS write succeeds the daemon may run the same bounded sync for that peer
   - storage queries locally persisted outbound records for the exact peer newer
@@ -3741,6 +3742,9 @@ mail correctness.
   - an exact duplicate ULID/payload is a no-op; same ULID with different
     immutable data returns a typed conflict, logs the discrepancy, preserves
     the original record, and has no side effect or panic
+  - automatic sync is limited to one peer batch per 60 seconds using a bounded
+    in-memory peer cooldown with no payload or message-ID state; explicit sync
+    runs one batch immediately and neither path retries or backs off
 
 - `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
   accepts the canonical write request.

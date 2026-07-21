@@ -41,6 +41,9 @@ for parity testing.
    consistently state Unix UDS plus loopback TCP, Windows loopback TCP only,
    and peer HTTPS/mTLS TCP. Delete named-pipe/Windows-AF_UNIX claims.
 
+   This sprint closes triage findings `AI11-BLOCKING-01-WINDOWS-NAMED-PIPE` and
+   `AI11-BLOCKING-02-HTTP-CONTRACT-GENERIC`.
+
 ## Boundary contract
 
 ```rust
@@ -85,6 +88,9 @@ orderly shutdown writes revocation before endpoint removal.
 - `platform_local_ipc_endpoint_path` Windows named-pipe mapping;
 - all `\\\\.\\pipe\\` construction, handling, wake behavior, tests, and docs;
 - all Windows AF_UNIX local-client/listener branches;
+- named-pipe listener connection-drain and force-cancel-deadline tests only
+  after their assertions are ported to the loopback-TCP listener; the category
+  remains required and must not be deleted as transport-specific test loss;
 - generic HTTP serialization/deserialization of `RequestEnvelope` and
   `ResponseEnvelope` as wire bodies.
 
@@ -113,12 +119,14 @@ Renaming or retaining either transport as a fallback fails this sprint.
 | Unix parity | one fixture yields the same `ApiRequest`/response via UDS and loopback TCP. |
 | Deletion gate | AST/dependency scan rejects pipe, Windows AF_UNIX, generic envelope wire codec, duplicate router, non-loopback bind, and adapter storage/nudge calls. |
 | Lifecycle | metadata publish only after bind; shutdown revokes metadata; stale metadata is replaced only after singleton ownership. |
+| Drain/cancel parity | loopback-TCP listener proves the migrated connection-drain and force-cancel shutdown-deadline cases formerly covered by the named-pipe listener. |
 
 ## Required validation
 
 Run every route contract and local-transport test above on Unix and Windows,
-then run the deletion gate, OpenAPI/CLI additions-only gates, `just lint`, and
-`just test`.
+then run `cargo test -p atm-daemon --lib` and
+`cargo test -p atm --test openapi_surface`, the deletion gate, OpenAPI/CLI
+additions-only gates, `just lint`, and `just test`.
 
 ## Non-closure
 

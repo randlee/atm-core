@@ -23,6 +23,8 @@ after peer testing.
    trust using durable CLI-managed records only.
 3. Execute every AI.13 case in both directions and attach evidence to the
    readiness record.
+4. Run AI.13 teardown on macOS and Windows even after a failed case; capture
+   listener/PID cleanup and do not leave a test daemon running.
 
 ## Acceptance criteria
 
