@@ -46,11 +46,7 @@ fn production_code_cannot_restore_retired_error_contract_symbols() {
     collect_rust_files(&root, &mut files);
     let violations = files
         .into_iter()
-        .filter(|path| {
-            !path
-                .components()
-                .any(|component| component.as_os_str() == "tests")
-        })
+        .filter(|path| !is_error_contract_guard_fixture(path))
         .filter_map(|path| {
             let contents = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
@@ -72,12 +68,27 @@ fn retired_error_contract_symbol(source: &str) -> Option<&'static str> {
         .find(|symbol| source.contains(symbol))
 }
 
+fn is_error_contract_guard_fixture(path: &Path) -> bool {
+    path == workspace_root().join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
 #[test]
 fn retired_error_contract_detector_rejects_duplicate_code_mapping_fixture() {
     assert_eq!(
         retired_error_contract_symbol("fn error_kind_for_code() {}"),
         Some("error_kind_for_code")
     );
+}
+
+#[test]
+fn retired_error_contract_guard_exempts_only_its_own_fixture() {
+    let root = workspace_root();
+    assert!(is_error_contract_guard_fixture(
+        &root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+    ));
+    assert!(!is_error_contract_guard_fixture(
+        &root.join("crates/atm-core/tests/error_contract_regression.rs")
+    ));
 }
 
 #[test]
