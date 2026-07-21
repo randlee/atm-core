@@ -28,7 +28,7 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendRequestEnvelope {
-    Compose(SendRequest),
+    Compose(Box<SendRequest>),
     Acknowledge(AckRequest),
 }
 
@@ -983,7 +983,7 @@ mod tests {
 
     #[test]
     fn request_from_frame_payload_accepts_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
+        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -997,7 +997,7 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        ));
+        )));
 
         let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
         let (_request_id, decoded) =

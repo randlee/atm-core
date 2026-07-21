@@ -112,7 +112,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir,
@@ -126,7 +126,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
                 false,
             )
             .expect("send request"),
-        )))
+        ))))
         .expect("send response");
 
     let outcome = match response {
@@ -147,7 +147,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir.clone(),
@@ -161,7 +161,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
                 false,
             )
             .expect("source send request"),
-        )))
+        ))))
         .expect("source send response");
     let source_message_id = match source_response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
@@ -243,7 +243,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ("USERPROFILE", None),
     ]);
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 atm_home,
                 workspace_dir,
@@ -257,7 +257,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
                 false,
             )
             .expect("send request"),
-        )))
+        ))))
         .expect("send response");
     let response = match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
