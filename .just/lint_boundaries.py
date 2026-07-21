@@ -87,8 +87,6 @@ SCB_CONFIG_SEND_PATTERNS = (
 SCB_CONFIG_BOUNDARY_FILES = (
     Path("crates/atm-core/src/boundary_support.rs"),
     Path("crates/atm-core/src/direct_boundaries.rs"),
-    Path("crates/atm-daemon/src/boundary_adapters.rs"),
-    Path("crates/atm-daemon/src/direct_boundaries.rs"),
 )
 # team_admin's sibling split files (restore.rs, filesystem.rs, projection.rs) were
 # reviewed as of the member_mutation.rs split (PR #471) and found not to call

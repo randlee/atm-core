@@ -12,13 +12,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pAI-2/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-2/770dd8ed> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-2/770dd8ed> ;
   triage:highestOpenBranch "feature/pAI-s2-storage-topology" ;
-  triage:resolution "HELD: fix dispatch deferred by team-lead macro-directive until all Phase AI sprints (AI.1-AI.10) complete; then fixed in earliest-to-latest triaged-fix rounds. Not yet dispatched to arch-ctm." ;
+  triage:resolution "Fixed on feature/pAI-s2-storage-topology closure round; see PR #597 Windows validation notes." ;
   triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-002/pAI-2/1>
@@ -26,8 +26,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-2.md" ;
   triage:line 1 ;
   triage:snippet "feature-branch copy: status: complete, Contract updated to fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError>; planning-branch copy: status: proposed, Contract still fn open(&self, scope: &HostRuntimeScope) -> ..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-2/770dd8ed> .

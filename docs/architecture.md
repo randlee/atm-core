@@ -20,7 +20,7 @@ The current merged workspace contains:
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-runtime`: concrete runtime/store composition root
-- `atm-rusqlite`: first concrete SQLite store implementation
+- `atm-storage-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -82,7 +82,7 @@ moved into:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
-- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
@@ -164,7 +164,7 @@ The post-Q product runtime is implemented by five crates:
 - `atm`
 - `atm-daemon`
 - `atm-runtime`
-- `atm-rusqlite`
+- `atm-storage-rusqlite`
 
 Product-level boundary rules:
 
@@ -175,14 +175,14 @@ Product-level boundary rules:
   runtime state, request routing, and daemon-owned runtime projection.
 - `atm-runtime` owns concrete runtime/store composition and storage-neutral
   doctor/runtime assembly for daemon and direct CLI doctor callers.
-- `atm-rusqlite` owns the first concrete SQLite implementation of the durable
+- `atm-storage-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
 - `atm-runtime` must remain a thin composition crate rather than a second
   daemon or workflow host.
-- `atm-rusqlite` must not absorb workflow or command logic; it implements store
+- `atm-storage-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
   machine-readable contract used to drive architectural linting and review
@@ -241,8 +241,8 @@ Crate-local boundary detail is owned by:
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
-- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
-- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+- [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-storage-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
 Current Phase R boundary direction:
 - shared protocol contract: `AtmProtocol` in `atm-core`
@@ -260,7 +260,7 @@ Current Phase R boundary direction:
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
-  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
+  - relocked boundary records forbid a direct `atm-daemon -> atm-storage-rusqlite`
     edge; any reintroduction must fail the Rust
     `crates/atm-architecture/` dependency guard (`cargo test --package
     atm-architecture`), which is the sole code-driven boundary enforcement
@@ -2234,7 +2234,7 @@ Phase U removed weak round-trip provenance from the durable mailbox contract.
 Current executed rule:
 - `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
   no longer part of the mailbox-row schema
-- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
+- `recorded_at` remains SQLite-owned ingest timing in `atm-storage-rusqlite`, not
   caller-supplied message data
 
 Governing ADR:
@@ -2984,7 +2984,7 @@ Architectural rules:
   lists and the inline notes that supersede them under the current runtime
 - SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
   `rusqlite` blocking-I/O rules are defined in
-  [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+  [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
   Sections 4, 5, and 6 and are part of this same current-runtime error boundary
 - `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
