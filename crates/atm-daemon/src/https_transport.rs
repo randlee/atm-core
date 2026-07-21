@@ -575,6 +575,7 @@ mod tests {
     use std::net::{TcpListener, TcpStream};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
@@ -749,6 +750,44 @@ mod tests {
             "occupied enabled interface must reject startup"
         );
         TcpListener::bind(first).expect("failed startup must release earlier bound interface");
+    }
+
+    #[test]
+    fn shutdown_bounds_an_incomplete_peer_handshake() {
+        let certificate = test_certificate();
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        )
+        .expect("start listener");
+        let _incomplete = TcpStream::connect(listener.listeners[0].address)
+            .expect("open incomplete peer connection");
+        let wait_started = Instant::now();
+        while listener
+            .requests
+            .lock()
+            .expect("request registry")
+            .is_empty()
+        {
+            assert!(
+                wait_started.elapsed() < Duration::from_secs(1),
+                "listener must retain the accepted request before shutdown"
+            );
+            std::thread::yield_now();
+        }
+
+        let started = Instant::now();
+        listener.shutdown().expect("shutdown listener");
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "shutdown must not wait beyond the bounded peer I/O deadline"
+        );
     }
 
     fn test_certificate() -> LocalCertificate {
