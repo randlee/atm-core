@@ -6,8 +6,7 @@ use std::time::Duration;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
-    api::{MessageCollectionRequest, MessageRequest},
+    api::MessageCollectionRequest,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -23,12 +22,11 @@ use atm_core::{
     process::process_is_alive,
     protocol::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_post_send_emitter,
+    send::{WriteOutcome, WriteRequest, write_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -527,31 +525,76 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
+/// Result of the one durable local write. It is intentionally opaque to
+/// transports: socket adapters submit `WriteRequest` and never receive a
+/// storage capability.
+struct MessageRecord {
+    response: ResponseEnvelope,
+}
+
+/// The only daemon capability that performs a durable local write.
+trait MessageWriter: Send + Sync {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
+}
+
+/// The post-write seam. AI.7 owns the routing decision; AI.9 supplies the
+/// concrete HTTPS remote arm. A local record reaches this hook exactly once.
+trait PostWriteRouter: Send + Sync {
+    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
+}
+
 impl DaemonRequestDispatcher {
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        match request {
+            RequestEnvelope::Write(request) => self.route_write(*request),
+            request => self.dispatch_non_write(request),
+        }
+    }
+
+    /// The sole host-routing decision. Empty hosts use the local canonical
+    /// writer; a present host enters the remote seam, whose HTTPS binding is
+    /// deliberately supplied by AI.9 rather than this sprint.
+    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+        if request
+            .to
+            .as_ref()
+            .is_some_and(|address| address.host.is_some())
+        {
+            return self.dispatch_remote_write(request);
+        }
+        let message = MessageWriter::write(self, request.clone())?;
+        PostWriteRouter::dispatch(self, &request, &message)?;
+        Ok(message.response)
+    }
+
+    fn dispatch_remote_write(&self, _request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+        Err(AtmError::daemon_unavailable(
+            "remote HTTPS write dispatch is not bound until AI.9",
+        ))
+    }
+
+    fn persist_local_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+        write_mail_with_runtime_and_post_send_emitter(
+            request,
+            self.observability.as_ref(),
+            &self.service_runtime,
+            &post_send_emitter,
+        )
+        .map(|outcome| match outcome {
+            WriteOutcome::Sent(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            }
+            WriteOutcome::Acknowledged(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            }
+        })
+    }
+
+    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    *request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    &post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
-                        request,
-                        self.observability.as_ref(),
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )))
-            }
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
@@ -576,7 +619,28 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
+            RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
+    }
+}
+
+impl MessageWriter for DaemonRequestDispatcher {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
+        self.persist_local_write(request)
+            .map(|response| MessageRecord { response })
+    }
+}
+
+impl PostWriteRouter for DaemonRequestDispatcher {
+    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> {
+        debug_assert!(
+            request
+                .to
+                .as_ref()
+                .is_none_or(|address| address.host.is_none())
+        );
+        let _ = message;
+        Ok(())
     }
 }
 
@@ -789,7 +853,7 @@ impl ApiRouter for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     fn route_api_request(&self, request: ApiRequest) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            ApiRequest::Messages(messages) => match *messages {
+            ApiRequest::Messages(request) => match *request {
                 MessageCollectionRequest::List(query) => {
                     self.dispatch(RequestEnvelope::List(query))
                 }
@@ -800,10 +864,7 @@ impl DaemonRequestDispatcher {
                     self.dispatch(RequestEnvelope::Receive(query))
                 }
             },
-            ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Send(request)),
-            ApiRequest::Message(MessageRequest::Acknowledge(request)) => self.dispatch(
-                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)),
-            ),
+            ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Write(request)),
             ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
             ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
             ApiRequest::CompatibilityPreflight(preflight) => {

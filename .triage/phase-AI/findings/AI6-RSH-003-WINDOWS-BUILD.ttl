@@ -28,8 +28,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 124 ;
   triage:snippet "SocketEndpointGuard::unpublish() { remove_stale_endpoint(...)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:rootCauseFile "crates/atm-daemon/src/local_ipc_transport.rs" ;

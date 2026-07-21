@@ -1,6 +1,6 @@
 ---
 title: AI.7 canonical write path
-status: proposed
+status: complete
 branch: feature/pAI-s7-canonical-write-path
 worktree: ../atm-core-worktrees/feature/pAI-s7-canonical-write-path
 target: integrate/phase-AI

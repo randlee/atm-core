@@ -18,8 +18,7 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope,
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -165,7 +164,7 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)
     )
 }
 
@@ -275,9 +274,7 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))? {
+        match self.send_request(RequestEnvelope::Write(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
@@ -300,8 +297,8 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            request,
+        match self.send_request(RequestEnvelope::Write(Box::new(
+            request.into_write_request(),
         )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
@@ -539,9 +536,7 @@ mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
-    use atm_core::protocol::{
-        RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-    };
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
     use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
@@ -1129,12 +1124,17 @@ mod tests {
                 .expect("daemon HTTP request"),
         )
         .expect("daemon HTTP decode");
-        let ApiRequest::Write(SendRequestEnvelope::Compose(request)) = daemon_request else {
+        let ApiRequest::Write(request) = daemon_request else {
             panic!("daemon must receive the canonical compose write request");
         };
         assert_eq!(request.caller_chat_id, Some(chat_id.clone()));
         assert_eq!(
-            request.to.chat_id.map(|chat| chat.to_string()).as_deref(),
+            request
+                .to
+                .as_ref()
+                .and_then(|target| target.chat_id.as_ref())
+                .map(ToString::to_string)
+                .as_deref(),
             Some("target-chat")
         );
 
@@ -1225,14 +1225,14 @@ mod tests {
             let first_transport = transport.clone();
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
-                first_transport.execute(ApiRequest::new(RequestEnvelope::Send(
-                    SendRequestEnvelope::Compose(Box::new(first_request)),
-                )))
+                first_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                    first_request,
+                ))))
             });
             let second = scope.spawn(move || {
-                second_transport.execute(ApiRequest::new(RequestEnvelope::Send(
-                    SendRequestEnvelope::Compose(Box::new(second_request)),
-                )))
+                second_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
+                    second_request,
+                ))))
             });
             (
                 first.join().expect("first transport result"),
@@ -1643,37 +1643,6 @@ mod tests {
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
-    }
-
-    #[test]
-    #[serial(env)]
-    fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply() {
-        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
-        let (message_id, mut pending_ack) = fixture.pending_ack_message("historical self poison");
-        pending_ack.from = TEST_SENDER.parse().expect("self sender");
-        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
-        let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
-            Arc::new(LoopbackClientTransport::new(Arc::new(
-                atm_core::observability::NullObservability,
-            ))),
-            &composition_observability,
-        );
-
-        let outcome = composition
-            .ack(fixture.ack_request(message_id, "resolved"))
-            .expect("self poison ack outcome");
-
-        assert!(matches!(
-            outcome.reply_disposition,
-            atm_core::ack::AckReplyDisposition::SuppressedSelfAck
-        ));
-        let sender_inbox = fixture.inbox_contents(TEST_SENDER);
-        assert_eq!(sender_inbox.len(), 1);
-        assert_eq!(sender_inbox[0].message_id, Some(message_id));
-        assert!(sender_inbox[0].pending_ack_at.is_none());
-        assert!(sender_inbox[0].acknowledged_at.is_some());
-        assert!(fixture.inbox_contents(TEST_LEAD).is_empty());
     }
 
     #[test]

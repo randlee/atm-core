@@ -363,7 +363,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         caller_identity: AgentName::from_validated(TEST_SENDER),
         caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
-        to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
+        to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),
         requires_ack: false,
@@ -371,15 +371,18 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
+        acknowledges_message_id: None,
         dry_run: false,
     }
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     let mut request = send_request(home_dir);
-    request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
-        .parse()
-        .expect("self address");
+    request.to = Some(
+        format!("{TEST_SENDER}@{TEST_TEAM}")
+            .parse()
+            .expect("self address"),
+    );
     request
 }
 
@@ -867,13 +870,15 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = self_addressed_send_request(tempdir.path());
-    request.to = format!(
-        "{}@{}",
-        TEST_SENDER.to_ascii_uppercase(),
-        TEST_TEAM.to_ascii_uppercase()
-    )
-    .parse()
-    .expect("case-variant self address");
+    request.to = Some(
+        format!(
+            "{}@{}",
+            TEST_SENDER.to_ascii_uppercase(),
+            TEST_TEAM.to_ascii_uppercase()
+        )
+        .parse()
+        .expect("case-variant self address"),
+    );
     request.dry_run = true;
 
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)

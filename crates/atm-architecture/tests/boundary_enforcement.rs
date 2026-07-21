@@ -40,6 +40,78 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
 ];
 
 #[test]
+fn acknowledgement_cannot_restore_a_second_write_pipeline() {
+    let root = workspace_root();
+    let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
+        .expect("canonical write module must be readable");
+    let acknowledgement = fs::read_to_string(root.join("crates/atm-core/src/ack/mod.rs"))
+        .expect("acknowledgement module must be readable");
+    let api = fs::read_to_string(root.join("crates/atm-core/src/api.rs"))
+        .expect("transport-neutral API module must be readable");
+    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
+        .expect("daemon dispatcher module must be readable");
+
+    assert!(
+        send.contains("fn write_mail_with_runtime_impl"),
+        "AI.7 requires one canonical write pipeline"
+    );
+    assert!(
+        send.contains("resolve_acknowledgement_write"),
+        "AI.7 acknowledgement normalization must enter the canonical write pipeline"
+    );
+    assert!(
+        acknowledgement.contains("crate::send::write_mail_with_runtime("),
+        "the ack command must invoke the canonical write entry point"
+    );
+    for retired in [
+        "ack_mail_with_runtime_and_post_send_emitter",
+        "acknowledge_via_canonical_write",
+    ] {
+        assert!(
+            !acknowledgement.contains(retired),
+            "AI.7 forbids the retired separate acknowledgement write path `{retired}`"
+        );
+    }
+    assert!(
+        !api.contains("MessageRequest") && !daemon.contains("ApiRequest::Message("),
+        "AI.7 forbids a second acknowledgement API/daemon-dispatch variant"
+    );
+}
+
+#[test]
+fn canonical_write_router_has_one_host_routing_decision() {
+    let source =
+        fs::read_to_string(workspace_root().join("crates/atm-daemon/src/runtime_health.rs"))
+            .expect("daemon request dispatcher source must be readable");
+
+    for required in [
+        "struct MessageRecord",
+        "trait MessageWriter",
+        "trait PostWriteRouter",
+        "fn route_write(",
+        "fn persist_local_write(",
+        "fn dispatch_remote_write(",
+    ] {
+        assert!(source.contains(required), "AI.7 requires `{required}`");
+    }
+    assert_eq!(
+        source.matches("address.host.is_some()").count(),
+        1,
+        "only route_write may select local or remote write dispatch"
+    );
+    for retired in [
+        "dispatch_peer_write",
+        "dispatch_peer_ingress",
+        "dispatch_local",
+    ] {
+        assert!(
+            !source.contains(retired),
+            "AI.7 forbids the retired duplicate write dispatch `{retired}`"
+        );
+    }
+}
+
+#[test]
 fn production_code_cannot_restore_retired_error_contract_symbols() {
     let root = workspace_root().join("crates");
     let mut files = Vec::new();

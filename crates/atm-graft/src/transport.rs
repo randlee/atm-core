@@ -47,7 +47,7 @@ impl GraftLocalIpcClientTransport {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)
     )
 }
 

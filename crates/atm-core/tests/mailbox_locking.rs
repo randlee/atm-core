@@ -7,10 +7,9 @@ use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
 
-use atm_core::ack::{AckReplyDisposition, AckRequest, ack_mail};
+use atm_core::ack::{AckRequest, ack_mail};
 use atm_core::clear::{ClearQuery, clear_mail};
-#[cfg(unix)]
-use atm_core::error::AtmErrorCode;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::list::{ListQuery, list_mail};
 use atm_core::observability::NullObservability;
 use atm_core::read::{PeekQuery, ReadQuery, peek_mail, read_mail};
@@ -832,7 +831,7 @@ fn ack_persists_read_state_and_acknowledged_timestamp() {
 
 #[test]
 #[serial_test::serial(env)]
-fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
+fn ack_self_addressed_empty_host_target_rejects_without_mutating_source() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     let message_id = AtmMessageId::new();
@@ -846,23 +845,18 @@ fn ack_self_addressed_poison_message_suppresses_replacement_reply() {
         )],
     );
 
-    let ack_outcome = ack_mail(
+    let error = ack_mail(
         fixture.ack_request(PRIMARY_AGENT, message_id, "resolved"),
         &observability,
     )
-    .expect("self ack outcome");
-
-    assert!(matches!(
-        ack_outcome.reply_disposition,
-        AckReplyDisposition::SuppressedSelfAck
-    ));
-    assert_eq!(ack_outcome.reply_text, "resolved");
+    .expect_err("empty-host self acknowledgement must be rejected");
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
 
     let inbox = fixture.inbox_contents(PRIMARY_AGENT);
     assert_eq!(inbox.len(), 1);
     assert_eq!(inbox[0].message_id, Some(message_id));
-    assert!(inbox[0].pending_ack_at.is_none());
-    assert!(inbox[0].acknowledged_at.is_some());
+    assert!(inbox[0].pending_ack_at.is_some());
+    assert!(inbox[0].acknowledged_at.is_none());
     assert!(inbox[0].acknowledges_message_id.is_none());
 }
 

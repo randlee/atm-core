@@ -29,8 +29,8 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 1 ;
   triage:snippet "ActiveConnectionRegistry::interrupt_all() only signals condvar, never force-closes sockets in thread::scope" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 

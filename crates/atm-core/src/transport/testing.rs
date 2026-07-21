@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::ack;
 use crate::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use crate::boundary;
 use crate::clear;
@@ -11,9 +10,7 @@ use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use crate::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use crate::read;
 use crate::send;
 
@@ -70,13 +67,15 @@ impl boundary::sealed::Sealed for LoopbackClientTransport {}
 impl DaemonApiClient for LoopbackClientTransport {
     fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         let response = match request.into_inner() {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(*request, self.observability.as_ref())
-                    .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                ack::ack_mail(request, self.observability.as_ref()).map(|outcome| {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            RequestEnvelope::Write(request) => {
+                send::write_mail(*request, self.observability.as_ref()).map(|outcome| match outcome
+                {
+                    send::WriteOutcome::Sent(outcome) => {
+                        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                    }
+                    send::WriteOutcome::Acknowledged(outcome) => {
+                        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                    }
                 })
             }
             RequestEnvelope::CompatibilityPreflight(_) => Err(AtmError::daemon_unavailable(

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use serde::{Deserialize, Serialize};
 
-use crate::ack::{AckOutcome, AckRequest};
+use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::AtmError;
@@ -18,17 +18,10 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
-use crate::send::{SendOutcome, SendRequest};
+use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
-
-/// Shared protocol send-shaped request envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendRequestEnvelope {
-    Compose(Box<SendRequest>),
-    Acknowledge(AckRequest),
-}
 
 /// Shared protocol send-shaped response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +33,7 @@ pub enum SendResponseEnvelope {
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
-    Send(SendRequestEnvelope),
+    Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     List(ListQuery),
@@ -502,7 +495,7 @@ mod tests {
 
     #[test]
     fn request_envelope_round_trips_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(
+        let request = RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -516,14 +509,14 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        )));
+        ));
 
         let decoded: RequestEnvelope =
             serde_json::from_slice(&serde_json::to_vec(&request).expect("encode request"))
                 .expect("decode nested send request");
 
         match decoded {
-            RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request)) => {
+            RequestEnvelope::Write(request) => {
                 assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
                 assert_eq!(request.caller_team.as_str(), TEST_TEAM);
             }

@@ -285,7 +285,10 @@ mod tests {
             Some("TASK-42")
         );
         assert!(request.dry_run);
-        assert_eq!(request.to.to_string(), "recipient-a@test-team");
+        assert_eq!(
+            request.to.expect("destination").to_string(),
+            "recipient-a@test-team"
+        );
         match request.message_source {
             SendMessageSource::Inline(message) => assert_eq!(message, "hello from send"),
             other => panic!("expected inline message source, got {other:?}"),

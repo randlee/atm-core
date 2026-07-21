@@ -29,8 +29,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-6.md" ;
   triage:line 1 ;
   triage:snippet "status: proposed (should be complete or have explicit waiver)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -39,8 +39,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1 ;
   triage:snippet "AI.6 rows missing entirely (should list sprint deliverables/owners)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 

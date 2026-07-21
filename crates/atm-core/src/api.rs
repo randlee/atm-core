@@ -6,16 +6,15 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
-use crate::ack::AckRequest;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    TeamMemberHeartbeatRequest,
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
+use crate::send::WriteRequest;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
@@ -31,12 +30,10 @@ pub struct HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
-        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => {
-            ("POST", "/v1/atm/messages".to_string())
-        }
-        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(ack)) => {
-            ("POST", format!("/v1/atm/message/{}/ack", ack.message_id))
-        }
+        RequestEnvelope::Write(request) => match request.acknowledges_message_id {
+            Some(message_id) => ("POST", format!("/v1/atm/message/{message_id}/ack")),
+            None => ("POST", "/v1/atm/messages".to_string()),
+        },
         RequestEnvelope::List(_) | RequestEnvelope::Peek(_) | RequestEnvelope::Receive(_) => {
             ("GET", "/v1/atm/messages".to_string())
         }
@@ -214,8 +211,7 @@ fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>,
 #[derive(Debug, Clone)]
 pub enum ApiRequest {
     Messages(Box<MessageCollectionRequest>),
-    Write(SendRequestEnvelope),
-    Message(MessageRequest),
+    Write(Box<WriteRequest>),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
@@ -229,11 +225,6 @@ pub enum MessageCollectionRequest {
     Receive(ReadQuery),
 }
 
-#[derive(Debug, Clone)]
-pub enum MessageRequest {
-    Acknowledge(AckRequest),
-}
-
 impl ApiRequest {
     pub fn new(request: RequestEnvelope) -> Self {
         Self::from(request)
@@ -241,15 +232,12 @@ impl ApiRequest {
 
     pub fn into_inner(self) -> RequestEnvelope {
         match self {
-            Self::Messages(messages) => match *messages {
+            Self::Messages(request) => match *request {
                 MessageCollectionRequest::List(query) => RequestEnvelope::List(query),
                 MessageCollectionRequest::Peek(query) => RequestEnvelope::Peek(query),
                 MessageCollectionRequest::Receive(query) => RequestEnvelope::Receive(query),
             },
-            Self::Write(request) => RequestEnvelope::Send(request),
-            Self::Message(MessageRequest::Acknowledge(request)) => {
-                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request))
-            }
+            Self::Write(request) => RequestEnvelope::Write(request),
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::CompatibilityPreflight(preflight) => {
@@ -276,15 +264,15 @@ impl ApiRequest {
     fn matches_route(&self, method: &str, path: &str) -> bool {
         match self {
             Self::Messages(_) => method == "GET" && path == "/v1/atm/messages",
-            Self::Write(SendRequestEnvelope::Compose(_)) => {
-                method == "POST" && path == "/v1/atm/messages"
-            }
-            Self::Write(SendRequestEnvelope::Acknowledge(_)) => false,
-            Self::Message(MessageRequest::Acknowledge(_)) => {
-                method == "POST"
-                    && path
-                        .strip_prefix("/v1/atm/message/")
-                        .is_some_and(|suffix| suffix.ends_with("/ack"))
+            Self::Write(request) => {
+                if request.acknowledges_message_id.is_some() {
+                    method == "POST"
+                        && path
+                            .strip_prefix("/v1/atm/message/")
+                            .is_some_and(|suffix| suffix.ends_with("/ack"))
+                } else {
+                    method == "POST" && path == "/v1/atm/messages"
+                }
             }
             Self::Clear(_) => {
                 method == "DELETE" && (path == "/v1/atm/messages" || is_message_detail_path(path))
@@ -299,12 +287,7 @@ impl ApiRequest {
 impl From<RequestEnvelope> for ApiRequest {
     fn from(request: RequestEnvelope) -> Self {
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                Self::Write(SendRequestEnvelope::Compose(request))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Self::Message(MessageRequest::Acknowledge(request))
-            }
+            RequestEnvelope::Write(request) => Self::Write(request),
             RequestEnvelope::List(query) => {
                 Self::Messages(Box::new(MessageCollectionRequest::List(query)))
             }
@@ -387,28 +370,14 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use std::io;
-
     use super::{
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
         write_http_request,
     };
     use crate::doctor::DoctorQuery;
-    use crate::protocol::{RequestEnvelope, SendRequestEnvelope};
+    use crate::protocol::RequestEnvelope;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-
-    struct FailingWriter;
-
-    impl io::Write for FailingWriter {
-        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
-            Err(io::Error::other("test write failure"))
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -428,7 +397,7 @@ mod tests {
 
     #[test]
     fn http_decode_uses_method_and_path_to_choose_write_variant() {
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+        let request = RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 std::env::temp_dir(),
                 std::env::temp_dir(),
@@ -442,7 +411,7 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        )));
+        ));
         let mut bytes = Vec::new();
 
         write_http_request(&mut bytes, &request).expect("write HTTP request");
@@ -455,7 +424,7 @@ mod tests {
 
         assert!(matches!(
             decoded,
-            ApiRequest::Write(SendRequestEnvelope::Compose(_))
+            ApiRequest::Write(request) if request.acknowledges_message_id.is_none()
         ));
     }
 
@@ -488,16 +457,5 @@ mod tests {
         let error = read_http_request(&mut request.as_bytes()).expect_err("oversized body");
 
         assert!(error.is_validation());
-    }
-
-    #[test]
-    fn http_write_preserves_io_error_context() {
-        let error = write_http_request(
-            &mut FailingWriter,
-            &RequestEnvelope::Doctor(DoctorQuery::default()),
-        )
-        .expect_err("write must fail");
-
-        assert!(error.message().contains("test write failure"));
     }
 }

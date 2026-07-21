@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
+use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
@@ -31,11 +32,6 @@ use crate::types::{AgentName, ChatId, CommandAction, IsoTimestamp, TaskId, TeamN
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[expect(
-    dead_code,
-    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
-)]
-mod hook_tmux;
 pub mod input;
 #[doc(hidden)]
 pub mod nudge_template;
@@ -57,14 +53,17 @@ pub enum SendMessageSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendRequest {
+pub struct WriteRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
-    pub to: AgentAddress,
+    /// Destination is omitted only by an `atm ack` command.  The daemon
+    /// resolves that destination from the acknowledged source before calling
+    /// the canonical writer.
+    pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -72,10 +71,14 @@ pub struct SendRequest {
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
+    /// When present this write is an acknowledgement reply.  It otherwise
+    /// follows the exact same persistence and post-write path as a send.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
 }
 
-impl SendRequest {
+impl WriteRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -95,7 +98,7 @@ impl SendRequest {
             caller_identity,
             caller_chat_id: None,
             caller_team,
-            to: to.parse()?,
+            to: Some(to.parse()?),
             message_source,
             summary_override,
             requires_ack,
@@ -103,6 +106,7 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            acknowledges_message_id: None,
             dry_run,
         })
     }
@@ -112,6 +116,21 @@ impl SendRequest {
         self.caller_chat_id = caller_chat_id;
         self
     }
+}
+
+/// Compatibility name for existing callers.  There is one write payload;
+/// acknowledgement is represented by `acknowledges_message_id` on it.
+pub type SendRequest = WriteRequest;
+
+/// Result of the one canonical write operation.
+///
+/// An acknowledgement is not a second transport operation: it is a write
+/// whose request carries `acknowledges_message_id`.  The distinct outcome only
+/// preserves the CLI/API response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WriteOutcome {
+    Sent(SendOutcome),
+    Acknowledged(AckOutcome),
 }
 
 /// Result of sending one ATM mailbox message.
@@ -223,12 +242,30 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
+/// Execute one canonical write without daemon-owned post-write delivery.
+pub fn write_mail(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<WriteOutcome, AtmError> {
+    let runtime = default_runtime()?;
+    write_mail_with_runtime(request, observability, &runtime)
+}
+
+/// Execute one canonical write with an explicit local runtime.
+pub fn write_mail_with_runtime(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<WriteOutcome, AtmError> {
+    write_mail_with_runtime_impl(request, observability, runtime, None)
+}
+
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, None)
+    write_mail_persisted_with_runtime(request, observability, runtime, None)
 }
 
 pub fn send_mail_with_runtime_and_post_send_emitter(
@@ -237,10 +274,68 @@ pub fn send_mail_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+    write_mail_persisted_with_runtime(request, observability, runtime, Some(post_send_emitter))
 }
 
-fn send_mail_with_runtime_impl<
+/// The sole daemon write entry point for every message ingress.
+///
+/// The acknowledgement form is normalized here, then uses the same durable
+/// persistence and post-write execution as an ordinary send.  No protocol
+/// dispatcher or transport chooses a separate acknowledgement path.
+pub fn write_mail_with_runtime_and_post_send_emitter(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<WriteOutcome, AtmError> {
+    write_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+}
+
+/// The sole write pipeline. `acknowledges_message_id` selects only an
+/// acknowledgement-source normalization step; both variants persist and emit
+/// through `write_mail_persisted_with_runtime` exactly once.
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+) -> Result<WriteOutcome, AtmError> {
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
+            return Err(AtmError::validation(
+                "message write is missing a destination",
+            ));
+        }
+        return write_mail_persisted_with_runtime(
+            request,
+            observability,
+            runtime,
+            post_send_emitter,
+        )
+        .map(WriteOutcome::Sent);
+    }
+    if request.to.is_some() {
+        return Err(AtmError::validation(
+            "acknowledgement write must not include a client-supplied destination",
+        ));
+    }
+    let acknowledgement = crate::ack::resolve_acknowledgement_write(request, runtime)?;
+    let send_outcome = write_mail_persisted_with_runtime(
+        acknowledgement.request(),
+        observability,
+        runtime,
+        post_send_emitter,
+    )?;
+    acknowledgement
+        .finish(runtime, observability, send_outcome)
+        .map(WriteOutcome::Acknowledged)
+}
+
+/// Shared durable persistence and post-write execution after write
+/// normalization has resolved a destination.
+pub(crate) fn write_mail_persisted_with_runtime<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: SendRequest,
@@ -285,6 +380,18 @@ fn send_mail_with_runtime_impl<
         task_id,
         persistence,
     )
+}
+
+#[cfg(test)]
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+) -> Result<SendOutcome, AtmError> {
+    write_mail_persisted_with_runtime(request, observability, runtime, post_send_emitter)
 }
 
 #[expect(
@@ -466,7 +573,10 @@ fn prepare_send_context<
         ),
     };
     let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
+    let target = request.to.as_ref().ok_or_else(|| {
+        AtmError::validation("write request destination must be resolved before persistence")
+    })?;
+    let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
     validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
@@ -512,13 +622,16 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             timestamp,
             read: false,
             source_team: Some(request.caller_team.clone()),
-            destination_chat_id: request.to.chat_id.clone(),
+            destination_chat_id: request
+                .to
+                .as_ref()
+                .and_then(|address| address.chat_id.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
             requires_ack: ack_intent.requires_ack,
             pending_ack_at: ack_intent.pending_ack_at,
             acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
+            acknowledges_message_id: request.acknowledges_message_id,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
             expires_at: request.expires_at,
@@ -533,13 +646,16 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         timestamp,
         read: false,
         source_team: Some(request.caller_team.clone()),
-        destination_chat_id: request.to.chat_id.clone(),
+        destination_chat_id: request
+            .to
+            .as_ref()
+            .and_then(|address| address.chat_id.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
         pending_ack_at: ack_intent.pending_ack_at,
         acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
+        acknowledges_message_id: request.acknowledges_message_id,
         parent_message_id: request.parent_message_id,
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,

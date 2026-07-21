@@ -35,8 +35,8 @@
   triage:file "boundaries/atm-core/atm-protocol.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -45,8 +45,8 @@
   triage:file "boundaries/atm-core/client-transport.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -55,8 +55,8 @@
   triage:file "boundaries/atm-core/server-transport.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -65,8 +65,8 @@
   triage:file "boundaries/atm-core/request-dispatcher.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -75,8 +75,8 @@
   triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -85,8 +85,8 @@
   triage:file "boundaries/atm-daemon/daemon-request-dispatcher.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
@@ -95,8 +95,8 @@
   triage:file "boundaries/atm/local-socket-client-transport.toml" ;
   triage:line 1 ;
   triage:snippet "status: active (trait no longer in source)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
