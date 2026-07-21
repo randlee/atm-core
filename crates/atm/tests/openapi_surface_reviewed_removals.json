@@ -1,0 +1,8 @@
+{
+  "review": "AI-FIXROUND-5 retired Teams-route removal, quality-mgr verified.",
+  "removals": [
+    "openapi/paths//team/{teamName}",
+    "openapi/paths//teams",
+    "openapi/schemas/Team"
+  ]
+}

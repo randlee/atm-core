@@ -27,6 +27,33 @@ fn baseline_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/openapi_surface_baseline.json")
 }
 
+fn reviewed_removals_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/openapi_surface_reviewed_removals.json")
+}
+
+fn reviewed_removals() -> BTreeSet<String> {
+    let source =
+        std::fs::read_to_string(reviewed_removals_path()).expect("read reviewed OpenAPI removals");
+    let document: Value = serde_json::from_str(&source).expect("parse reviewed OpenAPI removals");
+    document["removals"]
+        .as_array()
+        .expect("reviewed OpenAPI removals must be an array")
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .expect("reviewed OpenAPI removal must be a string")
+                .to_owned()
+        })
+        .collect()
+}
+
+fn is_reviewed_breaking(entry: &str, reviewed_removals: &BTreeSet<String>) -> bool {
+    entry
+        .strip_prefix("removed OpenAPI contract entry ")
+        .is_some_and(|path| reviewed_removals.contains(path))
+}
+
 fn object(value: &Value) -> &serde_json::Map<String, Value> {
     value.as_object().expect("OpenAPI value must be an object")
 }
@@ -166,10 +193,19 @@ fn openapi_surface_is_additions_only() {
     let mut breaking = Vec::new();
     let mut additions = Vec::new();
     compare_value("openapi", &baseline, &live, &mut breaking, &mut additions);
+    let reviewed_removals = reviewed_removals();
+    let unreviewed_breaking = breaking
+        .iter()
+        .filter(|entry| !is_reviewed_breaking(entry, &reviewed_removals))
+        .collect::<Vec<_>>();
     assert!(
-        breaking.is_empty(),
-        "OpenAPI baseline update is additions-only; refusing:\n{}",
-        breaking.join("\n")
+        unreviewed_breaking.is_empty(),
+        "OpenAPI baseline update has unreviewed breaking entries:\n{}",
+        unreviewed_breaking
+            .iter()
+            .map(|entry| entry.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
     );
     if std::env::var_os(BLESS_ENV).is_some() {
         let encoded = serde_json::to_string_pretty(&live).expect("serialize OpenAPI surface");
@@ -182,4 +218,22 @@ fn openapi_surface_is_additions_only() {
         "OpenAPI surface has unbaselined additions:\n{}\nSet {BLESS_ENV}=1 for a reviewed additive update.",
         additions.join("\n")
     );
+}
+
+#[test]
+fn reviewed_removals_allow_only_exact_removed_entries() {
+    let reviewed = reviewed_removals();
+
+    assert!(is_reviewed_breaking(
+        "removed OpenAPI contract entry openapi/paths//teams",
+        &reviewed
+    ));
+    assert!(!is_reviewed_breaking(
+        "removed OpenAPI contract entry openapi/paths//teams/get",
+        &reviewed
+    ));
+    assert!(!is_reviewed_breaking(
+        "changed OpenAPI contract entry openapi/paths//teams: old -> new",
+        &reviewed
+    ));
 }

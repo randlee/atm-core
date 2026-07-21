@@ -107,80 +107,6 @@
           }
         }
       }
-    },
-    "/team/{teamName}": {
-      "delete": {
-        "operation_id": "deleteTeam",
-        "request_required": false,
-        "responses": {
-          "204": {
-            "error": false,
-            "schema": null
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      },
-      "get": {
-        "operation_id": "getTeam",
-        "request_required": false,
-        "responses": {
-          "200": {
-            "error": false,
-            "schema": "#/components/schemas/Team"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      },
-      "patch": {
-        "operation_id": "updateTeam",
-        "request_required": true,
-        "responses": {
-          "200": {
-            "error": false,
-            "schema": "#/components/schemas/Team"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
-    },
-    "/teams": {
-      "get": {
-        "operation_id": "listTeams",
-        "request_required": false,
-        "responses": {
-          "200": {
-            "error": false,
-            "schema": null
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      },
-      "post": {
-        "operation_id": "createTeam",
-        "request_required": true,
-        "responses": {
-          "201": {
-            "error": false,
-            "schema": "#/components/schemas/Team"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
     }
   },
   "schemas": {
@@ -235,14 +161,6 @@
       ],
       "required": [
         "messages"
-      ]
-    },
-    "Team": {
-      "properties": [
-        "name"
-      ],
-      "required": [
-        "name"
       ]
     },
     "WriteRequest": {
