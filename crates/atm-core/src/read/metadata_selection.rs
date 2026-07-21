@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::address::MessageParticipantFilter;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::schema::InboxMessage;
@@ -26,6 +27,12 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
         let selected = classified_all
             .iter()
             .filter(|message| message.envelope.message_id == Some(*message_id))
+            .filter(|message| {
+                filters::matches_participant_filter(
+                    message,
+                    query.mailbox.participant_filter.as_ref(),
+                )
+            })
             .cloned()
             .collect();
         let logical_current = logical_current_messages(classified_all);
@@ -37,6 +44,7 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     let filtered = apply_metadata_only_filters(
         logical_current,
         query.mailbox.sender_filter.as_ref(),
+        query.mailbox.participant_filter.as_ref(),
         query.mailbox.timestamp_filter,
         query.mailbox.task_filter.as_ref(),
     );
@@ -57,7 +65,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
             class: MessageClass::Unread,
             envelope: InboxMessage {
                 from: row.from_agent.clone(),
-                source_chat_id: None,
+                source_chat_id: row.source_chat_id.clone(),
                 // Metadata rows intentionally do not carry durable message body
                 // text. AD.20 keeps this projection empty so later contains
                 // evaluation cannot accidentally treat summary-only data as the
@@ -66,7 +74,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
                 timestamp: row.message_at,
                 read: row.read,
                 source_team: None,
-                destination_chat_id: None,
+                destination_chat_id: row.destination_chat_id.clone(),
                 summary: row.summary.clone(),
                 message_id: row.message_id,
                 requires_ack: row.requires_ack,
@@ -107,12 +115,16 @@ pub(crate) fn classify_mailbox_metadata_rows(
 pub(crate) fn apply_metadata_only_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&crate::types::AgentName>,
+    participant_filter: Option<&MessageParticipantFilter>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&crate::types::TaskId>,
 ) -> Vec<ClassifiedMessage> {
     filters::apply_task_filter(
         filters::apply_timestamp_filter(
-            filters::apply_sender_filter(messages, sender_filter),
+            filters::apply_participant_filter(
+                filters::apply_sender_filter(messages, sender_filter),
+                participant_filter,
+            ),
             timestamp_filter,
         ),
         task_filter,

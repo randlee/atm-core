@@ -1,6 +1,6 @@
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 use atm_storage::contract::{Message, MessageKey};
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +28,10 @@ pub struct MailStoreMailboxMetadataRow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thread_mode: Option<ThreadMode>,
     pub from_agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_chat_id: Option<ChatId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_chat_id: Option<ChatId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
