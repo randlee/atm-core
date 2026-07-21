@@ -54,36 +54,6 @@ paths:
       responses:
         '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
         default: { $ref: '#/components/responses/AtmError' }
-  /teams:
-    get:
-      operationId: listTeams
-      responses:
-        '200': { description: Teams, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Team' } } } } }
-        default: { $ref: '#/components/responses/AtmError' }
-    post:
-      operationId: createTeam
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
-      responses:
-        '201': { description: Created team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
-  /team/{teamName}:
-    parameters: [ { name: teamName, in: path, required: true, schema: { type: string } } ]
-    get:
-      operationId: getTeam
-      responses:
-        '200': { description: Team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
-    patch:
-      operationId: updateTeam
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
-      responses:
-        '200': { description: Updated team, content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
-    delete:
-      operationId: deleteTeam
-      responses:
-        '204': { description: Deleted }
-        default: { $ref: '#/components/responses/AtmError' }
 components:
   parameters:
     MessageId: { name: messageId, in: path, required: true, schema: { type: string } }
@@ -131,10 +101,6 @@ components:
       properties:
         messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
         cursor: { type: string }
-    Team:
-      type: object
-      required: [name]
-      properties: { name: { type: string } }
     AtmError:
       type: object
       required: [code, message]
