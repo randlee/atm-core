@@ -18,7 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -164,7 +165,7 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)
+        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
     )
 }
 
@@ -274,7 +275,9 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Write(Box::new(request)))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
@@ -297,8 +300,8 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Write(Box::new(
-            request.into_write_request(),
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+            request,
         )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
@@ -535,10 +538,13 @@ mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{
+        RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+        next_request_id, request_from_frame_payload, request_to_frame_payload,
+    };
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
-    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_core::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
         TEST_TEAM,
@@ -547,7 +553,7 @@ mod tests {
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
     use atm_core::types::ReadSelection;
-    use atm_core::types::{AgentName, TeamName};
+    use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
     use atm_core::{ApiRequest, DaemonApiClient};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
@@ -1041,6 +1047,116 @@ mod tests {
     }
 
     #[test]
+    fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
+        let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
+        let send_request = SendRequest::new(
+            std::path::PathBuf::from("/tmp/home"),
+            std::path::PathBuf::from("/tmp/current"),
+            TEST_SENDER.parse().expect("caller"),
+            "recipient:target-chat@test-team",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline("chat parity".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("send request")
+        .with_caller_chat_id(Some(chat_id.clone()));
+        let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+            action: CommandAction::Send,
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_RECIPIENT.parse().expect("recipient"),
+            sender: TEST_SENDER.parse().expect("sender"),
+            outcome: SendCommandOutcome::Sent,
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            task_id: None,
+            summary: None,
+            message: None,
+            warnings: Vec::new(),
+            dry_run: false,
+        }));
+        let cli_requests = Arc::new(Mutex::new(Vec::new()));
+        let cli_transport = Arc::new(FakeClientTransport::new({
+            let cli_requests = cli_requests.clone();
+            let response = response.clone();
+            move |request| {
+                cli_requests.lock().expect("cli request log").push(request);
+                Ok(response.clone())
+            }
+        }));
+        let observability = CliObservability::fallback();
+        CliComposition::from_transport(cli_transport, &observability)
+            .send(send_request.clone())
+            .expect("cli send");
+
+        let graft_requests = Arc::new(Mutex::new(Vec::new()));
+        let graft_transport = Arc::new(FakeClientTransport::new({
+            let graft_requests = graft_requests.clone();
+            let response = response.clone();
+            move |request| {
+                graft_requests
+                    .lock()
+                    .expect("graft request log")
+                    .push(request);
+                Ok(response.clone())
+            }
+        }));
+        atm_graft::GraftClient::from_transport_for_test(graft_transport)
+            .send_message(send_request)
+            .expect("graft send");
+
+        let cli_request = cli_requests
+            .lock()
+            .expect("cli request log")
+            .pop()
+            .expect("request");
+        let graft_request = graft_requests
+            .lock()
+            .expect("graft request log")
+            .pop()
+            .expect("request");
+        assert_eq!(
+            serde_json::to_value(&cli_request).expect("cli JSON"),
+            serde_json::to_value(&graft_request).expect("graft JSON")
+        );
+        let frame = request_to_frame_payload(next_request_id(), cli_request).expect("daemon frame");
+        let (_, daemon_request) = request_from_frame_payload(frame).expect("daemon decode");
+        let RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) = daemon_request else {
+            panic!("daemon must receive the canonical compose request");
+        };
+        assert_eq!(request.caller_chat_id, Some(chat_id.clone()));
+        assert_eq!(
+            request.to.chat_id.map(|chat| chat.to_string()).as_deref(),
+            Some("target-chat")
+        );
+
+        let read = ReadQuery::new(
+            std::path::PathBuf::from("/tmp/home"),
+            std::path::PathBuf::from("/tmp/current"),
+            TEST_SENDER.parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+        .with_caller_chat_id(Some(chat_id));
+        assert_eq!(
+            read.caller_chat_id().map(ToString::to_string).as_deref(),
+            Some("chat-42")
+        );
+    }
+
+    #[test]
     #[serial(env)]
     fn loopback_transport_send_persists_inbox_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
@@ -1103,14 +1219,14 @@ mod tests {
             let first_transport = transport.clone();
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
-                first_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
-                    first_request,
-                ))))
+                first_transport.execute(ApiRequest::new(RequestEnvelope::Send(
+                    SendRequestEnvelope::Compose(Box::new(first_request)),
+                )))
             });
             let second = scope.spawn(move || {
-                second_transport.execute(ApiRequest::new(RequestEnvelope::Write(Box::new(
-                    second_request,
-                ))))
+                second_transport.execute(ApiRequest::new(RequestEnvelope::Send(
+                    SendRequestEnvelope::Compose(Box::new(second_request)),
+                )))
             });
             (
                 first.join().expect("first transport result"),
@@ -1525,7 +1641,7 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn loopback_transport_ack_rejects_empty_host_self_target_without_mutating_source() {
+    fn loopback_transport_ack_historical_self_poison_suppresses_replacement_reply() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let (message_id, mut pending_ack) = fixture.pending_ack_message("historical self poison");
         pending_ack.from = TEST_SENDER.parse().expect("self sender");
@@ -1538,19 +1654,19 @@ mod tests {
             &composition_observability,
         );
 
-        let error = composition
+        let outcome = composition
             .ack(fixture.ack_request(message_id, "resolved"))
-            .expect_err("empty-host self acknowledgement must be rejected");
+            .expect("self poison ack outcome");
 
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::SelfAddressedSendInvalid
-        );
+        assert!(matches!(
+            outcome.reply_disposition,
+            atm_core::ack::AckReplyDisposition::SuppressedSelfAck
+        ));
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
         assert_eq!(sender_inbox[0].message_id, Some(message_id));
-        assert!(sender_inbox[0].pending_ack_at.is_some());
-        assert!(sender_inbox[0].acknowledged_at.is_none());
+        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].acknowledged_at.is_some());
         assert!(fixture.inbox_contents(TEST_LEAD).is_empty());
     }
 
