@@ -950,12 +950,34 @@
     {
       "args": [
         {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "all",
           "long": "all",
           "num_args": {
             "max": 0,
             "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
           },
           "required": false,
           "short": null
@@ -1142,6 +1164,28 @@
     },
     {
       "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
         {
           "has_default": true,
           "id": "dry_run",

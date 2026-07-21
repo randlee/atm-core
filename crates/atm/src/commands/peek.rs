@@ -98,6 +98,7 @@ impl PeekCommand {
     ) -> Result<PeekQuery> {
         let caller_context = resolve_cli_inspection_caller_context(CallerContextOverrides {
             identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+            chat_id_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         if let Some(timeout_secs) = self.timeout

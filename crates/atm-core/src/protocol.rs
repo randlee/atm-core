@@ -25,15 +25,8 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(
-    windows,
-    allow(
-        clippy::large_enum_variant,
-        reason = "Windows target layout makes SendRequest materially larger than AckRequest; this shared protocol DTO preserves the stable request shape across platforms."
-    )
-)]
 pub enum SendRequestEnvelope {
-    Compose(SendRequest),
+    Compose(Box<SendRequest>),
     Acknowledge(AckRequest),
 }
 
@@ -509,7 +502,7 @@ mod tests {
 
     #[test]
     fn request_envelope_round_trips_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
+        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -523,7 +516,7 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        ));
+        )));
 
         let decoded: RequestEnvelope =
             serde_json::from_slice(&serde_json::to_vec(&request).expect("encode request"))

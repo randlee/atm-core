@@ -71,7 +71,7 @@ impl DaemonApiClient for LoopbackClientTransport {
     fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
         let response = match request.into_inner() {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(request, self.observability.as_ref())
+                send::send_mail(*request, self.observability.as_ref())
                     .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {

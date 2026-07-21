@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn http_decode_uses_method_and_path_to_choose_write_variant() {
-        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 std::env::temp_dir(),
                 std::env::temp_dir(),
@@ -442,7 +442,7 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        ));
+        )));
         let mut bytes = Vec::new();
 
         write_http_request(&mut bytes, &request).expect("write HTTP request");
