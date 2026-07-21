@@ -181,8 +181,11 @@ impl WarningEntry {
             _ => self.message.clone(),
         };
         match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            Some(recovery) if !message.contains("Recovery:") => {
+                format!("{message} Recovery: {recovery}")
+            }
             None => message,
+            Some(_) => message,
         }
     }
 }
@@ -442,12 +445,14 @@ fn prepare_send_context<
         Err(error) => (
             None,
             vec![WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
+                    request.caller_identity,
+                    request.caller_team,
+                    error.message()
                 ),
-                Some(error.message.clone()),
+                Some(error.message().to_owned()),
             )],
         ),
     };
@@ -607,7 +612,7 @@ mod self_address_tests {
         )
         .expect_err("case-variant self target must be rejected");
 
-        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+        assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     }
 }
 

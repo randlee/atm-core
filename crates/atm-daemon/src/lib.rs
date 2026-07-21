@@ -66,18 +66,18 @@ impl DaemonExitCode {
 }
 
 pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
-    if error.code == AtmErrorCode::DaemonLifecycleWedge {
+    if error.code() == AtmErrorCode::DaemonLifecycleWedge {
         return DaemonExitCode::LifecycleWedge;
     }
     if matches!(
-        error.code,
+        error.code(),
         AtmErrorCode::DaemonServingStateRejected
             | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
             | AtmErrorCode::DaemonLaunchGateRejected
             | AtmErrorCode::ConfigHomeUnavailable
             | AtmErrorCode::ObservabilityBootstrapFailed
     ) || matches!(
-        error.code,
+        error.code(),
         AtmErrorCode::ConfigParseFailed
             | AtmErrorCode::ConfigRetiredHookMembersKey
             | AtmErrorCode::ConfigRetiredLegacyHookKeys
@@ -86,7 +86,7 @@ pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
     ) {
         return DaemonExitCode::DoNotRestart;
     }
-    if error.code == AtmErrorCode::DaemonUnavailable {
+    if error.code() == AtmErrorCode::DaemonUnavailable {
         return DaemonExitCode::TransportFatal;
     }
     DaemonExitCode::InternalBug

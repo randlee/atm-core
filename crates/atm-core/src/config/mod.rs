@@ -100,7 +100,7 @@ fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<Te
                     format!(
                         "invalid default team in {}: {}",
                         path.display(),
-                        error.message
+                        error.message()
                     ),
                 )
             })
@@ -565,9 +565,13 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("oversized export cap should fail");
 
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("claude_jsonl_body_export_max_bytes"));
-        assert!(error.message.contains("exceeds the maximum"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(
+            error
+                .message()
+                .contains("claude_jsonl_body_export_max_bytes")
+        );
+        assert!(error.message().contains("exceeds the maximum"));
     }
 
     #[test]
@@ -583,9 +587,9 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("too many hooks should fail");
 
-        assert_eq!(error.code, AtmErrorCode::ConfigParseFailed);
-        assert!(error.message.contains("[[atm.post_send_hooks]]"));
-        assert!(error.message.contains("exceeds the maximum"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert!(error.message().contains("[[atm.post_send_hooks]]"));
+        assert!(error.message().contains("exceeds the maximum"));
     }
 
     #[test]
@@ -599,7 +603,7 @@ blank = ""
 
         let error = load_config(root.path()).expect_err("invalid team member");
 
-        assert!(error.message.contains("[atm].team_members"));
+        assert!(error.message().contains("[atm].team_members"));
     }
 
     #[test]
@@ -661,7 +665,7 @@ post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
         let error = load_config(root.path()).expect_err("retired key should fail");
 
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -669,14 +673,14 @@ post_send_hook_members = ["{ROLE_TEAM_LEAD}"]
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert_eq!(error.code, AtmErrorCode::ConfigRetiredHookMembersKey);
+        assert_eq!(error.code(), AtmErrorCode::ConfigRetiredHookMembersKey);
         assert!(
             error
-                .message
+                .message()
                 .contains(&root.path().join(".atm.toml").display().to_string())
         );
-        assert!(error.message.contains("post_send_hook_members"));
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.message().contains("post_send_hook_members"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -696,7 +700,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let error = load_config(root.path()).expect_err("legacy hook shape should fail");
 
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -704,10 +708,10 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert_eq!(error.code, AtmErrorCode::ConfigRetiredLegacyHookKeys);
-        assert!(error.message.contains("retired post-send hook keys"));
-        assert!(error.message.contains("[[atm.post_send_hooks]]"));
-        assert!(error.message.contains("Recovery:"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigRetiredLegacyHookKeys);
+        assert!(error.message().contains("retired post-send hook keys"));
+        assert!(error.message().contains("[[atm.post_send_hooks]]"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -779,7 +783,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let error = parse_team_config(&config_path, &raw).expect_err("syntax error");
 
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -787,10 +791,10 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
-        assert!(error.message.contains("config.json"));
-        assert!(error.message.contains("EOF while parsing"));
-        assert!(error.message.contains("Recovery:"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
+        assert!(error.message().contains("config.json"));
+        assert!(error.message().contains("EOF while parsing"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -800,7 +804,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let error = parse_team_config(&config_path, &raw).expect_err("root shape error");
 
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -808,9 +812,9 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
-        assert!(error.message.contains("root value must be a JSON object"));
-        assert!(error.message.contains("Recovery:"));
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
+        assert!(error.message().contains("root value must be a JSON object"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -820,7 +824,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let error = parse_team_config(&config_path, &raw).expect_err("members shape error");
 
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -828,13 +832,13 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert_eq!(error.code, AtmErrorCode::ConfigTeamParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::ConfigTeamParseFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("field 'members' must be a JSON array")
         );
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -845,9 +849,9 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
 
         let error = super::load_claude_team_config_document(&team_dir).expect_err("missing config");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::ConfigTeamMissing);
-        assert!(error.message.contains("team config is missing"));
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::ConfigTeamMissing);
+        assert!(error.message().contains("team config is missing"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]

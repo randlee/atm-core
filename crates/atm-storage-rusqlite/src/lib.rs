@@ -198,6 +198,9 @@ impl SqliteRosterStore {
     }
 }
 
+impl atm_storage::contract::sealed::Sealed for SqliteMessageStore {}
+impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
+
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
         self.db.submit_upsert_message(message.clone())
@@ -643,7 +646,7 @@ mod tests {
             .message_store()
             .load_message(&MessageKey::new("atm:test-invalid-team").expect("key"))
             .expect_err("invalid team should fail");
-        assert!(error.message.contains("failed to parse sqlite team"));
+        assert!(error.message().contains("failed to parse sqlite team"));
     }
 
     #[test]
@@ -679,7 +682,7 @@ mod tests {
             .expect_err("invalid task id should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse sqlite mailbox metadata task_id")
         );
     }
@@ -717,7 +720,7 @@ mod tests {
             .expect_err("invalid model should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse canonical team-roster model")
         );
     }

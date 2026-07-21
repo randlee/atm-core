@@ -45,7 +45,7 @@ mod tests {
         )
         .expect_err("eligibility errors should propagate");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
-        assert!(error.message.contains("simulated durable reload failure"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.message().contains("simulated durable reload failure"));
     }
 }

@@ -1163,7 +1163,7 @@ mod tests {
 
         let error = DaemonObservability::bootstrap().expect_err("invalid ATM_LOG_DIR");
         assert!(error.is_config());
-        assert!(error.message.contains("absolute path"));
+        assert!(error.message().contains("absolute path"));
     }
 
     #[test]
@@ -1188,7 +1188,7 @@ mod tests {
         assert!(error.is_observability_bootstrap());
         assert!(
             error
-                .message
+                .message()
                 .contains(&blocked_log_dir.display().to_string())
         );
     }
@@ -1214,10 +1214,10 @@ mod tests {
         let error =
             DaemonObservability::bootstrap().expect_err("retained log file open should fail");
         assert!(error.is_observability_bootstrap());
-        assert!(error.message.contains("atm.log.jsonl"));
+        assert!(error.message().contains("atm.log.jsonl"));
         assert!(
             error
-                .message
+                .message()
                 .contains(&blocked_log_dir.join("atm.log.jsonl").display().to_string())
         );
     }

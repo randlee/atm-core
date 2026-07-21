@@ -675,7 +675,7 @@ mod tests {
         )
         .expect_err("invalid member");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -692,7 +692,7 @@ mod tests {
         )
         .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -806,9 +806,9 @@ mod tests {
         )
         .expect_err("invalid persisted agent id");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("invalid persisted agentId"));
-        assert!(error.message.contains("bad/agent/id"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("invalid persisted agentId"));
+        assert!(error.message().contains("bad/agent/id"));
     }
 
     #[test]
@@ -1034,8 +1034,8 @@ mod tests {
         )
         .expect_err("caller team mismatch");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("caller team"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
     }
 
     #[test]
@@ -1061,8 +1061,8 @@ mod tests {
         )
         .expect_err("missing caller");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
-        assert!(error.message.contains(TEST_SENDER));
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert!(error.message().contains(TEST_SENDER));
     }
 
     #[test]
@@ -1088,7 +1088,7 @@ mod tests {
         )
         .expect_err("missing member");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
     }
 
     #[test]
@@ -1128,10 +1128,10 @@ mod tests {
         )
         .expect_err("invalid kind");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("unsupported built-in nudge template kind")
         );
     }
@@ -1146,7 +1146,7 @@ mod tests {
         )
         .expect_err("empty body");
 
-        assert_eq!(error.code, AtmErrorCode::EmptyNudgeTemplateBody);
+        assert_eq!(error.code(), AtmErrorCode::EmptyNudgeTemplateBody);
     }
 
     #[test]
@@ -1164,8 +1164,8 @@ mod tests {
         )
         .expect_err("caller mismatch");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("caller team"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
     }
 
     #[test]
@@ -1290,8 +1290,8 @@ mod tests {
         )
         .expect_err("invalid model");
 
-        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-        assert!(error.message.contains("model"));
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("model"));
     }
 
     #[test]
@@ -1301,7 +1301,7 @@ mod tests {
         let error =
             BackupRequest::new(tempdir.path().to_path_buf(), "../evil").expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1311,7 +1311,7 @@ mod tests {
         let error = RestoreRequest::new(tempdir.path().to_path_buf(), "../evil", None, false)
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1320,7 +1320,7 @@ mod tests {
         let error = super::filesystem::backup_root_from_home(tempdir.path(), "../evil")
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -1329,6 +1329,6 @@ mod tests {
         let error = super::filesystem::tasks_dir_from_home(tempdir.path(), "../evil")
             .expect_err("invalid team");
 
-        assert_eq!(error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 }

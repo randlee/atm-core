@@ -7,8 +7,8 @@ pub use crate::error_codes::AtmErrorCode;
 /// ATM's sole serializable error contract.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmError {
-    pub code: AtmErrorCode,
-    pub message: String,
+    code: AtmErrorCode,
+    message: String,
 }
 
 impl AtmError {
@@ -26,6 +26,21 @@ impl AtmError {
             code,
             message: crate::error_catalog::render_code(code),
         }
+    }
+
+    #[must_use]
+    pub const fn code(&self) -> AtmErrorCode {
+        self.code
+    }
+
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    #[must_use]
+    pub fn into_message(self) -> String {
+        self.message
     }
 
     #[must_use]
@@ -322,6 +337,6 @@ mod tests {
     fn member_not_found_preserves_its_stable_code() {
         let error = AtmError::member_not_found("test-agent", "test-team");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
     }
 }

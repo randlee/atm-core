@@ -320,8 +320,8 @@ impl SharedDb {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "wal_checkpoint",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 )),
         }
         result
@@ -335,8 +335,8 @@ impl SharedDb {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "reader_budget_state",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             error
         })?;
@@ -351,8 +351,8 @@ impl SharedDb {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "reader_budget_acquire",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             return Err(error);
         }

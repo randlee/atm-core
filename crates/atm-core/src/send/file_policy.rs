@@ -140,9 +140,9 @@ mod tests {
         )
         .expect_err("oversized file should fail");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::FilePolicyRejected);
-        assert!(error.message.contains("exceeds"));
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::FilePolicyRejected);
+        assert!(error.message().contains("exceeds"));
+        assert!(error.message().contains("Recovery:"));
         assert!(
             fs::read_dir(
                 home_dir

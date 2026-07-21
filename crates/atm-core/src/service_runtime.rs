@@ -398,9 +398,9 @@ mod tests {
         )
         .expect_err("oversized non-claude payload must fail");
 
-        assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
-        assert!(error.message.contains("exceeded"));
-        assert!(error.message.contains("Recovery:"));
+        assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(error.message().contains("exceeded"));
+        assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
     }
 }

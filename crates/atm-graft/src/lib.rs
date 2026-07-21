@@ -490,8 +490,8 @@ impl Drop for GraftSession {
                 .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
             tracing::warn!(
                 identity,
-                error_code = %error.code,
-                error_message = %error.message,
+                error_code = %error.code(),
+                error_message = %error.message(),
                 "graft session drop cleanup failed"
             );
         }

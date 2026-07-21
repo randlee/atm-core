@@ -99,6 +99,24 @@ fn assert_recovered_payload_texts(
     );
 }
 
+#[test]
+fn warning_render_keeps_catalog_recovery_singleton() {
+    let error = AtmError::new(
+        AtmErrorCode::ConfigParseFailed,
+        "post-send hook configuration is invalid",
+    );
+    let warning = WarningEntry::with_code(
+        error.code(),
+        format!(
+            "warning: post-send hook config lookup failed: {}.",
+            error.message()
+        ),
+        Some(error.message()),
+    );
+
+    assert_eq!(warning.render().matches("Recovery:").count(), 1);
+}
+
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
@@ -747,11 +765,11 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     )
     .expect_err("empty atm roster must fail");
 
-    assert!(error.code == crate::error_codes::AtmErrorCode::AgentNotFound);
-    assert!(error.message.starts_with(&format!(
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
+    assert!(error.message().starts_with(&format!(
         "agent 'recipient' was not found in team '{TEST_TEAM}'"
     )));
-    assert!(error.message.contains("Recovery:"));
+    assert!(error.message().contains("Recovery:"));
     assert!(
         runtime
             .appended_messages
@@ -781,10 +799,10 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         error
-            .message
+            .message()
             .contains("self-addressed messages are invalid ATM input")
     );
     assert!(
@@ -818,7 +836,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
     )
     .expect_err("self-addressed task send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -854,7 +872,7 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed dry-run must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -893,14 +911,14 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
     )
     .expect_err("invalid address");
 
-    assert!(error.message.contains("agent name"));
+    assert!(error.message().contains("agent name"));
 }
 
 #[test]
 fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
     let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
-    assert!(error.message.contains("team name"));
+    assert!(error.message().contains("team name"));
 }
 
 #[test]
@@ -919,7 +937,7 @@ fn resolve_recipient_rejects_invalid_alias_target() {
     )
     .expect_err("invalid alias target");
 
-    assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
 }
 
 #[test]
@@ -973,5 +991,5 @@ fn prepare_threaded_message_rejects_non_originating_sender() {
 
     let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
 
-    assert!(error.message.contains("original sender"));
+    assert!(error.message().contains("original sender"));
 }

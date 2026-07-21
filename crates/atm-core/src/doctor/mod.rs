@@ -491,11 +491,11 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = Some(error.message.clone());
+    let remediation = Some(error.message().to_owned());
     findings.push(DoctorFinding {
         severity,
-        code: error.code,
-        message: error.message,
+        code: error.code(),
+        message: error.into_message(),
         remediation,
     });
 }
@@ -626,6 +626,9 @@ mod tests {
         members: Vec<atm_storage::RosterMember>,
     }
     struct NoopNudgeTemplateOverrideStore;
+
+    impl atm_storage::contract::sealed::Sealed for UnusedMailStore {}
+    impl atm_storage::contract::sealed::Sealed for TestRosterStore {}
 
     #[allow(
         deprecated,

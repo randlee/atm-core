@@ -19,7 +19,7 @@ use crate::active_connection_registry::ActiveConnectionRegistry;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
+use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_listener_until};
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
@@ -509,7 +509,7 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 Err(error) => {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
             };
@@ -520,7 +520,7 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 if let Err(error) = lifecycle_control.wait_for_state_change(&mut observed_generation) {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if shutdown_beacon.is_tripped() {
@@ -528,12 +528,12 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 }
                 if lifecycle_control.terminate_requested() {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if lifecycle_control.take_reload_requested() {
                     signals.request_reload();
-                    if let Err(_error) = wake_listener(&endpoint_path) {
+                    if let Err(_error) = wake_listener_until(&endpoint_path, REQUEST_DEADLINE) {
                         record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                         let _ = signals.record_accept_error(
                             AtmError::daemon_lifecycle_wedge(
@@ -868,7 +868,7 @@ mod tests {
         assert!(force_shutdown.load(Ordering::SeqCst));
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch worker exceeded the shutdown join deadline")
         );
         let _ = release_tx.send(());
@@ -911,7 +911,7 @@ mod tests {
         )
         .expect_err("a dispatch worker panic discovered during the shutdown drain must be fatal");
         assert!(
-            error.message.contains("daemon dispatch thread panicked"),
+            error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
         );
     }
@@ -951,7 +951,7 @@ mod tests {
             .expect_err("second handle should be rejected once the bounded registry is full");
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
             "unexpected error: {error:?}"
         );
