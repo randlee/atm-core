@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
-use crate::ack::{AckOutcome, AckRequest};
+use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
@@ -32,11 +32,6 @@ use crate::types::{AgentName, ChatId, CommandAction, IsoTimestamp, TaskId, TeamN
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[expect(
-    dead_code,
-    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
-)]
-mod hook_tmux;
 pub mod input;
 #[doc(hidden)]
 pub mod nudge_template;
@@ -262,22 +257,7 @@ pub fn write_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
-    if request.acknowledges_message_id.is_some() {
-        if request.to.is_some() {
-            return Err(AtmError::validation(
-                "acknowledgement write must not include a client-supplied destination",
-            ));
-        }
-        return AckRequest::from_unresolved_write(request)
-            .and_then(|ack| crate::ack::ack_mail_with_runtime(ack, observability, runtime))
-            .map(WriteOutcome::Acknowledged);
-    }
-    if request.to.is_none() {
-        return Err(AtmError::validation(
-            "message write is missing a destination",
-        ));
-    }
-    send_mail_with_runtime(request, observability, runtime).map(WriteOutcome::Sent)
+    write_mail_with_runtime_impl(request, observability, runtime, None)
 }
 
 pub fn send_mail_with_runtime(
@@ -308,30 +288,49 @@ pub fn write_mail_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<WriteOutcome, AtmError> {
-    if request.acknowledges_message_id.is_some() {
-        if request.to.is_some() {
+    write_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+}
+
+/// The sole write pipeline. `acknowledges_message_id` selects only an
+/// acknowledgement-source normalization step; both variants persist and emit
+/// through `write_mail_persisted_with_runtime` exactly once.
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+) -> Result<WriteOutcome, AtmError> {
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
             return Err(AtmError::validation(
-                "acknowledgement write must not include a client-supplied destination",
+                "message write is missing a destination",
             ));
         }
-        return AckRequest::from_unresolved_write(request)
-            .and_then(|ack| {
-                crate::ack::ack_mail_with_runtime_and_post_send_emitter(
-                    ack,
-                    observability,
-                    runtime,
-                    post_send_emitter,
-                )
-            })
-            .map(WriteOutcome::Acknowledged);
+        return write_mail_persisted_with_runtime(
+            request,
+            observability,
+            runtime,
+            post_send_emitter,
+        )
+        .map(WriteOutcome::Sent);
     }
-    if request.to.is_none() {
+    if request.to.is_some() {
         return Err(AtmError::validation(
-            "message write is missing a destination",
+            "acknowledgement write must not include a client-supplied destination",
         ));
     }
-    write_mail_persisted_with_runtime(request, observability, runtime, Some(post_send_emitter))
-        .map(WriteOutcome::Sent)
+    let acknowledgement = crate::ack::resolve_acknowledgement_write(request, runtime)?;
+    let send_outcome = write_mail_persisted_with_runtime(
+        acknowledgement.request(),
+        observability,
+        runtime,
+        post_send_emitter,
+    )?;
+    acknowledgement
+        .finish(runtime, observability, send_outcome)
+        .map(WriteOutcome::Acknowledged)
 }
 
 /// Shared durable persistence and post-write execution after write
