@@ -564,17 +564,17 @@ fn install_platform_hooks(
     let shutdown = Arc::new(AtomicBool::new(false));
     let mut signal_ids = Vec::new();
     signal_ids.push(
-        signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
+        signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|_source| {
             AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
         })?,
     );
     signal_ids.push(
-        signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
+        signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|_source| {
             AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
         })?,
     );
     signal_ids.push(
-        signal_flag::register(SIGBREAK, Arc::clone(reload)).map_err(|source| {
+        signal_flag::register(SIGBREAK, Arc::clone(reload)).map_err(|_source| {
             AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
         })?,
     );
@@ -607,7 +607,7 @@ fn install_platform_hooks(
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn daemon lifecycle signal worker")
         })?;
     Ok(LifecycleWorkerRegistration {
