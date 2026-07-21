@@ -43,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-ROSTERSTORE-REFERENCES"]
 review_gates = ["no_concrete_store_leakage"]
 
 [status]
-state = "retired"
-notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "retired 2026-06-09 — AC.4 consumer cutover complete", "concrete store implementation still lands in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]
+state = "active"
+notes = ["AC.1 introduced crates/atm-storage::RosterStore as the authoritative shared roster contract", "legacy compile bridge remains active while retained production callers still route through atm-runtime::legacy_storage_adapters", "concrete store implementation lives in crates/atm-storage-rusqlite/src/roster_store.rs as SqliteRosterStore during the convergence window", "canonical roster truth remains explicit member rows rather than a TeamConfig snapshot document"]
