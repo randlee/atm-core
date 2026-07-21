@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-RSH-003>
+  a triage:Finding ;
+  triage:findingId "AI6-RSH-003" ;
+  triage:title "Windows build-breaking: remove_stale_endpoint imported only under #[cfg(unix)]" ;
+  triage:description "SocketEndpointGuard::unpublish() unconditionally calls remove_stale_endpoint, but that symbol is only imported under #[cfg(unix)] at line 31-32. Causes compilation failure on Windows (Both 'Just lint (windows-latest)' and 'Test (windows-latest)' CI jobs fail). Distinct from prior 9f15e27c boxing fix." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-RSH-003/pAI-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:reviewedBy "rust-service-hardening-agent" ;
+  triage:reviewedBy "team-lead" .
+
+<urn:atm:triage:occurrence/AI6-RSH-003/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 124 ;
+  triage:snippet "SocketEndpointGuard::unpublish() { remove_stale_endpoint(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:rootCauseFile "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:rootCauseLine 31 ;
+  triage:rootCauseSnippet "#[cfg(unix)] use local_ipc_transport::remove_stale_endpoint" .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
