@@ -56,13 +56,17 @@ pub fn write_http_request(
         "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
-    .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP request headers"))?;
-    writer.write_all(&body).map_err(|_source| {
-        AtmError::daemon_unavailable("failed to write daemon HTTP request body")
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP request headers: {source}"))
     })?;
-    writer
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP request"))
+    writer.write_all(&body).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP request body: {source}"
+        ))
+    })?;
+    writer.flush().map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP request: {source}"))
+    })
 }
 
 pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
@@ -117,13 +121,17 @@ pub fn write_http_response(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
-    .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP response headers"))?;
-    writer.write_all(&body).map_err(|_source| {
-        AtmError::daemon_unavailable("failed to write daemon HTTP response body")
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
     })?;
-    writer
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP response"))
+    writer.write_all(&body).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP response body: {source}"
+        ))
+    })?;
+    writer.flush().map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP response: {source}"))
+    })
 }
 
 pub fn read_http_response(reader: &mut impl Read) -> Result<ResponseEnvelope, AtmError> {
@@ -163,10 +171,10 @@ fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<Strin
                     break;
                 }
             }
-            Err(_source) => {
-                return Err(AtmError::daemon_unavailable(
-                    "failed to read daemon HTTP headers",
-                ));
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "failed to read daemon HTTP headers: {source}",
+                )));
             }
         }
     }
@@ -201,9 +209,9 @@ fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>,
         ));
     }
     let mut body = vec![0_u8; length];
-    reader
-        .read_exact(&mut body)
-        .map_err(|_source| AtmError::daemon_unavailable("failed to read daemon HTTP body"))?;
+    reader.read_exact(&mut body).map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to read daemon HTTP body: {source}"))
+    })?;
     Ok(body)
 }
 
