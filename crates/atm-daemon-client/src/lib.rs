@@ -9,8 +9,8 @@ use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cl
 use atm_core::protocol::{self, RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
+use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
-use interprocess::local_socket::{GenericFilePath, Name, Stream as LocalSocketStream, ToFsName};
 use std::sync::Mutex;
 
 pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
@@ -22,8 +22,6 @@ pub use compatibility::{Connection, Unverified, VersionVerified, verify_connecti
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-#[cfg(windows)]
-const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -349,7 +347,7 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
 }
 
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    let ipc_name = daemon_local_ipc_name_from_path(endpoint.as_ref())?;
+    let ipc_name = protocol::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     thread::Builder::new()
         .name("daemon-local-ipc-connect".to_string())
@@ -380,19 +378,6 @@ pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStrea
             endpoint.display()
         ))),
     }
-}
-
-fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
-    endpoint_path
-        .to_path_buf()
-        .into_os_string()
-        .to_fs_name::<GenericFilePath>()
-        .map_err(|_source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to map daemon local IPC endpoint {} to an AF_UNIX socket name",
-                endpoint_path.display()
-            ))
-        })
 }
 
 /// Exchange one canonical request through HTTP over the daemon's UDS endpoint.
