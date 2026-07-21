@@ -469,7 +469,7 @@ pub trait RosterStore {
 /// A non-empty, opaque certificate fingerprint. It cannot be confused with a
 /// private-key reference at storage and transport boundaries.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct CertificateFingerprint(String);
 
 impl CertificateFingerprint {
@@ -492,9 +492,23 @@ impl FromStr for CertificateFingerprint {
     }
 }
 
+impl TryFrom<String> for CertificateFingerprint {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<CertificateFingerprint> for String {
+    fn from(value: CertificateFingerprint) -> Self {
+        value.0
+    }
+}
+
 /// A non-empty opaque reference to locally held private-key material.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct PrivateKeyRef(String);
 
 impl PrivateKeyRef {
@@ -514,6 +528,20 @@ impl FromStr for PrivateKeyRef {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         require_non_blank(value.to_owned(), "certificate key reference").map(Self)
+    }
+}
+
+impl TryFrom<String> for PrivateKeyRef {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<PrivateKeyRef> for String {
+    fn from(value: PrivateKeyRef) -> Self {
+        value.0
     }
 }
 
@@ -594,11 +622,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
-        derive_ack_requirement, sealed,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
+        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
+        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
+        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -852,5 +880,11 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn security_reference_newtypes_reject_blank_deserialization() {
+        assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
+        assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
     }
 }

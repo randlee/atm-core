@@ -261,11 +261,33 @@ fn require_confirmation(confirmed: bool, operation: &str) -> Result<()> {
 }
 
 fn print_output<T: Serialize>(value: &T, json: bool) -> Result<()> {
-    let rendered = if json {
-        serde_json::to_string(value)?
-    } else {
-        serde_json::to_string_pretty(value)?
-    };
-    println!("{rendered}");
+    println!("{}", render_output(value, json)?);
     Ok(())
+}
+
+fn render_output<T: Serialize>(value: &T, json: bool) -> Result<String> {
+    if json {
+        Ok(serde_json::to_string(value)?)
+    } else {
+        Ok(serde_json::to_string_pretty(value)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{render_output, require_confirmation};
+
+    #[test]
+    fn json_flag_selects_compact_machine_output() {
+        let compact = render_output(&vec!["peer.example"], true).expect("compact JSON");
+        let pretty = render_output(&vec!["peer.example"], false).expect("pretty JSON");
+        assert_eq!(compact, "[\"peer.example\"]");
+        assert!(pretty.contains('\n'));
+    }
+
+    #[test]
+    fn mutations_require_explicit_confirmation() {
+        assert!(require_confirmation(false, "test mutation").is_err());
+        require_confirmation(true, "test mutation").expect("explicit confirmation");
+    }
 }

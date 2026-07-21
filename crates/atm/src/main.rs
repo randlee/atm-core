@@ -12,6 +12,9 @@ use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::error_codes::AtmErrorCode::{
+    BindPreflightFailed, CertificateOperationFailed, PeerConfigValidationFailed,
+};
 use atm_core::home;
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_core::observability::RetainedSinkFaultMode;
@@ -84,6 +87,7 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
 )]
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     match error.code() {
+        PeerConfigValidationFailed | CertificateOperationFailed | BindPreflightFailed => 3,
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
@@ -107,8 +111,6 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
-        | AtmErrorCode::PeerConfigValidationFailed
-        | AtmErrorCode::CertificateOperationFailed
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
         AtmErrorCode::DaemonUnavailable
@@ -122,7 +124,6 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonConnectionSaturated
-        | AtmErrorCode::BindPreflightFailed
         | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered
