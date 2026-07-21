@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI6-RSH-001" ;
+  triage:title "RSH-001 (critical): No socket-level timeout on primary request path" ;
+  triage:description "handle_connection never applies set_recv_timeout/set_send_timeout before blocking reads. Only connection-cap-rejection and shutdown-probe paths apply the 3s deadline to socket. A stalled same-host peer can wedge a connection-worker thread forever, consuming one of 64 connection slots indefinitely. Causally linked with RSH-002 (shutdown not bounded) — together they allow daemon shutdown hang via single wedged peer." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-RSH-001/pAI-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:relatedFinding "AI6-RSH-002" ;
+  triage:reviewedBy "rust-service-hardening-agent" ;
+  triage:resolution "FIXED: apply_primary_request_deadline is now the first statement in handle_connection (request_worker.rs:46), applying set_recv_timeout/set_send_timeout on the primary request path (not just the connection-cap-rejection/shutdown-probe paths). Fixed on feature/pAI-s6-http-uds-router @ 3dd7e6e2, merge-forwarded through AI7 6fc4009a, AI8 1a99ee2c, AI9 87c5a1f7, AI10 b43c0b1b. quality-mgr independently re-verified against source (AI-FIXROUND-3 recheck): PASS. Note: the causally-linked AI6-RSH-002 (force-close on shutdown) remains OPEN — its interrupt_all() still only signals a condvar, no socket is force-closed." .
+
+<urn:atm:triage:occurrence/AI6-RSH-001/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn handle_connection(...) { blocking reads without set_recv_timeout/set_send_timeout }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .

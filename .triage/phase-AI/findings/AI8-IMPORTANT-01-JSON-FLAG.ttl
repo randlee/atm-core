@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-IMPORTANT-01-JSON-FLAG>
+  a triage:Finding ;
+  triage:findingId "AI8-IMPORTANT-01-JSON-FLAG" ;
+  triage:title "Dead --json flag on atm peer list/show commands — print_output() ignores _json parameter" ;
+  triage:description "AI8-QA-1 (rust-qa-agent QA-001, ruthless-boundary RBQA-F005, req-qa ATM-QA-009, rust-best-practices — 4 independent confirmations). The print_output() function (crates/atm/src/commands/peer.rs:253-256) ignores its _json parameter and always prints pretty JSON; the flag has no effect on 'interface list', 'certificate show', 'trust list'. This violates the contract advertised in --help and breaks scripting workflows that depend on stable JSON output format." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-IMPORTANT-01-JSON-FLAG/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Fix: update print_output() to respect the _json parameter and output machine-readable compact JSON when requested. Should output either pretty-printed or compact JSON based on flag value." .
+
+<urn:atm:triage:occurrence/AI8-IMPORTANT-01-JSON-FLAG/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 253 ;
+  triage:snippet "fn print_output(_json: bool, output: PeerOutput) { ... always prints pretty JSON regardless of _json parameter ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .

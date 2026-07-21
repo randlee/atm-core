@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-AUTHENTICATEDINGRESS-SHAPE>
+  a triage:Finding ;
+  triage:findingId "AI6-AUTHENTICATEDINGRESS-SHAPE" ;
+  triage:title "AuthenticatedIngress missing documented Peer(AuthenticatedPeer) variant" ;
+  triage:description "Delivered as enum AuthenticatedIngress { Local }; the contract requires Peer(AuthenticatedPeer) be declared (even if unconstructable pre-AI.9). AuthenticatedPeer doesn't exist anywhere in the workspace. Blocks type-level distinction between local IPC and cross-host peer authentication that AI.9 requires. Blocks AI.7 dev start because routing logic cannot be designed to handle peer variant that the contract promises but enum does not declare." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-AUTHENTICATEDINGRESS-SHAPE/pAI-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:reviewedBy "req-qa" ;
+  triage:reviewedBy "arch-qa" ;
+  triage:resolution "FIXED: crates/atm-daemon/src/api.rs:373-382 now declares enum AuthenticatedIngress { Local, Peer(AuthenticatedPeer) } with a real (minimal, pre-AI.9-unconstructed) AuthenticatedPeer struct, and runtime_health.rs:777 genuinely matches both variants (Peer(_) currently returns Err pending AI.9/AI.7 wiring, not an unused _ingress binding). Fixed on feature/pAI-s6-http-uds-router @ 3dd7e6e2, merge-forwarded through AI7 6fc4009a, AI8 1a99ee2c, AI9 87c5a1f7, AI10 b43c0b1b. quality-mgr independently re-verified against source (AI-FIXROUND-3 recheck): PASS." .
+
+<urn:atm:triage:occurrence/AI6-AUTHENTICATEDINGRESS-SHAPE/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/api.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub enum AuthenticatedIngress { Local } (missing Peer variant)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
