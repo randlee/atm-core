@@ -8,7 +8,7 @@
 use std::fmt;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -154,6 +154,7 @@ impl HttpsMessageTransport for HttpsTransport {
 pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
+    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 }
 
 struct HttpsListener {
@@ -172,6 +173,7 @@ impl HttpsListenerSet {
         let identity = TlsIdentity::load(certificate)?;
         let server_config = Arc::new(server_config(&identity, peers)?);
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let requests = Arc::new(Mutex::new(Vec::new()));
         let mut listeners = Vec::new();
         for interface in enabled {
             let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
@@ -189,9 +191,18 @@ impl HttpsListenerSet {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
             let thread_config = Arc::clone(&server_config);
+            let thread_requests = Arc::clone(&requests);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
-                .spawn(move || accept_loop(listener, thread_stop, thread_config, thread_router))
+                .spawn(move || {
+                    accept_loop(
+                        listener,
+                        thread_stop,
+                        thread_config,
+                        thread_router,
+                        thread_requests,
+                    )
+                })
                 .map_err(|_source| {
                     AtmError::daemon_unavailable("failed to start HTTPS listener")
                 })?;
@@ -200,7 +211,11 @@ impl HttpsListenerSet {
                 thread: Some(thread),
             });
         }
-        Ok(Self { stop, listeners })
+        Ok(Self {
+            stop,
+            listeners,
+            requests,
+        })
     }
 
     pub(crate) fn shutdown(mut self) -> Result<(), AtmError> {
@@ -215,6 +230,15 @@ impl HttpsListenerSet {
                 })?;
             }
         }
+        let requests =
+            std::mem::take(&mut *self.requests.lock().map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS request registry lock poisoned")
+            })?);
+        for request in requests {
+            request.join().map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS request worker panicked during shutdown")
+            })?;
+        }
         Ok(())
     }
 }
@@ -224,6 +248,7 @@ fn accept_loop(
     stop: Arc<std::sync::atomic::AtomicBool>,
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
+    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
@@ -240,7 +265,7 @@ fn accept_loop(
                 }
                 let config = Arc::clone(&config);
                 let router = Arc::clone(&router);
-                let _ = std::thread::Builder::new()
+                let request = std::thread::Builder::new()
                     .name("atm-https-peer-request".to_string())
                     .spawn(move || {
                         if let Err(error) = handle_peer_connection(stream, config, router) {
@@ -254,6 +279,24 @@ fn accept_loop(
                             );
                         }
                     });
+                match request {
+                    Ok(request) => match requests.lock() {
+                        Ok(mut active) => active.push(request),
+                        Err(_) => tracing::error!(
+                            subsystem = "https_transport",
+                            action = "track_connection",
+                            outcome = "failed",
+                            "HTTPS request worker could not be tracked for shutdown"
+                        ),
+                    },
+                    Err(error) => tracing::warn!(
+                        subsystem = "https_transport",
+                        action = "start_request",
+                        outcome = "failed",
+                        %error,
+                        "HTTPS listener rejected connection because request worker startup failed"
+                    ),
+                }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -534,6 +577,7 @@ mod tests {
     use std::str::FromStr as _;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
@@ -632,6 +676,44 @@ mod tests {
         let _ = read_http_response(&mut tls).expect("shared router response");
         assert!(router.0.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn shutdown_joins_an_incomplete_peer_request_within_its_deadline() {
+        let certificate = test_certificate();
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        )
+        .expect("start listener");
+        let _incomplete = TcpStream::connect(listener.listeners[0].address)
+            .expect("open incomplete peer connection");
+        let wait_started = Instant::now();
+        while listener
+            .requests
+            .lock()
+            .expect("request registry")
+            .is_empty()
+        {
+            assert!(
+                wait_started.elapsed() < Duration::from_secs(1),
+                "listener must retain each accepted request before shutdown"
+            );
+            std::thread::yield_now();
+        }
+
+        let started = Instant::now();
+        listener.shutdown().expect("shutdown listener");
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "shutdown must join the bounded peer I/O worker"
+        );
     }
 
     #[test]
