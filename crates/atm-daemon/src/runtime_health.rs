@@ -534,7 +534,7 @@ impl DaemonRequestDispatcher {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    *request,
+                    request,
                     self.observability.as_ref(),
                     &self.service_runtime,
                     &post_send_emitter,

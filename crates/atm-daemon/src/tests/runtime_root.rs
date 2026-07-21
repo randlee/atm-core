@@ -72,21 +72,19 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path.clone());
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(
-                SendRequest::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    "qa-a@test-team",
-                    TEST_TEAM.parse().expect("team"),
-                    SendMessageSource::Inline("hello add-member roster".to_string()),
-                    None,
-                    false,
-                    None,
-                    false,
-                )
-                .expect("send request"),
-            ),
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "qa-a@test-team",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello add-member roster".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
         )))
         .expect("dispatch send");
     let ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) = &response else {
@@ -125,21 +123,19 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     let handle = std::thread::spawn(move || {
         let response = dispatcher
             .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-                Box::new(
-                    SendRequest::new(
-                        atm_home.clone(),
-                        workspace_dir.clone(),
-                        ROLE_TEAM_LEAD.parse().expect("caller"),
-                        "qa-a@test-team",
-                        TEST_TEAM.parse().expect("team"),
-                        SendMessageSource::Inline("hello threaded dispatch".to_string()),
-                        None,
-                        false,
-                        None,
-                        false,
-                    )
-                    .expect("send request"),
-                ),
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "qa-a@test-team",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello threaded dispatch".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
             )))
             .expect("dispatch send");
         serde_json::to_vec(&response).expect("encode HTTP response body");
@@ -176,21 +172,19 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
     let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
     let error = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(
-                SendRequest::new(
-                    atm_home.clone(),
-                    workspace_dir.clone(),
-                    ROLE_TEAM_LEAD.parse().expect("caller"),
-                    &self_address,
-                    TEST_TEAM.parse().expect("team"),
-                    SendMessageSource::Inline("hello self".to_string()),
-                    None,
-                    false,
-                    None,
-                    false,
-                )
-                .expect("send request"),
-            ),
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                &self_address,
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello self".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
         )))
         .expect_err("self-addressed daemon send must fail");
 
@@ -331,7 +325,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(
+    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(
         SendRequest::new(
             atm_home.clone(),
             workspace_dir.clone(),
@@ -345,7 +339,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
             false,
         )
         .expect("send request"),
-    )));
+    ));
     atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
     let response = atm_core::api::read_http_response(&mut stream).expect("read send response");
     match response {
@@ -455,7 +449,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         false,
     )
     .expect("send request");
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request)));
+    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(request));
     let mut verified = atm_daemon_client::verify_connection_compatibility(
         &endpoint,
         atm_daemon_client::CompatibilityPreflight {

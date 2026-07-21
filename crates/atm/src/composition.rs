@@ -275,9 +275,7 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            Box::new(request),
-        )))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
@@ -1107,12 +1105,12 @@ mod tests {
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
                 first_transport.execute(ApiRequest::new(RequestEnvelope::Send(
-                    SendRequestEnvelope::Compose(Box::new(first_request)),
+                    SendRequestEnvelope::Compose(first_request),
                 )))
             });
             let second = scope.spawn(move || {
                 second_transport.execute(ApiRequest::new(RequestEnvelope::Send(
-                    SendRequestEnvelope::Compose(Box::new(second_request)),
+                    SendRequestEnvelope::Compose(second_request),
                 )))
             });
             (
