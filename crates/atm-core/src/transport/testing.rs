@@ -70,7 +70,7 @@ impl ClientTransport for LoopbackClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(request, self.observability.as_ref())
+                send::send_mail(*request, self.observability.as_ref())
                     .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {

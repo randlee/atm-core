@@ -191,9 +191,9 @@ fn ack_mail_with_runtime_sqlite<
                         "warning: post-send hook config lookup failed for {}@{}: {}.",
                         actor,
                         team,
-                        error.message()
+                        error.detail()
                     ),
-                    Some(error.message().to_owned()),
+                    Some(error.detail().to_owned()),
                 )],
             ),
         };

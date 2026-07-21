@@ -27,15 +27,8 @@ const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
 /// Shared protocol send-shaped request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(
-    windows,
-    allow(
-        clippy::large_enum_variant,
-        reason = "Windows target layout makes SendRequest materially larger than AckRequest; this shared protocol DTO preserves the stable request shape across platforms."
-    )
-)]
 pub enum SendRequestEnvelope {
-    Compose(SendRequest),
+    Compose(Box<SendRequest>),
     Acknowledge(AckRequest),
 }
 
@@ -967,7 +960,7 @@ mod tests {
 
     #[test]
     fn protocol_error_round_trip_preserves_exact_code_and_message() {
-        let error = AtmError::member_not_found(TEST_SENDER, TEST_TEAM);
+        let error = AtmError::identity_invalid("representative invalid caller".to_string());
         let response = ResponseEnvelope::Error(error.clone());
         let round_trip: ResponseEnvelope =
             serde_json::from_slice(&serde_json::to_vec(&response).expect("serialize error"))
@@ -977,7 +970,8 @@ mod tests {
             panic!("expected error response");
         };
         assert_eq!(round_trip, error);
-        assert_eq!(round_trip.code(), AtmErrorCode::MemberNotFound);
+        assert_eq!(round_trip.code(), AtmErrorCode::IdentityInvalid);
+        assert_eq!(round_trip.message().matches("Recovery:").count(), 1);
     }
 
     fn test_atm_home_dir() -> PathBuf {
@@ -990,7 +984,7 @@ mod tests {
 
     #[test]
     fn request_from_frame_payload_accepts_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
+        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -1004,7 +998,7 @@ mod tests {
                 false,
             )
             .expect("send request"),
-        ));
+        )));
 
         let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
         let (_request_id, decoded) =

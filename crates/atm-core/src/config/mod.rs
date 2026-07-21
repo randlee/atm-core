@@ -100,7 +100,7 @@ fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<Te
                     format!(
                         "invalid default team in {}: {}",
                         path.display(),
-                        error.message()
+                        error.detail()
                     ),
                 )
             })
@@ -604,6 +604,21 @@ blank = ""
         let error = load_config(root.path()).expect_err("invalid team member");
 
         assert!(error.message().contains("[atm].team_members"));
+    }
+
+    #[test]
+    fn invalid_default_team_composes_one_recovery_line() {
+        let root = unique_temp_dir("atm-config-invalid-default-team");
+        fs::write(
+            root.path().join(".atm.toml"),
+            "[atm]\ndefault_team = \"bad/team\"\n",
+        )
+        .expect("config");
+
+        let error = load_config(root.path()).expect_err("invalid default team must fail");
+
+        assert_eq!(error.code(), AtmErrorCode::ConfigParseFailed);
+        assert_eq!(error.message().matches("Recovery:").count(), 1);
     }
 
     #[test]
