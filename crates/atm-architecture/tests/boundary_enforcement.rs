@@ -16,6 +16,8 @@ use serde::Deserialize;
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
@@ -44,6 +46,16 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 #[test]
 fn atm_runtime_must_not_depend_on_atm_daemon() {
     assert_forbidden_edge_absent("atm-runtime", "atm-daemon");
+}
+
+#[test]
+fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-runtime", "atm-storage-rusqlite");
+}
+
+#[test]
+fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
+    assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-runtime");
 }
 
 #[test]
@@ -175,9 +187,86 @@ fn deleted_daemon_boundary_modules_must_be_retired() {
 }
 
 #[test]
+fn deleted_core_boundary_modules_must_be_retired() {
+    let root = workspace_root();
+    let stale = core_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            let sources = boundary_module_sources(&root, &boundary)?;
+            let source_exists = sources.iter().any(|source| source.exists());
+            module_is_stale_if_missing(source_exists, &boundary.status.state).then(|| {
+                format!(
+                    "{} declares missing module {} with status {}",
+                    path.display(),
+                    boundary.implementation.module,
+                    boundary.status.state
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        stale.is_empty(),
+        "core boundary TOMLs for deleted modules must be retired: {stale:?}"
+    );
+}
+
+#[test]
+fn retired_core_boundary_records_must_not_name_live_dependents_and_must_be_historical_docs() {
+    let docs = fs::read_to_string(workspace_root().join("docs/atm-core/boundaries.md"))
+        .expect("docs/atm-core/boundaries.md must be readable");
+    let stale = core_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            if boundary.status.state != "retired" {
+                return None;
+            }
+
+            let mut failures = Vec::new();
+            if !boundary.dependencies.allowed_dependents.is_empty() {
+                failures.push(format!(
+                    "lists live dependents {:?}",
+                    boundary.dependencies.allowed_dependents
+                ));
+            }
+            let section = documented_boundary_section(&docs, &boundary.name);
+            if section.is_none_or(|section| {
+                !(section.contains("Historical status:")
+                    || section.contains("Historical boundary record"))
+            }) {
+                failures.push("is not documented as historical".to_string());
+            }
+
+            (!failures.is_empty()).then(|| format!("{}: {}", path.display(), failures.join("; ")))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        stale.is_empty(),
+        "retired atm-core boundary records must not name live callers and must be documented as historical: {stale:?}"
+    );
+}
+
+#[test]
 fn missing_daemon_module_requires_retired_boundary_state() {
     assert!(module_is_stale_if_missing(false, "active"));
     assert!(!module_is_stale_if_missing(false, "retired"));
+    assert!(!module_is_stale_if_missing(false, "planned"));
+}
+
+#[test]
+fn missing_core_module_requires_retired_boundary_state() {
+    assert!(module_is_stale_if_missing(false, "active"));
+    assert!(!module_is_stale_if_missing(false, "retired"));
+    assert!(!module_is_stale_if_missing(false, "planned"));
 }
 
 #[test]
@@ -253,8 +342,66 @@ fn daemon_boundary_module_sources(root: &Path, module: &str) -> Option<Vec<PathB
     ])
 }
 
+fn boundary_module_sources(root: &Path, boundary: &BoundaryToml) -> Option<Vec<PathBuf>> {
+    let module = boundary.implementation.module.trim();
+    if module.is_empty() {
+        if boundary.implementation.visibility == "trait_only" {
+            return Some(core_contract_trait_sources(
+                root,
+                &boundary.public.trait_name,
+            ));
+        }
+        return Some(Vec::new());
+    }
+
+    let crate_path = boundary.owner_crate_path.trim();
+    if crate_path.is_empty() {
+        return Some(Vec::new());
+    }
+    let crate_source_root = root
+        .join("crates")
+        .join(crate_path.replace('_', "-"))
+        .join("src");
+    let relative_module = module
+        .strip_prefix(crate_path)
+        .and_then(|value| value.strip_prefix("::"))
+        .unwrap_or(module);
+    if relative_module == module && module != crate_path {
+        return Some(Vec::new());
+    }
+    if relative_module.is_empty() {
+        return Some(vec![
+            crate_source_root.join("lib.rs"),
+            crate_source_root.join("main.rs"),
+        ]);
+    }
+
+    let module_path = crate_source_root.join(relative_module.replace("::", "/"));
+    Some(vec![
+        module_path.with_extension("rs"),
+        module_path.join("mod.rs"),
+    ])
+}
+
+fn core_contract_trait_sources(root: &Path, trait_name: &str) -> Vec<PathBuf> {
+    if trait_name.trim().is_empty() {
+        return Vec::new();
+    }
+    let needle = format!("pub trait {}", trait_name.trim());
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates/atm-core/src/boundary"), &mut files);
+    files
+        .into_iter()
+        .filter(|path| {
+            fs::read_to_string(path)
+                .map(|contents| contents.contains(&needle))
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
 fn module_is_stale_if_missing(source_exists: bool, state: &str) -> bool {
-    !source_exists && state != "retired"
+    !source_exists && !matches!(state, "retired" | "planned")
 }
 
 fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
@@ -362,6 +509,34 @@ fn daemon_boundary_files() -> Vec<PathBuf> {
     files.sort();
     files
 }
+
+fn core_boundary_files() -> Vec<PathBuf> {
+    boundary_files_in("atm-core")
+}
+
+fn boundary_files_in(owner: &str) -> Vec<PathBuf> {
+    let root = workspace_root();
+    let mut files = fs::read_dir(root.join("boundaries").join(owner))
+        .unwrap_or_else(|error| panic!("boundaries/{owner} directory must be readable: {error}"))
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
+
+fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str> {
+    let start_marker = format!("## {}", name);
+    let start = docs.find(&start_marker)?;
+    let rest = &docs[start..];
+    let next = rest
+        .match_indices("\n## ")
+        .next()
+        .map(|(index, _)| index)
+        .unwrap_or(rest.len());
+    Some(&rest[..next])
+}
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -373,6 +548,12 @@ fn workspace_root() -> PathBuf {
 #[derive(Default, Deserialize)]
 struct BoundaryToml {
     #[serde(default)]
+    name: String,
+    #[serde(default)]
+    owner_crate_path: String,
+    #[serde(default)]
+    public: BoundaryPublic,
+    #[serde(default)]
     implementation: BoundaryImplementation,
     #[serde(default)]
     status: BoundaryStatus,
@@ -381,7 +562,15 @@ struct BoundaryToml {
 }
 
 #[derive(Default, Deserialize)]
+struct BoundaryPublic {
+    #[serde(default, rename = "trait")]
+    trait_name: String,
+}
+
+#[derive(Default, Deserialize)]
 struct BoundaryImplementation {
+    #[serde(default)]
+    visibility: String,
     #[serde(default)]
     module: String,
 }
@@ -394,6 +583,8 @@ struct BoundaryStatus {
 
 #[derive(Default, Deserialize)]
 struct BoundaryDependencies {
+    #[serde(default)]
+    allowed_dependents: Vec<String>,
     #[serde(default)]
     allowed_dependencies: Vec<String>,
     #[serde(default)]

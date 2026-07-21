@@ -572,8 +572,7 @@ mod tests {
         restore_task_state_from_backup, restore_team_with_roster_store,
     };
     use crate::boundary::{
-        self, ReplaySource, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-        RosterStoreHealthSnapshot,
+        self, RosterEntry, RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
     };
     use crate::error::AtmError;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -599,12 +598,7 @@ mod tests {
     impl boundary::sealed::Sealed for RecordingRosterStore {}
 
     impl RosterStore for RecordingRosterStore {
-        fn replace_roster(
-            &self,
-            team: &TeamName,
-            members: &[RosterEntry],
-            _source: Option<&ReplaySource>,
-        ) -> Result<(), AtmError> {
+        fn replace_roster(&self, team: &TeamName, members: &[RosterEntry]) -> Result<(), AtmError> {
             self.teams
                 .lock()
                 .expect("roster store lock")

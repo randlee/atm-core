@@ -1,5 +1,5 @@
+use crate::SqliteMailboxMetadataRow;
 use crate::shared_db::SharedDb;
-use crate::{SqliteMailboxMetadataCounts, SqliteMailboxMetadataRow};
 use atm_storage::AtmError;
 use atm_storage::contract::MessageKey;
 use atm_storage::schema::{AtmMessageId, ThreadMode};
@@ -8,11 +8,6 @@ use atm_storage::{AckRequirementState, InboxMessage, derive_ack_requirement};
 use rusqlite::params;
 use serde_json::Map;
 
-// This module shares the same mixed lib/test compatibility lane as lib.rs:
-// some helpers are only exercised via rusqlite tests on this branch, while the
-// rest stay dormant pending the SQL Server backend. `#[expect(dead_code)]`
-// therefore trips `unfulfilled_lint_expectations` under `--all-targets`.
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 type MetadataQueryRow = (
     String,
     Option<String>,
@@ -28,7 +23,6 @@ type MetadataQueryRow = (
     Option<String>,
 );
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_optional_timestamp(
     raw: Option<String>,
     field_name: &str,
@@ -46,7 +40,6 @@ fn parse_optional_timestamp(
         })
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MetadataQueryRow> {
     Ok((
         row.get::<_, String>(0)?,
@@ -64,7 +57,6 @@ fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Metada
     ))
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_optional_message_id(
     raw: Option<String>,
     field_name: &str,
@@ -82,7 +74,6 @@ fn parse_optional_message_id(
     .transpose()
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError> {
     raw.map(|value| {
         serde_json::from_str::<ThreadMode>(&format!("\"{value}\"")).map_err(|error| {
@@ -97,7 +88,6 @@ fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError
     .transpose()
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId>, AtmError> {
     raw.map(|value| {
         value.parse::<TaskId>().map_err(|error| {
@@ -112,20 +102,6 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
     .transpose()
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
-    u64::try_from(value).map_err(|error| {
-        AtmError::validation(format!(
-            "sqlite mailbox metadata {field_name} must not be negative: {value}"
-        ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox metadata counts row before retrying the query.",
-        )
-        .with_source(error)
-    })
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_message_key(message_key: &str) -> Result<MessageKey, AtmError> {
     MessageKey::new(message_key.to_string()).map_err(|error| {
         AtmError::validation(format!(
@@ -137,7 +113,6 @@ fn parse_message_key(message_key: &str) -> Result<MessageKey, AtmError> {
     })
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmError> {
     value.parse().map_err(|error| {
         AtmError::validation(format!(
@@ -149,7 +124,6 @@ fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmErro
     })
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
     value.parse::<IsoTimestamp>().map_err(|error| {
         AtmError::validation(format!(
@@ -162,7 +136,6 @@ fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
     })
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_mailbox_metadata_row(
     row: MetadataQueryRow,
 ) -> Result<SqliteMailboxMetadataRow, AtmError> {
@@ -226,7 +199,6 @@ fn decode_mailbox_metadata_row(
     })
 }
 
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
 pub(crate) fn query_mailbox_metadata_rows(
     db: &SharedDb,
     team: &TeamName,
@@ -291,69 +263,5 @@ pub(crate) fn query_mailbox_metadata_rows(
             collected.push(decode_mailbox_metadata_row(row)?);
         }
         Ok(collected)
-    })
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-pub(crate) fn query_mailbox_metadata_counts(
-    db: &SharedDb,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<SqliteMailboxMetadataCounts, AtmError> {
-    db.with_connection(|connection| {
-        connection
-            .query_row(
-                "SELECT
-                     COUNT(*),
-                     SUM(CASE
-                           WHEN COALESCE(
-                                    mail_message_states.read,
-                                    json_extract(mail_messages.envelope_json, '$.read'),
-                                    0
-                                ) = 0
-                           THEN 1 ELSE 0
-                         END),
-                     SUM(CASE
-                           WHEN mail_message_states.pending_ack_at IS NOT NULL
-                            AND mail_message_states.acknowledged_at IS NULL
-                           THEN 1 ELSE 0
-                         END)
-                 FROM mail_messages
-                 LEFT JOIN mail_message_states
-                   ON mail_message_states.team = mail_messages.team
-                  AND mail_message_states.agent = mail_messages.agent
-                  AND mail_message_states.message_key = mail_messages.message_key
-                 WHERE mail_messages.team = ?1
-                   AND mail_messages.agent = ?2
-                   AND mail_message_states.deleted_at IS NULL
-                   AND (
-                        mail_message_states.expires_at IS NULL
-                        OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                   );",
-                params![team.as_str(), agent.as_str()],
-                |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, Option<i64>>(1)?.unwrap_or(0),
-                        row.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                    ))
-                },
-            )
-            .map_err(|error| db.error("failed to query sqlite mailbox metadata counts", error))
-            .and_then(
-                |(total_messages, unread_message_count, pending_ack_messages)| {
-                    Ok(SqliteMailboxMetadataCounts {
-                        total_messages: decode_count(total_messages, "total_messages")?,
-                        unread_message_count: decode_count(
-                            unread_message_count,
-                            "unread_message_count",
-                        )?,
-                        pending_ack_messages: decode_count(
-                            pending_ack_messages,
-                            "pending_ack_messages",
-                        )?,
-                    })
-                },
-            )
     })
 }

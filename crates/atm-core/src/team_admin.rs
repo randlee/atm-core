@@ -463,9 +463,9 @@ mod tests {
         update_member_with_roster_store,
     };
     use crate::boundary::{
-        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, ReplaySource, RosterEntry,
-        RosterHarness, RosterMemberKind, RosterStore, RosterStoreHealthSnapshot,
-        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        self, BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness,
+        RosterMemberKind, RosterStore, RosterStoreHealthSnapshot, TeamNudgeTemplateOverrideMode,
+        TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
@@ -505,7 +505,6 @@ mod tests {
             &self,
             team: &TeamName,
             members: &[RosterEntry],
-            _source: Option<&ReplaySource>,
         ) -> Result<(), crate::error::AtmError> {
             self.teams
                 .lock()

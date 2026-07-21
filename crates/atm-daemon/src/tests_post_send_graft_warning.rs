@@ -1,5 +1,5 @@
 use atm_core::ack::AckRequest;
-use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
+use atm_core::boundary::{RequestDispatcher, RosterHarness};
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
@@ -20,10 +20,6 @@ use tempfile::TempDir;
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
 const TEST_TEAM: &str = "test-team";
-
-fn replay_source_static(label: &'static str) -> ReplaySource {
-    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
-}
 
 fn install_test_roster_with_harness(
     db_path: &std::path::Path,
@@ -48,11 +44,7 @@ fn install_test_roster_with_harness(
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(
-            &team,
-            &members,
-            Some(&replay_source_static("daemon-graft-warning-test")),
-        )
+        .replace_roster(&team, &members)
         .expect("replace roster");
 }
 

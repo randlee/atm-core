@@ -7,6 +7,7 @@
 //! SQLite-backed storage backend implementing the shared `atm-storage`
 //! message and roster contracts.
 
+#[cfg(test)]
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
@@ -14,31 +15,22 @@ mod roster_store;
 mod shared_db;
 mod writer;
 
-use crate::mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
+#[cfg(test)]
+use crate::mailbox_metadata::query_mailbox_metadata_rows;
 pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
-use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+use atm_storage::schema::MessageEnvelope;
+#[cfg(test)]
+use atm_storage::schema::{AtmMessageId, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp};
+use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
-    u64::try_from(value).map_err(|error| {
-        AtmError::validation(format!(
-            "sqlite count {field_name} must not be negative: {value}"
-        ))
-        .with_recovery(
-            "Repair the malformed sqlite count row before retrying the health or metadata query.",
-        )
-        .with_source(error)
-    })
-}
 
 #[derive(Debug)]
 pub(crate) struct SqliteWriterLockGuard {
@@ -85,57 +77,11 @@ pub fn hold_sqlite_writer_lock_for_test(
     hold_sqlite_writer_lock(path).map(|guard| TestOnlySqliteWriterLockGuard { _guard: guard })
 }
 
-// This compatibility lane mixes lib-only dormant items with helpers exercised only
-// from rusqlite tests. Under `--all-targets`, `#[expect(dead_code)]` becomes
-// `unfulfilled_lint_expectations` on the test-reachable subset before the SQL
-// Server backend lands, so this branch intentionally uses `allow(dead_code)`.
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMessageStateRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub actor: AgentName,
-    pub message_key: MessageKey,
-    pub read: bool,
-    pub pending_ack_at: Option<IsoTimestamp>,
-    pub acknowledged_at: Option<IsoTimestamp>,
-    pub expires_at: Option<IsoTimestamp>,
-    pub deleted_at: Option<IsoTimestamp>,
-    pub updated_at: Option<IsoTimestamp>,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct SqliteStoredMessageRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: MessageKey,
-    pub envelope: MessageEnvelope,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct SqliteIngestReplayStateRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub source: String,
-    pub last_fingerprint: Option<String>,
-    pub last_ingested_at: Option<IsoTimestamp>,
-    pub ingested_rows: u64,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailHealthSnapshot {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub total_messages: u64,
-    pub pending_ack_messages: u64,
-    pub read_message_count: u64,
-    pub latest_message_timestamp: Option<IsoTimestamp>,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
+#[cfg(test)]
+#[allow(
+    dead_code,
+    reason = "metadata positive-path fields are owned by the query DTO while current tests exercise malformed-row validation"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SqliteMailboxMetadataRow {
     pub message_key: MessageKey,
@@ -151,23 +97,6 @@ pub(crate) struct SqliteMailboxMetadataRow {
     pub acknowledged_at: Option<IsoTimestamp>,
     pub expires_at: Option<IsoTimestamp>,
     pub task_id: Option<atm_storage::types::TaskId>,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteMailboxMetadataCounts {
-    pub total_messages: u64,
-    pub unread_message_count: u64,
-    pub pending_ack_messages: u64,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SqliteRosterHealthSnapshot {
-    pub team: TeamName,
-    pub member_count: u64,
-    pub stale: bool,
-    pub refreshed_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug)]
@@ -191,10 +120,6 @@ struct StoredMailMessageState {
     pending_ack_at: Option<IsoTimestamp>,
     acknowledged_at: Option<IsoTimestamp>,
     expires_at: Option<IsoTimestamp>,
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    deleted_at: Option<IsoTimestamp>,
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    updated_at: Option<IsoTimestamp>,
 }
 
 impl SqliteMessageStore {
@@ -228,7 +153,7 @@ impl SqliteMessageStore {
     ) -> Result<Option<StoredMailMessageState>, AtmError> {
         connection
             .query_row(
-                "SELECT read, pending_ack_at, acknowledged_at, expires_at, deleted_at, updated_at
+                "SELECT read, pending_ack_at, acknowledged_at, expires_at
                  FROM mail_message_states
                  WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
                 params![team.as_str(), agent.as_str(), message_key.as_ref()],
@@ -238,8 +163,6 @@ impl SqliteMessageStore {
                         row.get::<_, Option<String>>(1)?,
                         row.get::<_, Option<String>>(2)?,
                         row.get::<_, Option<String>>(3)?,
-                        row.get::<_, Option<String>>(4)?,
-                        row.get::<_, Option<String>>(5)?,
                     ))
                 },
             )
@@ -248,24 +171,20 @@ impl SqliteMessageStore {
                 self.db
                     .error("failed to load sqlite message-state row", error)
             })?
-            .map(
-                |(read, pending_ack_at, acknowledged_at, expires_at, deleted_at, updated_at)| {
-                    Ok(StoredMailMessageState {
-                        read: read != 0,
-                        pending_ack_at: Self::parse_optional_timestamp(
-                            pending_ack_at,
-                            "pending_ack_at",
-                        )?,
-                        acknowledged_at: Self::parse_optional_timestamp(
-                            acknowledged_at,
-                            "acknowledged_at",
-                        )?,
-                        expires_at: Self::parse_optional_timestamp(expires_at, "expires_at")?,
-                        deleted_at: Self::parse_optional_timestamp(deleted_at, "deleted_at")?,
-                        updated_at: Self::parse_optional_timestamp(updated_at, "updated_at")?,
-                    })
-                },
-            )
+            .map(|(read, pending_ack_at, acknowledged_at, expires_at)| {
+                Ok(StoredMailMessageState {
+                    read: read != 0,
+                    pending_ack_at: Self::parse_optional_timestamp(
+                        pending_ack_at,
+                        "pending_ack_at",
+                    )?,
+                    acknowledged_at: Self::parse_optional_timestamp(
+                        acknowledged_at,
+                        "acknowledged_at",
+                    )?,
+                    expires_at: Self::parse_optional_timestamp(expires_at, "expires_at")?,
+                })
+            })
             .transpose()
     }
 
@@ -445,6 +364,43 @@ pub struct SqliteStorageBackend {
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
 }
 
+/// Concrete SQLite selection owned by the SQLite backend and consumed only at
+/// an executable composition root through [`StorageFactory`].
+#[derive(Debug, Clone, Default)]
+pub struct SqliteStorageFactory {
+    database_path: Option<PathBuf>,
+}
+
+impl SqliteStorageFactory {
+    pub fn host_scoped() -> Self {
+        Self::default()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn at_path(path: impl Into<PathBuf>) -> Self {
+        Self {
+            database_path: Some(path.into()),
+        }
+    }
+
+    fn database_path(&self, durable_state_root: &Path) -> PathBuf {
+        self.database_path
+            .clone()
+            .unwrap_or_else(|| durable_state_root.join("mail.db"))
+    }
+}
+
+impl StorageFactory for SqliteStorageFactory {
+    fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
+        let backend = SqliteStorageBackend::new(self.database_path(durable_state_root))?;
+        Ok(StorageHandles::new(
+            backend.message_store(),
+            backend.roster_store(),
+            backend.nudge_template_override_store(),
+        ))
+    }
+}
+
 impl SqliteStorageBackend {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         Self::new_with_observability(path, Arc::new(NullSqliteObservability))
@@ -488,21 +444,6 @@ impl SqliteStorageBackend {
             agent,
             message_key,
             envelope,
-        })
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn load_message_record(
-        &self,
-        key: &MessageKey,
-    ) -> Result<Option<SqliteStoredMessageRecord>, AtmError> {
-        self.message_store().load_message(key).map(|record| {
-            record.map(|record| SqliteStoredMessageRecord {
-                team: record.team,
-                agent: record.agent,
-                message_key: record.message_key,
-                envelope: record.envelope,
-            })
         })
     }
 
@@ -554,97 +495,7 @@ impl SqliteStorageBackend {
         }
     }
 
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn upsert_message_state(
-        &self,
-        state: SqliteMessageStateRecord,
-    ) -> Result<(), AtmError> {
-        let updated_at = state
-            .updated_at
-            .unwrap_or_else(IsoTimestamp::now)
-            .into_inner()
-            .to_rfc3339();
-        self.message_store.db.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO mail_message_states(
-                        team,
-                        agent,
-                        message_key,
-                        read,
-                        pending_ack_at,
-                        acknowledged_at,
-                        expires_at,
-                        deleted_at,
-                        updated_at
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
-                        read = excluded.read,
-                        pending_ack_at = excluded.pending_ack_at,
-                        acknowledged_at = excluded.acknowledged_at,
-                        expires_at = excluded.expires_at,
-                        deleted_at = excluded.deleted_at,
-                        updated_at = excluded.updated_at;",
-                    params![
-                        state.team.as_str(),
-                        state.agent.as_str(),
-                        state.message_key.as_ref(),
-                        i64::from(state.read),
-                        state
-                            .pending_ack_at
-                            .map(|value| value.into_inner().to_rfc3339()),
-                        state
-                            .acknowledged_at
-                            .map(|value| value.into_inner().to_rfc3339()),
-                        state
-                            .expires_at
-                            .map(|value| value.into_inner().to_rfc3339()),
-                        state
-                            .deleted_at
-                            .map(|value| value.into_inner().to_rfc3339()),
-                        updated_at,
-                    ],
-                )
-                .map_err(|error| {
-                    self.message_store
-                        .db
-                        .error("failed to upsert sqlite message state", error)
-                })?;
-            Ok(())
-        })
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn load_message_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        actor: &AgentName,
-        message_key: &MessageKey,
-    ) -> Result<Option<SqliteMessageStateRecord>, AtmError> {
-        self.message_store
-            .db
-            .with_connection(|connection| {
-                self.message_store
-                    .load_message_state_row(connection, team, agent, message_key)
-            })
-            .map(|state| {
-                state.map(|state| SqliteMessageStateRecord {
-                    team: team.clone(),
-                    agent: agent.clone(),
-                    actor: actor.clone(),
-                    message_key: message_key.clone(),
-                    read: state.read,
-                    pending_ack_at: state.pending_ack_at,
-                    acknowledged_at: state.acknowledged_at,
-                    expires_at: state.expires_at,
-                    deleted_at: state.deleted_at,
-                    updated_at: state.updated_at,
-                })
-            })
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
+    #[cfg(test)]
     pub(crate) fn query_mailbox_metadata(
         &self,
         team: &TeamName,
@@ -654,183 +505,8 @@ impl SqliteStorageBackend {
         query_mailbox_metadata_rows(&self.message_store.db, team, agent, limit)
     }
 
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn query_mailbox_metadata_counts(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<SqliteMailboxMetadataCounts, AtmError> {
-        query_mailbox_metadata_counts(&self.message_store.db, team, agent)
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn record_ingest_replay_state(
-        &self,
-        state: &SqliteIngestReplayStateRecord,
-    ) -> Result<(), AtmError> {
-        let state_json = serde_json::to_string(state).map_err(|error| {
-            AtmError::validation(format!(
-                "failed to serialize sqlite ingest replay state: {error}"
-            ))
-            .with_recovery(
-                "Repair the ingest replay state payload before retrying the SQLite write.",
-            )
-            .with_source(error)
-        })?;
-        self.message_store.db.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team, agent, source) DO UPDATE SET
-                       state_json = excluded.state_json;",
-                    params![
-                        state.team.as_str(),
-                        state.agent.as_str(),
-                        state.source,
-                        state_json,
-                    ],
-                )
-                .map_err(|error| {
-                    self.message_store
-                        .db
-                        .error("failed to record sqlite ingest replay state", error)
-                })?;
-            Ok(())
-        })
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn load_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &str,
-    ) -> Result<Option<SqliteIngestReplayStateRecord>, AtmError> {
-        let state_json = self.message_store.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT state_json
-                     FROM mail_ingest_replay_states
-                     WHERE team = ?1 AND agent = ?2 AND source = ?3;",
-                    params![team.as_str(), agent.as_str(), source],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| {
-                    self.message_store
-                        .db
-                        .error("failed to load sqlite ingest replay state", error)
-                })
-        })?;
-
-        state_json
-            .map(|value| {
-                serde_json::from_str::<SqliteIngestReplayStateRecord>(&value).map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse sqlite ingest replay state: {error}"
-                    ))
-                    .with_recovery(
-                        "Repair the persisted ingest replay row before retrying the SQLite read.",
-                    )
-                    .with_source(error)
-                })
-            })
-            .transpose()
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn mail_health_snapshot(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<SqliteMailHealthSnapshot, AtmError> {
-        let (total_messages, pending_ack_messages, read_message_count, latest_message_timestamp) =
-            self.message_store.db.with_connection(|connection| {
-                connection
-                    .query_row(
-                        "SELECT
-                             COUNT(*),
-                             (
-                                 SELECT COUNT(*)
-                                 FROM mail_message_states
-                                 WHERE team = ?1
-                                   AND agent = ?2
-                                   AND pending_ack_at IS NOT NULL
-                                   AND acknowledged_at IS NULL
-                             ),
-                             (
-                                 SELECT COUNT(*)
-                                 FROM mail_message_states
-                                 WHERE team = ?1
-                                   AND agent = ?2
-                                   AND read = 1
-                             ),
-                             MAX(COALESCE(recorded_at, message_at))
-                         FROM mail_messages
-                         WHERE team = ?1 AND agent = ?2;",
-                        params![team.as_str(), agent.as_str()],
-                        |row| {
-                            Ok((
-                                row.get::<_, i64>(0)?,
-                                row.get::<_, i64>(1)?,
-                                row.get::<_, i64>(2)?,
-                                row.get::<_, Option<String>>(3)?,
-                            ))
-                        },
-                    )
-                    .map_err(|error| {
-                        self.message_store
-                            .db
-                            .error("failed to query sqlite mail health summary", error)
-                    })
-            })?;
-
-        Ok(SqliteMailHealthSnapshot {
-            team: team.clone(),
-            agent: agent.clone(),
-            total_messages: decode_sqlite_count(total_messages, "total_messages")?,
-            pending_ack_messages: decode_sqlite_count(
-                pending_ack_messages,
-                "pending_ack_messages",
-            )?,
-            read_message_count: decode_sqlite_count(read_message_count, "read_message_count")?,
-            latest_message_timestamp: SqliteMessageStore::parse_optional_timestamp(
-                latest_message_timestamp,
-                "health latest_message",
-            )?,
-        })
-    }
-
     pub fn inspect_mail_store(&self) -> Result<(), AtmError> {
         self.message_store.db.with_connection(|_| Ok(()))
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn roster_health_snapshot(
-        &self,
-        team: &TeamName,
-    ) -> Result<SqliteRosterHealthSnapshot, AtmError> {
-        let member_count = self.roster_store.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT COUNT(*) FROM team_roster WHERE team_name = ?1;",
-                    params![team.as_str()],
-                    |row| row.get::<_, i64>(0),
-                )
-                .map_err(|error| {
-                    self.roster_store
-                        .db
-                        .error("failed to query sqlite roster health summary", error)
-                })
-        })?;
-
-        Ok(SqliteRosterHealthSnapshot {
-            team: team.clone(),
-            member_count: decode_sqlite_count(member_count, "roster_member_count")?,
-            stale: false,
-            refreshed_at: None,
-        })
     }
 
     pub fn inspect_roster_store(&self) -> Result<(), AtmError> {
@@ -980,36 +656,6 @@ mod tests {
             .load_message(&MessageKey::new("atm:test-invalid-team").expect("key"))
             .expect_err("invalid team should fail");
         assert!(error.message.contains("failed to parse sqlite team"));
-    }
-
-    #[test]
-    fn load_ingest_replay_state_rejects_invalid_json() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let team = team();
-        let agent = agent();
-        backend
-            .message_store
-            .db
-            .with_transaction(|transaction| {
-                transaction
-                    .execute(
-                        "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
-                         VALUES (?1, ?2, ?3, ?4);",
-                        params![team.as_str(), agent.as_str(), "bad-source", "{not-json"],
-                    )
-                    .expect("insert invalid replay state");
-                Ok(())
-            })
-            .expect("seed row");
-
-        let error = backend
-            .load_ingest_replay_state(&team, &agent, "bad-source")
-            .expect_err("invalid replay state should fail");
-        assert!(
-            error
-                .message
-                .contains("failed to parse sqlite ingest replay state")
-        );
     }
 
     #[test]

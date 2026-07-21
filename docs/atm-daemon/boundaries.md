@@ -12,7 +12,7 @@ Current design assumption:
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
 - after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
-  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
+  `atm-runtime`; a direct `atm-daemon -> atm-storage-rusqlite` dependency is a
   boundary violation guarded by both the boundary TOMLs and
   `cargo test --package atm-architecture`
 - Phase AD retired the watch/reconcile runtime lanes; any retained
@@ -26,6 +26,9 @@ Current design assumption:
 - Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
   above that owner boundary; harness-specific compatibility-export policy must
   now stay centralized there rather than leaking back into command callers.
+- This daemon-side retained runtime policy coordinator is distinct from the
+  `atm-core` delivery policy module, which owns message delivery-plan
+  decisions inside the reusable service library.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:

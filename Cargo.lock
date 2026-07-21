@@ -10,7 +10,6 @@ dependencies = [
  "anyhow",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
- "atm-runtime",
  "atm-runtime-test-support",
  "chrono",
  "clap",
@@ -136,6 +135,7 @@ version = "1.3.1"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
+ "atm-daemon-bootstrap",
  "atm-daemon-client",
  "atm-runtime",
  "atm-runtime-test-support",
@@ -158,6 +158,7 @@ version = "1.3.1"
 dependencies = [
  "agent-team-mail-core",
  "atm-runtime",
+ "atm-storage-rusqlite",
 ]
 
 [[package]]
@@ -193,7 +194,6 @@ version = "1.3.1"
 dependencies = [
  "agent-team-mail-core",
  "atm-storage",
- "atm-storage-rusqlite",
 ]
 
 [[package]]
