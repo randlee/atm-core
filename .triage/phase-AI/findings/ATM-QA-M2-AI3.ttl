@@ -12,7 +12,7 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-M2-AI3/pAI-3/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
@@ -26,7 +26,7 @@
   triage:file "crates/atm-storage/src/error.rs" ;
   triage:line 1 ;
   triage:snippet "pub struct AtmError { pub code: AtmErrorCode, pub message: String } -- public fields allow bypassing error_catalog::render(); deferred to AI.4 consumer migration" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:closed false ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "0d448efe" ;

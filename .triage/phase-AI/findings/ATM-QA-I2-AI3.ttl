@@ -12,8 +12,8 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-I2-AI3/pAI-3/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
@@ -26,7 +26,7 @@
   triage:file "docs/atm-error-codes.md" ;
   triage:line 28 ;
   triage:snippet "- `crates/atm-core/src/error_codes.rs` -- cited as canonical, but crates/atm-storage/src/error_codes.rs also exists post-AI.3 split; docs/atm-core/architecture.md:307,676 repeat the same claim" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:closed false ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "0d448efe" ;
