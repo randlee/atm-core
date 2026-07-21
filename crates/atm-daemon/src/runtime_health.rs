@@ -34,7 +34,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_peer_transport::{PeerHttpTransport, PeerRequestDeadline};
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -229,7 +229,7 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    peer_transport: std::sync::Mutex<Option<Arc<dyn PeerHttpTransport>>>,
+    https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -241,7 +241,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("peer_transport", &"dyn PeerHttpTransport")
+            .field("https_transport", &"dyn HttpsMessageTransport")
             .finish()
     }
 }
@@ -501,25 +501,25 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            peer_transport: std::sync::Mutex::new(None),
+            https_transport: std::sync::Mutex::new(None),
         }
     }
 
-    pub(crate) fn install_peer_transport(
+    pub(crate) fn install_https_transport(
         &self,
-        transport: Arc<dyn PeerHttpTransport>,
+        transport: Arc<dyn HttpsMessageTransport>,
     ) -> Result<(), AtmError> {
         let mut slot = self
-            .peer_transport
+            .https_transport
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
         *slot = Some(transport);
         Ok(())
     }
 
-    pub(crate) fn clear_peer_transport(&self) -> Result<(), AtmError> {
+    pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
         let mut slot = self
-            .peer_transport
+            .https_transport
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
         *slot = None;
@@ -626,14 +626,14 @@ impl DaemonRequestDispatcher {
             AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
         })?;
         let transport = self
-            .peer_transport
+            .https_transport
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
             .clone()
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        transport.deliver(request, &peer, PeerRequestDeadline::default())
+        transport.deliver(request, &peer, HttpsRequestDeadline::default())
     }
 
     fn dispatch_peer_ingress(
@@ -1003,7 +1003,7 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
-            peer_transport: std::sync::Mutex::new(None),
+            https_transport: std::sync::Mutex::new(None),
         }
     }
 }

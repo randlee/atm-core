@@ -32,13 +32,13 @@ const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The independently bounded network stages for one peer request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PeerRequestDeadline {
+pub(crate) struct HttpsRequestDeadline {
     pub(crate) connect: Duration,
     pub(crate) handshake: Duration,
     pub(crate) request: Duration,
 }
 
-impl Default for PeerRequestDeadline {
+impl Default for HttpsRequestDeadline {
     fn default() -> Self {
         Self {
             connect: HTTPS_TIMEOUT,
@@ -50,12 +50,12 @@ impl Default for PeerRequestDeadline {
 
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
-pub(crate) trait PeerHttpTransport: Send + Sync {
+pub(crate) trait HttpsMessageTransport: Send + Sync {
     fn deliver(
         &self,
         request: WriteRequest,
         peer: &TrustedPeer,
-        deadline: PeerRequestDeadline,
+        deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
 }
 
@@ -105,11 +105,11 @@ impl TlsIdentity {
 /// Concrete outbound adapter. Configuration is read during construction and
 /// retained only as TLS material; no storage trait crosses this boundary.
 #[derive(Debug)]
-pub(crate) struct HttpsPeerTransport {
+pub(crate) struct HttpsTransport {
     identity: TlsIdentity,
 }
 
-impl HttpsPeerTransport {
+impl HttpsTransport {
     pub(crate) fn from_local_certificate(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         Ok(Self {
             identity: TlsIdentity::load(certificate)?,
@@ -117,12 +117,12 @@ impl HttpsPeerTransport {
     }
 }
 
-impl PeerHttpTransport for HttpsPeerTransport {
+impl HttpsMessageTransport for HttpsTransport {
     fn deliver(
         &self,
         request: WriteRequest,
         peer: &TrustedPeer,
-        deadline: PeerRequestDeadline,
+        deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         if !peer.enabled {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
@@ -150,18 +150,18 @@ impl PeerHttpTransport for HttpsPeerTransport {
 }
 
 /// Starts enabled peer listeners. The caller owns lifecycle shutdown through
-/// `PeerListenerSet::shutdown`; the listener has no daemon state of its own.
-pub(crate) struct PeerListenerSet {
+/// `HttpsListenerSet::shutdown`; the listener has no daemon state of its own.
+pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
-    listeners: Vec<PeerListener>,
+    listeners: Vec<HttpsListener>,
 }
 
-struct PeerListener {
+struct HttpsListener {
     address: SocketAddr,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
-impl PeerListenerSet {
+impl HttpsListenerSet {
     pub(crate) fn bind_enabled(
         interfaces: &[HttpsInterface],
         certificate: &LocalCertificate,
@@ -195,7 +195,7 @@ impl PeerListenerSet {
                 .map_err(|_source| {
                     AtmError::daemon_unavailable("failed to start HTTPS listener")
                 })?;
-            listeners.push(PeerListener {
+            listeners.push(HttpsListener {
                 address,
                 thread: Some(thread),
             });
@@ -230,7 +230,7 @@ fn accept_loop(
             Ok((stream, _)) => {
                 if let Err(error) = stream.set_nonblocking(false) {
                     tracing::warn!(
-                        subsystem = "https_peer_transport",
+                        subsystem = "https_transport",
                         action = "configure_connection",
                         outcome = "failed",
                         %error,
@@ -245,7 +245,7 @@ fn accept_loop(
                     .spawn(move || {
                         if let Err(error) = handle_peer_connection(stream, config, router) {
                             tracing::warn!(
-                                subsystem = "https_peer_transport",
+                                subsystem = "https_transport",
                                 action = "request",
                                 outcome = "rejected",
                                 error_code = %error.code(),
@@ -260,7 +260,7 @@ fn accept_loop(
             }
             Err(error) => {
                 tracing::warn!(
-                    subsystem = "https_peer_transport",
+                    subsystem = "https_transport",
                     action = "accept",
                     outcome = "failed",
                     %error,
@@ -536,7 +536,7 @@ mod tests {
     use rustls::{ClientConnection, StreamOwned};
 
     use super::{
-        PeerListenerSet, PeerRequestDeadline, TlsIdentity, client_config, complete_handshake,
+        HttpsListenerSet, HttpsRequestDeadline, TlsIdentity, client_config, complete_handshake,
         normalize_fingerprint,
     };
 
@@ -568,7 +568,7 @@ mod tests {
 
     #[test]
     fn peer_deadline_defaults_bound_every_network_leg() {
-        let deadline = PeerRequestDeadline::default();
+        let deadline = HttpsRequestDeadline::default();
         assert_eq!(deadline.connect.as_secs(), 5);
         assert_eq!(deadline.handshake.as_secs(), 5);
         assert_eq!(deadline.request.as_secs(), 5);
@@ -579,7 +579,7 @@ mod tests {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
-        let listener = PeerListenerSet::bind_enabled(
+        let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {
                 bind_addr: "127.0.0.1:0".parse().expect("bind address"),
                 advertise_host: "localhost".parse().expect("host"),
@@ -624,7 +624,7 @@ mod tests {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
-        let listener = PeerListenerSet::bind_enabled(
+        let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {
                 bind_addr: "127.0.0.1:0".parse().expect("bind address"),
                 advertise_host: "localhost".parse().expect("host"),
