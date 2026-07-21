@@ -28,6 +28,7 @@ impl AckRequest {
             home_dir: self.home_dir,
             current_dir: self.current_dir,
             caller_identity: self.caller_identity,
+            caller_chat_id: None,
             caller_team: self.caller_team,
             to: None,
             message_source: SendMessageSource::Inline(self.reply_body),
@@ -280,6 +281,7 @@ fn canonical_ack_write_request(
         home_dir: request.home_dir.clone(),
         current_dir: request.current_dir.clone(),
         caller_identity: actor.clone(),
+        caller_chat_id: None,
         caller_team: team.clone(),
         to: Some(crate::address::AgentAddress {
             agent: target.agent.clone(),
