@@ -49,6 +49,21 @@ pub enum AuthenticatedIngress {
     Peer(AuthenticatedPeer),
 }
 
+pub struct LocalCapability {
+    pub bytes: [u8; 32],
+    pub daemon_instance_id: Ulid,
+}
+
+pub struct LocalHttpEndpointRecord {
+    pub schema_version: u8, // 1
+    pub daemon_instance_id: Ulid,
+    pub ipv4_loopback: Option<SocketAddr>,
+    pub ipv6_loopback: Option<SocketAddr>,
+    pub capability_base64url: String, // encodes exactly 32 bytes
+    pub issued_at: IsoTimestamp,
+    pub revoked_at: Option<IsoTimestamp>,
+}
+
 pub struct HttpResponse {
     pub status: HttpStatus,
     pub headers: HttpHeaders,
@@ -60,7 +75,10 @@ Adapters authenticate then call `ApiRouter`. They do not decide message
 routing from socket type or address, access storage, mutate acknowledgement
 state, or emit a nudge. A valid runtime capability yields local ingress; exact
 mTLS peer authentication yields peer ingress; every other connection is
-rejected before routing.
+rejected before routing. `local-http.json` is owner-readable only. A client
+rejects a record whose instance ID does not match the singleton owner, whose
+capability does not decode to 32 bytes, or whose `revoked_at` is present; an
+orderly shutdown writes revocation before endpoint removal.
 
 ## Deletion inventory
 

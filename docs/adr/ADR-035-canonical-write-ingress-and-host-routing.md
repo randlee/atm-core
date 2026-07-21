@@ -75,3 +75,11 @@ opaque `AuthenticatedPeer` constructed only by the HTTPS adapter after mTLS and
 exact configured-host/fingerprint verification; adapters cannot fabricate it.
 This type preserves the authenticate-before-route invariant without adding a
 peer-specific application handler.
+
+## Compliance status
+
+This ADR is the accepted target contract. At the current integrated tip, the
+pre-persistence `route_write` remote-host branch and no-op
+`PostWriteRouter::dispatch` remain; AI.12 is the sole owning sprint for their
+deletion and the structural enforcement of this ADR. Until AI.12 closes, no
+current code claim may describe the post-write routing invariants as enforced.

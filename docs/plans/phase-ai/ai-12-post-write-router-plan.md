@@ -75,8 +75,8 @@ difference.
   nudges, and acknowledgement reply construction. The destination host is an
   outbound routing selector: the sending router consumes it to choose the peer,
   and the authenticated receiving adapter removes that selector before the
-  receiving post-write router runs. Update ADR-035 and the address projection
-  contract to make this distinction explicit.
+  receiving post-write router runs. Confirm ADR-035 and the address projection
+  contract remain consistent with this distinction when AI.12 lands.
 - A remote-recipient roster rejection is produced only by the receiving host's
   canonical handler. The origin retains no recipient inbox row and makes no
   remote acknowledgement mutation.
