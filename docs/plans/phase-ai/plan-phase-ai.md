@@ -20,7 +20,7 @@ the same read/write handlers. Cross-host code is transport-only.
 | --- | --- |
 | Local client transport | HTTP over UDS on Unix and Windows AF_UNIX; no named pipes |
 | Remote transport | HTTPS/TCP to the same daemon router |
-| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/doctor`, `/teams`, and `/team/{name}` endpoints |
+| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, and `/doctor` endpoints |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
 | Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
 | Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
