@@ -973,7 +973,7 @@ Implementation Branches:
 | `AI.4` | `complete` | `feature/pAI-s4-error-consumer-migration` | consumers migrated onto the two-field error contract |
 | `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
 | `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
-| `AI.7` | `in progress` | `feature/pAI-s7-canonical-write-path` | one canonical write path for send and acknowledgement |
+| `AI.7` | `complete` | `feature/pAI-s7-canonical-write-path` | canonical write request, single host-routing seam, and collapsed send/ack ingress |
 | `AI.8` | `in progress` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
 | `AI.9` | `in progress` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
 | `AI.10` | `in progress` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout |
