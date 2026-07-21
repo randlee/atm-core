@@ -269,7 +269,7 @@ fn read_request_frame_with_helper(
             let result = read_request_frame(&mut stream);
             let _ = result_tx.send((stream, result));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn Windows named-pipe request read helper")
         })?;
 
