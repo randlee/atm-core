@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-IMPORTANT-03-DOCTOR-TEXT-RENDER>
+  a triage:Finding ;
+  triage:findingId "AI8-IMPORTANT-03-DOCTOR-TEXT-RENDER" ;
+  triage:title "Text-mode atm doctor has no rendering for peer-config state — only --json exposes it" ;
+  triage:description "AI8-QA-1 (ruthless-boundary RBQA-F002). Deliverable 3 requires atm doctor to report peer configuration state in both text and JSON modes. Currently, the plain-text operator path has no rendering for peer-config state at all; only the --json output exposes it. This breaks the text-mode operator experience and violates the symmetric reporting contract (both modes should provide equivalent information)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-IMPORTANT-03-DOCTOR-TEXT-RENDER/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Fix: add text-mode rendering for peer configuration state in doctor output. Should display summary counts and status of enabled interfaces, local certificates, and trusted peers in plain-text format." .
+
+<urn:atm:triage:occurrence/AI8-IMPORTANT-03-DOCTOR-TEXT-RENDER/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 1 ;
+  triage:snippet "Text-mode rendering missing for peer_config state; only --json path exposes PeerConfigDoctorReport" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .

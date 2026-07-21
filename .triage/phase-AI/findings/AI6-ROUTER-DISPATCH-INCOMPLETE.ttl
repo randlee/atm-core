@@ -18,7 +18,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-ROUTER-DISPATCH-INCOMPLETE/pAI-s6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
-  triage:reviewedBy "req-qa" .
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:reviewedBy "req-qa" ;
+  triage:resolution "FIXED: runtime_health.rs route_api_request (789-819) now matches each ApiRequest variant to real per-resource handlers (send_mail_with_runtime_and_post_send_emitter, list_mail, peek_mail_with_runtime, read_mail_with_runtime, clear_mail_with_runtime, project_doctor_report) — genuine dispatch, not a passthrough bypass (ApiRequest::Teams currently returns an explicit Err, tracked separately under AI6-IMPORTANT-FINDINGS 8.1). Fixed on feature/pAI-s6-http-uds-router @ 3dd7e6e2, merge-forwarded through AI7 6fc4009a, AI8 1a99ee2c, AI9 87c5a1f7, AI10 b43c0b1b. quality-mgr independently re-verified against source (AI-FIXROUND-3 recheck): PASS." .
 
 <urn:atm:triage:occurrence/AI6-ROUTER-DISPATCH-INCOMPLETE/pAI-s6/1>
   a triage:Occurrence ;

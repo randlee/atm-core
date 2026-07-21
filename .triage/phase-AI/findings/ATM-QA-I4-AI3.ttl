@@ -12,13 +12,14 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "whole_phase" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/1>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/2>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/3>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/4>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/5>, <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/6> ;
   triage:openOn <urn:atm:triage:worktree/pAI-4/baf86e22>, <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
   triage:highestOpenBranch "feature/pAI-s5-chat-address-identity" ;
-  triage:resolution "OPEN, dispatch-ready, escalated to blocking (AI4-QA-1 verdict rejects the earlier 'fixed' claim). Fix target: feature/pAI-s5-chat-address-identity (latest sprint branch; AI.5 branched from AI.4 and inherits all 6 sites unchanged, per fix-dispatch-latest-branch policy). Required fix: stop re-embedding a fully-rendered `.message()` string (which already ends in a composed 'Recovery: ...' line) into a new AtmError constructor call. Either (a) pass through the lower-level error's raw detail/guidance code instead of its rendered message, so the outer constructor is the sole composer of the 'Recovery:' line, or (b) give AtmError a wrap-without-re-rendering constructor for exactly this case (propagate detail verbatim, do not re-run guidance()/render()). Apply uniformly at all 6 sites. Add a regression test asserting exactly one 'Recovery:' occurrence in the final composed message for a representative call at each site." ;
+  triage:highestFixedBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:resolution "FIXED: all 3 real sites (crates/atm-core/src/identity/hook.rs:~58, crates/atm-core/src/config/mod.rs:~99, crates/atm-core/src/ack/mod.rs:~192) switched to error.detail() instead of error.message(); AtmError::detail() strips any prior 'Recovery:' suffix before the outer constructor renders its own, so each site now emits exactly one Recovery: line. Fixed on feature/pAI-s5-chat-address-identity @ ad8a6021, merge-forwarded through AI10 @ 8775de8d. quality-mgr independently re-verified against source (AI-fixround-2-QA-recheck, message 01KY1F2ZSX9CNYGMMNXFKVKNWX): PASS." ;
   triage:triagedAt "2026-07-20T23:10:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-I4-AI3/pAI-4/1>

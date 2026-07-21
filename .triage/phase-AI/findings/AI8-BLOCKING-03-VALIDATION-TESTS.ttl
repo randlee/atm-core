@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI8-BLOCKING-03-VALIDATION-TESTS>
+  a triage:Finding ;
+  triage:findingId "AI8-BLOCKING-03-VALIDATION-TESTS" ;
+  triage:title "Required validation test artifacts are entirely absent — CLI integration tests, doctor redaction test, unit tests on validate_enabled_peer_configuration()" ;
+  triage:description "AI8-QA-1 (req-qa ATM-QA-004/ATM-QA-005/ATM-QA-006, rust-qa-agent QA-002 — 2 independent confirmations). The sprint doc's own 'Required validation' section lists CLI integration tests, doctor redaction tests, and (implicitly) coverage of the fail-closed startup gate — none exist in the codebase. No test anywhere exercises 'atm peer interface|certificate|trust' subcommands (list/set/remove/init/add/replace/revoke, --yes gating); no test proves the doctor projection path never serializes private_key_ref; validate_enabled_peer_configuration() itself has zero unit tests. This blocks acceptance of deliverables 3 (doctor redaction), 4 (peer commands), and 5 (bind-preflight validation)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI8-BLOCKING-03-VALIDATION-TESTS/pAI-8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
+  triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
+  triage:notes "Required tests: (1) CLI integration tests for atm peer interface list/show, certificate show/init/revoke, trust list/add/replace/revoke with --yes gating verification, (2) unit tests on validate_enabled_peer_configuration for valid/invalid/missing scenarios, (3) doctor test that verifies no serialization of private_key_ref in output, (4) end-to-end doctor test covering healthy peer config projection." .
+
+<urn:atm:triage:occurrence/AI8-BLOCKING-03-VALIDATION-TESTS/pAI-8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/" ;
+  triage:line 1 ;
+  triage:snippet "No existing peer CLI integration tests found; no validate_enabled_peer_configuration unit tests found; no doctor redaction/peer-config projection tests found" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .
+
+<urn:atm:triage:worktree/pAI-8/d9991a90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s8-crosshost-control-plane" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s8-crosshost-control-plane" ;
+  triage:headSha "d9991a90" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/latest>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "1138e624" ;
+  triage:orderIndex 0 .
