@@ -1510,7 +1510,7 @@ mod tests {
     }
 
     #[test]
-    fn peer_config_doctor_projection_is_healthy_and_redacts_key_reference() {
+    fn peer_config_doctor_projection_redacts_private_key_reference_from_store() {
         let (report, findings) = peer_config_doctor_report(&StubPeerConfigStore::healthy());
 
         assert!(findings.is_empty());
