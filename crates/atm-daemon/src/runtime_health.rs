@@ -6,6 +6,7 @@ use std::time::Duration;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope,
+    api::{MessageCollectionRequest, MessageRequest},
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -773,7 +774,7 @@ impl ApiRouter for DaemonRequestDispatcher {
     fn route(
         &self,
         request: ApiRequest,
-        _ingress: AuthenticatedIngress,
+        ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         if deadline.expired() {
@@ -781,7 +782,47 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        self.dispatch(request.into_inner()).map(ApiResponse::new)
+        match ingress {
+            AuthenticatedIngress::Local => {}
+            AuthenticatedIngress::Peer(_) => {
+                return Err(AtmError::daemon_unavailable(
+                    "authenticated peer ingress is declared for AI.9 and is not accepted by the AI.6 local router",
+                ));
+            }
+        }
+        self.route_api_request(request).map(ApiResponse::new)
+    }
+}
+
+impl DaemonRequestDispatcher {
+    fn route_api_request(&self, request: ApiRequest) -> Result<ResponseEnvelope, AtmError> {
+        match request {
+            ApiRequest::Messages(request) => match *request {
+                MessageCollectionRequest::List(query) => {
+                    self.dispatch(RequestEnvelope::List(query))
+                }
+                MessageCollectionRequest::Peek(query) => {
+                    self.dispatch(RequestEnvelope::Peek(query))
+                }
+                MessageCollectionRequest::Receive(query) => {
+                    self.dispatch(RequestEnvelope::Receive(query))
+                }
+            },
+            ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Write(request)),
+            ApiRequest::Message(MessageRequest::Acknowledge(request)) => self.dispatch(
+                RequestEnvelope::Write(Box::new(request.into_write_request())),
+            ),
+            ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
+            ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
+            ApiRequest::Teams(request) => Err(AtmError::daemon_unavailable(format!(
+                "daemon API route {} {} is declared in OpenAPI but team administration routing remains outside the AI.6 runtime router",
+                request.method, request.path
+            ))),
+            ApiRequest::CompatibilityPreflight(preflight) => {
+                self.dispatch(RequestEnvelope::CompatibilityPreflight(preflight))
+            }
+            ApiRequest::Heartbeat(request) => self.dispatch(RequestEnvelope::Heartbeat(request)),
+        }
     }
 }
 

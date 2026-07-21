@@ -8,8 +8,10 @@ use atm_core::api::{
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
-use atm_core::protocol::{RequestEnvelope, RequestId, ResponseEnvelope};
+use atm_core::protocol::{RequestId, ResponseEnvelope};
+use interprocess::TryClone as _;
 use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
 use crate::active_connection_registry::{
@@ -41,10 +43,11 @@ pub(super) fn handle_connection(
     registry: Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
+    apply_primary_request_deadline(&mut stream);
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream).map(|_| ());
     }
-    let request = match read_http_request(&mut stream)? {
+    let request = match read_bounded_http_request(&mut stream)? {
         Some(request) => decode_request(request)?,
         None => return Ok(()),
     };
@@ -142,7 +145,7 @@ pub(super) fn emit_connection_failure_event(
 
 fn dispatch_request(
     request_id: RequestId,
-    request: RequestEnvelope,
+    request: ApiRequest,
     dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
@@ -171,7 +174,7 @@ fn dispatch_request(
 }
 
 fn spawn_dispatch_worker(
-    request: RequestEnvelope,
+    request: ApiRequest,
     dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     dispatch_registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<DispatchWorker, AtmError> {
@@ -190,7 +193,7 @@ fn spawn_dispatch_worker(
             let _dispatch_work = dispatch_registry.register_dispatch_work();
             let response = dispatcher
                 .route(
-                    ApiRequest::new(request),
+                    request,
                     AuthenticatedIngress::Local,
                     RequestDeadline::after(REQUEST_DEADLINE),
                 )
@@ -202,6 +205,37 @@ fn spawn_dispatch_worker(
             AtmError::daemon_unavailable("failed to spawn daemon local IPC dispatch worker")
         })?;
     Ok((result_rx, completion_rx, dispatch_handle))
+}
+
+fn apply_primary_request_deadline(stream: &mut LocalSocketStream) {
+    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
+    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
+}
+
+fn read_bounded_http_request(
+    stream: &mut LocalSocketStream,
+) -> Result<Option<atm_core::api::HttpRequest>, AtmError> {
+    let mut read_stream = stream.try_clone().map_err(|_source| {
+        AtmError::daemon_unavailable("failed to clone daemon local IPC stream for bounded read")
+    })?;
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("local-ipc-request-read".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(read_http_request(&mut read_stream));
+        })
+        .map_err(|_source| {
+            AtmError::daemon_unavailable("failed to spawn daemon local IPC request read worker")
+        })?;
+    match result_rx.recv_timeout(REQUEST_DEADLINE) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
+            "daemon local IPC request read exceeded the 3s deadline",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
+            "daemon local IPC request read worker stopped before returning a request",
+        )),
+    }
 }
 
 fn await_dispatch_response(
@@ -231,16 +265,16 @@ fn await_dispatch_response(
     }
 }
 
-fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
+fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
     match request {
-        RequestEnvelope::List(_)
-        | RequestEnvelope::Peek(_)
-        | RequestEnvelope::Receive(_)
-        | RequestEnvelope::Doctor(_) => RequestExecutionRisk::ReadOnly,
-        RequestEnvelope::CompatibilityPreflight(_) => RequestExecutionRisk::ReadOnly,
-        RequestEnvelope::Write(_) | RequestEnvelope::Heartbeat(_) | RequestEnvelope::Clear(_) => {
-            RequestExecutionRisk::SideEffecting
-        }
+        ApiRequest::Messages(_)
+        | ApiRequest::Doctor(_)
+        | ApiRequest::CompatibilityPreflight(_)
+        | ApiRequest::Teams(_) => RequestExecutionRisk::ReadOnly,
+        ApiRequest::Write(_)
+        | ApiRequest::Message(_)
+        | ApiRequest::Heartbeat(_)
+        | ApiRequest::Clear(_) => RequestExecutionRisk::SideEffecting,
     }
 }
 
@@ -269,14 +303,25 @@ pub(crate) fn install_injected_accept_error_for_test(
 mod tests {
     use super::{
         RequestExecutionRisk, classify_connection_failure, dispatch_timeout_response,
-        request_execution_risk,
+        handle_connection, request_execution_risk,
     };
+    use atm_core::api::ApiRequest;
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::ConnectionFailureClassification;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use interprocess::local_socket::ListenerOptions;
+    use interprocess::local_socket::traits::Listener as _;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+    use tempfile::TempDir;
+
+    use crate::active_connection_registry::ActiveConnectionRegistry;
+    use crate::test_support::{DoctorOnlyDispatcher, connect_local_ipc_with_timeout};
+    use crate::{DaemonSubsystem, SubsystemObservability};
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
@@ -309,7 +354,7 @@ mod tests {
             dry_run: false,
         });
         assert_eq!(
-            request_execution_risk(&request),
+            request_execution_risk(&ApiRequest::new(request)),
             RequestExecutionRisk::SideEffecting
         );
     }
@@ -324,7 +369,7 @@ mod tests {
             ..DoctorQuery::default()
         });
         assert_eq!(
-            request_execution_risk(&request),
+            request_execution_risk(&ApiRequest::new(request)),
             RequestExecutionRisk::ReadOnly
         );
     }
@@ -367,5 +412,54 @@ mod tests {
             classify_connection_failure(&error),
             ConnectionFailureClassification::RequestFailure
         );
+    }
+
+    #[test]
+    fn wedged_peer_read_is_bounded_by_primary_request_deadline() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let socket_path = tempdir.path().join("wedged-peer.sock");
+        #[cfg(unix)]
+        if socket_path.exists() {
+            std::fs::remove_file(&socket_path).expect("remove stale socket");
+        }
+        let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("socket name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name.clone())
+            .create_sync()
+            .expect("bind listener");
+        let (client_connected_tx, client_connected_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_client_tx, release_client_rx) = std::sync::mpsc::sync_channel(1);
+        let client = std::thread::spawn(move || {
+            let _stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
+                .expect("connect wedged peer");
+            client_connected_tx.send(()).expect("signal connected");
+            let _ = release_client_rx.recv_timeout(Duration::from_secs(5));
+        });
+
+        let server_stream = listener.accept().expect("accept");
+        client_connected_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("client connected");
+        let started = Instant::now();
+        let result = handle_connection(
+            server_stream,
+            Arc::new(DoctorOnlyDispatcher),
+            &AtomicBool::new(false),
+            Arc::new(ActiveConnectionRegistry::default()),
+            &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+        );
+
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "wedged same-host peer must not keep the connection worker blocked indefinitely"
+        );
+        assert!(
+            result.is_err(),
+            "a peer that never sends an HTTP request should time out"
+        );
+        let _ = release_client_tx.send(());
+        client.join().expect("join wedged peer");
     }
 }
