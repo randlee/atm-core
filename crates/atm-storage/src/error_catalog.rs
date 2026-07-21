@@ -102,6 +102,9 @@ const fn daemon_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::PeerConfigValidationFailed
+        | AtmErrorCode::CertificateOperationFailed
+        | AtmErrorCode::BindPreflightFailed
         | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered

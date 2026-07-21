@@ -78,6 +78,10 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
         .map_or(1, exit_code_for_atm_error)
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "centralized stable CLI error-code mapping"
+)]
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     match error.code() {
         AtmErrorCode::ConfigHomeUnavailable
@@ -103,6 +107,8 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::PeerConfigValidationFailed
+        | AtmErrorCode::CertificateOperationFailed
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
         AtmErrorCode::DaemonUnavailable
@@ -116,6 +122,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonConnectionSaturated
+        | AtmErrorCode::BindPreflightFailed
         | AtmErrorCode::ClientDaemonVersionIncompatible
         | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
         | AtmErrorCode::DaemonAdvisorySessionNotRegistered

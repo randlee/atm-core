@@ -1,7 +1,7 @@
 use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
-use atm_core::doctor::{self, DoctorQuery};
+use atm_core::doctor::{self, DaemonRuntimeDoctorReport, DoctorQuery};
 use atm_daemon_bootstrap::assemble_default_runtime;
 use clap::Args;
 
@@ -96,12 +96,17 @@ impl DoctorCommand {
     ) -> Result<atm_core::doctor::DoctorReport> {
         let query = self.build_query(home_dir, current_dir)?;
         let runtime = assemble_default_runtime()?;
+        let (peer_config, peer_findings) =
+            doctor::peer_config_doctor_report(runtime.peer_config_store().as_ref());
         doctor::run_doctor_with_runtime_ports(
             query,
             observability,
             &runtime.service_runtime,
             &runtime.doctor_ports,
-            None,
+            Some(DaemonRuntimeDoctorReport {
+                findings: peer_findings,
+                peer_config: Some(peer_config),
+            }),
         )
         .map_err(anyhow::Error::from)
     }
@@ -184,8 +189,12 @@ mod tests {
             .expect("report");
 
         assert!(
-            report.daemon_runtime.is_none(),
-            "hermetic local doctor must not report a daemon"
+            report
+                .daemon_runtime
+                .as_ref()
+                .and_then(|runtime| runtime.peer_config.as_ref())
+                .is_some(),
+            "direct-local doctor must retain peer configuration visibility"
         );
         assert!(
             report.runtime_status.is_none(),

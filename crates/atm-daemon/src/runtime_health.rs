@@ -10,7 +10,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerConfigDoctorReport,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -683,9 +683,12 @@ impl DaemonRequestDispatcher {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),
         };
+        let (peer_config, mut peer_findings) =
+            doctor::peer_config_doctor_report(self.peer_config_store.as_ref());
+        peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
-            findings: vec![daemon_observability_finding],
-            peer_config: Some(peer_config_doctor_report(self.peer_config_store.as_ref())?),
+            findings: peer_findings,
+            peer_config: Some(peer_config),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -827,24 +830,6 @@ fn daemon_observability_finding(
             ),
         },
     }
-}
-
-fn peer_config_doctor_report(
-    store: &(dyn PeerConfigStore + Send + Sync),
-) -> Result<PeerConfigDoctorReport, AtmError> {
-    let interfaces = store.list_interfaces()?;
-    let peers = store.list_trusted_peers()?;
-    let certificate = store.local_certificate()?;
-    Ok(PeerConfigDoctorReport {
-        configured_interface_count: interfaces.len(),
-        enabled_interface_count: interfaces
-            .iter()
-            .filter(|interface| interface.enabled)
-            .count(),
-        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint),
-        trusted_peer_count: peers.len(),
-        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
-    })
 }
 
 #[derive(Debug, Clone)]

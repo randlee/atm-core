@@ -17,6 +17,7 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MembersList, ordered_roster_member_summaries};
 use crate::types::{AgentName, TeamName};
+use atm_storage::PeerConfigStore;
 use std::sync::Arc;
 
 pub use report::{
@@ -167,6 +168,53 @@ pub fn run_doctor_with_runtime_ports(
         None,
         None,
     ))
+}
+
+/// Project safe peer-control-plane state into doctor output. A storage or
+/// validation failure is report data, never a reason for `atm doctor` to abort.
+pub fn peer_config_doctor_report(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> (PeerConfigDoctorReport, Vec<DoctorFinding>) {
+    match peer_config_doctor_report_inner(store) {
+        Ok(report) => (report, Vec::new()),
+        Err(error) => {
+            let finding = DoctorFinding {
+                severity: DoctorSeverity::Error,
+                code: error.code(),
+                message: error.message().to_string(),
+                remediation: Some(
+                    "Repair the peer HTTPS configuration or bind conflict, then rerun `atm doctor`."
+                        .to_string(),
+                ),
+            };
+            (
+                PeerConfigDoctorReport {
+                    validation_failure: Some(finding.clone()),
+                    ..PeerConfigDoctorReport::default()
+                },
+                vec![finding],
+            )
+        }
+    }
+}
+
+fn peer_config_doctor_report_inner(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<PeerConfigDoctorReport, crate::error::AtmError> {
+    let interfaces = store.list_interfaces()?;
+    let peers = store.list_trusted_peers()?;
+    let certificate = store.local_certificate()?;
+    Ok(PeerConfigDoctorReport {
+        configured_interface_count: interfaces.len(),
+        enabled_interface_count: interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .count(),
+        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint.to_string()),
+        trusted_peer_count: peers.len(),
+        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+        validation_failure: None,
+    })
 }
 
 struct DoctorRunContext {
