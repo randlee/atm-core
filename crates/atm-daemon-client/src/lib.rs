@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
-use atm_core::protocol;
+use atm_core::protocol::{self, RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
 use interprocess::local_socket::Stream as LocalSocketStream;
@@ -421,6 +421,60 @@ pub fn exchange_envelope(
         )));
     }
     Ok(response)
+}
+
+/// Exchange one canonical request through HTTP over the daemon's UDS endpoint.
+///
+/// This is the retained production local-client path. The request is encoded
+/// once as JSON HTTP and is decoded by the daemon before it reaches
+/// [`atm_core::ApiRouter`].
+pub fn exchange_request(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let mut stream = try_connect(endpoint)?;
+    let _send_deadline_support = apply_local_ipc_deadline(
+        stream.set_send_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC write timeout",
+    )?;
+    let recv_deadline_support = apply_local_ipc_deadline(
+        stream.set_recv_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC read timeout",
+    )?;
+    atm_core::api::write_http_request(&mut stream, request)?;
+    read_http_response_with_deadline(stream, request_deadline, recv_deadline_support)
+}
+
+fn read_http_response_with_deadline(
+    mut stream: LocalSocketStream,
+    _request_deadline: Duration,
+    _recv_deadline_support: LocalIpcDeadlineSupport,
+) -> Result<ResponseEnvelope, AtmError> {
+    #[cfg(windows)]
+    if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
+        return read_http_response_with_helper(stream, _request_deadline);
+    }
+    atm_core::api::read_http_response(&mut stream)
+}
+
+#[cfg(windows)]
+fn read_http_response_with_helper(
+    mut stream: LocalSocketStream,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("local-ipc-http-response-read-helper".to_string())
+        .spawn(move || {
+            let result = atm_core::api::read_http_response(&mut stream);
+            let _ = result_tx.send(result);
+        })
+        .map_err(|_source| AtmError::daemon_unavailable("failed to spawn daemon HTTP response read helper"))?;
+    result_rx.recv_timeout(request_deadline).map_err(|error| match error {
+        mpsc::RecvTimeoutError::Timeout => AtmError::daemon_unavailable("timed out reading daemon HTTP response"),
+        mpsc::RecvTimeoutError::Disconnected => AtmError::daemon_unavailable("daemon HTTP response read helper disconnected unexpectedly"),
+    })?
 }
 
 fn read_response_frame_with_deadline(

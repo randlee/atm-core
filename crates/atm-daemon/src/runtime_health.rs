@@ -4,6 +4,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
     LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
@@ -525,8 +526,8 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl DaemonRequestDispatcher {
+    pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
@@ -757,6 +758,22 @@ impl DaemonRequestDispatcher {
             version: Some(ReleaseVersion::current()),
         });
         Ok(report)
+    }
+}
+
+impl ApiRouter for DaemonRequestDispatcher {
+    fn route(
+        &self,
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "daemon API request exceeded its same-host deadline before routing",
+            ));
+        }
+        self.dispatch(request.into_inner()).map(ApiResponse::new)
     }
 }
 

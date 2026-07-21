@@ -1,4 +1,5 @@
 /// Acknowledgement workflows for ack-required mailbox messages.
+pub mod api;
 pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
@@ -89,16 +90,16 @@ pub mod types;
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ClientTransport,
+    AckTransition, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind,
     ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
     DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
     MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
     MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey, NotificationEvent,
-    NudgeTemplateOverrideStore, PostSendHookEmitter, PostSendHookEvent, RequestDispatcher,
+    NudgeTemplateOverrideStore, PostSendHookEmitter, PostSendHookEvent,
     ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
     RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    ServerTransport, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
@@ -109,6 +110,10 @@ pub use config::types::GraftConfig;
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use api::{
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
+    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
+};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };

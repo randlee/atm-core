@@ -7,7 +7,7 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
 use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
 use atm_runtime::RuntimeAssembly;
@@ -189,7 +189,7 @@ impl RuntimeComposition {
         })
     }
 
-    fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
+    fn request_dispatcher(&self) -> Arc<dyn ApiRouter + Send + Sync> {
         self.request_dispatcher.clone()
     }
 
@@ -568,7 +568,6 @@ pub(crate) fn compose_runtime(
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::ServerTransport;
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
@@ -718,7 +717,7 @@ mod tests {
 
         let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
-        let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
+        let error = runtime.server_transport.serve(runtime.request_dispatcher())
             .expect_err("direct transport bootstrap should be rejected");
 
         assert!(error.is_daemon_unavailable());

@@ -1,5 +1,5 @@
 use super::*;
-use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
@@ -299,7 +299,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(DaemonRequestDispatcher::new_for_test(
             atm_home.clone(),
             RuntimeStatusCache::new(),
@@ -346,17 +346,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         )
         .expect("send request"),
     )));
-    let request_id = next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write send frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read send frame", "send frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
+    let response = atm_core::api::read_http_response(&mut stream).expect("read send response");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -418,7 +409,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(DaemonRequestDispatcher::new_for_test(
             atm_home.clone(),
             RuntimeStatusCache::new(),

@@ -9,7 +9,7 @@ use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
-use atm_core::boundary::ClientTransport;
+use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
@@ -17,18 +17,14 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{
-    self, CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
-    FramePayload, MessageKind, RequestId as DaemonRequestId, RpcEnvelope,
-    exchange_envelope as daemon_exchange_envelope, parse_bootstrap_agent, parse_bootstrap_team,
+    exchange_request as daemon_exchange_request, parse_bootstrap_agent, parse_bootstrap_team,
     resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
     unexpected_response,
 };
@@ -148,41 +144,21 @@ impl LocalIpcClientTransportAdapter {
 
     /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let envelope = encode_request_envelope(request.clone())?;
-        let response = if request_requires_compatibility_verification(&request) {
-            let mut verified = atm_daemon_client::verify_connection_compatibility(
-                &self.endpoint,
-                CompatibilityPreflight {
-                    client_release: atm_daemon_client::ReleaseVersion::current(),
-                    wire_version: protocol::ATM_FRAME_VERSION_V1,
-                },
-                SAME_HOST_REQUEST_DEADLINE,
-            )?;
-            verified.dispatch_write(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?
-        } else {
-            daemon_exchange_envelope(&self.endpoint, envelope, SAME_HOST_REQUEST_DEADLINE)?
-        };
-        decode_response_envelope(response)
+        daemon_exchange_request(&self.endpoint, &request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
 
-fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
-    matches!(
-        request,
-        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
-    )
-}
 
 impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
-impl ClientTransport for LocalIpcClientTransportAdapter {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.round_trip(request)
+impl DaemonApiClient for LocalIpcClientTransportAdapter {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        self.round_trip(request.into_inner()).map(ApiResponse::new)
     }
 }
 
 pub(crate) struct CliComposition<'a> {
-    transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
+    transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
     bootstrap_trace: Option<BootstrapTraceReport>,
     send_command: SendCommandEntryPoint,
@@ -192,7 +168,7 @@ pub(crate) struct CliComposition<'a> {
 impl fmt::Debug for CliComposition<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CliComposition")
-            .field("transport", &"dyn ClientTransport")
+            .field("transport", &"dyn DaemonApiClient")
             .field("observability_port", &"dyn ObservabilityPort")
             .field("bootstrap_trace", &self.bootstrap_trace)
             .field("send_command", &self.send_command)
@@ -203,7 +179,7 @@ impl fmt::Debug for CliComposition<'_> {
 
 impl<'a> CliComposition<'a> {
     pub(crate) fn from_transport(
-        transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
+        transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
         observability_port: &'a CliObservability,
     ) -> Self {
         install_retained_runtime_factory();
@@ -218,7 +194,7 @@ impl<'a> CliComposition<'a> {
 
     #[cfg(test)]
     pub(crate) fn from_transport_with_bootstrap_trace(
-        transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
+        transport: Arc<dyn DaemonApiClient + Send + Sync + 'a>,
         observability_port: &'a CliObservability,
         bootstrap_trace: BootstrapTraceReport,
     ) -> Self {
@@ -236,7 +212,7 @@ impl<'a> CliComposition<'a> {
         dead_code,
         reason = "reserved for future phase that inspects the active transport variant"
     )]
-    pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
+    pub(crate) fn transport(&self) -> &(dyn DaemonApiClient + Send + Sync + 'a) {
         self.transport.as_ref()
     }
 
@@ -244,7 +220,7 @@ impl<'a> CliComposition<'a> {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.send(request)? {
+        match self.transport.execute(ApiRequest::new(request))?.into_inner() {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
@@ -473,35 +449,6 @@ impl<'a> CliComposition<'a> {
     }
 }
 
-fn encode_request_envelope(request: RequestEnvelope) -> Result<RpcEnvelope, AtmError> {
-    let request_id = protocol::next_request_id();
-    let frame = protocol::request_to_frame_payload(request_id, request)?;
-    Ok(RpcEnvelope::from_frame_payload(encode_daemon_frame(frame)?))
-}
-
-fn decode_response_envelope(envelope: RpcEnvelope) -> Result<ResponseEnvelope, AtmError> {
-    let frame = decode_daemon_frame(envelope.into_frame_payload())?;
-    let (_, response) = protocol::response_from_frame_payload(frame)?;
-    Ok(response)
-}
-
-fn encode_daemon_frame(frame: protocol::FramePayload) -> Result<FramePayload, AtmError> {
-    Ok(FramePayload {
-        request_id: DaemonRequestId::new(frame.request_id.into_inner())?,
-        message_kind: MessageKind::try_from(frame.message_kind.code())?,
-        flags: frame.flags,
-        bytes: frame.bytes,
-    })
-}
-
-fn decode_daemon_frame(frame: FramePayload) -> Result<protocol::FramePayload, AtmError> {
-    Ok(protocol::FramePayload {
-        request_id: protocol::RequestId::new(frame.request_id.into_inner())?,
-        message_kind: protocol::MessageKind::try_from(frame.message_kind.code())?,
-        flags: frame.flags,
-        bytes: frame.bytes,
-    })
-}
 
 fn bootstrap_trace_to_core(
     report: atm_daemon_client::BootstrapTraceReport,
@@ -559,7 +506,7 @@ mod tests {
 
     use atm_core::ack::AckRequest;
     use atm_core::boundary;
-    use atm_core::boundary::ClientTransport;
+    use atm_core::{ApiRequest, DaemonApiClient};
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -1134,14 +1081,14 @@ mod tests {
             let first_transport = transport.clone();
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
-                first_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                first_transport.execute(ApiRequest::new(RequestEnvelope::Send(SendRequestEnvelope::Compose(
                     Box::new(first_request),
-                )))
+                ))))
             });
             let second = scope.spawn(move || {
-                second_transport.send(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+                second_transport.execute(ApiRequest::new(RequestEnvelope::Send(SendRequestEnvelope::Compose(
                     Box::new(second_request),
-                )))
+                ))))
             });
             (
                 first.join().expect("first transport result"),

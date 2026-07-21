@@ -1,7 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::api::{
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
+    read_http_request, write_http_response,
+};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
@@ -61,7 +64,7 @@ enum ReadRequestFrameResult {
 
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     force_shutdown: &AtomicBool,
     registry: Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,
@@ -70,25 +73,17 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    let frame = match read_connection_frame(stream, force_shutdown, observability)? {
-        ReadRequestFrameResult::EndOfStream => return Ok(()),
-        ReadRequestFrameResult::Frame {
-            stream: resumed_stream,
-            frame,
-        } => {
-            stream = resumed_stream;
-            frame
-        }
-        #[cfg(windows)]
-        ReadRequestFrameResult::TimedOut => return Ok(()),
+    let request = match read_http_request(&mut stream)? {
+        Some(request) => decode_request(request)?,
+        None => return Ok(()),
     };
     tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
+        max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
+        "daemon HTTP request accepted under configured size cap"
     );
-    let (request_id, request) = decode_request_frame(&codec, frame, observability)?;
+    let request_id = atm_core::protocol::next_request_id();
     let response = dispatch_request(request_id, request, dispatcher, &registry, observability)?;
-    if let Err(error) = write_response(&mut stream, &codec, request_id, response) {
+    if let Err(error) = write_http_response(&mut stream, &response) {
         let classification = classify_connection_failure(&error);
         if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
             observability.emit_event_or_warn(
@@ -96,7 +91,7 @@ pub(super) fn handle_connection(
                     .event(
                         "connection_worker",
                         classification.as_str(),
-                        "same-host peer disconnected before the daemon response frame completed",
+                        "same-host peer disconnected before the daemon HTTP response completed",
                     )
                     .with_connection_failure(DaemonConnectionFailureFields {
                         code: error.code(),
@@ -348,7 +343,7 @@ fn apply_optional_deadline(
 fn dispatch_request(
     request_id: RequestId,
     request: RequestEnvelope,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
 ) -> Result<ResponseEnvelope, AtmError> {
@@ -377,7 +372,7 @@ fn dispatch_request(
 
 fn spawn_dispatch_worker(
     request: RequestEnvelope,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     dispatch_registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<DispatchWorker, AtmError> {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
@@ -393,7 +388,14 @@ fn spawn_dispatch_worker(
         .name("local-ipc-dispatch".to_string())
         .spawn(move || {
             let _dispatch_work = dispatch_registry.register_dispatch_work();
-            let _ = result_tx.send(dispatcher.dispatch(request));
+            let response = dispatcher
+                .route(
+                    ApiRequest::new(request),
+                    AuthenticatedIngress::Local,
+                    RequestDeadline::after(REQUEST_DEADLINE),
+                )
+                .map(|response| response.into_inner());
+            let _ = result_tx.send(response);
             let _ = completion_tx.send(());
         })
         .map_err(|_source| {

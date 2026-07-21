@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
+use atm_core::api::ApiRouter;
+use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::{JsonAtmProtocolCodec, ResponseEnvelope};
 use interprocess::local_socket::prelude::*;
@@ -211,7 +212,7 @@ struct AcceptLoopContext<'a> {
     force_shutdown: &'a Arc<AtomicBool>,
     codec: &'a JsonAtmProtocolCodec,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
@@ -230,7 +231,7 @@ struct ServeShutdownContext<'a> {
 
 struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishReady> {
     listener: &'a LocalSocketListener,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
@@ -339,7 +340,7 @@ impl PreparedRuntimeServer {
 
     pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -352,7 +353,7 @@ impl PreparedRuntimeServer {
 
     fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -761,10 +762,8 @@ impl LocalIpcServerTransportAdapter {
     }
 }
 
-impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
-
-impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
-    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
+impl LocalIpcServerTransportAdapter {
+    pub(crate) fn serve(&self, _router: Arc<dyn ApiRouter + Send + Sync>) -> Result<(), AtmError> {
         Err(AtmError::daemon_unavailable(
             "LocalIpcServerTransportAdapter::serve cannot bootstrap the daemon directly; use RuntimeComposition::start()",
         ))

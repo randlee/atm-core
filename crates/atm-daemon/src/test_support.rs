@@ -1,4 +1,4 @@
-use atm_core::boundary::RequestDispatcher;
+use atm_core::api::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
 #[cfg(test)]
 use atm_core::error::AtmError;
@@ -51,13 +51,15 @@ pub(crate) struct DoctorOnlyDispatcher;
 
 impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
 
-impl RequestDispatcher for DoctorOnlyDispatcher {
-    fn dispatch(
+impl ApiRouter for DoctorOnlyDispatcher {
+    fn route(
         &self,
-        request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-        match request {
-            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(Box::new(DoctorReport {
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        _deadline: RequestDeadline,
+    ) -> Result<ApiResponse, atm_core::error::AtmError> {
+        match request.into_inner() {
+            RequestEnvelope::Doctor(_) => Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(DoctorReport {
                 summary: DoctorSummary {
                     status: DoctorStatus::Healthy,
                     message: "ok".to_string(),
@@ -92,7 +94,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                 drift_findings: Vec::new(),
                 runtime_status: None,
                 bootstrap_trace: None,
-            }))),
+            })))),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
@@ -129,8 +131,13 @@ impl PanicDispatcherWithUnwindSignal {
 impl atm_core::boundary::sealed::Sealed for PanicDispatcherWithUnwindSignal {}
 
 #[cfg(test)]
-impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl ApiRouter for PanicDispatcherWithUnwindSignal {
+    fn route(
+        &self,
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        _deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
         let unwind_signal = PanicUnwindSignal(
             self.unwind_tx
                 .lock()
@@ -138,7 +145,7 @@ impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
                 .take(),
         );
         let _keep_unwind_signal_until_panic_unwinds = unwind_signal;
-        panic!("intentional dispatcher panic for test: {request:?}");
+        panic!("intentional router panic for test: {:?}", request.into_inner());
     }
 }
 

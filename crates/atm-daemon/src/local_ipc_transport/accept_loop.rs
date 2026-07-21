@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 
-use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
@@ -172,7 +172,7 @@ pub(super) fn reject_connection_when_capped(
 pub(super) fn spawn_connection_worker<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     stream: LocalSocketStream,
-    dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
     force_shutdown: &Arc<AtomicBool>,
     registry: &Arc<ActiveConnectionRegistry>,
     codec: JsonAtmProtocolCodec,

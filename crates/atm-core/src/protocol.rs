@@ -248,10 +248,8 @@ impl TryFrom<u16> for MessageKind {
 #[derive(Debug, Clone, Default)]
 pub struct JsonAtmProtocolCodec;
 
-impl crate::boundary::sealed::Sealed for JsonAtmProtocolCodec {}
-
-impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
-    fn request_to_frame(
+impl JsonAtmProtocolCodec {
+    pub fn request_to_frame(
         &self,
         request_id: RequestId,
         request: RequestEnvelope,
@@ -259,14 +257,14 @@ impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
         request_to_frame_payload(request_id, request)
     }
 
-    fn request_from_frame(
+    pub fn request_from_frame(
         &self,
         frame: FramePayload,
     ) -> Result<(RequestId, RequestEnvelope), AtmError> {
         request_from_frame_payload(frame)
     }
 
-    fn response_to_frame(
+    pub fn response_to_frame(
         &self,
         request_id: RequestId,
         response: ResponseEnvelope,
@@ -274,7 +272,7 @@ impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
         response_to_frame_payload(request_id, response)
     }
 
-    fn response_from_frame(
+    pub fn response_from_frame(
         &self,
         frame: FramePayload,
     ) -> Result<(RequestId, ResponseEnvelope), AtmError> {
