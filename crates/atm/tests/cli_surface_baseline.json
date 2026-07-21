@@ -950,17 +950,6 @@
     {
       "args": [
         {
-          "has_default": false,
-          "id": "actor",
-          "long": "as",
-          "num_args": {
-            "max": 1,
-            "min": 1
-          },
-          "required": false,
-          "short": null
-        },
-        {
           "has_default": true,
           "id": "stderr_logs",
           "long": "stderr-logs",
@@ -1383,6 +1372,17 @@
     },
     {
       "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
         {
           "has_default": true,
           "id": "all",
