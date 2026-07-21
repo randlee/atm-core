@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::address::AgentAddress;
+use crate::address::{AgentAddress, MessageParticipantFilter, ParticipantDirection};
 use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
@@ -38,6 +38,7 @@ pub struct MailboxQueryFields {
     pub(crate) seen_state_filter: bool,
     pub(crate) message_id_filter: Option<AtmMessageId>,
     pub(crate) sender_filter: Option<AgentName>,
+    pub(crate) participant_filter: Option<MessageParticipantFilter>,
     pub(crate) timestamp_filter: Option<IsoTimestamp>,
     pub(crate) task_filter: Option<TaskId>,
     pub(crate) contains_filter: Option<String>,
@@ -75,6 +76,7 @@ impl MailboxQueryFields {
                 })
                 .transpose()?,
             sender_filter: sender_filter.map(str::parse).transpose()?,
+            participant_filter: None,
             timestamp_filter,
             task_filter: task_filter.map(str::parse).transpose()?,
             contains_filter,
@@ -136,20 +138,26 @@ impl PeekQuery {
         contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
+        let mut mailbox = build_mailbox_query_fields(
+            home_dir,
+            current_dir,
+            target_address,
+            selection_mode,
+            seen_state_filter,
+            message_id_filter,
+            sender_filter,
+            timestamp_filter,
+            task_filter,
+            contains_filter,
+            timeout_secs,
+        )?;
+        mailbox.participant_filter = Some(MessageParticipantFilter {
+            agent: caller_identity.clone(),
+            chat_id: None,
+            direction: ParticipantDirection::To,
+        });
         Ok(Self {
-            mailbox: build_mailbox_query_fields(
-                home_dir,
-                current_dir,
-                target_address,
-                selection_mode,
-                seen_state_filter,
-                message_id_filter,
-                sender_filter,
-                timestamp_filter,
-                task_filter,
-                contains_filter,
-                timeout_secs,
-            )?,
+            mailbox,
             caller_identity,
             caller_team,
         })
@@ -236,6 +244,11 @@ impl ReadQuery {
 
     #[must_use]
     pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.mailbox.participant_filter = Some(MessageParticipantFilter {
+            agent: self.caller_identity.clone(),
+            chat_id: caller_chat_id.clone(),
+            direction: ParticipantDirection::To,
+        });
         self.caller_chat_id = caller_chat_id;
         self
     }
@@ -988,8 +1001,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId,
-        TeamName,
+        AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+        TaskId, TeamName,
     };
 
     fn selection_state_for_source_files(
@@ -1007,6 +1020,12 @@ mod tests {
             let selected = classified_all
                 .iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
+                .filter(|message| {
+                    crate::read::filters::matches_participant_filter(
+                        message,
+                        query.mailbox.participant_filter.as_ref(),
+                    )
+                })
                 .cloned()
                 .collect();
             let logical_current = metadata_selection::logical_current_messages(classified_all);
@@ -1019,6 +1038,7 @@ mod tests {
             metadata_selection::apply_metadata_only_filters(
                 logical_current,
                 query.mailbox.sender_filter.as_ref(),
+                query.mailbox.participant_filter.as_ref(),
                 query.mailbox.timestamp_filter,
                 query.mailbox.task_filter.as_ref(),
             ),
@@ -1042,12 +1062,19 @@ mod tests {
             return classified
                 .into_iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
+                .filter(|message| {
+                    crate::read::filters::matches_participant_filter(
+                        message,
+                        query.mailbox.participant_filter.as_ref(),
+                    )
+                })
                 .collect();
         }
         let filtered = crate::read::filters::apply_contains_filter(
             metadata_selection::apply_metadata_only_filters(
                 metadata_selection::logical_current_messages(classified),
                 query.mailbox.sender_filter.as_ref(),
+                query.mailbox.participant_filter.as_ref(),
                 query.mailbox.timestamp_filter,
                 query.mailbox.task_filter.as_ref(),
             ),
@@ -1456,6 +1483,71 @@ mod tests {
         .expect("read query")
     }
 
+    #[test]
+    fn chat_qualified_read_filters_source_and_metadata_surfaces_identically() {
+        let chat_a = "chat-a".parse::<ChatId>().expect("chat id");
+        let chat_b = "chat-b".parse::<ChatId>().expect("chat id");
+        let first_id = AtmMessageId::new();
+        let second_id = AtmMessageId::new();
+        let mut first = message("for chat a", first_id, None, None, false);
+        first.destination_chat_id = Some(chat_a.clone());
+        let mut second = message("for chat b", second_id, None, None, false);
+        second.destination_chat_id = Some(chat_b);
+        let source_messages = vec![
+            SourcedMessage {
+                envelope: first.clone(),
+                source_path: PathBuf::from("first.json"),
+                source_index: 0.into(),
+            },
+            SourcedMessage {
+                envelope: second.clone(),
+                source_path: PathBuf::from("second.json"),
+                source_index: 1.into(),
+            },
+        ];
+        let query = ReadQuery::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+        .with_caller_chat_id(Some(chat_a.clone()));
+
+        let source_selected = selected_after_filters(&source_messages, &query, None);
+        assert_eq!(source_selected.len(), 1);
+        assert_eq!(source_selected[0].envelope.message_id, Some(first_id));
+
+        let (mut first_row, _) = metadata_row("for chat a", None, TEST_SENDER);
+        first_row.message_id = Some(first_id);
+        first_row.destination_chat_id = Some(chat_a);
+        let (mut second_row, _) = metadata_row("for chat b", None, TEST_SENDER);
+        second_row.message_id = Some(second_id);
+        second_row.destination_chat_id = second.destination_chat_id;
+        let (_counts, metadata_selected) =
+            metadata_selection::selection_state_for_mailbox_metadata_rows(
+                &[first_row, second_row],
+                &query,
+                None,
+            );
+        assert_eq!(metadata_selected.len(), 1);
+        assert_eq!(metadata_selected[0].envelope.message_id, Some(first_id));
+
+        let mut by_id = query.clone();
+        by_id.mailbox.message_id_filter = Some(second_id);
+        assert!(selected_after_filters(&source_messages, &by_id, None).is_empty());
+    }
+
     fn metadata_row(
         text: &str,
         summary: Option<&str>,
@@ -1490,6 +1582,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 from_agent: from.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
+                destination_chat_id: None,
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,

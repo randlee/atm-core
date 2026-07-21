@@ -86,6 +86,8 @@ pub(crate) struct SqliteMailboxMetadataRow {
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub from_agent: AgentName,
+    pub source_chat_id: Option<atm_storage::types::ChatId>,
+    pub destination_chat_id: Option<atm_storage::types::ChatId>,
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
     pub read: bool,
