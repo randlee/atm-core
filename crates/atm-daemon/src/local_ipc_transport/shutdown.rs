@@ -134,7 +134,7 @@ pub(super) fn prepare_local_ipc_endpoint(
         if !raw.starts_with(WINDOWS_PIPE_PREFIX)
             && let Some(parent) = endpoint_path.parent()
         {
-            fs::create_dir_all(parent).map_err(|source| {
+            fs::create_dir_all(parent).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to create daemon local IPC directory at {}",
                     parent.display()

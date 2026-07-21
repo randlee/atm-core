@@ -820,7 +820,7 @@ fn read_graft_post_send_request_with_helper(
                 );
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn graft request-read helper")
 
 
@@ -868,7 +868,7 @@ fn write_graft_post_send_response_with_helper(
                     "graft post-send response exceeded the bounded payload cap",
                 )?;
                 use std::io::Write as _;
-                stream.flush().map_err(|source| {
+                stream.flush().map_err(|_source| {
                     let error = AtmError::daemon_unavailable("failed to flush graft post-send response")
 
                         ;
@@ -883,7 +883,7 @@ fn write_graft_post_send_response_with_helper(
                 );
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn graft response-write helper")
 
 

@@ -331,7 +331,7 @@ fn read_owner_record_from_shadow_path(
     let record = match fs::read_to_string(&shadow_path) {
         Ok(record) => record,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(source) => {
+        Err(_source) => {
             return Err(AtmError::daemon_unavailable(format!(
                 "failed to read daemon ownership shadow record at {}",
                 shadow_path.display()
@@ -361,26 +361,26 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
             std::process::id(),
         ));
         {
-            let mut file = File::create(&temp_path).map_err(|source| {
+            let mut file = File::create(&temp_path).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to create daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
             })?;
-            file.write_all(record.as_bytes()).map_err(|source| {
+            file.write_all(record.as_bytes()).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to write daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
             })?;
-            file.sync_all().map_err(|source| {
+            file.sync_all().map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to sync daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
             })?;
         }
-        fs::rename(&temp_path, &shadow_path).map_err(|source| {
+        fs::rename(&temp_path, &shadow_path).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to replace daemon ownership shadow record at {}",
                 shadow_path.display()
