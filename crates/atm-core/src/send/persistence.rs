@@ -31,7 +31,7 @@ pub(crate) fn persist_message(
 
     match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
         Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
-        Err(error) if error.is_mailbox_write() => {
+        Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
         Err(error) => Err(error),
@@ -52,7 +52,7 @@ fn recover_after_sqlite_failure(
         sqlite_error,
     );
     let warning = WarningEntry::with_code(
-        sqlite_error.code,
+        sqlite_error.code(),
         format!(
             "error: SQLite persistence failed for delivery to {}@{}: {}.",
             recipient.agent, recipient.team, sqlite_error
@@ -81,6 +81,7 @@ fn build_sqlite_failure_companion_message(
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated("atm-system"),
+        source_chat_id: None,
         text: format!(
             "ATM error: SQLite persistence failed while delivering message {} to {}@{}: {}. The original message was emitted through the degraded outward path only and the retained SQLite state must be repaired immediately.",
             original_message_id, agent, team, sqlite_error
@@ -88,6 +89,7 @@ fn build_sqlite_failure_companion_message(
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(team.clone()),
+        destination_chat_id: None,
         summary: Some(format!(
             "ATM error: SQLite persistence failed for {}@{}",
             agent, team

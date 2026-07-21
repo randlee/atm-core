@@ -13,6 +13,7 @@ mod daemon_runtime_observability;
 // fork while only one daemon can publish the local IPC endpoint; see
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
+mod https_transport;
 mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;
@@ -20,7 +21,6 @@ mod local_ipc_wake;
 mod non_claude_outbound_runtime;
 mod post_send_emitter;
 mod runtime_health;
-mod runtime_sqlite_observer;
 mod runtime_status_cache;
 mod shutdown_beacon;
 #[cfg(test)]
@@ -67,21 +67,27 @@ impl DaemonExitCode {
 }
 
 pub fn daemon_exit_code_for_error(error: &AtmError) -> DaemonExitCode {
-    if error.code == AtmErrorCode::DaemonLifecycleWedge {
+    if error.code() == AtmErrorCode::DaemonLifecycleWedge {
         return DaemonExitCode::LifecycleWedge;
     }
     if matches!(
-        error.code,
+        error.code(),
         AtmErrorCode::DaemonServingStateRejected
             | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
             | AtmErrorCode::DaemonLaunchGateRejected
             | AtmErrorCode::ConfigHomeUnavailable
             | AtmErrorCode::ObservabilityBootstrapFailed
-    ) || error.is_config()
-    {
+    ) || matches!(
+        error.code(),
+        AtmErrorCode::ConfigParseFailed
+            | AtmErrorCode::ConfigRetiredHookMembersKey
+            | AtmErrorCode::ConfigRetiredLegacyHookKeys
+            | AtmErrorCode::ConfigTeamParseFailed
+            | AtmErrorCode::ConfigTeamMissing
+    ) {
         return DaemonExitCode::DoNotRestart;
     }
-    if error.is_daemon_unavailable() {
+    if error.code() == AtmErrorCode::DaemonUnavailable {
         return DaemonExitCode::TransportFatal;
     }
     DaemonExitCode::InternalBug

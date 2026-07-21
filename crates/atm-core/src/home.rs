@@ -94,12 +94,8 @@ pub fn user_home() -> Result<PathBuf, AtmError> {
 ///
 /// Returns [`AtmError`] when the process working directory cannot be resolved.
 pub fn command_invocation_dir() -> Result<PathBuf, AtmError> {
-    env::current_dir().map_err(|source| {
+    env::current_dir().map_err(|_source| {
         AtmError::runtime_root_invalid("failed to resolve the ATM command invocation directory")
-            .with_recovery(
-                "Run the ATM command from a readable working directory or repair the workspace path before retrying.",
-            )
-            .with_source(source)
     })
 }
 
@@ -172,32 +168,20 @@ pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
 /// Returns [`AtmError`] when the accepted ATM home directory cannot be resolved.
 pub fn host_log_dir() -> Result<PathBuf, AtmError> {
     if let Some(raw_path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
-        let raw_path = raw_path.to_str().ok_or_else(|| {
-            AtmError::config("ATM_LOG_DIR must be valid UTF-8").with_recovery(
-                "Set ATM_LOG_DIR to an absolute UTF-8 local filesystem path outside ~/.claude/ and ~/.atm/daemon/ before retrying.",
-            )
-        })?;
+        let raw_path = raw_path
+            .to_str()
+            .ok_or_else(|| AtmError::config("ATM_LOG_DIR must be valid UTF-8"))?;
         if raw_path.len() > MAX_HOST_LOG_DIR_UTF8_BYTES {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must not exceed {MAX_HOST_LOG_DIR_UTF8_BYTES} UTF-8 bytes"
-                ))
-                .with_recovery(
-                    "Shorten ATM_LOG_DIR to a local filesystem path no longer than 4096 UTF-8 bytes before retrying.",
-                ),
-            );
+            return Err(AtmError::config(format!(
+                "ATM_LOG_DIR must not exceed {MAX_HOST_LOG_DIR_UTF8_BYTES} UTF-8 bytes"
+            )));
         }
         let path = PathBuf::from(raw_path);
         if !path.is_absolute() {
-            return Err(
-                AtmError::config(format!(
-                    "ATM_LOG_DIR must be an absolute path: {}",
-                    path.display()
-                ))
-                .with_recovery(
-                    "Set ATM_LOG_DIR to an absolute local filesystem path outside ~/.claude/ and ~/.atm/daemon/ before retrying.",
-                ),
-            );
+            return Err(AtmError::config(format!(
+                "ATM_LOG_DIR must be an absolute path: {}",
+                path.display()
+            )));
         }
         return Ok(path);
     }
@@ -288,9 +272,7 @@ fn os_account_home() -> Result<PathBuf, AtmError> {
     // lookup in this thread; copy it before returning.
     let passwd = unsafe { libc::getpwuid(libc::geteuid()) };
     if passwd.is_null() {
-        return Err(AtmError::home_directory_unavailable().with_recovery(
-            "Ensure the operating-system account has a resolvable profile directory before starting ATM.",
-        ));
+        return Err(AtmError::home_directory_unavailable());
     }
     // SAFETY: `passwd` was checked for null and `pw_dir` is a NUL-terminated
     // C string supplied by libc for this account record.
@@ -340,50 +322,31 @@ fn os_account_home() -> Result<PathBuf, AtmError> {
 }
 
 fn validate_atm_home_os(raw_path: &OsStr) -> Result<PathBuf, AtmError> {
-    let raw_path = raw_path.to_str().ok_or_else(|| {
-        AtmError::atm_home_unresolved("ATM_HOME must be valid UTF-8").with_recovery(
-            "Set ATM_HOME to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
-        )
-    })?;
+    let raw_path = raw_path
+        .to_str()
+        .ok_or_else(|| AtmError::atm_home_unresolved("ATM_HOME must be valid UTF-8"))?;
     if raw_path.len() > MAX_ATM_HOME_UTF8_BYTES {
-        return Err(
-            AtmError::atm_home_unresolved(format!(
-                "ATM_HOME must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
-            ))
-            .with_recovery(
-                "Shorten ATM_HOME to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
-            ),
-        );
+        return Err(AtmError::atm_home_unresolved(format!(
+            "ATM_HOME must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+        )));
     }
     validate_atm_home_path(PathBuf::from(raw_path))
 }
 
 fn validate_atm_home_path(path: PathBuf) -> Result<PathBuf, AtmError> {
-    let utf8_path = path.to_str().ok_or_else(|| {
-        AtmError::atm_home_unresolved("ATM home path must be valid UTF-8").with_recovery(
-            "Set ATM_HOME or the OS home directory to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
-        )
-    })?;
+    let utf8_path = path
+        .to_str()
+        .ok_or_else(|| AtmError::atm_home_unresolved("ATM home path must be valid UTF-8"))?;
     if utf8_path.len() > MAX_ATM_HOME_UTF8_BYTES {
-        return Err(
-            AtmError::atm_home_unresolved(format!(
-                "ATM home path must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
-            ))
-            .with_recovery(
-                "Shorten ATM_HOME or the OS home directory path to an absolute UTF-8 local filesystem path no longer than 4096 UTF-8 bytes before retrying the ATM command.",
-            ),
-        );
+        return Err(AtmError::atm_home_unresolved(format!(
+            "ATM home path must not exceed {MAX_ATM_HOME_UTF8_BYTES} UTF-8 bytes"
+        )));
     }
     if !path.is_absolute() {
-        return Err(
-            AtmError::atm_home_unresolved(format!(
-                "ATM home path must be an absolute path: {}",
-                path.display()
-            ))
-            .with_recovery(
-                "Set ATM_HOME or the OS home directory to an absolute local filesystem path before retrying the ATM command.",
-            ),
-        );
+        return Err(AtmError::atm_home_unresolved(format!(
+            "ATM home path must be an absolute path: {}",
+            path.display()
+        )));
     }
     Ok(path)
 }
@@ -521,8 +484,11 @@ mod tests {
 
         let error = atm_home().expect_err("relative ATM_HOME should fail");
 
-        assert!(error.is_config());
-        assert!(error.message.contains("absolute path"));
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+        assert!(error.message().contains("absolute path"));
     }
 
     #[test]
@@ -534,8 +500,11 @@ mod tests {
 
         let error = atm_home().expect_err("overlong ATM_HOME should fail");
 
-        assert!(error.is_config());
-        assert!(error.message.contains("must not exceed"));
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::AtmHomeUnresolved
+        );
+        assert!(error.message().contains("must not exceed"));
     }
 
     #[cfg(unix)]
@@ -774,8 +743,8 @@ mod tests {
             .and_then(|team| team_dir_from_home(tempdir.path(), &team))
             .expect_err("invalid team");
 
-        assert!(error.is_address());
-        assert!(error.message.contains("team name"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.message().contains("team name"));
     }
 
     #[test]
@@ -787,8 +756,8 @@ mod tests {
             .and_then(|agent| inbox_path_from_home(tempdir.path(), &team, &agent))
             .expect_err("invalid agent");
 
-        assert!(error.is_address());
-        assert!(error.message.contains("agent name"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.message().contains("agent name"));
     }
 
     #[cfg(unix)]
@@ -802,8 +771,16 @@ mod tests {
         ]);
 
         let error = host_log_dir().expect_err("non-absolute ATM_LOG_DIR should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains("absolute path"));
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert!(error.message().contains("absolute path"));
     }
 
     /// Windows ATM_LOG_DIR path-shape validation is covered by cross-compile CI
@@ -863,8 +840,16 @@ mod tests {
         ]);
 
         let error = host_log_dir().expect_err("non-utf8 override should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains("UTF-8"));
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert!(error.message().contains("UTF-8"));
     }
 
     #[cfg(unix)]
@@ -879,8 +864,16 @@ mod tests {
         ]);
 
         let error = host_log_dir().expect_err("overlong ATM_LOG_DIR should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains("4096"));
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
+                | crate::error_codes::AtmErrorCode::ConfigParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
+                | crate::error_codes::AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
+                | crate::error_codes::AtmErrorCode::ConfigTeamMissing
+        ));
+        assert!(error.message().contains("4096"));
     }
 
     #[cfg(unix)]
@@ -894,8 +887,8 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("relative ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("absolute path"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("absolute path"));
     }
 
     #[cfg(unix)]
@@ -914,8 +907,8 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("non-utf8 ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("UTF-8"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("UTF-8"));
     }
 
     #[cfg(unix)]
@@ -930,7 +923,7 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("overlong ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("4096"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("4096"));
     }
 }

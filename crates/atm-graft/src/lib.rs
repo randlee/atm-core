@@ -10,15 +10,14 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::boundary::{ClientTransport, PostSendHookEvent};
+use atm_core::api::{ApiRequest, DaemonApiClient};
+use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
     CommandEvent, NullObservability, ObservabilityPort, action_name, outcome_label,
 };
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
@@ -141,13 +140,13 @@ impl GraftSessionOptions {
 /// Thin daemon-backed same-host client for embedded graft consumers.
 #[derive(Clone)]
 pub struct GraftClient {
-    transport: Arc<dyn ClientTransport + Send + Sync>,
+    transport: Arc<dyn DaemonApiClient + Send + Sync>,
 }
 
 impl fmt::Debug for GraftClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GraftClient")
-            .field("transport", &"dyn ClientTransport")
+            .field("transport", &"dyn DaemonApiClient")
             .finish()
     }
 }
@@ -189,12 +188,12 @@ impl GraftClient {
             transport.probe_connection()
         })?;
         Ok(Self {
-            transport: transport as Arc<dyn ClientTransport + Send + Sync>,
+            transport: transport as Arc<dyn DaemonApiClient + Send + Sync>,
         })
     }
 
     #[cfg(test)]
-    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    fn from_transport(transport: Arc<dyn DaemonApiClient + Send + Sync>) -> Self {
         Self { transport }
     }
 
@@ -216,8 +215,12 @@ impl GraftClient {
     }
 
     fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.send(request)? {
-            ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
+        match self
+            .transport
+            .execute(ApiRequest::new(request))?
+            .into_inner()
+        {
+            ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
     }
@@ -225,7 +228,7 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
+        match self.send_request(RequestEnvelope::Write(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }
@@ -239,8 +242,8 @@ impl AtmGraftClient for GraftClient {
     }
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
-            request,
+        match self.send_request(RequestEnvelope::Write(Box::new(
+            request.into_write_request(),
         )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => Ok(outcome),
             other => Err(unexpected_response("ack", other)),
@@ -379,13 +382,7 @@ impl GraftSession {
             ready_latch.notifier(),
             stop_rx,
         )?;
-        ready_latch
-            .wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)
-            .map_err(|error| {
-                error.with_recovery(
-                    "Retry graft activation after the same-host receiver loop can bind and signal readiness within the bounded startup deadline.",
-                )
-            })?;
+        ready_latch.wait_until_listening(RECEIVE_LOOP_READY_DEADLINE)?;
         Ok((stop_tx, join_handle))
     }
 
@@ -480,12 +477,8 @@ fn spawn_graft_receive_loop(
         .map_err(spawn_receive_loop_error)
 }
 
-fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
+fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError {
     AtmError::daemon_unavailable("failed to spawn graft receive loop")
-        .with_source(source)
-        .with_recovery(
-            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-        )
 }
 
 impl Drop for GraftSession {
@@ -500,8 +493,8 @@ impl Drop for GraftSession {
                 .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
             tracing::warn!(
                 identity,
-                error_code = %error.code,
-                error_message = %error.message,
+                error_code = %error.code(),
+                error_message = %error.message(),
                 "graft session drop cleanup failed"
             );
         }
@@ -600,7 +593,7 @@ mod tests {
         let transport = Arc::new(FakeClientTransport::new(Box::new(
             |request| {
                 match request {
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => Ok(
+                CoreRequestEnvelope::Write(request) if request.to.is_some() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
                         action: CommandAction::Send,
                         team: TeamName::from_validated(TEST_TEAM),
@@ -654,7 +647,7 @@ mod tests {
                         },
                     })))
                 }
-                CoreRequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => Ok(
+                CoreRequestEnvelope::Write(request) if request.to.is_none() => Ok(
                     CoreResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
                         serde_json::from_value(json!({
                             "action": "ack",

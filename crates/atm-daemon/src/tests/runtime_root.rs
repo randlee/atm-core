@@ -1,18 +1,14 @@
 use super::*;
-use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::protocol::{
-    JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
-    SendResponseEnvelope, next_request_id,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -73,7 +69,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path.clone());
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir.clone(),
@@ -93,9 +89,7 @@ fn dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
         panic!("expected send response, got {response:?}");
     };
     assert_eq!(outcome.outcome.as_str(), "sent");
-    JsonAtmProtocolCodec
-        .response_to_frame(next_request_id(), response)
-        .expect("encode send response");
+    serde_json::to_vec(&response).expect("encode HTTP response body");
 }
 
 #[test]
@@ -126,7 +120,7 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
     );
     let handle = std::thread::spawn(move || {
         let response = dispatcher
-            .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            .dispatch(RequestEnvelope::Write(Box::new(
                 SendRequest::new(
                     atm_home.clone(),
                     workspace_dir.clone(),
@@ -142,9 +136,7 @@ fn threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly() {
                 .expect("send request"),
             )))
             .expect("dispatch send");
-        JsonAtmProtocolCodec
-            .response_to_frame(next_request_id(), response)
-            .expect("encode send response");
+        serde_json::to_vec(&response).expect("encode HTTP response body");
     });
 
     handle.join().expect("threaded send dispatch");
@@ -177,7 +169,7 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
     );
     let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
     let error = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir.clone(),
@@ -194,8 +186,8 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
         )))
         .expect_err("self-addressed daemon send must fail");
 
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
-    assert!(error.is_validation());
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
 }
 
 #[test]
@@ -246,8 +238,11 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
         ))
         .expect_err("cross-agent daemon read must fail");
 
-    assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
-    assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+    assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+    assert!(
+        error.message().contains("owner-only `atm read`"),
+        "{error:?}"
+    );
 }
 
 #[test]
@@ -296,7 +291,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(DaemonRequestDispatcher::new_for_test(
             atm_home.clone(),
             RuntimeStatusCache::new(),
@@ -319,9 +314,6 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
                         AtmError::daemon_unavailable(
                             "send round-trip test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
                     })
                 },
             },
@@ -331,7 +323,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     configure_test_local_ipc_timeouts(&stream);
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(
+    let request = RequestEnvelope::Write(Box::new(
         SendRequest::new(
             atm_home.clone(),
             workspace_dir.clone(),
@@ -346,17 +338,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         )
         .expect("send request"),
     ));
-    let request_id = next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write send frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read send frame", "send frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
+    let response = atm_core::api::read_http_response(&mut stream).expect("read send response");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");
@@ -418,7 +401,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(DaemonRequestDispatcher::new_for_test(
             atm_home.clone(),
             RuntimeStatusCache::new(),
@@ -441,9 +424,6 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
                         AtmError::daemon_unavailable(
                             "send round-trip test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
                     })
                 },
             },
@@ -451,7 +431,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    let _stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
+    drop(connect_daemon_local_ipc_until_ready(&socket_path, ready_rx));
     let endpoint =
         atm_daemon_client::DaemonLocalIpcEndpoint::new(socket_path.clone()).expect("endpoint");
     let request = SendRequest::new(
@@ -467,29 +447,19 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         false,
     )
     .expect("send request");
-    let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(request));
-    let envelope = atm_daemon_client::RpcEnvelope::encode_body(
-        atm_daemon_client::RpcHeader::new(
-            atm_daemon_client::RequestId::new(next_request_id().into_inner()).expect("request id"),
-            atm_daemon_client::MessageKind::SendComposeRequest,
-        ),
-        &request,
-    )
-    .expect("encode request");
-
+    let request = RequestEnvelope::Write(Box::new(request));
     let mut verified = atm_daemon_client::verify_connection_compatibility(
         &endpoint,
         atm_daemon_client::CompatibilityPreflight {
             client_release: atm_daemon_client::ReleaseVersion::current(),
-            wire_version: atm_core::protocol::ATM_FRAME_VERSION_V1,
+            wire_version: 1,
         },
         Duration::from_secs(3),
     )
     .expect("preflight compatible");
     let response = verified
-        .dispatch_write(&endpoint, envelope, Duration::from_secs(3))
+        .dispatch_write(&endpoint, request, Duration::from_secs(3))
         .expect("dispatch write");
-    let response: ResponseEnvelope = response.decode_body().expect("decode response");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");

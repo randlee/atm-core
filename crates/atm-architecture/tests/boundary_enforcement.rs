@@ -16,6 +16,8 @@ use serde::Deserialize;
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
     ("atm-daemon", "atm-storage-rusqlite"),
+    ("atm-runtime", "atm-storage-rusqlite"),
+    ("atm-storage-rusqlite", "atm-runtime"),
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
@@ -31,6 +33,94 @@ const RETIRED_DAEMON_CONSTRUCT_FRAGMENTS: &[(&str, &str)] = &[
     ("RemoteDelivery", "OutcomeUnknown"),
 ];
 
+const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
+    "AtmErrorKind",
+    "ProtocolErrorEnvelope",
+    "error_kind_for_code",
+];
+
+#[test]
+fn production_code_cannot_restore_retired_error_contract_symbols() {
+    let root = workspace_root().join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&root, &mut files);
+    let violations = files
+        .into_iter()
+        .filter(|path| {
+            !path
+                .components()
+                .any(|component| component.as_os_str() == "tests")
+        })
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            retired_error_contract_symbol(&contents)
+                .map(|symbol| format!("{} contains retired `{symbol}`", path.display()))
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        violations.is_empty(),
+        "AI.3's two-field error contract forbids retired error shapes: {violations:?}"
+    );
+}
+
+fn retired_error_contract_symbol(source: &str) -> Option<&'static str> {
+    RETIRED_ERROR_CONTRACT_SYMBOLS
+        .iter()
+        .copied()
+        .find(|symbol| source.contains(symbol))
+}
+
+#[test]
+fn retired_error_contract_detector_rejects_duplicate_code_mapping_fixture() {
+    assert_eq!(
+        retired_error_contract_symbol("fn error_kind_for_code() {}"),
+        Some("error_kind_for_code")
+    );
+}
+
+#[test]
+fn only_the_error_contract_module_may_define_an_atm_error_literal() {
+    let root = workspace_root();
+    let contract_module = root.join("crates/atm-storage/src/error.rs");
+    let source_root = root.join("crates");
+    let mut files = Vec::new();
+    collect_rust_files(&source_root, &mut files);
+    let violations = files
+        .into_iter()
+        .filter(|path| path != &contract_module)
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            direct_atm_error_literal(&contents).then(|| path.display().to_string())
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        violations.is_empty(),
+        "AtmError literals bypass the canonical error catalog: {violations:?}"
+    );
+}
+
+fn direct_atm_error_literal(source: &str) -> bool {
+    source.split("AtmError").skip(1).any(|suffix| {
+        let Some(body) = suffix.trim_start().strip_prefix('{') else {
+            return false;
+        };
+        matches!(body.trim_start(), body if body.starts_with("code:") || body.starts_with("message:"))
+    })
+}
+
+#[test]
+fn direct_atm_error_literal_detector_rejects_constructor_fixture() {
+    let fixture = concat!("Atm", "Error", " {", " code: error_code, message: detail }");
+    assert!(direct_atm_error_literal(fixture));
+    assert!(!direct_atm_error_literal(
+        "fn error() -> AtmError { panic!() }"
+    ));
+}
+
 #[test]
 fn atm_daemon_must_not_depend_on_atm_storage_rusqlite() {
     assert_forbidden_edge_absent("atm-daemon", "atm-storage-rusqlite");
@@ -44,6 +134,16 @@ fn atm_must_not_depend_on_atm_storage_rusqlite() {
 #[test]
 fn atm_runtime_must_not_depend_on_atm_daemon() {
     assert_forbidden_edge_absent("atm-runtime", "atm-daemon");
+}
+
+#[test]
+fn atm_runtime_must_not_depend_on_atm_storage_rusqlite() {
+    assert_forbidden_edge_absent("atm-runtime", "atm-storage-rusqlite");
+}
+
+#[test]
+fn atm_storage_rusqlite_must_not_depend_on_atm_runtime() {
+    assert_forbidden_edge_absent("atm-storage-rusqlite", "atm-runtime");
 }
 
 #[test]
@@ -175,7 +275,42 @@ fn deleted_daemon_boundary_modules_must_be_retired() {
 }
 
 #[test]
+fn deleted_core_boundary_modules_must_be_retired() {
+    let root = workspace_root();
+    let stale = core_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            let sources = boundary_module_sources(&root, &boundary)?;
+            let source_exists = sources.iter().any(|source| source.exists());
+            module_is_stale_if_missing(source_exists, &boundary.status.state).then(|| {
+                format!(
+                    "{} declares missing module {} with status {}",
+                    path.display(),
+                    boundary.implementation.module,
+                    boundary.status.state
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        stale.is_empty(),
+        "core boundary TOMLs for deleted modules must be retired: {stale:?}"
+    );
+}
+
+#[test]
 fn missing_daemon_module_requires_retired_boundary_state() {
+    assert!(module_is_stale_if_missing(false, "active"));
+    assert!(!module_is_stale_if_missing(false, "retired"));
+}
+
+#[test]
+fn missing_core_module_requires_retired_boundary_state() {
     assert!(module_is_stale_if_missing(false, "active"));
     assert!(!module_is_stale_if_missing(false, "retired"));
 }
@@ -247,6 +382,41 @@ fn daemon_boundary_module_sources(root: &Path, module: &str) -> Option<Vec<PathB
 
     let relative_module = relative_module.strip_prefix("::")?;
     let module_path = source_root.join(relative_module.replace("::", "/"));
+    Some(vec![
+        module_path.with_extension("rs"),
+        module_path.join("mod.rs"),
+    ])
+}
+
+fn boundary_module_sources(root: &Path, boundary: &BoundaryToml) -> Option<Vec<PathBuf>> {
+    let module = boundary.implementation.module.trim();
+    if module.is_empty() {
+        return None;
+    }
+
+    let crate_path = boundary.owner_crate_path.trim();
+    if crate_path.is_empty() {
+        return Some(Vec::new());
+    }
+    let crate_source_root = root
+        .join("crates")
+        .join(crate_path.replace('_', "-"))
+        .join("src");
+    let relative_module = module
+        .strip_prefix(crate_path)
+        .and_then(|value| value.strip_prefix("::"))
+        .unwrap_or(module);
+    if relative_module == module && module != crate_path {
+        return Some(Vec::new());
+    }
+    if relative_module.is_empty() {
+        return Some(vec![
+            crate_source_root.join("lib.rs"),
+            crate_source_root.join("main.rs"),
+        ]);
+    }
+
+    let module_path = crate_source_root.join(relative_module.replace("::", "/"));
     Some(vec![
         module_path.with_extension("rs"),
         module_path.join("mod.rs"),
@@ -362,6 +532,21 @@ fn daemon_boundary_files() -> Vec<PathBuf> {
     files.sort();
     files
 }
+
+fn core_boundary_files() -> Vec<PathBuf> {
+    boundary_files_in("atm-core")
+}
+
+fn boundary_files_in(owner: &str) -> Vec<PathBuf> {
+    let root = workspace_root();
+    let mut files = fs::read_dir(root.join("boundaries").join(owner))
+        .unwrap_or_else(|error| panic!("boundaries/{owner} directory must be readable: {error}"))
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -372,6 +557,8 @@ fn workspace_root() -> PathBuf {
 
 #[derive(Default, Deserialize)]
 struct BoundaryToml {
+    #[serde(default)]
+    owner_crate_path: String,
     #[serde(default)]
     implementation: BoundaryImplementation,
     #[serde(default)]

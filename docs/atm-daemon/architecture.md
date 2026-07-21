@@ -14,7 +14,7 @@ It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns runtime composition only.
 
 The canonical daemon wire contract lives in:
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
@@ -279,7 +279,7 @@ implementation is accepted.
 ## 3.0.2 Historical Shared Frame Contract
 
 Through AI.5, the daemon host shell uses the shared ATM frame contract defined
-in [`protocol-icd.md`](./protocol-icd.md). AI.6 retires it for ADR-033's
+in the retired custom frame contract. AI.6 replaces it with ADR-033's
 HTTP-over-UDS contract; the frame contract must not be extended or preserved as
 a fallback.
 

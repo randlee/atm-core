@@ -1,18 +1,16 @@
-use atm_core::LocalFileNonClaudeOutbound;
-use atm_core::boundary::RequestDispatcher;
+use atm_core::api::{ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
 #[cfg(test)]
 use atm_core::error::AtmError;
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_runtime::RuntimeAssembly;
 
 use interprocess::local_socket::Name as LocalSocketName;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
-use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
@@ -53,48 +51,52 @@ pub(crate) struct DoctorOnlyDispatcher;
 
 impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
 
-impl RequestDispatcher for DoctorOnlyDispatcher {
-    fn dispatch(
+impl ApiRouter for DoctorOnlyDispatcher {
+    fn route(
         &self,
-        request: RequestEnvelope,
-    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-        match request {
-            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(Box::new(DoctorReport {
-                summary: DoctorSummary {
-                    status: DoctorStatus::Healthy,
-                    message: "ok".to_string(),
-                    info_count: 0,
-                    warning_count: 0,
-                    error_count: 0,
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        _deadline: RequestDeadline,
+    ) -> Result<ApiResponse, atm_core::error::AtmError> {
+        match request.into_inner() {
+            RequestEnvelope::Doctor(_) => Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(
+                DoctorReport {
+                    summary: DoctorSummary {
+                        status: DoctorStatus::Healthy,
+                        message: "ok".to_string(),
+                        info_count: 0,
+                        warning_count: 0,
+                        error_count: 0,
+                    },
+                    findings: Vec::new(),
+                    recommendations: Vec::new(),
+                    environment: DoctorEnvironmentVisibility {
+                        atm_home: None,
+                        atm_team: None,
+                        atm_identity: None,
+                        team_override: None,
+                    },
+                    client_context: atm_core::doctor::DoctorExecutionContext::default(),
+                    daemon_context: None,
+                    member_roster: None,
+                    observability: AtmObservabilityHealth {
+                        active_log_path: None,
+                        logging_state: AtmObservabilityHealthState::Healthy,
+                        query_state: Some(AtmObservabilityHealthState::Healthy),
+                        maintenance: None,
+                        diagnostic: None,
+                        detail: None,
+                    },
+                    post_send: atm_core::doctor::PostSendDoctorReport::default(),
+                    config: atm_core::boundary::ConfigDoctorReport::default(),
+                    mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
+                    roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
+                    daemon_runtime: None,
+                    drift_findings: Vec::new(),
+                    runtime_status: None,
+                    bootstrap_trace: None,
                 },
-                findings: Vec::new(),
-                recommendations: Vec::new(),
-                environment: DoctorEnvironmentVisibility {
-                    atm_home: None,
-                    atm_team: None,
-                    atm_identity: None,
-                    team_override: None,
-                },
-                client_context: atm_core::doctor::DoctorExecutionContext::default(),
-                daemon_context: None,
-                member_roster: None,
-                observability: AtmObservabilityHealth {
-                    active_log_path: None,
-                    logging_state: AtmObservabilityHealthState::Healthy,
-                    query_state: Some(AtmObservabilityHealthState::Healthy),
-                    maintenance: None,
-                    diagnostic: None,
-                    detail: None,
-                },
-                post_send: atm_core::doctor::PostSendDoctorReport::default(),
-                config: atm_core::boundary::ConfigDoctorReport::default(),
-                mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
-                roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
-                daemon_runtime: None,
-                drift_findings: Vec::new(),
-                runtime_status: None,
-                bootstrap_trace: None,
-            }))),
+            )))),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
@@ -131,8 +133,13 @@ impl PanicDispatcherWithUnwindSignal {
 impl atm_core::boundary::sealed::Sealed for PanicDispatcherWithUnwindSignal {}
 
 #[cfg(test)]
-impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl ApiRouter for PanicDispatcherWithUnwindSignal {
+    fn route(
+        &self,
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        _deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
         let unwind_signal = PanicUnwindSignal(
             self.unwind_tx
                 .lock()
@@ -140,37 +147,17 @@ impl RequestDispatcher for PanicDispatcherWithUnwindSignal {
                 .take(),
         );
         let _keep_unwind_signal_until_panic_unwinds = unwind_signal;
-        panic!("intentional dispatcher panic for test: {request:?}");
+        panic!(
+            "intentional router panic for test: {:?}",
+            request.into_inner()
+        );
     }
 }
 
-pub(crate) fn sqlite_runtime_assembly_for_test(db_path: &std::path::Path) -> RuntimeAssembly {
-    let config_current_dir = std::env::current_dir().unwrap_or_else(|_| {
-        db_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .to_path_buf()
-    });
-    let log_dir = db_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."))
-        .join("daemon-test-logs");
-    let observability = std::sync::Arc::new(
-        crate::test_observability::TestDaemonObservability::new(log_dir)
-            .unwrap_or_else(|error| panic!("failed to build daemon test observability: {error}")),
-    );
-    assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: db_path.to_path_buf(),
-        config_current_dir,
-        sqlite_observer: std::sync::Arc::new(DaemonRuntimeSqliteObserver::new(observability)),
-        non_claude_outbound: std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
-    })
-    .unwrap_or_else(|error| {
-        panic!(
-            "failed to assemble sqlite runtime for daemon test support at {}: {error}",
-            db_path.display()
-        )
-    })
+pub(crate) fn sqlite_runtime_assembly_for_test(
+    db_path: &std::path::Path,
+) -> Result<RuntimeAssembly, AtmError> {
+    atm_runtime_test_support::open_sqlite_boundary(db_path)
 }
 
 pub(crate) fn connect_daemon_local_ipc_until_ready(

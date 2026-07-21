@@ -276,7 +276,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
@@ -330,8 +330,8 @@ Required `atm-core` crate rules:
 - canonical writes represent both send and acknowledgement. An ack differs
   only by a populated `acknowledges_message_id`, never by a second request or
   packet family.
-- `atm-core` owns the ingest replay/degradation contract and must not silently
-  drop parseable external rows
+- `atm-core` relies on durable message identity and idempotent writes; it owns
+  no ingest-replay or deferred-delivery persistence contract
 - `atm-core` must not let command/service code access SQLite, mailbox JSON,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` boundary traits are sealed by default; any boundary that must

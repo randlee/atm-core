@@ -39,10 +39,6 @@ fn parse_optional_timestamp(
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata {field_name}: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox metadata row before retrying the query.",
-            )
-            .with_source(error)
         })
 }
 
@@ -74,9 +70,6 @@ fn parse_optional_message_id(
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata {field_name}: {error}"
             ))
-            .with_recovery(format!(
-                "Repair or remove the malformed {field_name} row before retrying the sqlite mailbox metadata query.",
-            ))
         })
     })
     .transpose()
@@ -89,9 +82,6 @@ fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata thread_mode: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed thread_mode row before retrying the sqlite mailbox metadata query.",
-            )
         })
     })
     .transpose()
@@ -104,9 +94,6 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata task_id for {message_key}: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed task_id row before retrying the sqlite mailbox metadata query.",
-            )
         })
     })
     .transpose()
@@ -114,14 +101,10 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
 fn decode_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
-    u64::try_from(value).map_err(|error| {
+    u64::try_from(value).map_err(|_error| {
         AtmError::validation(format!(
             "sqlite mailbox metadata {field_name} must not be negative: {value}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox metadata counts row before retrying the query.",
-        )
-        .with_source(error)
     })
 }
 
@@ -131,9 +114,6 @@ fn parse_message_key(message_key: &str) -> Result<MessageKey, AtmError> {
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata message key: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed message-key row before retrying the sqlite mailbox metadata query.",
-        )
     })
 }
 
@@ -143,9 +123,6 @@ fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmErro
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata from_agent for {message_key}: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed from_agent row before retrying the sqlite mailbox metadata query.",
-        )
     })
 }
 
@@ -155,10 +132,6 @@ fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata timestamp: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
-        )
-        .with_source(error)
     })
 }
 
@@ -193,10 +166,12 @@ fn decode_mailbox_metadata_row(
     let parsed_task_id = parse_task_id(task_id, &message_key)?;
     let ack_requirement = derive_ack_requirement(&InboxMessage {
         from: parsed_from_agent.clone(),
+        source_chat_id: None,
         text: String::new(),
         timestamp: parsed_message_at,
         read: read != 0,
         source_team: None,
+        destination_chat_id: None,
         summary: summary.clone(),
         message_id: parsed_message_id,
         requires_ack: requires_ack != 0,
@@ -236,7 +211,6 @@ pub(crate) fn query_mailbox_metadata_rows(
     db.with_connection(|connection| {
         let limit_i64 = limit.map(i64::try_from).transpose().map_err(|_| {
             AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
-                .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
         })?;
         // AD.20 keeps this query bounded to mailbox header data only. Full
         // durable message text is reloaded later, and only for surviving

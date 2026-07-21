@@ -8,7 +8,7 @@ use tracing::warn;
 use super::BackupOutcome;
 use crate::address::validate_path_segment;
 use crate::boundary::RosterStore;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::persistence;
 
 pub(super) fn backup_team_from_roster_store(
@@ -23,8 +23,6 @@ pub(super) fn backup_team_from_roster_store(
             "failed to create backup directory {}: {error}",
             backup_dir.display()
         ))
-        .with_source(error)
-        .with_recovery("Check backup directory permissions under ATM_HOME and retry the backup.")
     })?;
 
     copy_regular_files(
@@ -57,8 +55,6 @@ pub(super) fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
                 "failed to create inbox directory {}: {error}",
                 parent.display()
             ))
-            .with_source(error)
-            .with_recovery("Check inbox directory permissions and rerun the team recovery command.")
         })?;
     }
 
@@ -71,8 +67,6 @@ pub(super) fn ensure_inbox_exists(inbox_path: &Path) -> Result<bool, AtmError> {
                 "failed to create inbox {}: {error}",
                 inbox_path.display()
             ))
-            .with_source(error)
-            .with_recovery("Check inbox permissions and rerun the team recovery command.")
         })?;
     Ok(true)
 }
@@ -125,7 +119,7 @@ fn write_roster_audit_snapshot(
     persistence::atomic_write_bytes(
         &backup_dir.join("atm-roster.json"),
         &bytes,
-        AtmErrorKind::FilePolicy,
+        AtmErrorCode::FilePolicyRejected,
         "ATM roster backup snapshot",
         "Check backup directory permissions and retry the backup.",
     )
@@ -160,8 +154,6 @@ where
             "failed to create destination directory {}: {error}",
             dst.display()
         ))
-        .with_source(error)
-        .with_recovery("Check destination directory permissions and retry the copy.")
     })?;
 
     let mut entries = Vec::new();
@@ -170,8 +162,6 @@ where
             "failed to read source directory {}: {error}",
             src.display()
         ))
-        .with_source(error)
-        .with_recovery("Check source directory permissions and retry the copy.")
     })? {
         let entry = match entry {
             Ok(entry) => entry,
@@ -188,9 +178,7 @@ where
                     return Err(AtmError::file_policy(format!(
                         "failed to read source directory entry under {}: {error}",
                         src.display()
-                    ))
-                    .with_source(error)
-                    .with_recovery("Check source directory permissions and retry the restore."));
+                    )));
                 }
             },
         };
@@ -209,8 +197,6 @@ where
                 from.display(),
                 to.display()
             ))
-            .with_source(error)
-            .with_recovery("Check source and destination permissions and retry the copy.")
         })?;
     }
 

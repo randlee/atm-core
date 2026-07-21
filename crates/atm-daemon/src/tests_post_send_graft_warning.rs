@@ -1,13 +1,11 @@
 use atm_core::ack::AckRequest;
-use atm_core::boundary::{ReplaySource, RequestDispatcher, RosterHarness};
+use atm_core::boundary::RosterHarness;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
 };
-use atm_core::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
@@ -20,10 +18,6 @@ use tempfile::TempDir;
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
 const TEST_TEAM: &str = "test-team";
-
-fn replay_source_static(label: &'static str) -> ReplaySource {
-    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
-}
 
 fn install_test_roster_with_harness(
     db_path: &std::path::Path,
@@ -48,11 +42,7 @@ fn install_test_roster_with_harness(
         })
         .collect::<Vec<_>>();
     roster_store
-        .replace_roster(
-            &team,
-            &members,
-            Some(&replay_source_static("daemon-graft-warning-test")),
-        )
+        .replace_roster(&team, &members)
         .expect("replace roster");
 }
 
@@ -120,7 +110,7 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir,
@@ -155,7 +145,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home.clone(),
                 workspace_dir.clone(),
@@ -177,7 +167,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     };
 
     let ack_response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(
+        .dispatch(RequestEnvelope::Write(Box::new(
             AckRequest {
                 home_dir: atm_home,
                 current_dir: workspace_dir,
@@ -185,7 +175,8 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
                 caller_team: TEST_TEAM.parse().expect("team"),
                 message_id: source_message_id,
                 reply_body: "ack reply".to_string(),
-            },
+            }
+            .into_write_request(),
         )))
         .expect("ack response");
 
@@ -251,7 +242,7 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
         ("USERPROFILE", None),
     ]);
     let response = dispatcher
-        .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+        .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home,
                 workspace_dir,

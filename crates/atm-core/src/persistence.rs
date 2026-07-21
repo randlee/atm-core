@@ -3,7 +3,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use ulid::Ulid;
 
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 
 /// Atomically replace one shared mutable ATM-owned state file.
 ///
@@ -17,7 +17,7 @@ use crate::error::{AtmError, AtmErrorKind};
 pub(crate) fn atomic_write_bytes(
     path: &Path,
     bytes: &[u8],
-    kind: AtmErrorKind,
+    kind: AtmErrorCode,
     label: &str,
     recovery: &str,
 ) -> Result<(), AtmError> {
@@ -30,8 +30,6 @@ pub(crate) fn atomic_write_bytes(
                     parent.display()
                 ),
             )
-            .with_source(error)
-            .with_recovery(recovery)
         })?;
     }
 
@@ -46,8 +44,6 @@ pub(crate) fn atomic_write_bytes(
                     temp_path.display()
                 ),
             )
-            .with_source(error)
-            .with_recovery(recovery)
         })?;
         file.write_all(bytes).map_err(|error| {
             AtmError::new(
@@ -57,8 +53,6 @@ pub(crate) fn atomic_write_bytes(
                     temp_path.display()
                 ),
             )
-            .with_source(error)
-            .with_recovery(recovery)
         })?;
         file.sync_all().map_err(|error| {
             AtmError::new(
@@ -68,8 +62,6 @@ pub(crate) fn atomic_write_bytes(
                     temp_path.display()
                 ),
             )
-            .with_source(error)
-            .with_recovery(recovery)
         })?;
     }
 
@@ -78,8 +70,6 @@ pub(crate) fn atomic_write_bytes(
             kind,
             format!("failed to replace {}: {error}", path.display()),
         )
-        .with_source(error)
-        .with_recovery(recovery)
     })?;
     sync_parent_directory(path, kind, label, recovery)?;
     Ok(())
@@ -99,7 +89,7 @@ fn temp_path_for_atomic_write(path: &Path, label: &str) -> PathBuf {
 pub(crate) fn atomic_write_string(
     path: &Path,
     contents: &str,
-    kind: AtmErrorKind,
+    kind: AtmErrorCode,
     label: &str,
     recovery: &str,
 ) -> Result<(), AtmError> {
@@ -109,9 +99,9 @@ pub(crate) fn atomic_write_string(
 #[cfg(unix)]
 fn sync_parent_directory(
     path: &Path,
-    kind: AtmErrorKind,
+    kind: AtmErrorCode,
     label: &str,
-    recovery: &str,
+    _recovery: &str,
 ) -> Result<(), AtmError> {
     let Some(parent) = path.parent() else {
         return Ok(());
@@ -119,18 +109,14 @@ fn sync_parent_directory(
 
     #[cfg(test)]
     if tests::forced_parent_sync_failure() {
-        return Err(
-            AtmError::new(
-                kind,
-                format!(
-                    "failed to sync parent directory {} after replacing {}: synthetic parent-directory sync failure",
-                    parent.display(),
-                    path.display()
-                ),
-            )
-            .with_source(std::io::Error::other("synthetic parent-directory sync failure"))
-            .with_recovery(recovery),
-        );
+        return Err(AtmError::new(
+            kind,
+            format!(
+                "failed to sync parent directory {} after replacing {}: synthetic parent-directory sync failure",
+                parent.display(),
+                path.display()
+            ),
+        ));
     }
 
     let directory = File::open(parent).map_err(|error| {
@@ -142,8 +128,6 @@ fn sync_parent_directory(
                 label
             ),
         )
-        .with_source(error)
-        .with_recovery(recovery)
     })?;
     directory.sync_all().map_err(|error| {
         AtmError::new(
@@ -154,15 +138,13 @@ fn sync_parent_directory(
                 path.display()
             ),
         )
-        .with_source(error)
-        .with_recovery(recovery)
     })
 }
 
 #[cfg(not(unix))]
 fn sync_parent_directory(
     _path: &Path,
-    _kind: AtmErrorKind,
+    _kind: AtmErrorCode,
     _label: &str,
     _recovery: &str,
 ) -> Result<(), AtmError> {
@@ -177,7 +159,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{atomic_write_bytes, temp_path_for_atomic_write};
-    use crate::error::AtmErrorKind;
+    use crate::error::AtmErrorCode;
     #[cfg(unix)]
     use crate::test_support::lock_env;
 
@@ -217,7 +199,7 @@ mod tests {
         atomic_write_bytes(
             &path,
             br#"{"value":1}"#,
-            AtmErrorKind::MailboxWrite,
+            AtmErrorCode::MailboxWriteFailed,
             "state file",
             "retry after fixing the state file path",
         )
@@ -225,7 +207,7 @@ mod tests {
         atomic_write_bytes(
             &path,
             br#"{"value":2}"#,
-            AtmErrorKind::MailboxWrite,
+            AtmErrorCode::MailboxWriteFailed,
             "state file",
             "retry after fixing the state file path",
         )
@@ -274,14 +256,17 @@ mod tests {
         let error = atomic_write_bytes(
             &path,
             br#"{"value":1}"#,
-            AtmErrorKind::MailboxWrite,
+            AtmErrorCode::MailboxWriteFailed,
             "state file",
             "retry after fixing the state file path",
         )
         .expect_err("parent sync failure");
 
-        assert!(error.is_mailbox_write());
-        assert!(error.message.contains("failed to sync parent directory"));
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::MailboxWriteFailed
+        );
+        assert!(error.message().contains("failed to sync parent directory"));
     }
 
     #[cfg(not(unix))]
@@ -293,7 +278,7 @@ mod tests {
         atomic_write_bytes(
             &path,
             br#"{"value":1}"#,
-            AtmErrorKind::MailboxWrite,
+            AtmErrorCode::MailboxWriteFailed,
             "state file",
             "retry after fixing the state file path",
         )

@@ -2,13 +2,11 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use atm_core::protocol::{
-    self, CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope,
-    ResponseEnvelope,
+    CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope,
 };
-use atm_storage::{AtmError, AtmErrorCode, AtmErrorKind};
+use atm_storage::{AtmError, AtmErrorCode};
 
-use crate::wire::MessageKind;
-use crate::{DaemonLocalIpcEndpoint, RpcEnvelope, exchange_envelope};
+use crate::{DaemonLocalIpcEndpoint, exchange_request};
 
 pub struct Unverified;
 pub struct VersionVerified {
@@ -27,16 +25,10 @@ pub struct VersionVerified {
 ///     wire_version: 1,
 /// });
 /// let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new("/tmp/atm-daemon.sock".into()).unwrap();
-/// let request = atm_daemon_client::RpcEnvelope::encode_body(
-///     atm_daemon_client::RpcHeader::new(
-///         atm_daemon_client::RequestId::new(1).unwrap(),
-///         atm_daemon_client::MessageKind::CompatibilityPreflightRequest,
-///     ),
-///     &atm_core::protocol::RequestEnvelope::CompatibilityPreflight(CompatibilityPreflight {
+/// let request = atm_core::protocol::RequestEnvelope::CompatibilityPreflight(CompatibilityPreflight {
 ///         client_release: ReleaseVersion::parse("1.3.1").unwrap(),
 ///         wire_version: 1,
 ///     }),
-/// ).unwrap();
 /// let _ = connection.dispatch_write(&endpoint, request, std::time::Duration::from_secs(3));
 /// ```
 pub struct Connection<State> {
@@ -59,16 +51,12 @@ impl Connection<Unverified> {
         daemon_release: ReleaseVersion,
     ) -> Result<Connection<VersionVerified>, AtmError> {
         if self.preflight.client_release != daemon_release {
-            return Err(AtmError::new_with_code(
+            return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
-                AtmErrorKind::DaemonUnavailable,
                 format!(
-                    "ATM client release {} is incompatible with daemon release {daemon_release}",
-                    self.preflight.client_release
+                    "ATM client release {} is incompatible with daemon release {}",
+                    self.preflight.client_release, daemon_release
                 ),
-            )
-            .with_recovery(
-                "Install matching atm and atm-daemon releases; no request was dispatched.",
             ));
         }
         Ok(Connection {
@@ -87,10 +75,10 @@ impl Connection<VersionVerified> {
     pub fn dispatch_write(
         &mut self,
         endpoint: &DaemonLocalIpcEndpoint,
-        request: RpcEnvelope,
+        request: RequestEnvelope,
         request_deadline: Duration,
-    ) -> Result<RpcEnvelope, AtmError> {
-        exchange_envelope(endpoint, request, request_deadline)
+    ) -> Result<ResponseEnvelope, AtmError> {
+        exchange_request(endpoint, &request, request_deadline)
     }
 }
 
@@ -99,24 +87,17 @@ pub fn verify_connection_compatibility(
     preflight: CompatibilityPreflight,
     request_deadline: Duration,
 ) -> Result<Connection<VersionVerified>, AtmError> {
-    let request = RpcEnvelope::from_frame_payload(crate::FramePayload {
-        request_id: protocol::next_request_id(),
-        message_kind: MessageKind::CompatibilityPreflightRequest,
-        flags: protocol::ATM_FRAME_FLAGS_V1,
-        bytes: serde_json::to_vec(&RequestEnvelope::CompatibilityPreflight(preflight.clone()))
-            .map_err(AtmError::from)?,
-    });
-    let response = exchange_envelope(endpoint, request, request_deadline)?;
-    let response: ResponseEnvelope = response.decode_body()?;
+    let response = exchange_request(
+        endpoint,
+        &RequestEnvelope::CompatibilityPreflight(preflight.clone()),
+        request_deadline,
+    )?;
     let verdict = match response {
         ResponseEnvelope::CompatibilityVerdict(verdict) => verdict,
         other => {
             return Err(AtmError::daemon_unavailable(format!(
                 "daemon returned an unexpected response for compatibility preflight: {other:?}"
-            ))
-            .with_recovery(
-                "Align the ATM client and daemon builds so compatibility preflight returns a CompatibilityVerdict before retrying writes.",
-            ));
+            )));
         }
     };
     let connection = Connection::<Unverified>::new(preflight.clone());
@@ -128,15 +109,11 @@ pub fn verify_connection_compatibility(
             client_release,
             daemon_release,
             code,
-        } => Err(AtmError::new_with_code(
+        } => Err(AtmError::new(
             code,
-            AtmErrorKind::DaemonUnavailable,
             format!(
                 "ATM client release {client_release} is incompatible with daemon release {daemon_release}"
             ),
-        )
-        .with_recovery(
-            "Install matching atm and atm-daemon releases; no request was dispatched.",
         )),
     }
 }
@@ -144,8 +121,6 @@ pub fn verify_connection_compatibility(
 #[cfg(test)]
 mod tests {
     use super::{CompatibilityPreflight, Connection, ReleaseVersion, Unverified};
-    use crate::{MessageKind, RpcEnvelope};
-    use atm_core::protocol::RequestEnvelope;
 
     #[test]
     fn matching_versions_transition_to_verified_connection() {
@@ -160,24 +135,14 @@ mod tests {
     }
 
     #[test]
-    fn compatibility_preflight_request_encodes_as_request_envelope() {
+    fn compatibility_preflight_retains_canonical_request_shape() {
         let preflight = CompatibilityPreflight {
             client_release: ReleaseVersion::parse("1.3.1").expect("version"),
             wire_version: 1,
         };
-        let request = RpcEnvelope::from_frame_payload(crate::FramePayload {
-            request_id: atm_core::protocol::next_request_id(),
-            message_kind: MessageKind::CompatibilityPreflightRequest,
-            flags: atm_core::protocol::ATM_FRAME_FLAGS_V1,
-            bytes: serde_json::to_vec(&RequestEnvelope::CompatibilityPreflight(preflight.clone()))
-                .expect("json body"),
-        });
-
-        let (request_id, decoded) = request.decode_request().expect("decode request");
-        assert!(request_id.into_inner() > 0);
-        match decoded {
-            RequestEnvelope::CompatibilityPreflight(decoded) => assert_eq!(decoded, preflight),
-            other => panic!("unexpected request payload: {other:?}"),
-        }
+        let request =
+            atm_core::protocol::RequestEnvelope::CompatibilityPreflight(preflight.clone());
+        let (_, path) = atm_core::api::endpoint_for(&request);
+        assert_eq!(path, "/v1/atm/compatibility");
     }
 }

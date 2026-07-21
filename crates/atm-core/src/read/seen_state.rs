@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::address::validate_path_segment;
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::persistence;
 use crate::types::IsoTimestamp;
 
@@ -24,11 +24,9 @@ pub fn load_seen_watermark(
 
     let raw = fs::read_to_string(&path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to read seen-state watermark: {error}"),
         )
-        .with_recovery("Check seen-state file permissions or remove the malformed watermark file before rerunning the read command.")
-        .with_source(error)
     })?;
 
     let trimmed = raw.trim();
@@ -38,11 +36,9 @@ pub fn load_seen_watermark(
 
     let parsed = chrono::DateTime::parse_from_rfc3339(trimmed).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::Serialization,
+            AtmErrorCode::SerializationFailed,
             format!("invalid seen-state watermark: {error}"),
         )
-        .with_recovery("Remove the malformed seen-state watermark file so ATM can rebuild it on the next successful read.")
-        .with_source(error)
     })?;
 
     Ok(Some(parsed.with_timezone(&chrono::Utc).into()))
@@ -64,7 +60,7 @@ pub fn save_seen_watermark(
     persistence::atomic_write_string(
         &path,
         &timestamp.into_inner().to_rfc3339(),
-        AtmErrorKind::MailboxWrite,
+        AtmErrorCode::MailboxWriteFailed,
         "seen-state watermark",
         "Check seen-state directory permissions and rerun the read command.",
     )
@@ -119,7 +115,7 @@ mod tests {
         let error =
             load_seen_watermark(tempdir.path(), "../evil", TEST_SENDER).expect_err("invalid team");
 
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -135,6 +131,6 @@ mod tests {
         let error = save_seen_watermark(tempdir.path(), TEST_TEAM, "../evil", timestamp)
             .expect_err("invalid agent");
 
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 }

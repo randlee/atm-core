@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
+use atm_core::api::ApiRouter;
 use atm_core::error::AtmError;
-use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+use atm_core::protocol::ResponseEnvelope;
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
@@ -19,7 +19,7 @@ use crate::active_connection_registry::ActiveConnectionRegistry;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
-use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
+use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_listener_until};
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
@@ -82,9 +82,6 @@ impl ServeLoopSignals {
     fn record_accept_error(&self, error: AtmError) -> Result<(), AtmError> {
         let mut slot = self.accept_error.lock().map_err(|_| {
             AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
-                .with_recovery(
-                    "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
-                )
         })?;
         if slot.is_none() {
             *slot = Some(error);
@@ -97,9 +94,6 @@ impl ServeLoopSignals {
             .lock()
             .map_err(|_| {
                 AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
-                    )
             })
             .map(|mut slot| slot.take())
     }
@@ -131,17 +125,10 @@ impl SocketEndpointGuard {
         if self.unpublished.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
-        match self.preparation {
-            #[cfg(unix)]
-            LocalIpcEndpointPreparation::FilesystemEndpointPrepared => {
-                remove_stale_endpoint(self.endpoint_path())?;
-            }
-            #[cfg(not(unix))]
-            LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared => {
-                // Windows same-host IPC publishes a named pipe rather than a filesystem
-                // socket path; once the listener has dropped there is no extra path
-                // artifact left for the guard to remove here.
-            }
+        let _ = self.preparation;
+        #[cfg(unix)]
+        {
+            remove_stale_endpoint(self.endpoint_path())?;
         }
         Ok(())
     }
@@ -170,7 +157,6 @@ pub(crate) struct PreparedRuntimeServer {
     lifecycle_control: LifecycleControlSourceAdapter,
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
-    codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
     // The endpoint guard must drop after the listener and connection registry have been torn
     // down so same-host endpoint unpublication never races a still-live serving resource.
@@ -187,15 +173,8 @@ pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishRea
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg(unix)]
 enum LocalIpcEndpointPreparation {
     FilesystemEndpointPrepared,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg(not(unix))]
-enum LocalIpcEndpointPreparation {
-    NonFilesystemEndpointPrepared,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,9 +194,8 @@ struct AcceptLoopContext<'a> {
     lifecycle_control: &'a LifecycleControlSourceAdapter,
     registry: &'a Arc<ActiveConnectionRegistry>,
     force_shutdown: &'a Arc<AtomicBool>,
-    codec: &'a JsonAtmProtocolCodec,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
@@ -236,14 +214,13 @@ struct ServeShutdownContext<'a> {
 
 struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishReady> {
     listener: &'a LocalSocketListener,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
     lifecycle_control: LifecycleControlSourceAdapter,
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
-    codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
     endpoint_guard: SocketEndpointGuard,
     graceful_drain_deadline: Duration,
@@ -306,19 +283,15 @@ impl PreparedRuntimeServer {
                 &endpoint_path,
             )?)
             .create_sync()
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to bind daemon local IPC endpoint at {}",
                     endpoint_path.display()
                 ))
-                .with_recovery(
-                    "Confirm the endpoint path is writable and no conflicting daemon still owns the same-host IPC address before restarting atm-daemon.",
-                )
-                .with_source(source)
             })?;
         tracing::info!(
             max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
-            max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+            max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
             request_deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
             endpoint_preparation = ?endpoint_preparation,
             "daemon local IPC transport limits configured"
@@ -342,14 +315,13 @@ impl PreparedRuntimeServer {
             lifecycle_control,
             registry: Arc::new(ActiveConnectionRegistry::default()),
             force_shutdown: Arc::new(AtomicBool::new(false)),
-            codec: JsonAtmProtocolCodec,
             observability,
         })
     }
 
     pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -362,7 +334,7 @@ impl PreparedRuntimeServer {
 
     fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, PublishReady>(
         self,
-        dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady>,
     ) -> Result<(), AtmError>
     where
@@ -388,7 +360,6 @@ impl PreparedRuntimeServer {
             lifecycle_control,
             registry,
             force_shutdown,
-            codec,
             observability,
         } = self;
         let serve_context = ServeRuntimeScopeContext {
@@ -400,7 +371,6 @@ impl PreparedRuntimeServer {
             lifecycle_control,
             registry,
             force_shutdown,
-            codec,
             observability,
             endpoint_guard,
             graceful_drain_deadline,
@@ -414,10 +384,9 @@ impl PreparedRuntimeServer {
 
     pub(crate) fn take_endpoint_guard(&mut self) -> Result<SocketEndpointGuard, AtmError> {
         self.endpoint_guard.take().ok_or_else(|| {
-            AtmError::daemon_unavailable("daemon local IPC endpoint guard was missing during runtime handoff")
-                .with_recovery(
-                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the runtime began serving.",
-                )
+            AtmError::daemon_unavailable(
+                "daemon local IPC endpoint guard was missing during runtime handoff",
+            )
         })
     }
 }
@@ -440,7 +409,6 @@ where
         lifecycle_control,
         registry,
         force_shutdown,
-        codec,
         observability,
         endpoint_guard,
         graceful_drain_deadline,
@@ -466,7 +434,6 @@ where
         lifecycle_control: &lifecycle_control,
         registry: &registry,
         force_shutdown: &force_shutdown,
-        codec: &codec,
         observability: &observability,
         dispatcher: &dispatcher,
         signals: signals.as_ref(),
@@ -520,7 +487,7 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 Err(error) => {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
             };
@@ -531,7 +498,7 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 if let Err(error) = lifecycle_control.wait_for_state_change(&mut observed_generation) {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                     let _ = signals.record_accept_error(error);
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if shutdown_beacon.is_tripped() {
@@ -539,33 +506,29 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                 }
                 if lifecycle_control.terminate_requested() {
                     record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
-                    let _ = wake_listener(&endpoint_path);
+                    let _ = wake_listener_until(&endpoint_path, REQUEST_DEADLINE);
                     return;
                 }
                 if lifecycle_control.take_reload_requested() {
                     signals.request_reload();
-                    if let Err(error) = wake_listener(&endpoint_path) {
+                    if let Err(_error) = wake_listener_until(&endpoint_path, REQUEST_DEADLINE) {
                         record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
                         let _ = signals.record_accept_error(
                             AtmError::daemon_lifecycle_wedge(
                                 "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
                             )
-                            .with_recovery(
-                                "Restart the daemon; lifecycle-control reload state could not interrupt the same-host listener cleanly.",
-                            )
-                            .with_source(error),
+
+                            ,
                         );
                         return;
                     }
                 }
             }
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can spawn the same-host lifecycle waiter thread.",
-                )
-                .with_source(source)
+
+
         })
 }
 
@@ -642,13 +605,12 @@ where
         return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
             context.lifecycle_control,
             context.shutdown_beacon,
-            AtmError::daemon_unavailable("injected daemon local IPC accept error for test")
-                .with_recovery("Test-only injected accept failure."),
+            AtmError::daemon_unavailable("injected daemon local IPC accept error for test"),
         ))));
     }
     match context.listener.accept() {
         Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
-        Err(source) => {
+        Err(_source) => {
             context.observability.emit_or_warn(
                 "accept_loop",
                 "failed",
@@ -657,11 +619,7 @@ where
             Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
                 context.lifecycle_control,
                 context.shutdown_beacon,
-                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection")
-                    .with_recovery(
-                        "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
-                    )
-                    .with_source(source),
+                AtmError::daemon_unavailable("failed while accepting daemon local IPC connection"),
             ))))
         }
     }
@@ -693,7 +651,6 @@ where
             &mut stream,
             context.lifecycle_control,
             context.shutdown_beacon,
-            context.codec,
             context.endpoint_path,
             terminate_probe_pending,
         );
@@ -701,7 +658,6 @@ where
     *terminate_probe_pending = false;
     if reject_connection_when_capped(
         &mut stream,
-        context.codec,
         context.registry.active_connections(),
         context.observability,
     )? {
@@ -713,7 +669,6 @@ where
         context.dispatcher,
         context.force_shutdown,
         context.registry,
-        context.codec.clone(),
         context.observability,
     )?;
     Ok(AcceptLoopOutcome::Continue)
@@ -781,19 +736,6 @@ impl LocalIpcServerTransportAdapter {
     }
 }
 
-impl boundary::sealed::Sealed for LocalIpcServerTransportAdapter {}
-
-impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
-    fn serve(&self, _dispatcher: Arc<dyn RequestDispatcher + Send + Sync>) -> Result<(), AtmError> {
-        Err(AtmError::daemon_unavailable(
-            "LocalIpcServerTransportAdapter::serve cannot bootstrap the daemon directly; use RuntimeComposition::start()",
-        )
-        .with_recovery(
-            "Enter the daemon through RuntimeComposition::start() so lifecycle state, host ownership, and shutdown handling stay consistent.",
-        ))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -801,12 +743,8 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
-    #[cfg(windows)]
-    use tempfile::TempDir;
-    #[cfg(unix)]
     use tempfile::TempDir;
 
-    #[cfg(unix)]
     #[test]
     fn prepare_local_ipc_endpoint_reports_filesystem_preparation() {
         let tempdir = TempDir::new().expect("tempdir");
@@ -819,19 +757,6 @@ mod tests {
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared
         );
         assert!(endpoint.parent().expect("parent").exists());
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn prepare_local_ipc_endpoint_reports_non_filesystem_preparation() {
-        let endpoint = PathBuf::from(r"\\.\pipe\atm-test-daemon");
-
-        let result = prepare_local_ipc_endpoint(&endpoint).expect("prepare endpoint");
-
-        assert_eq!(
-            result,
-            LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
-        );
     }
 
     #[cfg(windows)]
@@ -891,7 +816,7 @@ mod tests {
         assert!(force_shutdown.load(Ordering::SeqCst));
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch worker exceeded the shutdown join deadline")
         );
         let _ = release_tx.send(());
@@ -934,7 +859,7 @@ mod tests {
         )
         .expect_err("a dispatch worker panic discovered during the shutdown drain must be fatal");
         assert!(
-            error.message.contains("daemon dispatch thread panicked"),
+            error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
         );
     }
@@ -974,7 +899,7 @@ mod tests {
             .expect_err("second handle should be rejected once the bounded registry is full");
         assert!(
             error
-                .message
+                .message()
                 .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
             "unexpected error: {error:?}"
         );

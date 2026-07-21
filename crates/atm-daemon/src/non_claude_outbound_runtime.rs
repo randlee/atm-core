@@ -61,10 +61,7 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
             return Err(AtmError::mailbox_write(format!(
                 "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
                 output_path.display()
-            ))
-            .with_recovery(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
-            ));
+            )));
         }
         bytes.push(b'\n');
         append_payload_to_file(&output_path, &bytes)?;
@@ -81,19 +78,12 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
             "non-Claude outbound path {} has no parent directory",
             output_path.display()
         ))
-        .with_recovery(
-            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-        )
     })?;
     std::fs::create_dir_all(parent).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to create non-Claude outbound directory {}: {error}",
             parent.display()
         ))
-        .with_recovery(
-            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-        )
-        .with_source(error)
     })?;
 
     let mut file = OpenOptions::new()
@@ -105,10 +95,6 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
                 "failed to open non-Claude outbound sink {} for append: {error}",
                 output_path.display()
             ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
         })?;
     // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
     // ceiling is accepted delivery latency.
@@ -117,10 +103,6 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
             "failed to append non-Claude outbound payload {}: {error}",
             output_path.display()
         ))
-        .with_recovery(
-            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-        )
-        .with_source(error)
     })?;
     // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
     // ceiling is accepted delivery latency.
@@ -129,10 +111,6 @@ fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmErr
             "failed to sync non-Claude outbound payload {}: {error}",
             output_path.display()
         ))
-        .with_recovery(
-            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-        )
-        .with_source(error)
     })?;
     Ok(())
 }
@@ -154,10 +132,12 @@ mod tests {
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
+                source_chat_id: None,
                 text: "hello".to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TEST_TEAM.parse().expect("source team")),
+                destination_chat_id: None,
                 summary: Some("hello".to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,
@@ -205,10 +185,12 @@ mod tests {
             recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![InboxMessage {
                 from: TEST_SENDER.parse().expect("sender"),
+                source_chat_id: None,
                 text: "x".repeat(1024 * 1024),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TEST_TEAM.parse().expect("source team")),
+                destination_chat_id: None,
                 summary: Some("oversized".to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: false,

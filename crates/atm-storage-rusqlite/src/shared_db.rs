@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_key TEXT NOT NULL,
     envelope_json TEXT NOT NULL,
     from_agent TEXT NOT NULL,
+    source_chat_id TEXT NULL,
+    destination_chat_id TEXT NULL,
     message_text TEXT NOT NULL,
     summary TEXT NULL,
     message_at TEXT NOT NULL,
@@ -55,14 +57,6 @@ CREATE TABLE IF NOT EXISTS mail_message_states (
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    source TEXT NOT NULL,
-    state_json TEXT NOT NULL,
-    PRIMARY KEY (team, agent, source)
 );
 
 CREATE TABLE IF NOT EXISTS team_roster (
@@ -97,6 +91,24 @@ CREATE TABLE IF NOT EXISTS team_nudge_template_overrides (
     PRIMARY KEY (team_name, template_kind)
 );
 
+CREATE TABLE IF NOT EXISTS peer_https_interfaces (
+    bind_addr TEXT NOT NULL PRIMARY KEY,
+    advertise_host TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+);
+
+CREATE TABLE IF NOT EXISTS peer_local_certificate (
+    singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+    fingerprint TEXT NOT NULL,
+    private_key_ref TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS peer_trusted_peers (
+    host TEXT NOT NULL PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -111,14 +123,17 @@ CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
 CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
     ON mail_message_states(team, agent);
 
-CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
-    ON mail_ingest_replay_states(team, agent);
-
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 
 CREATE INDEX IF NOT EXISTS idx_team_nudge_template_overrides_team_name
     ON team_nudge_template_overrides(team_name);
+
+CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
+    ON peer_https_interfaces(enabled);
+
+CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
+    ON peer_trusted_peers(enabled);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.
@@ -211,10 +226,6 @@ impl SharedDb {
                     "failed to create sqlite parent directory {}: {error}",
                     parent.display()
                 ))
-                .with_recovery(
-                    "Check the sqlite database directory permissions or choose a different ATM durable-state root before retrying.",
-                )
-                .with_source(error)
             })?;
         }
 
@@ -335,8 +346,8 @@ impl SharedDb {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "wal_checkpoint",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 )),
         }
         result
@@ -345,16 +356,14 @@ impl SharedDb {
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
             let error =
-                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
-                    );
-            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "reader_budget_state",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
+                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned");
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "reader_budget_state",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message().to_owned(),
+                    Some(error.code()),
+                ));
             error
         })?;
         if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
@@ -368,8 +377,8 @@ impl SharedDb {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "reader_budget_acquire",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             return Err(error);
         }
@@ -388,9 +397,6 @@ fn reader_budget_exceeded_error() -> AtmError {
     AtmError::daemon_unavailable(format!(
         "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
     ))
-    .with_recovery(
-        "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
-    )
 }
 
 impl std::fmt::Debug for SharedDb {
@@ -482,6 +488,20 @@ fn ensure_mail_message_columns(
         "mail_messages",
         "from_agent",
         "ALTER TABLE mail_messages ADD COLUMN from_agent TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "source_chat_id",
+        "ALTER TABLE mail_messages ADD COLUMN source_chat_id TEXT NULL;",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "destination_chat_id",
+        "ALTER TABLE mail_messages ADD COLUMN destination_chat_id TEXT NULL;",
     )?;
     ensure_column(
         connection,
@@ -682,54 +702,35 @@ pub(crate) fn sqlite_error(
     source: RusqliteError,
 ) -> AtmError {
     let message = message.into();
-    let error = match &source {
-        RusqliteError::SqliteFailure(error, _) => match error.code {
-            rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message)
-                .with_recovery(
-                    "Correct the conflicting ATM message/thread/store input so it satisfies the SQLite-backed durability constraints, then retry.",
-                ),
-            rusqlite::ffi::ErrorCode::DatabaseBusy
-            | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
-                SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                #[cfg(test)]
-                SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                    "timed out waiting for sqlite database lock on {}",
-                    target.display()
-                )),
-            },
-            rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Check the SQLite durable-state path, parent directory creation, and filesystem permissions before retrying.",
-                ),
-            rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Remount the SQLite durable-state root as writable or choose a writable ATM durable-state path before retrying.",
-                ),
-            rusqlite::ffi::ErrorCode::DatabaseCorrupt
-            | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message)
-                .with_recovery(
-                    "Inspect or rebuild the SQLite durable-state store because the current file is corrupt or not a valid database.",
-                ),
-            rusqlite::ffi::ErrorCode::SystemIoFailure
-            | rusqlite::ffi::ErrorCode::DiskFull => AtmError::mailbox_write(message)
-                .with_recovery(
-                    "Check the host filesystem health, available disk space, and SQLite durable-state path before retrying.",
-                ),
-            _ => AtmError::mailbox_write(message).with_recovery(
-                "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
-            ),
-        },
-        _ => AtmError::mailbox_write(message).with_recovery(
-            "Inspect the SQLite durable-state store for corruption or permission faults before retrying.",
-        ),
-    };
-    error.with_source(source)
+    match &source {
+        RusqliteError::SqliteFailure(error, _) => {
+            match error.code {
+                rusqlite::ffi::ErrorCode::ConstraintViolation => AtmError::validation(message),
+                rusqlite::ffi::ErrorCode::DatabaseBusy
+                | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
+                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
+                    #[cfg(test)]
+                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
+                        "timed out waiting for sqlite database lock on {}",
+                        target.display()
+                    )),
+                },
+                rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message),
+                rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message),
+                rusqlite::ffi::ErrorCode::DatabaseCorrupt
+                | rusqlite::ffi::ErrorCode::NotADatabase => AtmError::mailbox_read(message),
+                rusqlite::ffi::ErrorCode::SystemIoFailure | rusqlite::ffi::ErrorCode::DiskFull => {
+                    AtmError::mailbox_write(message)
+                }
+                _ => AtmError::mailbox_write(message),
+            }
+        }
+        _ => AtmError::mailbox_write(message),
+    }
 }
 
-fn json_error(message: impl Into<String>, source: serde_json::Error) -> AtmError {
+fn json_error(message: impl Into<String>, _source: serde_json::Error) -> AtmError {
     AtmError::validation(message)
-        .with_recovery("Repair the persisted ATM-owned JSON payload or rebuild it through the owning boundary.")
-        .with_source(source)
 }
 
 pub(crate) fn serialize_json<T: serde::Serialize>(

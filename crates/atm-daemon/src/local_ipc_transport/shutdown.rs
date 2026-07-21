@@ -1,5 +1,4 @@
 use super::*;
-#[cfg(any(unix, windows))]
 use std::fs;
 use std::time::Instant;
 
@@ -33,9 +32,6 @@ where
             "lifecycle_waiter_error",
             AtmError::daemon_lifecycle_wedge(
                 "daemon lifecycle waiter panicked during transport shutdown",
-            )
-            .with_recovery(
-                "Restart the daemon; the same-host lifecycle waiter crashed while the runtime was transitioning out of serving state.",
             ),
         );
     }
@@ -109,54 +105,21 @@ pub(super) fn record_shutdown_signal(
     let _ = lifecycle_control.notify_state_change();
 }
 
-#[cfg(unix)]
 pub(super) fn prepare_local_ipc_endpoint(
     endpoint_path: &Path,
 ) -> Result<LocalIpcEndpointPreparation, AtmError> {
     if let Some(parent) = endpoint_path.parent() {
-        fs::create_dir_all(parent).map_err(|source| {
+        fs::create_dir_all(parent).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to create daemon local IPC directory at {}",
                 parent.display()
             ))
-            .with_recovery(
-                "Grant write access to the daemon socket parent directory or choose a writable ATM_HOME before retrying.",
-            )
-            .with_source(source)
         })?;
     }
     remove_stale_endpoint(endpoint_path)?;
     Ok(LocalIpcEndpointPreparation::FilesystemEndpointPrepared)
 }
 
-#[cfg(not(unix))]
-pub(super) fn prepare_local_ipc_endpoint(
-    endpoint_path: &Path,
-) -> Result<LocalIpcEndpointPreparation, AtmError> {
-    #[cfg(windows)]
-    {
-        const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
-
-        let raw = endpoint_path.to_string_lossy();
-        if !raw.starts_with(WINDOWS_PIPE_PREFIX)
-            && let Some(parent) = endpoint_path.parent()
-        {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon local IPC directory at {}",
-                    parent.display()
-                ))
-                .with_recovery(
-                    "Grant write access to the daemon socket parent directory or choose a writable ATM_HOME before retrying.",
-                )
-                .with_source(source)
-            })?;
-        }
-    }
-    Ok(LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared)
-}
-
-#[cfg(unix)]
 pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
     if !endpoint_path.exists() {
         return Ok(());
@@ -164,51 +127,25 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
     match fs::remove_file(endpoint_path) {
         Ok(()) => Ok(()),
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(source) => Err(AtmError::daemon_unavailable(format!(
+        Err(_source) => Err(AtmError::daemon_unavailable(format!(
             "failed to remove stale daemon local IPC endpoint at {}",
             endpoint_path.display()
-        ))
-        .with_recovery(
-            "Stop the conflicting daemon or remove the stale same-host socket path before restarting atm-daemon.",
-        )
-        .with_source(source)),
+        ))),
     }
 }
 
 pub(super) fn write_shutdown_response(
     stream: &mut LocalSocketStream,
-    codec: &JsonAtmProtocolCodec,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let Some(frame) = atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame during shutdown rejection",
-        "daemon request frame exceeded the maximum supported size during shutdown rejection",
-    )?
-    else {
+    if atm_core::api::read_http_request(stream)?.is_none() {
         return Ok(ShutdownResponseOutcome::NoFrame);
-    };
-    let Ok((request_id, _request)) = codec.request_from_frame(frame) else {
-        return Ok(ShutdownResponseOutcome::NoFrame);
-    };
-    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::daemon_unavailable("daemon is shutting down and not accepting new requests")
-            .with_recovery("Retry the ATM command after the daemon restarts."),
+    }
+    let response = ResponseEnvelope::Error(AtmError::daemon_unavailable(
+        "daemon is shutting down and not accepting new requests",
     ));
-    let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(
-        stream,
-        &frame,
-        "failed to write daemon shutdown rejection response frame",
-    )?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon shutdown rejection response frame")
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
-            )
-            .with_source(source)
-    })?;
+    atm_core::api::write_http_response(stream, &response)?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
@@ -217,19 +154,10 @@ pub(super) fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
         return Ok(());
     }
     let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
-        AtmError::daemon_unavailable("failed to emit daemon ready signal")
-            .with_recovery(
-                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
-            )
-            .with_source(source)
-    })?;
-    stdout.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon ready signal")
-            .with_recovery(
-                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
-            )
-            .with_source(source)
-    })?;
+    writeln!(stdout, "ATM_DAEMON_READY")
+        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
+    stdout
+        .flush()
+        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
     Ok(())
 }

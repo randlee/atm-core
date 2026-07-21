@@ -4,16 +4,15 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime_and_post_send_emitter,
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
+    RequestEnvelope, ResponseEnvelope,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerConfigDoctorReport,
     },
-    error::{AtmError, AtmErrorKind},
-    error_codes::AtmErrorCode,
+    error::{AtmError, AtmErrorCode},
     graft::{
         GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
         read_graft_post_send_message, write_graft_post_send_message,
@@ -22,12 +21,11 @@ use atm_core::{
     process::process_is_alive,
     protocol::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::send_mail_with_runtime_and_post_send_emitter,
+    send::{WriteOutcome, write_mail_with_runtime_and_post_send_emitter},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -36,12 +34,14 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
+use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -84,19 +84,14 @@ impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
             return Err(graft_recipient_unavailable_error(
                 event,
                 "recipient is missing from the authoritative ATM roster",
-            )
-            .with_recovery(
-                "Repair the roster row and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
             ));
         };
-        let recipient_home_dir =
-            canonical_home_dir(&member.metadata_json).ok_or_else(|| graft_recipient_unavailable_error(
+        let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(|| {
+            graft_recipient_unavailable_error(
                 event,
                 "recipient has no authoritative home_dir for graft post-send delivery",
-            ).with_recovery(format!(
-                "Repair the roster row with `atm teams update-member --team {} --member {} --home-dir <path>` and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                target.recipient_team, target.recipient
-            )))?;
+            )
+        })?;
         let endpoint_path = graft_receiver_socket_path_from_home(
             recipient_home_dir.as_path(),
             &target.recipient_team,
@@ -122,15 +117,12 @@ fn deliver_post_send_to_graft_receiver(
         "graft post-send request exceeded the bounded payload cap",
     )
     .map_err(|error| graft_transport_error(event, error))?;
-    stream
-        .flush()
-        .map_err(|source| graft_transport_error(event, AtmError::daemon_unavailable(
-            "failed to flush graft post-send request",
+    stream.flush().map_err(|_source| {
+        graft_transport_error(
+            event,
+            AtmError::daemon_unavailable("failed to flush graft post-send request"),
         )
-        .with_recovery(
-            "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-        )
-        .with_source(source)))?;
+    })?;
     match read_graft_post_send_message::<GraftPostSendResponse>(
         &mut stream,
         "failed to read graft post-send response",
@@ -139,7 +131,7 @@ fn deliver_post_send_to_graft_receiver(
     .map_err(|error| graft_transport_error(event, error))?
     {
         GraftPostSendResponse::Delivered => Ok(()),
-        GraftPostSendResponse::Error(error) => Err(error.into_atm_error()),
+        GraftPostSendResponse::Error(error) => Err(error),
     }
 }
 
@@ -154,43 +146,28 @@ fn connect_graft_receiver(
         .spawn(move || {
             let _ = result_tx.send(LocalSocketStream::connect(name));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             graft_recipient_unavailable_error(
                 event,
                 "failed to spawn bounded graft post-send connect helper",
             )
-            .with_recovery(
-                "Retry after the daemon can spawn one bounded same-host connect helper thread.",
-            )
-            .with_source(source)
         })?;
     match result_rx.recv_timeout(GRAFT_POST_SEND_CONNECT_DEADLINE) {
         Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(
-            graft_recipient_unavailable_error(event, "recipient has no active graft receiver path")
-                .with_recovery(
-                    "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "timed out connecting to the graft receiver path",
-            )
-            .with_recovery(
-                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
-            graft_recipient_unavailable_error(
+        Ok(Err(_source)) => Err(graft_recipient_unavailable_error(
+            event,
+            "recipient has no active graft receiver path",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(graft_recipient_unavailable_error(
+            event,
+            "timed out connecting to the graft receiver path",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err(graft_recipient_unavailable_error(
                 event,
                 "graft post-send connect helper disconnected unexpectedly",
-            )
-            .with_recovery(
-                "Restart the daemon and the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
+            ))
+        }
     }
 }
 
@@ -219,35 +196,23 @@ fn apply_graft_post_send_deadline(
         Ok(()) => Ok(()),
         #[cfg(windows)]
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
-        Err(source) => Err(
-            graft_recipient_unavailable_error(event, message)
-                .with_recovery(
-                    "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
+        Err(_source) => Err(graft_recipient_unavailable_error(event, message)),
     }
 }
 
 fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    let mut graft_error = graft_recipient_unavailable_error(event, &error.message);
-    for recovery in error.recovery {
-        graft_error = graft_error.with_recovery(recovery);
-    }
-    graft_error
+    graft_recipient_unavailable_error(event, error.detail())
 }
 
 fn graft_recipient_unavailable_error(
     event: &PostSendHookEvent,
     message: impl Into<String>,
 ) -> AtmError {
-    AtmError::new_with_code(
+    AtmError::new(
         AtmErrorCode::PostSendGraftUnavailable,
-        AtmErrorKind::DaemonUnavailable,
         format!(
-            "recipient {}@{} {}",
+            "failed to deliver graft nudge to {}: {}",
             event.recipient,
-            event.recipient_team,
             message.into()
         ),
     )
@@ -263,6 +228,8 @@ pub(crate) struct DaemonRequestDispatcher {
     service_runtime: LocalServiceRuntime,
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
+    peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -273,6 +240,8 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("service_runtime", &self.service_runtime)
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
+            .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("https_transport", &"dyn HttpsMessageTransport")
             .finish()
     }
 }
@@ -329,14 +298,12 @@ impl DaemonRequestDispatcher {
                     );
                 });
             })
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to spawn daemon shutdown finalizer step `{label}`"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; the bounded shutdown finalizer helper could not be created.",
-                )
-                .with_source(source)
+
+
             })
     }
 
@@ -390,14 +357,10 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 let _ = result_tx.send(shutdown_handle.join());
             })
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to spawn daemon shutdown finalizer join helper `{label}`"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; the bounded shutdown finalizer join helper could not be created.",
-                )
-                .with_source(source)
             })?;
         Ok((result_rx, join_helper))
     }
@@ -511,6 +474,7 @@ impl DaemonRequestDispatcher {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
+        let peer_config_store = runtime_assembly.peer_config_store();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -536,7 +500,30 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime,
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
+            peer_config_store,
+            https_transport: std::sync::Mutex::new(None),
         }
+    }
+
+    pub(crate) fn install_https_transport(
+        &self,
+        transport: Arc<dyn HttpsMessageTransport>,
+    ) -> Result<(), AtmError> {
+        let mut slot = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = Some(transport);
+        Ok(())
+    }
+
+    pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
+        let mut slot = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = None;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -567,31 +554,38 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl DaemonRequestDispatcher {
+    pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        if let RequestEnvelope::Write(write) = &request
+            && write
+                .to
+                .as_ref()
+                .is_some_and(|address| address.host.is_some())
+        {
+            return self.dispatch_peer_write((**write).clone());
+        }
+        self.dispatch_local(request)
+    }
+
+    fn dispatch_local(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
-                    self.observability.as_ref(),
-                    &self.service_runtime,
-                    &post_send_emitter,
-                )?;
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime_and_post_send_emitter(
-                        request,
-                        self.observability.as_ref(),
-                        &self.service_runtime,
-                        &post_send_emitter,
-                    )?,
-                )))
-            }
+            RequestEnvelope::Write(request) => write_mail_with_runtime_and_post_send_emitter(
+                *request,
+                self.observability.as_ref(),
+                &self.service_runtime,
+                &post_send_emitter,
+            )
+            .map(|outcome| match outcome {
+                WriteOutcome::Sent(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                }
+                WriteOutcome::Acknowledged(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                }
+            }),
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
@@ -618,6 +612,43 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             ))),
         }
     }
+
+    fn dispatch_peer_write(
+        &self,
+        request: atm_core::send::WriteRequest,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let host = request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+            .ok_or_else(|| AtmError::validation("peer write requires a destination host"))?;
+        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
+            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
+        })?;
+        let transport = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
+            })?;
+        transport.deliver(request, &peer, HttpsRequestDeadline::default())
+    }
+
+    fn dispatch_peer_ingress(
+        &self,
+        mut request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        if let RequestEnvelope::Write(write) = &mut request
+            && let Some(destination) = write.to.as_mut()
+        {
+            // One routing decision has already occurred at the sender. The
+            // receiving daemon now follows the canonical local write path.
+            destination.host = None;
+        }
+        self.dispatch_local(request)
+    }
 }
 
 impl DaemonRequestDispatcher {
@@ -626,7 +657,7 @@ impl DaemonRequestDispatcher {
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
+        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
             && preflight.client_release == daemon_release
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });
@@ -639,23 +670,16 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
-        let roster_store = self
-            .roster_store
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| {
-                self.runtime_health_observability.emit_or_warn(
-                    "reload_unavailable",
-                    "failed",
-                    "daemon runtime reload is unavailable because the roster store is not assembled",
-                );
-                AtmError::daemon_unavailable(
-                    "daemon runtime reload is unavailable because the roster store is not assembled",
-                )
-                .with_recovery(
-                    "Restore the runtime-bound roster store and restart atm-daemon before retrying SIGHUP reload.",
-                )
-            })?;
+        let roster_store = self.roster_store.as_ref().cloned().ok_or_else(|| {
+            self.runtime_health_observability.emit_or_warn(
+                "reload_unavailable",
+                "failed",
+                "daemon runtime reload is unavailable because the roster store is not assembled",
+            );
+            AtmError::daemon_unavailable(
+                "daemon runtime reload is unavailable because the roster store is not assembled",
+            )
+        })?;
         let current_state = self.status_cache.clone_state();
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
@@ -692,23 +716,16 @@ impl DaemonRequestDispatcher {
         &self,
         request: TeamMemberHeartbeatRequest,
     ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
-        let roster_store = self
-            .roster_store
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| {
-                self.runtime_health_observability.emit_or_warn(
-                    "heartbeat_unavailable",
-                    "failed",
-                    "daemon heartbeats are unavailable because the roster store is not assembled",
-                );
-                AtmError::daemon_unavailable(
-                    "daemon heartbeats are unavailable because the roster store is not assembled",
-                )
-                .with_recovery(
-                    "Restore the runtime-bound roster store and restart atm-daemon before retrying heartbeat traffic.",
-                )
-            })?;
+        let roster_store = self.roster_store.as_ref().cloned().ok_or_else(|| {
+            self.runtime_health_observability.emit_or_warn(
+                "heartbeat_unavailable",
+                "failed",
+                "daemon heartbeats are unavailable because the roster store is not assembled",
+            );
+            AtmError::daemon_unavailable(
+                "daemon heartbeats are unavailable because the roster store is not assembled",
+            )
+        })?;
         let membership = roster_store
             .load_roster(&request.team)?
             .members
@@ -728,9 +745,6 @@ impl DaemonRequestDispatcher {
                 .record_identity_conflict(&request, existing_pid);
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
-            )
-            .with_recovery(
-                "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
         Ok(self
@@ -745,6 +759,7 @@ impl DaemonRequestDispatcher {
         };
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: vec![daemon_observability_finding],
+            peer_config: Some(peer_config_doctor_report(self.peer_config_store.as_ref())?),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -769,43 +784,12 @@ impl DaemonRequestDispatcher {
         } else {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
+                peer_config: None,
             });
         }
-        report.recommendations = report
-            .findings
-            .iter()
-            .filter_map(|finding| finding.remediation.clone())
-            .collect();
-        let status = doctor::health::status_from_findings(&report.findings);
-        let (info_count, warning_count, error_count) = report.findings.iter().fold(
-            (0usize, 0usize, 0usize),
-            |(info, warning, error), finding| match finding.severity {
-                DoctorSeverity::Info => (info + 1, warning, error),
-                DoctorSeverity::Warning => (info, warning + 1, error),
-                DoctorSeverity::Error => (info, warning, error + 1),
-            },
-        );
-        let message = match status {
-            DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-            DoctorStatus::Warning => "ATM doctor completed with warnings",
-            DoctorStatus::Error => "ATM doctor found critical issues",
-        };
-        report.summary = DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        };
         report.runtime_status = Some(runtime_status);
-        // `daemon_context` reports the daemon process's own launch-time
-        // environment, which is frozen when the singleton starts and does NOT
-        // track the requesting shell. It is deliberately distinct from
-        // `client_context` (threaded through the request payload in
-        // `DoctorQuery::caller_*`), which reflects the invoking CLI process.
-        // Surfacing the daemon's launch-time identity is diagnostically useful:
-        // it explains why an earlier release appeared to report a stale team or
-        // identity for every caller (see issue #548).
+        // This is existing doctor-only launch context. Client context remains
+        // request-scoped and is reported separately.
         report.daemon_context = Some(DoctorExecutionContext {
             team: atm_core::caller_context::read_cli_team_from_env_or_warn(
                 "atm_daemon::runtime_health::daemon_context",
@@ -815,7 +799,65 @@ impl DaemonRequestDispatcher {
             ),
             version: Some(ReleaseVersion::current()),
         });
+        finalize_doctor_report(&mut report);
         Ok(report)
+    }
+}
+
+fn finalize_doctor_report(report: &mut DoctorReport) {
+    report.recommendations = report
+        .findings
+        .iter()
+        .filter_map(|finding| finding.remediation.clone())
+        .collect();
+    let status = doctor::health::status_from_findings(&report.findings);
+    let (info_count, warning_count, error_count) = doctor_finding_counts(&report.findings);
+    report.summary = DoctorSummary {
+        status,
+        message: doctor_summary_message(status).to_string(),
+        info_count,
+        warning_count,
+        error_count,
+    };
+}
+
+fn doctor_finding_counts(findings: &[DoctorFinding]) -> (usize, usize, usize) {
+    findings.iter().fold(
+        (0usize, 0usize, 0usize),
+        |(info, warning, error), finding| match finding.severity {
+            DoctorSeverity::Info => (info + 1, warning, error),
+            DoctorSeverity::Warning => (info, warning + 1, error),
+            DoctorSeverity::Error => (info, warning, error + 1),
+        },
+    )
+}
+
+fn doctor_summary_message(status: DoctorStatus) -> &'static str {
+    match status {
+        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Warning => "ATM doctor completed with warnings",
+        DoctorStatus::Error => "ATM doctor found critical issues",
+    }
+}
+
+impl ApiRouter for DaemonRequestDispatcher {
+    fn route(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "daemon API request exceeded its same-host deadline before routing",
+            ));
+        }
+        let request = request.into_inner();
+        match ingress {
+            AuthenticatedIngress::Local => self.dispatch(request),
+            AuthenticatedIngress::Peer => self.dispatch_peer_ingress(request),
+        }
+        .map(ApiResponse::new)
     }
 }
 
@@ -866,6 +908,24 @@ fn daemon_observability_finding(
     }
 }
 
+fn peer_config_doctor_report(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<PeerConfigDoctorReport, AtmError> {
+    let interfaces = store.list_interfaces()?;
+    let peers = store.list_trusted_peers()?;
+    let certificate = store.local_certificate()?;
+    Ok(PeerConfigDoctorReport {
+        configured_interface_count: interfaces.len(),
+        enabled_interface_count: interfaces
+            .iter()
+            .filter(|interface| interface.enabled)
+            .count(),
+        certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint),
+        trusted_peer_count: peers.len(),
+        enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+    })
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct DaemonStatusSource {
     status_cache: RuntimeStatusCache,
@@ -891,9 +951,6 @@ impl boundary::StatusSource for DaemonStatusSource {
         {
             return Err(AtmError::daemon_unavailable(
                 "daemon runtime status snapshot is unavailable because no owner process is recorded",
-            )
-            .with_recovery(
-                "Restart atm-daemon or restore same-host ownership before retrying daemon status collection.",
             ));
         }
         Ok(snapshot)
@@ -916,7 +973,8 @@ impl DaemonRequestDispatcher {
         let runtime_observability: std::sync::Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
         let runtime_assembly =
-            crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
+            crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path)
+                .expect("assemble sqlite runtime for daemon dispatcher test");
         match build_runtime_status_cache_state(
             None,
             runtime_assembly.shared_roster_store_arc().as_ref(),
@@ -944,6 +1002,8 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
+            peer_config_store: runtime_assembly.peer_config_store(),
+            https_transport: std::sync::Mutex::new(None),
         }
     }
 }

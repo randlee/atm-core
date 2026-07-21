@@ -13,15 +13,11 @@ pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
     Ok(ConfigLoadResponse {
-        config: config::load_config(&request.current_dir).map_err(|error| {
+        config: config::load_config(&request.current_dir).map_err(|_error| {
             AtmError::config(format!(
                 "daemon ConfigIngress could not load workspace config from {}",
                 request.current_dir.display()
             ))
-            .with_recovery(
-                "Fix the workspace ATM configuration or current-directory selection before retrying daemon config ingress.",
-            )
-            .with_source(error)
         })?,
     })
 }

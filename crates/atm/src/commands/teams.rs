@@ -339,7 +339,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
+    use atm_core::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
@@ -508,11 +508,7 @@ mod tests {
             ];
             assembly
                 .roster_store_arc()
-                .replace_roster(
-                    &team,
-                    &members,
-                    Some(&ReplaySource::new("teams-test").expect("source")),
-                )
+                .replace_roster(&team, &members)
                 .expect("seed roster");
 
             Self {
@@ -562,7 +558,7 @@ mod tests {
             .expect_err("invalid team");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(atm_error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -582,7 +578,7 @@ mod tests {
             .expect_err("invalid member");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::AddressParseFailed);
+        assert_eq!(atm_error.code(), AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -602,7 +598,7 @@ mod tests {
             .expect_err("invalid kind");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::MessageValidationFailed);
+        assert_eq!(atm_error.code(), AtmErrorCode::MessageValidationFailed);
     }
 
     #[test]
@@ -622,7 +618,7 @@ mod tests {
             .expect_err("empty body");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::EmptyNudgeTemplateBody);
+        assert_eq!(atm_error.code(), AtmErrorCode::EmptyNudgeTemplateBody);
     }
 
     #[test]
@@ -885,7 +881,7 @@ mod tests {
             .expect_err("missing identity");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::IdentityUnavailable);
+        assert_eq!(atm_error.code(), AtmErrorCode::IdentityUnavailable);
     }
 
     #[test]
@@ -907,7 +903,7 @@ mod tests {
             .expect_err("missing team");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::TeamUnavailable);
+        assert_eq!(atm_error.code(), AtmErrorCode::TeamUnavailable);
     }
 
     #[test]
@@ -929,7 +925,7 @@ mod tests {
             .expect_err("invalid identity");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::IdentityInvalid);
+        assert_eq!(atm_error.code(), AtmErrorCode::IdentityInvalid);
     }
 
     #[test]
@@ -951,6 +947,6 @@ mod tests {
             .expect_err("invalid team");
 
         let atm_error = error.downcast_ref::<AtmError>().expect("AtmError");
-        assert_eq!(atm_error.code, AtmErrorCode::TeamInvalid);
+        assert_eq!(atm_error.code(), AtmErrorCode::TeamInvalid);
     }
 }

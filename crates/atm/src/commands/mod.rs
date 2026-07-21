@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 pub mod ack;
+pub mod api;
 pub(crate) mod caller_context;
 pub mod clear;
 pub mod doctor;
@@ -11,6 +12,7 @@ pub mod list;
 pub mod log;
 pub mod members;
 pub mod peek;
+pub mod peer;
 pub mod read;
 pub(crate) mod retained_roster;
 pub mod send;
@@ -18,6 +20,7 @@ pub mod teams;
 pub(crate) mod util;
 
 pub use ack::AckCommand;
+pub use api::ApiCommand;
 pub use clear::ClearCommand;
 pub use doctor::DoctorCommand;
 pub use help::HelpCommand;
@@ -26,6 +29,7 @@ pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
 pub use peek::PeekCommand;
+pub use peer::PeerCommand;
 pub use read::ReadCommand;
 pub use send::SendCommand;
 pub use teams::TeamsCommand;
@@ -66,9 +70,11 @@ impl Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    Api(ApiCommand),
     Send(SendCommand),
     List(ListCommand),
     Peek(PeekCommand),
+    Peer(PeerCommand),
     Read(ReadCommand),
     Ack(AckCommand),
     Clear(ClearCommand),
@@ -84,9 +90,11 @@ enum Command {
 impl Command {
     fn run(self, observability: &CliObservability) -> Result<()> {
         match self {
+            Self::Api(command) => command.run(observability),
             Self::Send(command) => command.run(observability),
             Self::List(command) => command.run(observability),
             Self::Peek(command) => command.run(observability),
+            Self::Peer(command) => command.run(observability),
             Self::Read(command) => command.run(observability),
             Self::Ack(command) => command.run(observability),
             Self::Clear(command) => command.run(observability),

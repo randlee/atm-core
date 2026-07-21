@@ -12,7 +12,7 @@ use super::{
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
@@ -30,7 +30,6 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -93,7 +92,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
@@ -111,9 +110,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                         AtmError::daemon_unavailable(
                             "doctor round-trip test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
-                        )
                     })
                 },
             },
@@ -129,17 +125,8 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
+    let response = atm_core::api::read_http_response(&mut stream).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(report.summary.status, DoctorStatus::Healthy);
@@ -207,17 +194,8 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
+    let response = atm_core::api::read_http_response(&mut stream).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(
@@ -254,14 +232,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .collect::<Vec<_>>();
     assembly
         .roster_store_arc()
-        .replace_roster(
-            test_team(),
-            &roster,
-            Some(
-                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
-                    .expect("replay source"),
-            ),
-        )
+        .replace_roster(test_team(), &roster)
         .expect("replace roster");
 }
 
@@ -550,10 +521,11 @@ fn heartbeat_rejects_live_pid_conflict() {
         }))
         .expect_err("live pid conflict");
 
-    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
-    assert_eq!(
-        error.message,
-        "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
+    assert_eq!(error.code(), AtmErrorCode::IdentityConflict);
+    assert!(
+        error
+            .message()
+            .starts_with("ATM_IDENTITY_CONFLICT: stop and report to user immediately")
     );
     assert_eq!(
         status_cache.member_state_for_test(&team, &member),

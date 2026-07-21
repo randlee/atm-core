@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
+use crate::ack::{AckOutcome, AckRequest};
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
@@ -57,12 +58,15 @@ pub enum SendMessageSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendRequest {
+pub struct WriteRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
     pub caller_team: TeamName,
-    pub to: AgentAddress,
+    /// Destination is omitted only by an `atm ack` command.  The daemon
+    /// resolves that destination from the acknowledged source before calling
+    /// the canonical writer.
+    pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -70,10 +74,14 @@ pub struct SendRequest {
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
+    /// When present this write is an acknowledgement reply.  It otherwise
+    /// follows the exact same persistence and post-write path as a send.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
 }
 
-impl SendRequest {
+impl WriteRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -92,7 +100,7 @@ impl SendRequest {
             current_dir,
             caller_identity,
             caller_team,
-            to: to.parse()?,
+            to: Some(to.parse()?),
             message_source,
             summary_override,
             requires_ack,
@@ -100,9 +108,25 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            acknowledges_message_id: None,
             dry_run,
         })
     }
+}
+
+/// Compatibility name for existing callers.  There is one write payload;
+/// acknowledgement is represented by `acknowledges_message_id` on it.
+pub type SendRequest = WriteRequest;
+
+/// Result of the one canonical write operation.
+///
+/// An acknowledgement is not a second transport operation: it is a write
+/// whose request carries `acknowledges_message_id`.  The distinct outcome only
+/// preserves the CLI/API response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WriteOutcome {
+    Sent(SendOutcome),
+    Acknowledged(AckOutcome),
 }
 
 /// Result of sending one ATM mailbox message.
@@ -181,8 +205,11 @@ impl WarningEntry {
             _ => self.message.clone(),
         };
         match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            Some(recovery) if !message.contains("Recovery:") => {
+                format!("{message} Recovery: {recovery}")
+            }
             None => message,
+            Some(_) => message,
         }
     }
 }
@@ -211,12 +238,45 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
+/// Execute one canonical write without daemon-owned post-write delivery.
+pub fn write_mail(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<WriteOutcome, AtmError> {
+    let runtime = default_runtime()?;
+    write_mail_with_runtime(request, observability, &runtime)
+}
+
+/// Execute one canonical write with an explicit local runtime.
+pub fn write_mail_with_runtime(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<WriteOutcome, AtmError> {
+    if request.acknowledges_message_id.is_some() {
+        if request.to.is_some() {
+            return Err(AtmError::validation(
+                "acknowledgement write must not include a client-supplied destination",
+            ));
+        }
+        return AckRequest::from_unresolved_write(request)
+            .and_then(|ack| crate::ack::ack_mail_with_runtime(ack, observability, runtime))
+            .map(WriteOutcome::Acknowledged);
+    }
+    if request.to.is_none() {
+        return Err(AtmError::validation(
+            "message write is missing a destination",
+        ));
+    }
+    send_mail_with_runtime(request, observability, runtime).map(WriteOutcome::Sent)
+}
+
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, None)
+    write_mail_persisted_with_runtime(request, observability, runtime, None)
 }
 
 pub fn send_mail_with_runtime_and_post_send_emitter(
@@ -225,10 +285,49 @@ pub fn send_mail_with_runtime_and_post_send_emitter(
     runtime: &LocalServiceRuntime,
     post_send_emitter: &dyn PostSendHookEmitter,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+    write_mail_persisted_with_runtime(request, observability, runtime, Some(post_send_emitter))
 }
 
-fn send_mail_with_runtime_impl<
+/// The sole daemon write entry point for every message ingress.
+///
+/// The acknowledgement form is normalized here, then uses the same durable
+/// persistence and post-write execution as an ordinary send.  No protocol
+/// dispatcher or transport chooses a separate acknowledgement path.
+pub fn write_mail_with_runtime_and_post_send_emitter(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<WriteOutcome, AtmError> {
+    if request.acknowledges_message_id.is_some() {
+        if request.to.is_some() {
+            return Err(AtmError::validation(
+                "acknowledgement write must not include a client-supplied destination",
+            ));
+        }
+        return AckRequest::from_unresolved_write(request)
+            .and_then(|ack| {
+                crate::ack::ack_mail_with_runtime_and_post_send_emitter(
+                    ack,
+                    observability,
+                    runtime,
+                    post_send_emitter,
+                )
+            })
+            .map(WriteOutcome::Acknowledged);
+    }
+    if request.to.is_none() {
+        return Err(AtmError::validation(
+            "message write is missing a destination",
+        ));
+    }
+    write_mail_persisted_with_runtime(request, observability, runtime, Some(post_send_emitter))
+        .map(WriteOutcome::Sent)
+}
+
+/// Shared durable persistence and post-write execution after write
+/// normalization has resolved a destination.
+pub(crate) fn write_mail_persisted_with_runtime<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: SendRequest,
@@ -273,6 +372,18 @@ fn send_mail_with_runtime_impl<
         task_id,
         persistence,
     )
+}
+
+#[cfg(test)]
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+) -> Result<SendOutcome, AtmError> {
+    write_mail_persisted_with_runtime(request, observability, runtime, post_send_emitter)
 }
 
 #[expect(
@@ -397,11 +508,7 @@ fn build_send_delivery_plan(
         ),
         context.recipient.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
-                )
-            })?,
+            .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),
     ))
 }
@@ -416,11 +523,7 @@ fn post_send_messages_from_persistence(
         false,
     )
     .map(|message| vec![message])
-    .map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted delivery record shape before retrying post-send emission.",
-        )
-    })
+    .map_err(|error| AtmError::mailbox_write(error.to_string()))
 }
 
 struct SendExecutionContext {
@@ -450,17 +553,22 @@ fn prepare_send_context<
         Err(error) => (
             None,
             vec![WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
+                    request.caller_identity,
+                    request.caller_team,
+                    error.message()
                 ),
-                error.primary_recovery().map(str::to_owned),
+                Some(error.message().to_owned()),
             )],
         ),
     };
     let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
+    let target = request.to.as_ref().ok_or_else(|| {
+        AtmError::validation("write request destination must be resolved before persistence")
+    })?;
+    let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
     validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
@@ -501,16 +609,21 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.canonical_sender.clone(),
+            source_chat_id: None,
             text: body.to_string(),
             timestamp,
             read: false,
             source_team: Some(request.caller_team.clone()),
+            destination_chat_id: request
+                .to
+                .as_ref()
+                .and_then(|address| address.chat_id.clone()),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
             requires_ack: ack_intent.requires_ack,
             pending_ack_at: ack_intent.pending_ack_at,
             acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
+            acknowledges_message_id: request.acknowledges_message_id,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
             expires_at: request.expires_at,
@@ -520,16 +633,21 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
     let envelope = InboxMessage {
         from: context.canonical_sender.clone(),
+        source_chat_id: None,
         text: body.to_string(),
         timestamp,
         read: false,
         source_team: Some(request.caller_team.clone()),
+        destination_chat_id: request
+            .to
+            .as_ref()
+            .and_then(|address| address.chat_id.clone()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
         pending_ack_at: ack_intent.pending_ack_at,
         acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
+        acknowledges_message_id: request.acknowledges_message_id,
         parent_message_id: request.parent_message_id,
         thread_mode: request.thread_mode,
         expires_at: request.expires_at,
@@ -615,8 +733,7 @@ mod self_address_tests {
         )
         .expect_err("case-variant self target must be rejected");
 
-        assert!(error.is_validation(), "{error:?}");
-        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+        assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     }
 }
 
@@ -674,16 +791,12 @@ fn prepare_threaded_message(
         (None, None, _) => Ok(()),
         (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
             "ephemeral messages may not participate in a message thread",
-        )
-        .with_recovery(
-            "Send the message either as a standalone ephemeral note or as a non-ephemeral thread update.",
         )),
-        (Some(parent_id), Some(_), None) => validate_thread_append(envelope, inbox_messages, parent_id),
+        (Some(parent_id), Some(_), None) => {
+            validate_thread_append(envelope, inbox_messages, parent_id)
+        }
         (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
             "thread updates must set both parent_message_id and thread_mode",
-        )
-        .with_recovery(
-            "Provide both the parent message id and either add-details or supersede when appending to an existing thread.",
         )),
     }
 }
@@ -699,17 +812,11 @@ fn validate_thread_append(
             "thread parent message {} was not found in the recipient inbox",
             parent_id
         ))
-        .with_recovery(
-            "Refresh the recipient inbox state and retry the update against a message id that still exists in that thread.",
-        )
     })?;
 
     if is_ephemeral(parent) {
         return Err(AtmError::validation(
             "ephemeral messages may not be updated or superseded",
-        )
-        .with_recovery(
-            "Send a fresh standalone message instead of trying to append to an ephemeral message.",
         ));
     }
 
@@ -717,27 +824,18 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "thread root could not be resolved for parent message {}",
             parent_id
-        ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        ));
+        )));
     };
     let root = index.message(root_id).ok_or_else(|| {
         AtmError::validation(format!(
             "thread root message {} was not found in the recipient inbox",
             root_id
         ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        )
     })?;
 
     if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
         return Err(AtmError::validation(
             "only the original sender may append details or supersede a message thread",
-        )
-        .with_recovery(
-            "Send a new message instead of appending to a thread you did not originate.",
         ));
     }
 
@@ -745,10 +843,7 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "message {} already has a successor; ATM threads are strictly linear",
             parent_id
-        ))
-        .with_recovery(
-            "Append to the current terminal message in the thread instead of branching from an older message.",
-        ));
+        )));
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);

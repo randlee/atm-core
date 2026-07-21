@@ -192,35 +192,25 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         &self,
         request: crate::boundary::NonClaudeOutboundDeliveryRequest,
     ) -> Result<crate::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
-        let output_path = (self.path_factory)().map_err(|e| {
-            e.with_recovery(
-                "Set ATM_HOME to a writable directory or ensure the user home directory is accessible before retrying non-Claude outbound delivery.",
-            )
-        })?;
+        let output_path = (self.path_factory)()?;
         let bytes = serde_json::to_vec(&request)?;
         if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
             return Err(AtmError::mailbox_write(format!(
                 "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
                 output_path.display()
-            ))
-            .with_recovery(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
-            ));
+            )));
         }
         let parent = output_path.parent().ok_or_else(|| {
             AtmError::mailbox_write(format!(
                 "non-Claude outbound path {} has no parent directory",
                 output_path.display()
             ))
-            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
         })?;
         std::fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to create non-Claude outbound directory {}: {error}",
                 parent.display()
             ))
-            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
-            .with_source(error)
         })?;
         crate::mailbox::atomic::append_jsonl_record(&output_path, &request)?;
         Ok(crate::boundary::NonClaudeOutboundDeliveryResponse {
@@ -245,17 +235,12 @@ pub(crate) fn append_notification_log_at_path(
             "notification log path {} has no parent directory",
             path.display()
         ))
-        .with_recovery("Choose a notification log path with an existing parent directory.")
     })?;
     std::fs::create_dir_all(parent).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to create notification log directory {}: {error}",
             parent.display()
         ))
-        .with_recovery(
-            "Check that the notification log directory is writable before retrying post-send logging.",
-        )
-        .with_source(error)
     })?;
     crate::mailbox::atomic::append_jsonl_record(path, event)
 }
@@ -348,10 +333,12 @@ mod tests {
     fn message() -> InboxMessage {
         InboxMessage {
             from: "sender".parse::<AgentName>().expect("sender"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -413,14 +400,9 @@ mod tests {
         )
         .expect_err("oversized non-claude payload must fail");
 
-        assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
-        assert!(error.message.contains("exceeded"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some(
-                "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command."
-            )
-        );
+        assert_eq!(error.code(), AtmErrorCode::MailboxWriteFailed);
+        assert!(error.message().contains("exceeded"));
+        assert!(error.message().contains("Recovery:"));
         assert!(!output_path.exists());
     }
 }

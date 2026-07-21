@@ -7,8 +7,7 @@ use atm_core::boundary::{
     self, BuiltInPostSendDispatch, GraftPostSendPort, LocalTmuxNudgeTarget, PostSendBuiltInTarget,
     PostSendEmissionPath, PostSendHookEmitter, PostSendHookEvent,
 };
-use atm_core::error::{AtmError, AtmErrorKind};
-use atm_core::error_codes::AtmErrorCode;
+use atm_core::error::{AtmError, AtmErrorCode};
 
 const TMUX_DOUBLE_ENTER_DELAY: Duration = Duration::from_millis(275);
 const TMUX_SEND_TIMEOUT: Duration = Duration::from_secs(5);
@@ -100,35 +99,21 @@ fn run_tmux_command(
     action: &'static str,
 ) -> Result<(), AtmError> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command.spawn().map_err(|source| {
-        AtmError::new_with_code(
-            AtmErrorCode::PostSendTmuxSendFailed,
-            AtmErrorKind::DaemonUnavailable,
-            format!("failed to start tmux while trying to {action}: {source}"),
-        )
-        .with_recovery("Repair the local tmux installation before retrying post-send delivery.")
-        .with_source(source)
-    })?;
+    let child = command
+        .spawn()
+        .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))?;
     let output = wait_for_tmux_output(child, action)?;
     ensure_tmux_success(output, event, action)
 }
 
-fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output, AtmError> {
+fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output, AtmError> {
     let started_at = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(_)) => {
-                return child.wait_with_output().map_err(|source| {
-                    AtmError::new_with_code(
-                        AtmErrorCode::PostSendTmuxSendFailed,
-                        AtmErrorKind::DaemonUnavailable,
-                        format!("failed to collect tmux output while trying to {action}: {source}"),
-                    )
-                    .with_recovery(
-                        "Repair the local tmux installation before retrying post-send delivery.",
-                    )
-                    .with_source(source)
-                });
+                return child
+                    .wait_with_output()
+                    .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
             }
             Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
                 thread::sleep(Duration::from_millis(50));
@@ -136,27 +121,12 @@ fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AtmError::new_with_code(
-                    AtmErrorCode::PostSendTmuxSendFailed,
-                    AtmErrorKind::Timeout,
-                    format!("tmux {action} timed out after {}s", TMUX_SEND_TIMEOUT.as_secs()),
-                )
-                .with_recovery(
-                    "Repair the local tmux installation or pane state before retrying post-send delivery.",
-                ));
+                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
             }
-            Err(source) => {
+            Err(_source) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AtmError::new_with_code(
-                    AtmErrorCode::PostSendTmuxSendFailed,
-                    AtmErrorKind::DaemonUnavailable,
-                    format!("failed while waiting for tmux {action}: {source}"),
-                )
-                .with_recovery(
-                    "Repair the local tmux installation before retrying post-send delivery.",
-                )
-                .with_source(source));
+                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed));
             }
         }
     }
@@ -164,27 +134,17 @@ fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output
 
 fn ensure_tmux_success(
     output: Output,
-    event: &PostSendHookEvent,
+    _event: &PostSendHookEvent,
     action: &'static str,
 ) -> Result<(), AtmError> {
     if output.status.success() {
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let detail = if stderr.is_empty() {
+    let _detail = if stderr.is_empty() {
         format!("tmux exited unsuccessfully while trying to {action}")
     } else {
         format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
     };
-    Err(AtmError::new_with_code(
-        AtmErrorCode::PostSendTmuxSendFailed,
-        AtmErrorKind::DaemonUnavailable,
-        format!(
-            "local tmux post-send emission failed for {}@{} message {}: {detail}",
-            event.recipient, event.recipient_team, event.message_id
-        ),
-    )
-    .with_recovery(
-        "Repair the local tmux installation or update the stored pane id before retrying post-send delivery.",
-    ))
+    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
 }

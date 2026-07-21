@@ -23,8 +23,8 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport,
-    RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSummary, PeerConfigDoctorReport, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -491,11 +491,11 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = error.primary_recovery().map(str::to_owned);
+    let remediation = Some(error.message().to_owned());
     findings.push(DoctorFinding {
         severity,
-        code: error.code,
-        message: error.message,
+        code: error.code(),
+        message: error.into_message(),
         remediation,
     });
 }
@@ -616,11 +616,7 @@ mod tests {
         fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
             match &self.health {
                 StubHealth::Ok(health) => Ok(health.clone()),
-                StubHealth::Err(error) => Err(AtmError::new_with_code(
-                    error.code,
-                    error.kind,
-                    error.message.clone(),
-                )),
+                StubHealth::Err(error) => Err(error.clone()),
             }
         }
     }

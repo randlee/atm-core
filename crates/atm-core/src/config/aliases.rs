@@ -58,7 +58,7 @@ mod tests {
         };
 
         let error = resolve_agent_name("tl", Some(&config)).expect_err("invalid alias target");
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]

@@ -10,6 +10,7 @@
 mod mailbox_metadata;
 mod nudge_template_override_store;
 mod observability;
+mod peer_config_store;
 mod roster_store;
 mod shared_db;
 mod writer;
@@ -19,24 +20,22 @@ pub use crate::observability::{
     NullSqliteObservability, SqliteObservability, SqliteObservabilityEvent,
     SqliteObservabilityOutcome,
 };
-use atm_storage::contract::{Message, MessageKey, MessageQuery, MessageStore, RosterStore};
+use atm_storage::contract::{
+    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+};
 use atm_storage::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp};
+use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 fn decode_sqlite_count(value: i64, field_name: &str) -> Result<u64, AtmError> {
-    u64::try_from(value).map_err(|error| {
+    u64::try_from(value).map_err(|_error| {
         AtmError::validation(format!(
             "sqlite count {field_name} must not be negative: {value}"
         ))
-        .with_recovery(
-            "Repair the malformed sqlite count row before retrying the health or metadata query.",
-        )
-        .with_source(error)
     })
 }
 
@@ -60,20 +59,14 @@ pub struct TestOnlySqliteWriterLockGuard {
 pub(crate) fn hold_sqlite_writer_lock(
     path: impl AsRef<Path>,
 ) -> Result<SqliteWriterLockGuard, AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
+    let connection = Connection::open(path.as_ref()).map_err(|_error| {
         AtmError::daemon_unavailable("failed to open sqlite writer lock connection")
-            .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
-            )
-            .with_source(error)
     })?;
-    connection.execute_batch("BEGIN IMMEDIATE;").map_err(|error| {
-        AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
-            .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
-            )
-            .with_source(error)
-    })?;
+    connection
+        .execute_batch("BEGIN IMMEDIATE;")
+        .map_err(|_error| {
+            AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
+        })?;
     Ok(SqliteWriterLockGuard { connection })
 }
 
@@ -111,17 +104,6 @@ pub(crate) struct SqliteStoredMessageRecord {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
-}
-
-#[allow(dead_code, reason = "used by upcoming SQL server backend")]
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub(crate) struct SqliteIngestReplayStateRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub source: String,
-    pub last_fingerprint: Option<String>,
-    pub last_ingested_at: Option<IsoTimestamp>,
-    pub ingested_rows: u64,
 }
 
 #[allow(dead_code, reason = "used by upcoming SQL server backend")]
@@ -185,6 +167,11 @@ struct SqliteNudgeTemplateOverrideStore {
     db: Arc<SharedDb>,
 }
 
+#[derive(Debug)]
+struct SqlitePeerConfigStore {
+    db: Arc<SharedDb>,
+}
+
 #[derive(Debug, Clone)]
 struct StoredMailMessageState {
     read: bool,
@@ -212,10 +199,6 @@ impl SqliteMessageStore {
                 AtmError::validation(format!(
                     "failed to parse mail-store {field_name} timestamp: {error}"
                 ))
-                .with_recovery(
-                    "Repair the sqlite-backed mail-store row or rewrite it through the owning backend.",
-                )
-                .with_source(error)
             })
     }
 
@@ -318,13 +301,11 @@ impl MessageStore for SqliteMessageStore {
                     AtmError::validation(format!(
                         "failed to parse sqlite team for message {key}: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the read.")
                 })?;
                 let agent: AgentName = agent.parse().map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse sqlite agent for message {key}: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the read.")
                 })?;
                 let state = self.load_message_state_row(connection, &team, &agent, key)?;
                 Ok(Some((team, agent, envelope_json, state)))
@@ -398,7 +379,7 @@ impl MessageStore for SqliteMessageStore {
                     AtmError::validation(format!(
                         "failed to parse sqlite message key during list: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the list.")
+
                 })?;
                 let state =
                     self.load_message_state_row(connection, &query.team, &query.agent, &message_key)?;
@@ -443,6 +424,45 @@ pub struct SqliteStorageBackend {
     message_store: Arc<SqliteMessageStore>,
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
+    peer_config_store: Arc<SqlitePeerConfigStore>,
+}
+
+/// Concrete SQLite selection owned by the SQLite backend and consumed only at
+/// an executable composition root through [`StorageFactory`].
+#[derive(Debug, Clone, Default)]
+pub struct SqliteStorageFactory {
+    database_path: Option<PathBuf>,
+}
+
+impl SqliteStorageFactory {
+    pub fn host_scoped() -> Self {
+        Self::default()
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn at_path(path: impl Into<PathBuf>) -> Self {
+        Self {
+            database_path: Some(path.into()),
+        }
+    }
+
+    fn database_path(&self, durable_state_root: &Path) -> PathBuf {
+        self.database_path
+            .clone()
+            .unwrap_or_else(|| durable_state_root.join("mail.db"))
+    }
+}
+
+impl StorageFactory for SqliteStorageFactory {
+    fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError> {
+        let backend = SqliteStorageBackend::new(self.database_path(durable_state_root))?;
+        Ok(StorageHandles::new(
+            backend.message_store(),
+            backend.roster_store(),
+            backend.nudge_template_override_store(),
+            backend.peer_config_store(),
+        ))
+    }
 }
 
 impl SqliteStorageBackend {
@@ -458,7 +478,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
         })
     }
 
@@ -468,7 +491,10 @@ impl SqliteStorageBackend {
         Ok(Self {
             message_store: Arc::new(SqliteMessageStore::new(Arc::clone(&db))),
             roster_store: Arc::new(SqliteRosterStore::new(Arc::clone(&db))),
-            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(db)),
+            nudge_template_override_store: Arc::new(SqliteNudgeTemplateOverrideStore::new(
+                Arc::clone(&db),
+            )),
+            peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
         })
     }
 
@@ -514,6 +540,10 @@ impl SqliteStorageBackend {
         &self,
     ) -> Arc<dyn atm_storage::NudgeTemplateOverrideStore + Send + Sync> {
         self.nudge_template_override_store.clone()
+    }
+
+    pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
+        self.peer_config_store.clone()
     }
 
     #[cfg(test)]
@@ -664,82 +694,6 @@ impl SqliteStorageBackend {
     }
 
     #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn record_ingest_replay_state(
-        &self,
-        state: &SqliteIngestReplayStateRecord,
-    ) -> Result<(), AtmError> {
-        let state_json = serde_json::to_string(state).map_err(|error| {
-            AtmError::validation(format!(
-                "failed to serialize sqlite ingest replay state: {error}"
-            ))
-            .with_recovery(
-                "Repair the ingest replay state payload before retrying the SQLite write.",
-            )
-            .with_source(error)
-        })?;
-        self.message_store.db.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team, agent, source) DO UPDATE SET
-                       state_json = excluded.state_json;",
-                    params![
-                        state.team.as_str(),
-                        state.agent.as_str(),
-                        state.source,
-                        state_json,
-                    ],
-                )
-                .map_err(|error| {
-                    self.message_store
-                        .db
-                        .error("failed to record sqlite ingest replay state", error)
-                })?;
-            Ok(())
-        })
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
-    pub(crate) fn load_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &str,
-    ) -> Result<Option<SqliteIngestReplayStateRecord>, AtmError> {
-        let state_json = self.message_store.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT state_json
-                     FROM mail_ingest_replay_states
-                     WHERE team = ?1 AND agent = ?2 AND source = ?3;",
-                    params![team.as_str(), agent.as_str(), source],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| {
-                    self.message_store
-                        .db
-                        .error("failed to load sqlite ingest replay state", error)
-                })
-        })?;
-
-        state_json
-            .map(|value| {
-                serde_json::from_str::<SqliteIngestReplayStateRecord>(&value).map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse sqlite ingest replay state: {error}"
-                    ))
-                    .with_recovery(
-                        "Repair the persisted ingest replay row before retrying the SQLite read.",
-                    )
-                    .with_source(error)
-                })
-            })
-            .transpose()
-    }
-
-    #[allow(dead_code, reason = "used by upcoming SQL server backend")]
     pub(crate) fn mail_health_snapshot(
         &self,
         team: &TeamName,
@@ -868,10 +822,12 @@ mod tests {
             message_key: MessageKey::new(key).expect("key"),
             envelope: MessageEnvelope {
                 from: agent,
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,
@@ -979,37 +935,7 @@ mod tests {
             .message_store()
             .load_message(&MessageKey::new("atm:test-invalid-team").expect("key"))
             .expect_err("invalid team should fail");
-        assert!(error.message.contains("failed to parse sqlite team"));
-    }
-
-    #[test]
-    fn load_ingest_replay_state_rejects_invalid_json() {
-        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let team = team();
-        let agent = agent();
-        backend
-            .message_store
-            .db
-            .with_transaction(|transaction| {
-                transaction
-                    .execute(
-                        "INSERT INTO mail_ingest_replay_states(team, agent, source, state_json)
-                         VALUES (?1, ?2, ?3, ?4);",
-                        params![team.as_str(), agent.as_str(), "bad-source", "{not-json"],
-                    )
-                    .expect("insert invalid replay state");
-                Ok(())
-            })
-            .expect("seed row");
-
-        let error = backend
-            .load_ingest_replay_state(&team, &agent, "bad-source")
-            .expect_err("invalid replay state should fail");
-        assert!(
-            error
-                .message
-                .contains("failed to parse sqlite ingest replay state")
-        );
+        assert!(error.message().contains("failed to parse sqlite team"));
     }
 
     #[test]
@@ -1045,7 +971,7 @@ mod tests {
             .expect_err("invalid task id should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse sqlite mailbox metadata task_id")
         );
     }
@@ -1083,7 +1009,7 @@ mod tests {
             .expect_err("invalid model should fail");
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to parse canonical team-roster model")
         );
     }

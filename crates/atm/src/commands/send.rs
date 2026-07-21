@@ -52,11 +52,9 @@ pub struct SendCommand {
 impl SendCommand {
     fn message_validation_error(
         message: impl Into<String>,
-        recovery: impl Into<String>,
+        _recovery: impl Into<String>,
     ) -> anyhow::Error {
-        atm_core::error::AtmError::validation(message.into())
-            .with_recovery(recovery.into())
-            .into()
+        atm_core::error::AtmError::validation(message.into()).into()
     }
 
     /// Execute the `atm send` command.
@@ -260,7 +258,10 @@ mod tests {
             Some("TASK-42")
         );
         assert!(request.dry_run);
-        assert_eq!(request.to.to_string(), "recipient-a@test-team");
+        assert_eq!(
+            request.to.expect("destination").to_string(),
+            "recipient-a@test-team"
+        );
         match request.message_source {
             SendMessageSource::Inline(message) => assert_eq!(message, "hello from send"),
             other => panic!("expected inline message source, got {other:?}"),

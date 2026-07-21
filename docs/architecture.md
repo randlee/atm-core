@@ -2534,8 +2534,6 @@ concrete SQLite table names:
     - compatibility `message_id`
 - one canonical mutable message-state table
   - logical `message_state` projection
-- `mail_ingest_replay_states`
-  - logical `inbox_ingest` replay/high-water projection
 - one canonical roster/member table
   - per-member durable projection keyed by `(team_name, agent_name)`
 
@@ -2556,7 +2554,6 @@ Minimum index/constraint rules:
   - recipient/team mailbox projection
   - task lookup
   - message-state projection
-  - ingest replay/high-water tracking
 
 Minimum canonical roster-member durable fields:
 - `team_name`
@@ -2815,7 +2812,6 @@ Minimum method set:
 - run transaction
 - upsert/load message rows
 - upsert/load unified message state
-- record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
