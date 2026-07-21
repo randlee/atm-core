@@ -584,14 +584,14 @@ impl DaemonSupervisor {
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        if self.try_connect_with_traceability(&mut try_connect, traceability, "initial_miss")? {
+        if self.try_connect_with_traceability(&mut try_connect, traceability, "initial_miss") {
             return Ok(());
         }
         let deadline = Instant::now() + publish_timeout;
         let mut gate_contention_reported = false;
         loop {
             self.emit_trace(traceability, "daemon_connect", "retry_attempt", None);
-            if self.try_connect_with_traceability(&mut try_connect, traceability, "pending")? {
+            if self.try_connect_with_traceability(&mut try_connect, traceability, "pending") {
                 return Ok(());
             }
             let launch_gate = match LaunchGateGuard::try_acquire_at(launch_lock_path.clone()) {
@@ -603,11 +603,7 @@ impl DaemonSupervisor {
             };
             if let Some(_guard) = launch_gate {
                 self.emit_trace(traceability, "daemon_launch_gate", "acquired", None);
-                if self.try_connect_with_traceability(
-                    &mut try_connect,
-                    traceability,
-                    "connected",
-                )? {
+                if self.try_connect_with_traceability(&mut try_connect, traceability, "connected") {
                     return Ok(());
                 }
                 return self.spawn_and_wait_for_daemon(
@@ -641,18 +637,18 @@ impl DaemonSupervisor {
         try_connect: &mut F,
         traceability: Option<&BootstrapTraceability<'_>>,
         miss_stage: &'static str,
-    ) -> Result<bool, AtmError>
+    ) -> bool
     where
         F: FnMut() -> Result<(), AtmError>,
     {
         match try_connect() {
             Ok(()) => {
                 self.emit_trace(traceability, "daemon_connect", "connected", None);
-                Ok(true)
+                true
             }
             Err(error) => {
                 self.emit_trace(traceability, "daemon_connect", miss_stage, Some(&error));
-                Ok(false)
+                false
             }
         }
     }
@@ -702,7 +698,7 @@ impl DaemonSupervisor {
         let halfway_deadline = Instant::now() + (publish_timeout / 2);
         let mut halfway_reported = false;
         while Instant::now() < deadline {
-            if self.try_connect_with_traceability(try_connect, traceability, "pending")? {
+            if self.try_connect_with_traceability(try_connect, traceability, "pending") {
                 return Ok(());
             }
             if !halfway_reported && Instant::now() >= halfway_deadline {
