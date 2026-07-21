@@ -47,7 +47,6 @@ pub enum ApiRequest {
     Message(MessageId),
     Clear(MessageId),
     Doctor,
-    Teams(TeamRequest),
 }
 
 pub trait ApiRouter: Send + Sync {

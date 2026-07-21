@@ -855,15 +855,7 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        let request = match request {
-            ApiRequest::Teams(request) => {
-                return Err(AtmError::daemon_unavailable(format!(
-                    "daemon API route {} {} is declared in OpenAPI but team administration routing remains outside the runtime router",
-                    request.method, request.path
-                )));
-            }
-            request => request.into_inner(),
-        };
+        let request = request.into_inner();
         match ingress {
             AuthenticatedIngress::Local => self.dispatch(request),
             AuthenticatedIngress::Peer => self.dispatch_peer_ingress(request),

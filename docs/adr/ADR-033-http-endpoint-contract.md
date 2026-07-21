@@ -23,8 +23,6 @@ The initial stable application surface is resource-oriented REST under
 | `/message/{message-id}/read` | `POST` owner-only read-state mutation |
 | `/message/{message-id}/ack` | `POST` acknowledgement |
 | `/doctor` | `GET` doctor report |
-| `/teams` | `GET` team list and collection administration |
-| `/team/{team-name}` | `GET` team detail and authorized team administration |
 
 The exact request/response schemas, status codes, pagination, and conditional
 mutation semantics are defined in the checked-in OpenAPI 3.1 document before
