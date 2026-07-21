@@ -58,13 +58,17 @@ pub fn write_http_request(
         "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
-    .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP request headers"))?;
-    writer.write_all(&body).map_err(|_source| {
-        AtmError::daemon_unavailable("failed to write daemon HTTP request body")
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP request headers: {source}"))
     })?;
-    writer
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP request"))
+    writer.write_all(&body).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP request body: {source}"
+        ))
+    })?;
+    writer.flush().map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP request: {source}"))
+    })
 }
 
 pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
@@ -119,13 +123,17 @@ pub fn write_http_response(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
-    .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP response headers"))?;
-    writer.write_all(&body).map_err(|_source| {
-        AtmError::daemon_unavailable("failed to write daemon HTTP response body")
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
     })?;
-    writer
-        .flush()
-        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP response"))
+    writer.write_all(&body).map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP response body: {source}"
+        ))
+    })?;
+    writer.flush().map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to flush daemon HTTP response: {source}"))
+    })
 }
 
 pub fn read_http_response(reader: &mut impl Read) -> Result<ResponseEnvelope, AtmError> {
@@ -165,10 +173,10 @@ fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<Strin
                     break;
                 }
             }
-            Err(_source) => {
-                return Err(AtmError::daemon_unavailable(
-                    "failed to read daemon HTTP headers",
-                ));
+            Err(source) => {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "failed to read daemon HTTP headers: {source}",
+                )));
             }
         }
     }
@@ -203,15 +211,15 @@ fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>,
         ));
     }
     let mut body = vec![0_u8; length];
-    reader
-        .read_exact(&mut body)
-        .map_err(|_source| AtmError::daemon_unavailable("failed to read daemon HTTP body"))?;
+    reader.read_exact(&mut body).map_err(|source| {
+        AtmError::daemon_unavailable(format!("failed to read daemon HTTP body: {source}"))
+    })?;
     Ok(body)
 }
 
 #[derive(Debug, Clone)]
 pub enum ApiRequest {
-    Messages(MessageCollectionRequest),
+    Messages(Box<MessageCollectionRequest>),
     Write(SendRequestEnvelope),
     Message(MessageRequest),
     Clear(ClearQuery),
@@ -246,11 +254,11 @@ impl ApiRequest {
 
     pub fn into_inner(self) -> RequestEnvelope {
         match self {
-            Self::Messages(MessageCollectionRequest::List(query)) => RequestEnvelope::List(query),
-            Self::Messages(MessageCollectionRequest::Peek(query)) => RequestEnvelope::Peek(query),
-            Self::Messages(MessageCollectionRequest::Receive(query)) => {
-                RequestEnvelope::Receive(query)
-            }
+            Self::Messages(messages) => match *messages {
+                MessageCollectionRequest::List(query) => RequestEnvelope::List(query),
+                MessageCollectionRequest::Peek(query) => RequestEnvelope::Peek(query),
+                MessageCollectionRequest::Receive(query) => RequestEnvelope::Receive(query),
+            },
             Self::Write(request) => RequestEnvelope::Send(request),
             Self::Message(MessageRequest::Acknowledge(request)) => {
                 RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request))
@@ -315,10 +323,14 @@ impl From<RequestEnvelope> for ApiRequest {
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Self::Message(MessageRequest::Acknowledge(request))
             }
-            RequestEnvelope::List(query) => Self::Messages(MessageCollectionRequest::List(query)),
-            RequestEnvelope::Peek(query) => Self::Messages(MessageCollectionRequest::Peek(query)),
+            RequestEnvelope::List(query) => {
+                Self::Messages(Box::new(MessageCollectionRequest::List(query)))
+            }
+            RequestEnvelope::Peek(query) => {
+                Self::Messages(Box::new(MessageCollectionRequest::Peek(query)))
+            }
             RequestEnvelope::Receive(query) => {
-                Self::Messages(MessageCollectionRequest::Receive(query))
+                Self::Messages(Box::new(MessageCollectionRequest::Receive(query)))
             }
             RequestEnvelope::Clear(query) => Self::Clear(query),
             RequestEnvelope::Doctor(query) => Self::Doctor(query),
@@ -401,6 +413,8 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::{
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
         write_http_request,
@@ -409,6 +423,18 @@ mod tests {
     use crate::protocol::{RequestEnvelope, SendRequestEnvelope};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
+
+    struct FailingWriter;
+
+    impl io::Write for FailingWriter {
+        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+            Err(io::Error::other("test write failure"))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -502,5 +528,16 @@ mod tests {
         let error = read_http_request(&mut request.as_bytes()).expect_err("oversized body");
 
         assert!(error.is_validation());
+    }
+
+    #[test]
+    fn http_write_preserves_io_error_context() {
+        let error = write_http_request(
+            &mut FailingWriter,
+            &RequestEnvelope::Doctor(DoctorQuery::default()),
+        )
+        .expect_err("write must fail");
+
+        assert!(error.message().contains("test write failure"));
     }
 }

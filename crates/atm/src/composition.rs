@@ -530,6 +530,7 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
+    use atm_core::api::{decode_request, read_http_request, write_http_request};
     use atm_core::boundary;
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{
@@ -540,7 +541,6 @@ mod tests {
     use atm_core::graft::AtmGraftClient;
     use atm_core::protocol::{
         RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-        next_request_id, request_from_frame_payload, request_to_frame_payload,
     };
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
@@ -1121,10 +1121,16 @@ mod tests {
             serde_json::to_value(&cli_request).expect("cli JSON"),
             serde_json::to_value(&graft_request).expect("graft JSON")
         );
-        let frame = request_to_frame_payload(next_request_id(), cli_request).expect("daemon frame");
-        let (_, daemon_request) = request_from_frame_payload(frame).expect("daemon decode");
-        let RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) = daemon_request else {
-            panic!("daemon must receive the canonical compose request");
+        let mut http_request = Vec::new();
+        write_http_request(&mut http_request, &cli_request).expect("daemon HTTP request");
+        let daemon_request = decode_request(
+            read_http_request(&mut http_request.as_slice())
+                .expect("daemon HTTP read")
+                .expect("daemon HTTP request"),
+        )
+        .expect("daemon HTTP decode");
+        let ApiRequest::Write(SendRequestEnvelope::Compose(request)) = daemon_request else {
+            panic!("daemon must receive the canonical compose write request");
         };
         assert_eq!(request.caller_chat_id, Some(chat_id.clone()));
         assert_eq!(

@@ -789,15 +789,17 @@ impl ApiRouter for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     fn route_api_request(&self, request: ApiRequest) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            ApiRequest::Messages(MessageCollectionRequest::List(query)) => {
-                self.dispatch(RequestEnvelope::List(query))
-            }
-            ApiRequest::Messages(MessageCollectionRequest::Peek(query)) => {
-                self.dispatch(RequestEnvelope::Peek(query))
-            }
-            ApiRequest::Messages(MessageCollectionRequest::Receive(query)) => {
-                self.dispatch(RequestEnvelope::Receive(query))
-            }
+            ApiRequest::Messages(messages) => match *messages {
+                MessageCollectionRequest::List(query) => {
+                    self.dispatch(RequestEnvelope::List(query))
+                }
+                MessageCollectionRequest::Peek(query) => {
+                    self.dispatch(RequestEnvelope::Peek(query))
+                }
+                MessageCollectionRequest::Receive(query) => {
+                    self.dispatch(RequestEnvelope::Receive(query))
+                }
+            },
             ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Send(request)),
             ApiRequest::Message(MessageRequest::Acknowledge(request)) => self.dispatch(
                 RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)),
