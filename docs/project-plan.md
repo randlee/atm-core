@@ -972,6 +972,7 @@ Implementation Branches:
 | `AI.4` | `complete` | `feature/pAI-s4-error-consumer-migration` | consumers migrated onto the two-field error contract |
 | `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
 | `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
+| `AI.7` | `complete` | `feature/pAI-s7-canonical-write-path` | canonical write request, single host-routing seam, and collapsed send/ack ingress |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
