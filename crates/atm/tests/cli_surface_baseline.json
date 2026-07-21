@@ -17,6 +17,34 @@
     {
       "args": [
         {
+          "has_default": false,
+          "id": "format",
+          "long": "format",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": true,
+          "short": null
+        },
+        {
+          "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "__dump-cli-surface",
+      "subcommands": []
+    },
+    {
+      "args": [
+        {
           "has_default": true,
           "id": "json",
           "long": "json",
