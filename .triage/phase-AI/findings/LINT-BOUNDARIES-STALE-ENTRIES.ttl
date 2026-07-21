@@ -12,8 +12,8 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/LINT-BOUNDARIES-STALE-ENTRIES/pAI-1/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-1/da3f978e> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-1/da3f978e> ;
@@ -25,8 +25,8 @@
   triage:file ".just/lint_boundaries.py" ;
   triage:line 87 ;
   triage:snippet "SCB_CONFIG_BOUNDARY_FILES includes Path(\"crates/atm-daemon/src/boundary_adapters.rs\") and Path(\"crates/atm-daemon/src/direct_boundaries.rs\"), both files deleted" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "da3f978e" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
