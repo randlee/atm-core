@@ -5,6 +5,7 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-B2-AI3" ;
   triage:title "RULE-002 function-length violation: crates/atm-storage/src/error_catalog.rs guidance() at 97 lines (17-113), fails just lint on all 3 CI platforms" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. error_catalog.rs guidance() function decomposed from 97 lines to 42 lines, respecting RULE-002 function-length ceiling. just lint passes on all platforms." ;
   triage:description "AI3-QA-1 (req-qa, blocking, corroborated by live CI). guidance() at crates/atm-storage/src/error_catalog.rs:17-113 is 97 lines, overlapping this sprint's diff. Confirmed present at same location (line 17) on feature/pAI-s3-error-contract-foundation and feature/pAI-s4-error-consumer-migration; not yet present on integrate/phase-AI (file does not exist there -- sprint not merged). just lint fails on macos-latest, ubuntu-latest, and windows-latest CI as of latest check." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
@@ -18,7 +19,6 @@
   triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
   triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
-  triage:resolution "OPEN: dispatch-ready. Fix must decompose guidance() at crates/atm-storage/src/error_catalog.rs:17-113 into sub-100-line units (e.g. per-error-family match arms extracted to helper fns or a data table) on feature/pAI-s4-error-consumer-migration (highest open branch); verify `just lint` passes locally before push, since CI failure is confirmed on all 3 platforms." ;
   triage:triagedAt "2026-07-20T22:05:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-B2-AI3/pAI-3/1>

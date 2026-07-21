@@ -5,6 +5,7 @@
   a triage:Finding ;
   triage:findingId "AI8-BLOCKING-01-COMPOSITION-SCOPE" ;
   triage:title "Fail-closed peer-config validation scoped too broadly — can break CLI commands, not just daemon startup" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38 (PR #603, commit 2196ffb3). Peer-config validation (validate_enabled_peer_configuration) now properly scoped to daemon startup only; assemble_runtime no longer calls it. CLI commands use shared runtime assembly to reach storage and mailbox boundaries only. Verified: composition.rs lines 82-151 validates only in daemon context; CLI paths (send, read, ack, doctor) no longer trigger validation side effects." ;
   triage:description "AI8-QA-1 (req-qa ATM-QA-001, rust-service-hardening RSH-001 — 2 independent confirmations). The validate_enabled_peer_configuration() function (crates/atm-runtime/src/composition.rs:82-151) is wired into assemble_runtime(), the shared composition root used by every local-runtime CLI path (send, read, ack, doctor) — not scoped to daemon startup as the deliverable specifies ('fails daemon startup'). An invalid enabled peer config, or once AI.9 lands a live daemon already holding the bind on an enabled interface, will make ordinary message commands and atm doctor/atm peer * self-deadlock trying to rebind the same socket. Deliverable 5 requires 'daemon startup only' scoping." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
@@ -12,13 +13,13 @@
   triage:severity "critical" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI8-BLOCKING-01-COMPOSITION-SCOPE/pAI-8/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
   triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
-  triage:highestFixedBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
   triage:notes "Pattern repeatable across any branch where assemble_runtime() is used outside daemon-startup context. Sweep scope: crate (atm-runtime). Root cause: composition.rs uses runtime assembly for all CLI paths; daemon-specific validation must be scoped to daemon-startup-only code path, not shared composition." .
 
@@ -27,8 +28,8 @@
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:line 82 ;
   triage:snippet "pub fn assemble_runtime(...) { ... validate_enabled_peer_configuration() ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s8-crosshost-control-plane" ;
   triage:headSha "d9991a90" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .

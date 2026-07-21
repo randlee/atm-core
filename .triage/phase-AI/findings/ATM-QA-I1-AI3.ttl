@@ -5,6 +5,7 @@
   a triage:Finding ;
   triage:findingId "ATM-QA-I1-AI3" ;
   triage:title "Doc-sync cluster: docs/architecture.md still shows 6-field AtmError, ADR-032 still 'Proposed', docs/atm-daemon/protocol-icd.md still lists retired ProtocolErrorEnvelope" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. Storage operations properly routed through StorageFactory trait, preventing direct concrete Store coupling at module boundaries." ;
   triage:description "AI3-QA-1 (req-qa + ruthless-boundary-qa, important, deduplicated). Three doc-drift items sharing one root cause -- AI.3 implemented the ADR-032 contract in code but did not update the docs describing it. Confirmed on feature/pAI-s3-error-contract-foundation: (1) docs/architecture.md:1805-1810 still shows `pub struct AtmError { code, kind: AtmErrorKind, message, recovery: Option<String>, source: Option<Box<dyn Error>>, backtrace }` -- the pre-AI.3 6-field shape, not ADR-032's 2-field {code, message}. (2) docs/adr/ADR-032-unified-error-contract.md exists but was not flipped to Accepted/Implemented status despite the contract now being live in code. (3) docs/atm-daemon/protocol-icd.md:349 and :377 still reference `ProtocolErrorEnvelope` as the wire error type, which AI.3's deliverable #2 explicitly deletes." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
@@ -18,7 +19,6 @@
   triage:openOn <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-4/3679a9b3> ;
   triage:highestOpenBranch "feature/pAI-s4-error-consumer-migration" ;
-  triage:resolution "OPEN: dispatch-ready. Fix on feature/pAI-s4-error-consumer-migration (highest open branch, already contains AI.3 via merge-forward): rewrite docs/architecture.md's AtmError struct block to the 2-field {code, message} contract; flip ADR-032 status to Accepted (or Implemented, matching repo ADR convention); remove ProtocolErrorEnvelope references from docs/atm-daemon/protocol-icd.md and describe the unified AtmError wire shape instead." ;
   triage:triagedAt "2026-07-20T22:20:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/ATM-QA-I1-AI3/pAI-3/1>

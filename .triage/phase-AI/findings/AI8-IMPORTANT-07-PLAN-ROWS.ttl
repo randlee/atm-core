@@ -5,6 +5,7 @@
   a triage:Finding ;
   triage:findingId "AI8-IMPORTANT-07-PLAN-ROWS" ;
   triage:title "Zero AI.4-AI.10 rows in docs/project-plan.md — same gap across AI.6/AI.7" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38 (PR #603, commit 2196ffb3). Plan deliverables (sprint-ai-8.md rows) match implementation: compose scoped properly, peer doctor output formatted, validation tests exercised." ;
   triage:description "AI8-QA-1 (req-qa ATM-QA-007). The project plan's sprint registry has no entries for AI.4 through AI.10, including AI.8. This violates the planning documentation requirements and blocks traceability from the plan to implemented sprints. Same recurring gap identified in AI.6 and AI.7." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
@@ -12,13 +13,13 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI8-IMPORTANT-07-PLAN-ROWS/pAI-8/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-8/d9991a90> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-8/d9991a90> ;
   triage:highestOpenBranch "feature/pAI-s8-crosshost-control-plane" ;
-  triage:highestFixedBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:triagedAt "2026-07-20T19:30:00Z"^^xsd:dateTime ;
   triage:notes "Fix: add sprint registry rows for all Phase AI sprints (AI.4-AI.10) to docs/project-plan.md with deliverable counts and status." .
 
@@ -27,8 +28,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 1 ;
   triage:snippet "No AI.4-AI.10 rows in sprint registry; AI.8 row missing" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s8-crosshost-control-plane" ;
   triage:headSha "d9991a90" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-8/d9991a90> .

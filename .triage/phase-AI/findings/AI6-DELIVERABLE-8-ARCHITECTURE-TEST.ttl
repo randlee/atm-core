@@ -5,6 +5,7 @@
   a triage:Finding ;
   triage:findingId "AI6-DELIVERABLE-8" ;
   triage:title "Deliverable #8 does not exist: AST-based write-ingress architecture test missing" ;
+  triage:resolution "WAIVED (AI.7-scope deferral, recorded in sprint-ai-6.md Closure waiver section). MessageWriter and PostWriteRouter types do not exist in AI.6 scope; deliverable AST-based write-ingress architecture test is deferred to AI.7. quality-mgr re-verified absence on both AI.6 and AI.10 tips (checked @ 3dd7e6e2 and b43c0b1b). No revision needed; closure waiver stands." ;
   triage:description "Sprint contract requires AST-based write-ingress architecture test proving ApiRouter::route → handler → MessageWriter::write → PostWriteRouter::dispatch. MessageWriter and PostWriteRouter are AI.7-scope types that do not exist anywhere in the workspace. The deliverable as literally written in sprint-ai-6.md cannot be built on this branch. This is a planning defect: no waiver or scope correction was recorded before the PR was opened." ;
   triage:triageMode "initial_pass" ;
   triage:category "REQ" ;
@@ -32,7 +33,7 @@
   triage:line 1 ;
   triage:snippet "Deliverable #8: AST-based write-ingress architecture test (missing entire implementation)" ;
   triage:status "open" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
