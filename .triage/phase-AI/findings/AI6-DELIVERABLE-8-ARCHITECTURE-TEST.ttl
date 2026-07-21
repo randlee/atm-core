@@ -12,17 +12,19 @@
   triage:severity "critical" ;
   triage:repeatable false ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-8/pAI-s6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
   triage:blockedByFinding "AI6-APIREQUEST-SHAPE" ;
   triage:reviewedBy "req-qa" ;
   triage:reviewedBy "arch-qa" ;
   triage:reviewedBy "ruthless-boundary-qa" ;
-  triage:reviewedBy "rust-qa-agent" .
+  triage:reviewedBy "rust-qa-agent" ;
+  triage:resolution "WAIVED (confirmed genuine, not a planning gap left unaddressed): quality-mgr independently confirmed MessageWriter/PostWriteRouter still do not exist anywhere in the workspace (checked both feature/pAI-s6-http-uds-router @ 3dd7e6e2 and AI10 tip b43c0b1b) — the deliverable is genuinely AI.7-scope-blocked, not a shortcut. The AI6-SPRINT-DOC-WAIVER-MISSING closure (docs/plans/phase-ai/sprint-ai-6.md 'Closure waiver' section) already accurately records this deferral; no revision needed." .
 
 <urn:atm:triage:occurrence/AI6-DELIVERABLE-8/pAI-s6/1>
   a triage:Occurrence ;

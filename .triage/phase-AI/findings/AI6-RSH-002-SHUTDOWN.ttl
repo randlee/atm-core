@@ -12,14 +12,17 @@
   triage:severity "critical" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-RSH-002/pAI-s6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:relatedFinding "AI6-RSH-001" ;
-  triage:reviewedBy "rust-service-hardening-agent" .
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:reviewedBy "rust-service-hardening-agent" ;
+  triage:reviewedBy "team-lead" ;
+  triage:resolution "WAIVED as genuinely library-blocked, independently verified by quality-mgr against interprocess 2.4.2 source (AI-FIXROUND-4 recheck) at feature/pAI-s6-http-uds-router @ e50d67f1: the public local_socket::Stream impl (interprocess src/local_socket/stream/enum.rs:80-144) exposes only from_options/set_nonblocking/set_recv_timeout/set_send_timeout/split/reunite/take_error/peer_creds/try_clone — no shutdown/close API. The inner UnixStream (os/unix/uds_local_socket/stream.rs) is pub(super), not reachable; no AsFd/AsRawFd impl exists on the public Stream type or local_socket prelude (grepped whole crate, zero hits) — no raw-fd escape hatch. Dropping/replacing the Stream from another thread would not reliably unblock a thread parked in a blocking read (fd-reuse hazard on Unix), so that is not a safe alternative either. active_connection_registry.rs:83-85 interrupt_all() remains exactly `self.drain_wake.notify_all();` — confirmed NOT a disguised/fake force-close claim; the boundedness proven by AI6-RSH-001's fix (socket-level recv/send timeout on the primary path) plus AI-FIXROUND-3's timeout-bounded drain (bounded_drain_returns_after_force_cancel_deadline, local_ipc_transport.rs:781) is the achievable mitigation given the current interprocess crate's API surface. Real force-close would require replacing the local-socket abstraction — out of AI.6 scope; tracked as a known limitation, not a defect." .
 
 <urn:atm:triage:occurrence/AI6-RSH-002/pAI-s6/1>
   a triage:Occurrence ;
