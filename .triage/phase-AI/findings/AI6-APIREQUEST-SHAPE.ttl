@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-APIREQUEST-SHAPE>
+  a triage:Finding ;
+  triage:findingId "AI6-APIREQUEST-SHAPE" ;
+  triage:title "ApiRequest delivered as struct wrapper instead of contract enum shape" ;
+  triage:description "Sprint contract specifies enum ApiRequest { Messages, Write, Message, Clear, Doctor, Teams }. Delivered type is struct ApiRequest { request: RequestEnvelope }, a thin wrapper with no distinguishable Write variant. This undermines deliverable #8 (architecture test): an AST/type-level graph check cannot statically identify the write path without a real enum discriminant. Blocks AI.7 type-level write-handler design and forces string/value-matching that the sprint explicitly disallows." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-APIREQUEST-SHAPE/pAI-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:reviewedBy "req-qa" ;
+  triage:reviewedBy "arch-qa" .
+
+<urn:atm:triage:occurrence/AI6-APIREQUEST-SHAPE/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/api.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub struct ApiRequest { request: RequestEnvelope } (no Write discriminant in enum)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
