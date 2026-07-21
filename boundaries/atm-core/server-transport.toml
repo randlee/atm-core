@@ -18,7 +18,7 @@ io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_se
 io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-SERVER-TRANSPORT-REFERENCES"]
 review_gates = ["no_server_business_logic"]
 
 [status]
-state = "stub_landed"
-notes = ["stub trait plus request/response shells landed in atm_core::boundary", "server transports stay runtime-only and are not exposed to thin client crates"]
+state = "retired"
+notes = ["Historical custom-frame server boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.", "Server transport behavior now belongs to runtime adapters that call ApiRouter, not this atm-core trait boundary."]

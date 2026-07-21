@@ -18,7 +18,7 @@ io_owns = ["protocol_request_types", "protocol_response_types", "frame_payload_c
 io_forbidden = ["socket_io", "sqlite", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -40,5 +40,5 @@ lint_rules = ["LINT-BOUNDARY-ATM-PROTOCOL-NAMING"]
 review_gates = ["no_daemon_shaped_protocol_types"]
 
 [status]
-state = "active"
-notes = ["trait plus protocol request/response/frame DTOs landed in atm_core::protocol", "ack is represented inside send-shape request data, not as a top-level protocol family", "heartbeat request/response DTOs and runtime-health snapshot payloads are part of the canonical protocol surface"]
+state = "retired"
+notes = ["Historical custom-frame boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.", "Retained protocol DTOs in atm_core::protocol are data contracts, not a live AtmProtocol trait boundary."]
