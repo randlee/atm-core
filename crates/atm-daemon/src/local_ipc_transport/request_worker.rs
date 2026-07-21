@@ -267,10 +267,9 @@ fn await_dispatch_response(
 
 fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
     match request {
-        ApiRequest::Messages(_)
-        | ApiRequest::Doctor(_)
-        | ApiRequest::CompatibilityPreflight(_)
-        | ApiRequest::Teams(_) => RequestExecutionRisk::ReadOnly,
+        ApiRequest::Messages(_) | ApiRequest::Doctor(_) | ApiRequest::CompatibilityPreflight(_) => {
+            RequestExecutionRisk::ReadOnly
+        }
         ApiRequest::Write(_)
         | ApiRequest::Message(_)
         | ApiRequest::Heartbeat(_)
