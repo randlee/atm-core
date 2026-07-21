@@ -538,10 +538,13 @@ mod tests {
     };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+    use atm_core::protocol::{
+        RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
+        next_request_id, request_from_frame_payload, request_to_frame_payload,
+    };
     use atm_core::read::{PeekQuery, ReadQuery};
     use atm_core::schema::{AgentMember, AtmMessageId, InboxMessage, TeamConfig};
-    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use atm_core::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
         TEST_TEAM,
@@ -550,7 +553,7 @@ mod tests {
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
     use atm_core::types::ReadSelection;
-    use atm_core::types::{AgentName, TeamName};
+    use atm_core::types::{AgentName, ChatId, CommandAction, TeamName};
     use atm_core::{ApiRequest, DaemonApiClient};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
@@ -1041,6 +1044,116 @@ mod tests {
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
         assert!(error.message().contains("Recovery:"));
+    }
+
+    #[test]
+    fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
+        let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
+        let send_request = SendRequest::new(
+            std::path::PathBuf::from("/tmp/home"),
+            std::path::PathBuf::from("/tmp/current"),
+            TEST_SENDER.parse().expect("caller"),
+            "recipient:target-chat@test-team",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline("chat parity".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("send request")
+        .with_caller_chat_id(Some(chat_id.clone()));
+        let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+            action: CommandAction::Send,
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_RECIPIENT.parse().expect("recipient"),
+            sender: TEST_SENDER.parse().expect("sender"),
+            outcome: SendCommandOutcome::Sent,
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            task_id: None,
+            summary: None,
+            message: None,
+            warnings: Vec::new(),
+            dry_run: false,
+        }));
+        let cli_requests = Arc::new(Mutex::new(Vec::new()));
+        let cli_transport = Arc::new(FakeClientTransport::new({
+            let cli_requests = cli_requests.clone();
+            let response = response.clone();
+            move |request| {
+                cli_requests.lock().expect("cli request log").push(request);
+                Ok(response.clone())
+            }
+        }));
+        let observability = CliObservability::fallback();
+        CliComposition::from_transport(cli_transport, &observability)
+            .send(send_request.clone())
+            .expect("cli send");
+
+        let graft_requests = Arc::new(Mutex::new(Vec::new()));
+        let graft_transport = Arc::new(FakeClientTransport::new({
+            let graft_requests = graft_requests.clone();
+            let response = response.clone();
+            move |request| {
+                graft_requests
+                    .lock()
+                    .expect("graft request log")
+                    .push(request);
+                Ok(response.clone())
+            }
+        }));
+        atm_graft::GraftClient::from_transport_for_test(graft_transport)
+            .send_message(send_request)
+            .expect("graft send");
+
+        let cli_request = cli_requests
+            .lock()
+            .expect("cli request log")
+            .pop()
+            .expect("request");
+        let graft_request = graft_requests
+            .lock()
+            .expect("graft request log")
+            .pop()
+            .expect("request");
+        assert_eq!(
+            serde_json::to_value(&cli_request).expect("cli JSON"),
+            serde_json::to_value(&graft_request).expect("graft JSON")
+        );
+        let frame = request_to_frame_payload(next_request_id(), cli_request).expect("daemon frame");
+        let (_, daemon_request) = request_from_frame_payload(frame).expect("daemon decode");
+        let RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) = daemon_request else {
+            panic!("daemon must receive the canonical compose request");
+        };
+        assert_eq!(request.caller_chat_id, Some(chat_id.clone()));
+        assert_eq!(
+            request.to.chat_id.map(|chat| chat.to_string()).as_deref(),
+            Some("target-chat")
+        );
+
+        let read = ReadQuery::new(
+            std::path::PathBuf::from("/tmp/home"),
+            std::path::PathBuf::from("/tmp/current"),
+            TEST_SENDER.parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+        .with_caller_chat_id(Some(chat_id));
+        assert_eq!(
+            read.caller_chat_id().map(ToString::to_string).as_deref(),
+            Some("chat-42")
+        );
     }
 
     #[test]

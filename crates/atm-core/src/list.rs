@@ -513,6 +513,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 from_agent: from.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
+                destination_chat_id: None,
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,
