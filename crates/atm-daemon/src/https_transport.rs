@@ -690,6 +690,44 @@ mod tests {
     }
 
     #[test]
+    fn shutdown_joins_an_incomplete_peer_request_within_its_deadline() {
+        let certificate = test_certificate();
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![],
+            Arc::new(RecordingRouter::default()),
+        )
+        .expect("start listener");
+        let _incomplete = TcpStream::connect(listener.listeners[0].address)
+            .expect("open incomplete peer connection");
+        let wait_started = Instant::now();
+        while listener
+            .requests
+            .lock()
+            .expect("request registry")
+            .is_empty()
+        {
+            assert!(
+                wait_started.elapsed() < Duration::from_secs(1),
+                "listener must retain each accepted request before shutdown"
+            );
+            std::thread::yield_now();
+        }
+
+        let started = Instant::now();
+        listener.shutdown().expect("shutdown listener");
+        assert!(
+            started.elapsed() < Duration::from_secs(6),
+            "shutdown must join the bounded peer I/O worker"
+        );
+    }
+
+    #[test]
     fn untrusted_mtls_peer_is_rejected_before_router() {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
