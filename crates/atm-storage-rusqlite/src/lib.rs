@@ -52,20 +52,14 @@ pub struct TestOnlySqliteWriterLockGuard {
 pub(crate) fn hold_sqlite_writer_lock(
     path: impl AsRef<Path>,
 ) -> Result<SqliteWriterLockGuard, AtmError> {
-    let connection = Connection::open(path.as_ref()).map_err(|error| {
+    let connection = Connection::open(path.as_ref()).map_err(|_error| {
         AtmError::daemon_unavailable("failed to open sqlite writer lock connection")
-            .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
-            )
-            .with_source(error)
     })?;
-    connection.execute_batch("BEGIN IMMEDIATE;").map_err(|error| {
-        AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
-            .with_recovery(
-                "Repair the sqlite test runtime path before retrying the bounded sqlite writer-lock test.",
-            )
-            .with_source(error)
-    })?;
+    connection
+        .execute_batch("BEGIN IMMEDIATE;")
+        .map_err(|_error| {
+            AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
+        })?;
     Ok(SqliteWriterLockGuard { connection })
 }
 
@@ -137,10 +131,6 @@ impl SqliteMessageStore {
                 AtmError::validation(format!(
                     "failed to parse mail-store {field_name} timestamp: {error}"
                 ))
-                .with_recovery(
-                    "Repair the sqlite-backed mail-store row or rewrite it through the owning backend.",
-                )
-                .with_source(error)
             })
     }
 
@@ -237,13 +227,11 @@ impl MessageStore for SqliteMessageStore {
                     AtmError::validation(format!(
                         "failed to parse sqlite team for message {key}: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the read.")
                 })?;
                 let agent: AgentName = agent.parse().map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse sqlite agent for message {key}: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the read.")
                 })?;
                 let state = self.load_message_state_row(connection, &team, &agent, key)?;
                 Ok(Some((team, agent, envelope_json, state)))
@@ -317,7 +305,7 @@ impl MessageStore for SqliteMessageStore {
                     AtmError::validation(format!(
                         "failed to parse sqlite message key during list: {error}"
                     ))
-                    .with_recovery("Repair the sqlite mail_messages row before retrying the list.")
+
                 })?;
                 let state =
                     self.load_message_state_row(connection, &query.team, &query.agent, &message_key)?;

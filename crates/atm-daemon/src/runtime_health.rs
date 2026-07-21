@@ -12,8 +12,7 @@ use atm_core::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
         DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
-    error::{AtmError, AtmErrorKind},
-    error_codes::AtmErrorCode,
+    error::{AtmError, AtmErrorCode},
     graft::{
         GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
         read_graft_post_send_message, write_graft_post_send_message,
@@ -84,19 +83,14 @@ impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
             return Err(graft_recipient_unavailable_error(
                 event,
                 "recipient is missing from the authoritative ATM roster",
-            )
-            .with_recovery(
-                "Repair the roster row and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
             ));
         };
-        let recipient_home_dir =
-            canonical_home_dir(&member.metadata_json).ok_or_else(|| graft_recipient_unavailable_error(
+        let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(|| {
+            graft_recipient_unavailable_error(
                 event,
                 "recipient has no authoritative home_dir for graft post-send delivery",
-            ).with_recovery(format!(
-                "Repair the roster row with `atm teams update-member --team {} --member {} --home-dir <path>` and restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                target.recipient_team, target.recipient
-            )))?;
+            )
+        })?;
         let endpoint_path = graft_receiver_socket_path_from_home(
             recipient_home_dir.as_path(),
             &target.recipient_team,
@@ -122,15 +116,12 @@ fn deliver_post_send_to_graft_receiver(
         "graft post-send request exceeded the bounded payload cap",
     )
     .map_err(|error| graft_transport_error(event, error))?;
-    stream
-        .flush()
-        .map_err(|source| graft_transport_error(event, AtmError::daemon_unavailable(
-            "failed to flush graft post-send request",
+    stream.flush().map_err(|_source| {
+        graft_transport_error(
+            event,
+            AtmError::daemon_unavailable("failed to flush graft post-send request"),
         )
-        .with_recovery(
-            "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-        )
-        .with_source(source)))?;
+    })?;
     match read_graft_post_send_message::<GraftPostSendResponse>(
         &mut stream,
         "failed to read graft post-send response",
@@ -139,7 +130,7 @@ fn deliver_post_send_to_graft_receiver(
     .map_err(|error| graft_transport_error(event, error))?
     {
         GraftPostSendResponse::Delivered => Ok(()),
-        GraftPostSendResponse::Error(error) => Err(error.into_atm_error()),
+        GraftPostSendResponse::Error(error) => Err(error),
     }
 }
 
@@ -154,43 +145,28 @@ fn connect_graft_receiver(
         .spawn(move || {
             let _ = result_tx.send(LocalSocketStream::connect(name));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             graft_recipient_unavailable_error(
                 event,
                 "failed to spawn bounded graft post-send connect helper",
             )
-            .with_recovery(
-                "Retry after the daemon can spawn one bounded same-host connect helper thread.",
-            )
-            .with_source(source)
         })?;
     match result_rx.recv_timeout(GRAFT_POST_SEND_CONNECT_DEADLINE) {
         Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(
-            graft_recipient_unavailable_error(event, "recipient has no active graft receiver path")
-                .with_recovery(
-                    "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(
-            graft_recipient_unavailable_error(
-                event,
-                "timed out connecting to the graft receiver path",
-            )
-            .with_recovery(
-                "Start or reconnect the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(
-            graft_recipient_unavailable_error(
+        Ok(Err(_source)) => Err(graft_recipient_unavailable_error(
+            event,
+            "recipient has no active graft receiver path",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(graft_recipient_unavailable_error(
+            event,
+            "timed out connecting to the graft receiver path",
+        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            Err(graft_recipient_unavailable_error(
                 event,
                 "graft post-send connect helper disconnected unexpectedly",
-            )
-            .with_recovery(
-                "Restart the daemon and the graft-backed recipient session before retrying if a fresh nudge is still required.",
-            ),
-        ),
+            ))
+        }
     }
 }
 
@@ -219,35 +195,23 @@ fn apply_graft_post_send_deadline(
         Ok(()) => Ok(()),
         #[cfg(windows)]
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
-        Err(source) => Err(
-            graft_recipient_unavailable_error(event, message)
-                .with_recovery(
-                    "Restart the graft-backed recipient session before retrying if a fresh nudge is still required.",
-                )
-                .with_source(source),
-        ),
+        Err(_source) => Err(graft_recipient_unavailable_error(event, message)),
     }
 }
 
 fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    let mut graft_error = graft_recipient_unavailable_error(event, &error.message);
-    for recovery in error.recovery {
-        graft_error = graft_error.with_recovery(recovery);
-    }
-    graft_error
+    graft_recipient_unavailable_error(event, error.message)
 }
 
 fn graft_recipient_unavailable_error(
     event: &PostSendHookEvent,
     message: impl Into<String>,
 ) -> AtmError {
-    AtmError::new_with_code(
+    AtmError::new(
         AtmErrorCode::PostSendGraftUnavailable,
-        AtmErrorKind::DaemonUnavailable,
         format!(
-            "recipient {}@{} {}",
+            "failed to deliver graft nudge to {}: {}",
             event.recipient,
-            event.recipient_team,
             message.into()
         ),
     )
@@ -329,14 +293,12 @@ impl DaemonRequestDispatcher {
                     );
                 });
             })
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to spawn daemon shutdown finalizer step `{label}`"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; the bounded shutdown finalizer helper could not be created.",
-                )
-                .with_source(source)
+
+
             })
     }
 
@@ -390,14 +352,10 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 let _ = result_tx.send(shutdown_handle.join());
             })
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to spawn daemon shutdown finalizer join helper `{label}`"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; the bounded shutdown finalizer join helper could not be created.",
-                )
-                .with_source(source)
             })?;
         Ok((result_rx, join_helper))
     }
@@ -639,23 +597,16 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
-        let roster_store = self
-            .roster_store
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| {
-                self.runtime_health_observability.emit_or_warn(
-                    "reload_unavailable",
-                    "failed",
-                    "daemon runtime reload is unavailable because the roster store is not assembled",
-                );
-                AtmError::daemon_unavailable(
-                    "daemon runtime reload is unavailable because the roster store is not assembled",
-                )
-                .with_recovery(
-                    "Restore the runtime-bound roster store and restart atm-daemon before retrying SIGHUP reload.",
-                )
-            })?;
+        let roster_store = self.roster_store.as_ref().cloned().ok_or_else(|| {
+            self.runtime_health_observability.emit_or_warn(
+                "reload_unavailable",
+                "failed",
+                "daemon runtime reload is unavailable because the roster store is not assembled",
+            );
+            AtmError::daemon_unavailable(
+                "daemon runtime reload is unavailable because the roster store is not assembled",
+            )
+        })?;
         let current_state = self.status_cache.clone_state();
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
@@ -692,23 +643,16 @@ impl DaemonRequestDispatcher {
         &self,
         request: TeamMemberHeartbeatRequest,
     ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
-        let roster_store = self
-            .roster_store
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| {
-                self.runtime_health_observability.emit_or_warn(
-                    "heartbeat_unavailable",
-                    "failed",
-                    "daemon heartbeats are unavailable because the roster store is not assembled",
-                );
-                AtmError::daemon_unavailable(
-                    "daemon heartbeats are unavailable because the roster store is not assembled",
-                )
-                .with_recovery(
-                    "Restore the runtime-bound roster store and restart atm-daemon before retrying heartbeat traffic.",
-                )
-            })?;
+        let roster_store = self.roster_store.as_ref().cloned().ok_or_else(|| {
+            self.runtime_health_observability.emit_or_warn(
+                "heartbeat_unavailable",
+                "failed",
+                "daemon heartbeats are unavailable because the roster store is not assembled",
+            );
+            AtmError::daemon_unavailable(
+                "daemon heartbeats are unavailable because the roster store is not assembled",
+            )
+        })?;
         let membership = roster_store
             .load_roster(&request.team)?
             .members
@@ -728,9 +672,6 @@ impl DaemonRequestDispatcher {
                 .record_identity_conflict(&request, existing_pid);
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
-            )
-            .with_recovery(
-                "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
         Ok(self
@@ -891,9 +832,6 @@ impl boundary::StatusSource for DaemonStatusSource {
         {
             return Err(AtmError::daemon_unavailable(
                 "daemon runtime status snapshot is unavailable because no owner process is recorded",
-            )
-            .with_recovery(
-                "Restart atm-daemon or restore same-host ownership before retrying daemon status collection.",
             ));
         }
         Ok(snapshot)

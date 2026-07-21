@@ -397,11 +397,7 @@ fn build_send_delivery_plan(
         ),
         context.recipient.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
-                )
-            })?,
+            .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),
     ))
 }
@@ -416,11 +412,7 @@ fn post_send_messages_from_persistence(
         false,
     )
     .map(|message| vec![message])
-    .map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted delivery record shape before retrying post-send emission.",
-        )
-    })
+    .map_err(|error| AtmError::mailbox_write(error.to_string()))
 }
 
 struct SendExecutionContext {
@@ -455,7 +447,7 @@ fn prepare_send_context<
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
                     request.caller_identity, request.caller_team, error.message
                 ),
-                error.primary_recovery().map(str::to_owned),
+                Some(error.message.clone()),
             )],
         ),
     };
@@ -615,7 +607,6 @@ mod self_address_tests {
         )
         .expect_err("case-variant self target must be rejected");
 
-        assert!(error.is_validation(), "{error:?}");
         assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
     }
 }
@@ -674,16 +665,12 @@ fn prepare_threaded_message(
         (None, None, _) => Ok(()),
         (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
             "ephemeral messages may not participate in a message thread",
-        )
-        .with_recovery(
-            "Send the message either as a standalone ephemeral note or as a non-ephemeral thread update.",
         )),
-        (Some(parent_id), Some(_), None) => validate_thread_append(envelope, inbox_messages, parent_id),
+        (Some(parent_id), Some(_), None) => {
+            validate_thread_append(envelope, inbox_messages, parent_id)
+        }
         (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
             "thread updates must set both parent_message_id and thread_mode",
-        )
-        .with_recovery(
-            "Provide both the parent message id and either add-details or supersede when appending to an existing thread.",
         )),
     }
 }
@@ -699,17 +686,11 @@ fn validate_thread_append(
             "thread parent message {} was not found in the recipient inbox",
             parent_id
         ))
-        .with_recovery(
-            "Refresh the recipient inbox state and retry the update against a message id that still exists in that thread.",
-        )
     })?;
 
     if is_ephemeral(parent) {
         return Err(AtmError::validation(
             "ephemeral messages may not be updated or superseded",
-        )
-        .with_recovery(
-            "Send a fresh standalone message instead of trying to append to an ephemeral message.",
         ));
     }
 
@@ -717,27 +698,18 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "thread root could not be resolved for parent message {}",
             parent_id
-        ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        ));
+        )));
     };
     let root = index.message(root_id).ok_or_else(|| {
         AtmError::validation(format!(
             "thread root message {} was not found in the recipient inbox",
             root_id
         ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        )
     })?;
 
     if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
         return Err(AtmError::validation(
             "only the original sender may append details or supersede a message thread",
-        )
-        .with_recovery(
-            "Send a new message instead of appending to a thread you did not originate.",
         ));
     }
 
@@ -745,10 +717,7 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "message {} already has a successor; ATM threads are strictly linear",
             parent_id
-        ))
-        .with_recovery(
-            "Append to the current terminal message in the thread instead of branching from an older message.",
-        ));
+        )));
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);

@@ -3,10 +3,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use atm_core::boundary::{AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
 use atm_core::protocol::{
-    FramePayload, JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId,
-    ResponseEnvelope,
+    FramePayload, JsonAtmProtocolCodec, RequestEnvelope, RequestId, ResponseEnvelope,
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream;
@@ -15,9 +15,6 @@ use crate::SubsystemObservability;
 use crate::active_connection_registry::{
     ActiveConnectionRegistry, DispatchReapSummary, TrackedDispatchHandle,
 };
-
-#[cfg(windows)]
-use atm_core::error_codes::AtmErrorCode;
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
@@ -197,18 +194,10 @@ fn decode_request_frame(
 }
 
 pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailureClassification {
-    if error.is_validation() {
+    if error.code == AtmErrorCode::MessageValidationFailed {
         return ConnectionFailureClassification::MalformedRequest;
     }
-    let haystacks = [
-        error.message.to_ascii_lowercase(),
-        error
-            .source
-            .as_ref()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_default()
-            .to_ascii_lowercase(),
-    ];
+    let haystacks = [error.message.to_ascii_lowercase()];
     if haystacks.iter().any(|value| {
         value.contains("broken pipe")
             || value.contains("connection reset")
@@ -218,7 +207,10 @@ pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailure
     }) {
         return ConnectionFailureClassification::ExpectedPeerDisconnect;
     }
-    if error.is_daemon_unavailable() || error.is_timeout() {
+    if matches!(
+        error.code,
+        AtmErrorCode::DaemonUnavailable | AtmErrorCode::WaitTimeout
+    ) {
         return ConnectionFailureClassification::TransportFailure;
     }
     ConnectionFailureClassification::RequestFailure
@@ -277,12 +269,8 @@ fn read_request_frame_with_helper(
             let result = read_request_frame(&mut stream);
             let _ = result_tx.send((stream, result));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn Windows named-pipe request read helper")
-                .with_recovery(
-                    "Restart the daemon; the same-host Windows request read helper could not be created.",
-                )
-                .with_source(source)
         })?;
 
     let started = std::time::Instant::now();
@@ -302,9 +290,6 @@ fn read_request_frame_with_helper(
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 return Err(AtmError::daemon_unavailable(
                     "Windows named-pipe request read helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Restart the daemon; the same-host Windows request read helper stopped before it could return a frame result.",
                 ));
             }
         }
@@ -356,11 +341,7 @@ fn apply_optional_deadline(
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
             Ok(DeadlineSupport::Unsupported)
         }
-        Err(source) => Err(AtmError::daemon_unavailable(message)
-            .with_recovery(
-                "Restart the daemon; the same-host request socket could not apply its bounded deadline.",
-            )
-            .with_source(source)),
+        Err(_source) => Err(AtmError::daemon_unavailable(message)),
     }
 }
 
@@ -415,12 +396,8 @@ fn spawn_dispatch_worker(
             let _ = result_tx.send(dispatcher.dispatch(request));
             let _ = completion_tx.send(());
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn daemon local IPC dispatch worker")
-                .with_recovery(
-                    "Retry the ATM command after atm-daemon restarts; the same-host request worker could not be created.",
-                )
-                .with_source(source)
         })?;
     Ok((result_rx, completion_rx, dispatch_handle))
 }
@@ -432,7 +409,7 @@ fn await_dispatch_response(
 ) -> ResponseEnvelope {
     match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
-        Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
+        Ok(Err(error)) => ResponseEnvelope::Error(error),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             tracing::warn!(
                 subsystem = "local_ipc",
@@ -445,13 +422,8 @@ fn await_dispatch_response(
             dispatch_timeout_response(execution_risk)
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                &AtmError::daemon_unavailable(
-                    "daemon request dispatcher stopped before returning a response",
-                )
-                .with_recovery(
-                    "Retry the ATM command after the daemon finishes recovering the request runtime.",
-                ),
+            ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                "daemon request dispatcher stopped before returning a response",
             ))
         }
     }
@@ -479,7 +451,7 @@ fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEn
             "daemon request exceeded the 3s runtime deadline after side-effecting work may have started",
         ),
     };
-    ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error))
+    ResponseEnvelope::Error(error)
 }
 
 fn write_response(
@@ -490,13 +462,8 @@ fn write_response(
 ) -> Result<(), AtmError> {
     let frame = codec.response_to_frame(request_id, response)?;
     atm_core::protocol::write_frame(stream, &frame, "failed to write daemon response frame")?;
-    std::io::Write::flush(stream).map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon response frame")
-            .with_recovery(
-                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
-            )
-            .with_source(source)
-    })
+    std::io::Write::flush(stream)
+        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon response frame"))
 }
 
 #[cfg(test)]
@@ -519,12 +486,12 @@ mod tests {
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::ConnectionFailureClassification;
-    use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
         let response = dispatch_timeout_response(RequestExecutionRisk::SideEffecting);
-        let ResponseEnvelope::Error(ProtocolErrorEnvelope { code, .. }) = response else {
+        let ResponseEnvelope::Error(AtmError { code, .. }) = response else {
             panic!("expected error envelope");
         };
         assert_eq!(code, AtmErrorCode::DaemonMayHaveExecuted);
@@ -533,7 +500,7 @@ mod tests {
     #[test]
     fn read_only_timeout_returns_retryable_daemon_unavailable_code() {
         let response = dispatch_timeout_response(RequestExecutionRisk::ReadOnly);
-        let ResponseEnvelope::Error(ProtocolErrorEnvelope { code, .. }) = response else {
+        let ResponseEnvelope::Error(AtmError { code, .. }) = response else {
             panic!("expected error envelope");
         };
         assert_eq!(code, AtmErrorCode::DaemonUnavailable);
@@ -604,11 +571,7 @@ mod tests {
 
     #[test]
     fn classify_connection_failure_marks_other_errors_as_request_failure() {
-        let error = AtmError::new_with_code(
-            AtmErrorCode::MailboxReadFailed,
-            atm_storage::AtmErrorKind::MailboxRead,
-            "mailbox lookup failed",
-        );
+        let error = AtmError::new(AtmErrorCode::MailboxReadFailed, "mailbox lookup failed");
 
         assert_eq!(
             classify_connection_failure(&error),

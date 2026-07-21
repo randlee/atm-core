@@ -133,7 +133,12 @@ mod tests {
         };
 
         let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
-        assert!(error.is_identity());
+        assert!(matches!(
+            error.code,
+            crate::error_codes::AtmErrorCode::IdentityUnavailable
+                | crate::error_codes::AtmErrorCode::IdentityInvalid
+                | crate::error_codes::AtmErrorCode::IdentityConflict
+        ));
 
         restore("ATM_IDENTITY", original_identity);
     }
@@ -171,7 +176,12 @@ mod tests {
         };
 
         let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
-        assert!(error.is_identity());
+        assert!(matches!(
+            error.code,
+            crate::error_codes::AtmErrorCode::IdentityUnavailable
+                | crate::error_codes::AtmErrorCode::IdentityInvalid
+                | crate::error_codes::AtmErrorCode::IdentityConflict
+        ));
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);

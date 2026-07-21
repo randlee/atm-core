@@ -99,7 +99,7 @@ pub(crate) fn emit_post_send_effects<R>(
                     "warning: notification delivery failed for {}@{}: {error}",
                     recipient.agent, recipient.team
                 ),
-                error.primary_recovery().map(str::to_owned),
+                Some(error.message.clone()),
             ));
         }
     }
@@ -668,7 +668,7 @@ fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) 
             "warning: {prefix} for {}@{} message {} ({}): {}.",
             event.recipient, event.recipient_team, event.message_id, error.code, error.message
         ),
-        error.primary_recovery().map(str::to_owned),
+        Some(error.message.clone()),
     )
 }
 

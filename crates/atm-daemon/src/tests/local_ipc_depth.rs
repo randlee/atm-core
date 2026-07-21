@@ -177,9 +177,6 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
                         AtmError::daemon_unavailable(
                             "shutdown rejection test failed to observe the daemon ready signal",
                         )
-                        .with_recovery(
-                            "Restore the bounded ready-signal handshake before retrying the same-host daemon shutdown rejection test.",
-                        )
                     })
                 },
             },
@@ -268,9 +265,6 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
                             "panic recovery test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Restore the bounded ready-signal handshake before retrying the same-host panic recovery test.",
                         )
                     })
                 },

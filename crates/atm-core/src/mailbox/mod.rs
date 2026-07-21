@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 use tracing::warn;
 
-use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::schema::{AtmMessageId, InboxMessage};
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 const DEGRADED_RAW_FRAGMENT_MAX_CHARS: usize = 512;
@@ -96,37 +96,26 @@ pub(crate) fn load_compat_mailbox_items(path: &Path) -> Result<Vec<InboxReadItem
 
     let file_size = fs::metadata(path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to inspect mailbox file {}: {error}", path.display()),
         )
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
-        )
-        .with_source(error)
     })?;
     if file_size.len() > MAX_MAILBOX_READ_BYTES {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "mailbox file {} exceeds the {}-byte read limit",
-                    path.display(),
-                    MAX_MAILBOX_READ_BYTES
-                ),
-            )
-            .with_recovery(
-                "Trim or archive oversized mailbox contents before retrying `atm read` so ATM does not load an unbounded mailbox into memory.",
+        return Err(AtmError::new(
+            AtmErrorCode::MailboxReadFailed,
+            format!(
+                "mailbox file {} exceeds the {}-byte read limit",
+                path.display(),
+                MAX_MAILBOX_READ_BYTES
             ),
-        );
+        ));
     }
 
     let raw = fs::read_to_string(path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to read mailbox file {}: {error}", path.display()),
         )
-        .with_recovery("Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.")
-        .with_source(error)
     })?;
 
     parse_mailbox_contents(&raw, path)
@@ -148,37 +137,26 @@ pub(crate) fn load_compat_mailbox_messages_strict(
 
     let file_size = fs::metadata(path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to inspect mailbox file {}: {error}", path.display()),
         )
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
-        )
-        .with_source(error)
     })?;
     if file_size.len() > MAX_MAILBOX_READ_BYTES {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "mailbox file {} exceeds the {}-byte read limit",
-                    path.display(),
-                    MAX_MAILBOX_READ_BYTES
-                ),
-            )
-            .with_recovery(
-                "Trim or archive oversized mailbox contents before retrying `atm read` so ATM does not load an unbounded mailbox into memory.",
+        return Err(AtmError::new(
+            AtmErrorCode::MailboxReadFailed,
+            format!(
+                "mailbox file {} exceeds the {}-byte read limit",
+                path.display(),
+                MAX_MAILBOX_READ_BYTES
             ),
-        );
+        ));
     }
 
     let raw = fs::read_to_string(path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to read mailbox file {}: {error}", path.display()),
         )
-        .with_recovery("Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.")
-        .with_source(error)
     })?;
 
     parse_mailbox_contents_strict(&raw, path)
@@ -234,13 +212,9 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<InboxReadItem>, Atm
 fn parse_mailbox_array_strict(raw: &str, path: &Path) -> Result<Vec<InboxMessage>, AtmError> {
     let records = serde_json::from_str::<Vec<Value>>(raw).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!("failed to parse mailbox array {}: {error}", path.display()),
         )
-        .with_recovery(
-            "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm read`.",
-        )
-        .with_source(error)
     })?;
 
     Ok(records
@@ -375,15 +349,13 @@ fn mailbox_record_parse_error(
     error: serde_json::Error,
 ) -> AtmError {
     AtmError::new(
-        AtmErrorKind::MailboxRead,
+        AtmErrorCode::MailboxReadFailed,
         format!(
             "failed to parse mailbox JSONL record {}:{}: {error}",
             path.display(),
             line_number
         ),
     )
-    .with_source(error)
-    .with_recovery("Inspect the mailbox file for malformed JSON records or partial writes, then retry atm read. If corruption persists, archive or remove the malformed mailbox file.")
 }
 
 fn parse_salvaged_array_fragment(raw: &str, path: &Path, object_index: usize) -> InboxReadItem {
@@ -436,13 +408,12 @@ fn truncated_array_fragment(path: &Path, object_index: usize, raw_fragment: &str
 
 fn mailbox_array_parse_error(path: &Path, parse_error: serde_json::Error) -> AtmError {
     AtmError::new(
-        AtmErrorKind::MailboxRead,
-        format!("failed to parse mailbox array {}: {parse_error}", path.display()),
+        AtmErrorCode::MailboxReadFailed,
+        format!(
+            "failed to parse mailbox array {}: {parse_error}",
+            path.display()
+        ),
     )
-    .with_recovery(
-        "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm read`.",
-    )
-    .with_source(parse_error)
 }
 
 fn mailbox_array_recovery_banner(path: &Path, parse_error: &serde_json::Error) -> InboxReadItem {
@@ -664,13 +635,9 @@ mod tests {
 
         let error = load_compat_mailbox_messages(&path).expect_err("oversized mailbox should fail");
 
-        assert!(error.is_mailbox_read());
+        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
         assert!(error.message.contains("exceeds"));
-        assert!(
-            error
-                .primary_recovery()
-                .is_some_and(|value| value.contains("oversized mailbox"))
-        );
+        assert!(error.message.contains("Recovery:"));
     }
 
     #[test]
@@ -808,7 +775,7 @@ mod tests {
         fs::write(&path, "[not-even-one-object").expect("write");
 
         let error = load_compat_mailbox_items(&path).expect_err("terminal malformed array");
-        assert!(error.is_mailbox_read());
+        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
         assert!(error.message.contains("failed to parse mailbox array"));
     }
 

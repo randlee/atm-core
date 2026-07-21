@@ -191,7 +191,7 @@ fn ack_mail_with_runtime_sqlite<
                         "warning: post-send hook config lookup failed for {}@{}: {}.",
                         actor, team, error.message
                     ),
-                    error.primary_recovery().map(str::to_owned),
+                    Some(error.message.clone()),
                 )],
             ),
         };
@@ -306,9 +306,6 @@ fn find_ack_source_row<'a>(
                 "message {} was not found in {}@{}",
                 message_id, actor, team
             ))
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
-            )
         })
 }
 
@@ -323,10 +320,7 @@ fn ensure_ack_target_is_terminal(
         return Err(AtmError::validation(format!(
             "message {} has been updated; acknowledge the current terminal message instead",
             message_id
-        ))
-        .with_recovery(
-            "Refresh the mailbox with `atm read` and acknowledge the latest message in the thread instead of an older parent message.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -348,9 +342,6 @@ fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                     .map(|id| id.to_string())
                     .unwrap_or_else(|| "<unknown>".to_string())
             ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox row before retrying `atm ack`.",
-            )
         })
 }
 
@@ -360,17 +351,11 @@ fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Res
         crate::types::AckState::Acknowledged => Err(AtmError::validation(format!(
             "message {} is already acknowledged",
             message_id
-        ))
-        .with_recovery(
-            "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
-        )),
+        ))),
         crate::types::AckState::NoAckRequired => Err(AtmError::validation(format!(
             "message {} is not pending acknowledgement",
             message_id
-        ))
-        .with_recovery(
-            "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
-        )),
+        ))),
     }
 }
 
@@ -394,10 +379,10 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     runtime: &R,
     team: &TeamName,
     agent: &AgentName,
-    recovery: &str,
+    _recovery: &str,
 ) -> Result<(), AtmError> {
     if runtime.load_roster_member(team, agent)?.is_none() {
-        return Err(AtmError::agent_not_found(agent, team).with_recovery(recovery));
+        return Err(AtmError::agent_not_found(agent, team));
     }
 
     Ok(())
@@ -674,11 +659,7 @@ impl AckReplyStateMachine {
         persistence: &crate::send::DeliveryPersistenceResult,
     ) -> Result<Self, AtmError> {
         let messages = logical_messages_from_persistence(persistence, false, true)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted reply-delivery record shape before retrying ack reply execution.",
-                )
-            })?;
+            .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
         let warnings = persistence.warnings.clone();
         Ok(match persistence.disposition {
             crate::send::DeliveryPersistenceDisposition::Persisted => {
@@ -740,11 +721,8 @@ fn build_reply_delivery_plan(
 fn reply_post_send_messages(
     persistence: &crate::send::DeliveryPersistenceResult,
 ) -> Result<Vec<LogicalMessage>, AtmError> {
-    logical_messages_from_persistence(persistence, false, true).map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted reply-delivery record shape before retrying post-send emission.",
-        )
-    })
+    logical_messages_from_persistence(persistence, false, true)
+        .map_err(|error| AtmError::mailbox_write(error.to_string()))
 }
 
 fn record_ack_telemetry(
@@ -821,8 +799,7 @@ mod tests {
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter,
     };
     use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
-    use crate::error::AtmErrorKind;
-    use crate::error_codes::AtmErrorCode;
+    use crate::error::AtmErrorCode;
     use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
@@ -902,12 +879,7 @@ mod tests {
                 .expect("post-send emitter")
                 .push(dispatch.clone());
             if let Some(code) = self.fail_code {
-                return Err(crate::error::AtmError::new_with_code(
-                    code,
-                    AtmErrorKind::DaemonUnavailable,
-                    "test ack post-send emitter failure",
-                )
-                .with_recovery("Repair the test ack post-send emitter and retry."));
+                return Err(crate::error::AtmError::for_code(code));
             }
             Ok(match dispatch.target {
                 PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
@@ -1721,7 +1693,10 @@ mod tests {
         )
         .expect_err("missing ATM roster member should fail");
 
-        assert!(error.is_agent_not_found(), "{error:?}");
+        assert!(
+            error.code == crate::error_codes::AtmErrorCode::AgentNotFound,
+            "{error:?}"
+        );
     }
 
     #[test]

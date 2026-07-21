@@ -70,9 +70,7 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
             AtmError::daemon_unavailable(
                 "sqlite-backed retained runtime is unavailable because no default runtime factory is installed",
             )
-            .with_recovery(
-                "Start the daemon-backed ATM runtime or install the sqlite default runtime factory before retrying this command.",
-            )
+
         })
         .and_then(|provider| match provider {
             DefaultRuntimeProvider::Factory(factory) => factory(),

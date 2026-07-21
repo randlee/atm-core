@@ -46,13 +46,7 @@ impl DoctorCommand {
         let team_override = self
             .team
             .as_ref()
-            .map(|value| {
-                value.parse::<atm_core::types::TeamName>().map_err(|error| {
-                    error.with_recovery(
-                        "Use `--team <team>` with a valid ATM team name when running `atm doctor`.",
-                    )
-                })
-            })
+            .map(|value| value.parse::<atm_core::types::TeamName>())
             .transpose()?;
         // Capture the invoking CLI process's identity here, where the process
         // environment is genuinely the caller's. When the doctor request is
@@ -159,12 +153,7 @@ mod tests {
             .expect_err("invalid team override should fail");
         let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
 
-        assert_eq!(
-            atm_error.primary_recovery(),
-            Some(
-                "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target."
-            )
-        );
+        assert!(atm_error.message.contains("Recovery:"));
     }
 
     #[test]

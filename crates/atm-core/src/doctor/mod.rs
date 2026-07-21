@@ -491,7 +491,7 @@ fn push_doctor_error(
     severity: DoctorSeverity,
     error: crate::error::AtmError,
 ) {
-    let remediation = error.primary_recovery().map(str::to_owned);
+    let remediation = Some(error.message.clone());
     findings.push(DoctorFinding {
         severity,
         code: error.code,
@@ -616,11 +616,7 @@ mod tests {
         fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
             match &self.health {
                 StubHealth::Ok(health) => Ok(health.clone()),
-                StubHealth::Err(error) => Err(AtmError::new_with_code(
-                    error.code,
-                    error.kind,
-                    error.message.clone(),
-                )),
+                StubHealth::Err(error) => Err(error.clone()),
             }
         }
     }

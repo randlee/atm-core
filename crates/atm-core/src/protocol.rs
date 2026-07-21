@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::ack::{AckOutcome, AckRequest};
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
@@ -63,35 +63,7 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
-    Error(ProtocolErrorEnvelope),
-}
-
-/// Serialized daemon-side ATM error for protocol transport.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ProtocolErrorEnvelope {
-    pub code: AtmErrorCode,
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub recovery: Vec<String>,
-}
-
-impl ProtocolErrorEnvelope {
-    pub fn from_error(error: &AtmError) -> Self {
-        Self {
-            code: error.code,
-            message: error.message.clone(),
-            recovery: error.recovery.clone(),
-        }
-    }
-
-    pub fn into_atm_error(self) -> AtmError {
-        let mut error =
-            AtmError::new_with_code(self.code, error_kind_for_code(self.code), self.message);
-        for recovery in self.recovery {
-            error = error.with_recovery(recovery);
-        }
-        error
-    }
+    Error(AtmError),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -112,13 +84,9 @@ impl ReleaseVersion {
             })
         }) && parts.next().is_none();
         if !valid {
-            return Err(AtmError::new_with_code(
+            return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
-                AtmErrorKind::DaemonUnavailable,
                 format!("invalid ATM release version `{value}`"),
-            )
-            .with_recovery(
-                "Install a matching released atm and atm-daemon pair before retrying.",
             ));
         }
         Ok(Self(value.to_string()))
@@ -153,114 +121,6 @@ pub enum CompatibilityVerdict {
     },
 }
 
-const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
-    if let Some(kind) = structural_error_kind_for_code(code) {
-        kind
-    } else if let Some(kind) = observability_error_kind_for_code(code) {
-        kind
-    } else {
-        validation_error_kind_for_code(code)
-    }
-}
-
-const fn structural_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
-    match code {
-        AtmErrorCode::ConfigHomeUnavailable
-        | AtmErrorCode::AtmHomeUnresolved
-        | AtmErrorCode::ConfigParseFailed
-        | AtmErrorCode::ConfigRetiredHookMembersKey
-        | AtmErrorCode::ConfigRetiredLegacyHookKeys
-        | AtmErrorCode::ConfigTeamParseFailed
-        | AtmErrorCode::ConfigTeamMissing => Some(AtmErrorKind::Config),
-        AtmErrorCode::IdentityUnavailable
-        | AtmErrorCode::IdentityInvalid
-        | AtmErrorCode::WarningIdentityDrift
-        | AtmErrorCode::IdentityConflict => Some(AtmErrorKind::Identity),
-        AtmErrorCode::MemberAlreadyExists => Some(AtmErrorKind::Validation),
-        AtmErrorCode::MemberNotFound => Some(AtmErrorKind::AgentNotFound),
-        AtmErrorCode::AddressParseFailed => Some(AtmErrorKind::Address),
-        AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => {
-            Some(AtmErrorKind::TeamNotFound)
-        }
-        AtmErrorCode::AgentNotFound => Some(AtmErrorKind::AgentNotFound),
-        AtmErrorCode::MailboxReadFailed | AtmErrorCode::WarningMailboxRecordSkipped => {
-            Some(AtmErrorKind::MailboxRead)
-        }
-        AtmErrorCode::MailboxWriteFailed => Some(AtmErrorKind::MailboxWrite),
-        AtmErrorCode::MailboxLockFailed
-        | AtmErrorCode::MailboxLockReadOnlyFilesystem
-        | AtmErrorCode::MailboxLockTimeout
-        | AtmErrorCode::WarningStaleMailboxLock => Some(AtmErrorKind::MailboxLock),
-        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
-            Some(AtmErrorKind::FilePolicy)
-        }
-        AtmErrorCode::InternalError => Some(AtmErrorKind::Internal),
-        AtmErrorCode::SerializationFailed => Some(AtmErrorKind::Serialization),
-        AtmErrorCode::WaitTimeout => Some(AtmErrorKind::Timeout),
-        _ => None,
-    }
-}
-
-const fn observability_error_kind_for_code(code: AtmErrorCode) -> Option<AtmErrorKind> {
-    match code {
-        AtmErrorCode::DaemonUnavailable
-        | AtmErrorCode::RuntimeRootInvalid
-        | AtmErrorCode::RuntimeBootstrapRefused
-        | AtmErrorCode::SocketOverrideForbidden
-        | AtmErrorCode::DaemonMayHaveExecuted
-        | AtmErrorCode::DaemonLifecycleWedge
-        | AtmErrorCode::DaemonLaunchGateRejected
-        | AtmErrorCode::DaemonServingStateRejected
-        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
-        | AtmErrorCode::DaemonAutoStartFailed
-        | AtmErrorCode::DaemonConnectionSaturated
-        | AtmErrorCode::ClientDaemonVersionIncompatible
-        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
-        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
-        | AtmErrorCode::DaemonAdvisorySessionCleanupFailed
-        | AtmErrorCode::WarningSqliteHealthDegraded
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed => Some(AtmErrorKind::DaemonUnavailable),
-        AtmErrorCode::ObservabilityEmitFailed => Some(AtmErrorKind::ObservabilityEmit),
-        AtmErrorCode::ObservabilityQueryFailed => Some(AtmErrorKind::ObservabilityQuery),
-        AtmErrorCode::ObservabilityFollowFailed => Some(AtmErrorKind::ObservabilityFollow),
-        AtmErrorCode::ObservabilityHealthFailed
-        | AtmErrorCode::ObservabilityHealthOk
-        | AtmErrorCode::WarningObservabilityHealthDegraded => {
-            Some(AtmErrorKind::ObservabilityHealth)
-        }
-        AtmErrorCode::ObservabilityBootstrapFailed => Some(AtmErrorKind::ObservabilityBootstrap),
-        _ => None,
-    }
-}
-
-const fn validation_error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
-    match code {
-        AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::SelfAddressedSendInvalid
-        | AtmErrorCode::EmptyNudgeTemplateBody
-        | AtmErrorCode::HelpTopicNotFound
-        | AtmErrorCode::AckInvalidState
-        | AtmErrorCode::ClearInvalidState
-        | AtmErrorCode::WarningInvalidTeamMemberSkipped
-        | AtmErrorCode::WarningMalformedAtmFieldIgnored
-        | AtmErrorCode::WarningOriginInboxEntrySkipped
-        | AtmErrorCode::WarningMissingTeamConfigFallback
-        | AtmErrorCode::WarningSendAlertStateDegraded
-        | AtmErrorCode::WarningRosterDrift
-        | AtmErrorCode::WarningBaselineMemberMissing
-        | AtmErrorCode::WarningRestoreInProgress
-        | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::PostSendPaneMissing
-        | AtmErrorCode::PostSendTmuxSendFailed
-        | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::TestFakeTransportInjectionFailed
-        | AtmErrorCode::TeamInvalid
-        | AtmErrorCode::CallerContextRequestInvalid => AtmErrorKind::Validation,
-        _ => AtmErrorKind::Validation,
-    }
-}
-
 /// Raw protocol frame payload plus the shared ATM frame header fields.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FramePayload {
@@ -286,12 +146,7 @@ pub struct RequestId(NonZeroU64);
 impl RequestId {
     pub fn new(request_id: u64) -> Result<Self, AtmError> {
         let request_id = NonZeroU64::new(request_id).ok_or_else(|| {
-            AtmError::validation(
-                "ATM daemon protocol request_id must be non-zero",
-            )
-            .with_recovery(
-                "Retry with a client and daemon build that populate non-zero ATM daemon request ids.",
-            )
+            AtmError::validation("ATM daemon protocol request_id must be non-zero")
         })?;
         Ok(Self(request_id))
     }
@@ -383,10 +238,7 @@ impl TryFrom<u16> for MessageKind {
             _ => {
                 return Err(AtmError::validation(format!(
                     "unsupported ATM daemon frame message kind 0x{value:04x}"
-                ))
-                .with_recovery(
-                    "Align the CLI and daemon builds so both sides speak the same ATM daemon protocol version before retrying.",
-                ));
+                )));
             }
         };
         Ok(kind)
@@ -458,10 +310,7 @@ pub fn request_from_frame_payload(
         return Err(AtmError::validation(format!(
             "ATM daemon request decoder received non-request message kind 0x{:04x}",
             frame.message_kind.code()
-        ))
-        .with_recovery(
-            "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
-        ));
+        )));
     }
     let request = match frame.message_kind {
         MessageKind::SendComposeRequest
@@ -585,10 +434,7 @@ pub fn response_from_frame_payload(
         return Err(AtmError::validation(format!(
             "ATM daemon response decoder received non-response message kind 0x{:04x}",
             frame.message_kind.code()
-        ))
-        .with_recovery(
-            "Align the CLI and daemon builds so both sides agree on request and response packet roles before retrying.",
-        ));
+        )));
     }
     let response = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
     Ok((frame.request_id, response))
@@ -603,17 +449,11 @@ pub fn write_frame(
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame flags 0x{:04x} for version {}",
             frame.flags, ATM_FRAME_VERSION_V1
-        ))
-        .with_recovery(
-            "Retry with a supported ATM daemon client/server build that uses protocol version 1 flags.",
-        ));
+        )));
     }
     if frame.bytes.len() > MAX_DAEMON_FRAME_BYTES {
         return Err(AtmError::daemon_unavailable(
             "daemon frame exceeded the maximum supported size",
-        )
-        .with_recovery(
-            "Reduce the daemon request/response payload size before retrying the ATM command.",
         ));
     }
     let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
@@ -626,7 +466,7 @@ pub fn write_frame(
     writer
         .write_all(&header)
         .and_then(|_| writer.write_all(&frame.bytes))
-        .map_err(|source| AtmError::daemon_unavailable(write_error).with_source(source))
+        .map_err(|_source| AtmError::daemon_unavailable(write_error))
 }
 
 pub fn read_frame(
@@ -658,20 +498,14 @@ pub fn decode_frame_header(
     if magic != ATM_FRAME_MAGIC {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame magic 0x{magic:08x}"
-        ))
-        .with_recovery(
-            "Retry with an ATM client and daemon build that both speak the documented ATM daemon protocol.",
-        ));
+        )));
     }
 
     let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
     if version != ATM_FRAME_VERSION_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame version {version}"
-        ))
-        .with_recovery(
-            "Align the CLI and daemon builds so both sides use the same ATM daemon protocol version before retrying.",
-        ));
+        )));
     }
 
     let message_kind =
@@ -680,19 +514,14 @@ pub fn decode_frame_header(
     if flags != ATM_FRAME_FLAGS_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
-        ))
-        .with_recovery(
-            "Retry with a supported ATM daemon client/server build that uses the version-1 flag contract.",
-        ));
+        )));
     }
     let request_id = RequestId::new(u64::from_be_bytes(
         header[10..18].try_into().expect("request id"),
     ))?;
     let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
     if payload_length > MAX_DAEMON_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-            "Reduce the daemon request/response payload size before retrying the ATM command.",
-        ));
+        return Err(AtmError::daemon_unavailable(oversize_error));
     }
 
     Ok(FrameHeader {
@@ -711,7 +540,7 @@ pub fn read_frame_payload(
     let mut bytes = vec![0u8; header.payload_length];
     reader
         .read_exact(&mut bytes)
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
     Ok(FramePayload {
         request_id: header.request_id,
         message_kind: header.message_kind,
@@ -727,13 +556,13 @@ pub fn read_frame_header(
     let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
     let read = reader
         .read(&mut header[..1])
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
     if read == 0 {
         return Ok(None);
     }
     reader
         .read_exact(&mut header[1..])
-        .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
     Ok(Some(header))
 }
 
@@ -786,14 +615,12 @@ pub fn read_bounded_stream(
     loop {
         let read = stream
             .read(&mut chunk)
-            .map_err(|source| AtmError::daemon_unavailable(read_error).with_source(source))?;
+            .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
         if read == 0 {
             return Ok(bytes);
         }
         if bytes.len().saturating_add(read) > MAX_DAEMON_FRAME_BYTES {
-            return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
-                "Reduce the daemon request/response payload size before retrying the ATM command.",
-            ));
+            return Err(AtmError::daemon_unavailable(oversize_error));
         }
         bytes.extend_from_slice(&chunk[..read]);
     }
@@ -808,9 +635,6 @@ pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
     if env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
         return Err(AtmError::socket_override_forbidden(
             "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
-        )
-        .with_recovery(
-            "Remove ATM_DAEMON_SOCKET and connect through the OS-user ATM daemon endpoint.",
         ));
     }
     Ok(platform_local_ipc_endpoint_path(
@@ -847,15 +671,11 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
     normalized
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to map daemon local IPC endpoint {} to a supported platform-local IPC name",
                 endpoint_path.display()
             ))
-            .with_source(source)
-            .with_recovery(
-                "Set ATM_DAEMON_SOCKET to a valid daemon local IPC endpoint and retry the ATM command.",
-            )
         })
 }
 
@@ -1003,12 +823,11 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope,
-        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
-        next_request_id, platform_local_ipc_endpoint_path, request_from_frame_payload,
-        request_to_frame_payload,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
+        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
+        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        daemon_socket_path, daemon_socket_path_from_home, next_request_id,
+        platform_local_ipc_endpoint_path, request_from_frame_payload, request_to_frame_payload,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -1140,13 +959,18 @@ mod tests {
     }
 
     #[test]
-    fn protocol_error_envelope_round_trips_member_not_found_as_agent_not_found() {
+    fn protocol_error_round_trip_preserves_exact_code_and_message() {
         let error = AtmError::member_not_found(TEST_SENDER, TEST_TEAM);
-        let envelope = ProtocolErrorEnvelope::from_error(&error);
-        let round_trip = envelope.into_atm_error();
+        let response = ResponseEnvelope::Error(error.clone());
+        let round_trip: ResponseEnvelope =
+            serde_json::from_slice(&serde_json::to_vec(&response).expect("serialize error"))
+                .expect("deserialize error");
 
+        let ResponseEnvelope::Error(round_trip) = round_trip else {
+            panic!("expected error response");
+        };
+        assert_eq!(round_trip, error);
         assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
-        assert!(round_trip.is_agent_not_found());
     }
 
     fn test_atm_home_dir() -> PathBuf {

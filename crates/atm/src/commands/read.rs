@@ -97,7 +97,6 @@ impl ReadCommand {
                 "timeout exceeds the {} second maximum",
                 MAX_TIMEOUT_SECS
             ))
-            .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")
             .into());
         }
         let _ = self.since_last_seen;

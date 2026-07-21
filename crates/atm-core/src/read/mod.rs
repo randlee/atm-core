@@ -69,12 +69,8 @@ impl MailboxQueryFields {
             seen_state_filter,
             message_id_filter: message_id_filter
                 .map(|value| {
-                    value.parse::<AtmMessageId>().map_err(|source| {
+                    value.parse::<AtmMessageId>().map_err(|_source| {
                         AtmError::validation(format!("invalid message id: {value}"))
-                            .with_recovery(
-                                "Provide a valid ULID-formatted --message-id before retrying the mailbox command.",
-                            )
-                            .with_source(source)
                     })
                 })
                 .transpose()?,
@@ -240,16 +236,14 @@ impl ReadQuery {
 pub(crate) fn normalize_contains_filter(
     contains_filter: Option<&str>,
 ) -> Result<Option<String>, AtmError> {
-    match contains_filter.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(value) if value.len() > MAX_CONTAINS_FILTER_LEN => Err(
-            AtmError::validation(format!(
-                "contains filter exceeds the {}-byte maximum",
-                MAX_CONTAINS_FILTER_LEN
-            ))
-            .with_recovery(
-                "Shorten the `--contains` filter before retrying so ATM can keep daemon-side substring scans bounded.",
-            ),
-        ),
+    match contains_filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) if value.len() > MAX_CONTAINS_FILTER_LEN => Err(AtmError::validation(format!(
+            "contains filter exceeds the {}-byte maximum",
+            MAX_CONTAINS_FILTER_LEN
+        ))),
         Some(value) => Ok(Some(value.to_ascii_lowercase())),
         None => Ok(None),
     }
@@ -260,8 +254,7 @@ fn validate_timeout_secs(timeout_secs: Option<u64>) -> Result<Option<u64>, AtmEr
         Some(value) if value > MAX_TIMEOUT_SECS => Err(AtmError::validation(format!(
             "timeout exceeds the {} second maximum",
             MAX_TIMEOUT_SECS
-        ))
-        .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")),
+        ))),
         _ => Ok(timeout_secs),
     }
 }
@@ -803,11 +796,7 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Repair or reload the ATM roster, or read a different mailbox target.",
-            ),
-        );
+        return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
     Ok(())
@@ -827,10 +816,7 @@ fn ensure_owner_only_read_target(
         return Err(AtmError::validation(format!(
             "owner-only `atm read` may not target '{}' in team '{}'; run the command as the mailbox owner or use `atm peek --as` for inspection",
             target.agent, target.team
-        ))
-        .with_recovery(
-            "Rerun `atm read` without a mailbox target as the owner, or use `atm peek --as <member>` for non-mutating inspection.",
-        ));
+        )));
     }
 
     Ok(())
@@ -839,11 +825,10 @@ fn ensure_owner_only_read_target(
 fn message_key_for_classified(
     message: &ClassifiedMessage,
 ) -> Result<boundary::MessageKey, AtmError> {
-    let message_id = message.envelope.message_id.ok_or_else(|| {
-        AtmError::validation("read message is missing a message_id").with_recovery(
-            "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
-        )
-    })?;
+    let message_id = message
+        .envelope
+        .message_id
+        .ok_or_else(|| AtmError::validation("read message is missing a message_id"))?;
     Ok(boundary::MessageKey::from(message_id))
 }
 
@@ -1935,7 +1920,10 @@ mod tests {
         )
         .expect_err("cross-agent owner-only read must fail");
 
-        assert!(error.is_validation(), "{error:?}");
+        assert!(
+            error.code == crate::error_codes::AtmErrorCode::MessageValidationFailed,
+            "{error:?}"
+        );
         assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
     }
 
@@ -2005,7 +1993,10 @@ mod tests {
         let error = read_mail_with_runtime_impl(query, &NullObservability, &runtime)
             .expect_err("durable reload failure should surface");
 
-        assert!(error.is_mailbox_read(), "{error:?}");
+        assert!(
+            error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed,
+            "{error:?}"
+        );
         assert!(error.message.contains("simulated durable reload failure"));
     }
 }

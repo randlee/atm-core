@@ -55,12 +55,8 @@ impl Drop for SqliteRuntimeGuard {
 }
 
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<RuntimeAssembly, AtmError> {
-    let config_current_dir = std::env::current_dir().map_err(|source| {
+    let config_current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::config("failed to resolve current directory for sqlite test runtime assembly")
-            .with_recovery(
-                "Run sqlite runtime tests from a readable ATM workspace so retained runtime composition can resolve config.",
-            )
-            .with_source(source)
     })?;
     {
         let _env_lock = lock_env();
@@ -92,9 +88,7 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
             AtmError::daemon_unavailable(
                 "sqlite retained runtime is unavailable because no sqlite test runtime path is installed",
             )
-            .with_recovery(
-                "Install a sqlite retained-runtime guard before running retained-runtime integration tests.",
-            )
+
         })?;
 
     let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));

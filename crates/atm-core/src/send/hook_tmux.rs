@@ -5,8 +5,7 @@ use std::time::{Duration, Instant};
 use tracing::warn;
 
 use crate::boundary::PostSendHookEvent;
-use crate::error::{AtmError, AtmErrorKind};
-use crate::error_codes::AtmErrorCode;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::types::{PaneId, TeamName};
 
 use super::POST_SEND_HOOK_TIMEOUT;
@@ -221,18 +220,13 @@ fn tmux_send_failed_error<E>(
 where
     E: std::error::Error + Send + Sync + 'static,
 {
-    let error = AtmError::new_with_code(
+    let error = AtmError::new(
         AtmErrorCode::PostSendTmuxSendFailed,
-        AtmErrorKind::Internal,
         format!(
             "local tmux post-send emission failed for {}@{} pane {}: {message}",
             event.recipient, event.recipient_team, pane_id
         ),
-    )
-    .with_recovery(format!(
-        "Verify tmux pane {} still exists and repair stale pane metadata with `atm teams update-member --team {} --member {} --tmux-pane-id <pane>`.",
-        pane_id, event.recipient_team, event.recipient
-    ));
+    );
     warn!(
         code = %AtmErrorCode::PostSendTmuxSendFailed,
         sender = %event.sender,
@@ -244,7 +238,7 @@ where
         "local tmux post-send emission failed"
     );
     match source {
-        Some(source) => error.with_source(source),
+        Some(_source) => error,
         None => error,
     }
 }

@@ -33,10 +33,6 @@ fn parse_optional_timestamp(
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata {field_name}: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed sqlite mailbox metadata row before retrying the query.",
-            )
-            .with_source(error)
         })
 }
 
@@ -66,9 +62,6 @@ fn parse_optional_message_id(
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata {field_name}: {error}"
             ))
-            .with_recovery(format!(
-                "Repair or remove the malformed {field_name} row before retrying the sqlite mailbox metadata query.",
-            ))
         })
     })
     .transpose()
@@ -80,9 +73,6 @@ fn parse_thread_mode(raw: Option<String>) -> Result<Option<ThreadMode>, AtmError
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata thread_mode: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed thread_mode row before retrying the sqlite mailbox metadata query.",
-            )
         })
     })
     .transpose()
@@ -94,9 +84,6 @@ fn parse_task_id(raw: Option<String>, message_key: &str) -> Result<Option<TaskId
             AtmError::validation(format!(
                 "failed to parse sqlite mailbox metadata task_id for {message_key}: {error}"
             ))
-            .with_recovery(
-                "Repair or remove the malformed task_id row before retrying the sqlite mailbox metadata query.",
-            )
         })
     })
     .transpose()
@@ -107,9 +94,6 @@ fn parse_message_key(message_key: &str) -> Result<MessageKey, AtmError> {
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata message key: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed message-key row before retrying the sqlite mailbox metadata query.",
-        )
     })
 }
 
@@ -118,9 +102,6 @@ fn parse_from_agent(value: &str, message_key: &str) -> Result<AgentName, AtmErro
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata from_agent for {message_key}: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed from_agent row before retrying the sqlite mailbox metadata query.",
-        )
     })
 }
 
@@ -129,10 +110,6 @@ fn parse_message_at(value: &str) -> Result<IsoTimestamp, AtmError> {
         AtmError::validation(format!(
             "failed to parse sqlite mailbox metadata timestamp: {error}"
         ))
-        .with_recovery(
-            "Repair or remove the malformed sqlite mailbox timestamp row before retrying the metadata query.",
-        )
-        .with_source(error)
     })
 }
 
@@ -208,7 +185,6 @@ pub(crate) fn query_mailbox_metadata_rows(
     db.with_connection(|connection| {
         let limit_i64 = limit.map(i64::try_from).transpose().map_err(|_| {
             AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
-                .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
         })?;
         // AD.20 keeps this query bounded to mailbox header data only. Full
         // durable message text is reloaded later, and only for surviving

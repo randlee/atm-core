@@ -87,11 +87,9 @@ impl ActiveConnectionRegistry {
     pub(crate) fn lock_dispatch_handles(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, Vec<TrackedDispatchHandle>>, AtmError> {
-        self.dispatch_handles.lock().map_err(|_| {
-            AtmError::daemon_unavailable("active dispatch handle lock poisoned").with_recovery(
-                "Restart the daemon; tracked dispatch worker state may be inconsistent after the poisoned lock.",
-            )
-        })
+        self.dispatch_handles
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
     }
 
     pub(crate) fn push_dispatch_handle(
@@ -108,14 +106,9 @@ impl ActiveConnectionRegistry {
         };
         if handles.len() >= max_handles {
             let _ = handle.join_handle.join();
-            return Err(
-                AtmError::daemon_lifecycle_wedge(format!(
-                    "tracked daemon dispatch registry exceeded its bounded capacity of {max_handles} handles"
-                ))
-                .with_recovery(
-                    "Restart the daemon; tracked request-work accounting lost its bounded-cap invariant.",
-                ),
-            );
+            return Err(AtmError::daemon_lifecycle_wedge(format!(
+                "tracked daemon dispatch registry exceeded its bounded capacity of {max_handles} handles"
+            )));
         }
         handles.push(handle);
         Ok(())
@@ -198,19 +191,14 @@ impl ActiveConnectionRegistry {
     }
 
     pub(crate) fn wait_for_connection_change(&self, timeout: Duration) -> Result<(), AtmError> {
-        let state = self.drain_state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
-                "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
-            )
-        })?;
+        let state = self
+            .drain_state
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
         let (_state, wait_result) = self
             .drain_wake
             .wait_timeout(state, timeout)
-            .map_err(|_| {
-                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
-                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
-                )
-            })?;
+            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
         if wait_result.timed_out() {
             return Ok(());
         }
@@ -247,11 +235,10 @@ impl Drop for ActiveDispatchGuard {
 }
 
 fn join_dispatch_handle(handle: TrackedDispatchHandle) -> Result<(), AtmError> {
-    handle.join_handle.join().map_err(|_| {
-        AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
-            "Restart the daemon; one completed dispatch worker panicked before it could be reaped cleanly.",
-        )
-    })
+    handle
+        .join_handle
+        .join()
+        .map_err(|_| AtmError::daemon_unavailable("daemon dispatch thread panicked"))
 }
 
 fn join_dispatch_handle_with_timeout(
@@ -272,9 +259,6 @@ fn join_dispatch_handle_with_timeout(
             );
             Err(AtmError::daemon_lifecycle_wedge(
                 "tracked daemon dispatch worker exceeded the shutdown join deadline",
-            )
-            .with_recovery(
-                "Restart the daemon; a request worker outlived the bounded shutdown window.",
             ))
         }
     }

@@ -40,10 +40,7 @@ pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), At
     if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
         return Err(AtmError::validation(format!(
             "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
-        ))
-        .with_recovery(
-            "Reduce the message envelope payload before retrying or raise the documented writer-lane size ceiling intentionally.",
-        ));
+        )));
     }
     Ok(())
 }
@@ -162,20 +159,14 @@ fn validate_message_record(
     if envelope_json_len > MAX_ENVELOPE_JSON_BYTES {
         return Err(AtmError::validation(format!(
             "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
-        ))
-        .with_recovery(
-            "Reduce the message envelope payload before retrying or raise the documented writer-lane size ceiling intentionally.",
-        ));
+        )));
     }
 
     let message_key = record.message_key.as_ref();
     if !message_key.starts_with("atm:") && !message_key.starts_with("ext:") {
         return Err(AtmError::validation(format!(
             "mail-store message_key must start with `atm:` or `ext:`; got `{message_key}`"
-        ))
-        .with_recovery(
-            "Rewrite the message record with an ATM-owned or external message_key prefix before retrying the sqlite write.",
-        ));
+        )));
     }
 
     validate_single_successor_invariant(record, connection, cache, target)?;
@@ -214,10 +205,7 @@ fn validate_single_successor_invariant(
         {
             return Err(AtmError::validation(format!(
                 "mail-store parent message `{parent_message_id}` already has successor `{owner}`; `{message_key}` would violate the single-successor invariant"
-            ))
-            .with_recovery(
-                "Reuse the existing successor message_key or choose a different parent_message_id before retrying the sqlite write.",
-            ));
+            )));
         }
     }
     Ok(())
@@ -253,10 +241,7 @@ fn validate_message_id_uniqueness(
         {
             return Err(AtmError::validation(format!(
                 "message_id `{message_id}` is already owned by `{owner}` and cannot be reassigned to `{message_key}`"
-            ))
-            .with_recovery(
-                "Reuse the existing message_key for that message identity or generate a new message id before retrying the sqlite write.",
-            ));
+            )));
         }
     }
     Ok(())
