@@ -19,7 +19,8 @@
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
   triage:relatedFinding "AI6-RSH-001" ;
-  triage:reviewedBy "rust-service-hardening-agent" .
+  triage:reviewedBy "rust-service-hardening-agent" ;
+  triage:notes "PARTIAL progress at feature/pAI-s6-http-uds-router @ 3dd7e6e2 (AI-FIXROUND-3): drain_active_connections_for_shutdown is now timeout-bounded and returns Err past the force-cancel deadline, proven by test bounded_drain_returns_after_force_cancel_deadline (local_ipc_transport.rs:781) — boundedness via timeout+error-return is real. However the finding's core claim (force-close in-flight connections) is still FALSE: ActiveConnectionRegistry::interrupt_all() (active_connection_registry.rs:83-85) is only `self.drain_wake.notify_all();`, a condvar notification — grepped all of crates/atm-daemon/src for `.shutdown(Shutdown`, zero hits. No socket is ever actively force-closed. Remains OPEN pending a real force-close implementation." .
 
 <urn:atm:triage:occurrence/AI6-RSH-002/pAI-s6/1>
   a triage:Occurrence ;
