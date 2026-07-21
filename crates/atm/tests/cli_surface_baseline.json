@@ -950,6 +950,17 @@
     {
       "args": [
         {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
           "has_default": true,
           "id": "stderr_logs",
           "long": "stderr-logs",
@@ -1385,6 +1396,17 @@
         },
         {
           "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
           "id": "contains",
           "long": "contains",
           "num_args": {
@@ -1565,6 +1587,28 @@
     },
     {
       "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
         {
           "has_default": true,
           "id": "dry_run",

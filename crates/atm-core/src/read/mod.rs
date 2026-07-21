@@ -17,7 +17,7 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{
-    AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TaskId, TeamName,
 };
 use metadata_selection::{
@@ -161,6 +161,8 @@ impl PeekQuery {
 pub struct ReadQuery {
     pub(crate) mailbox: MailboxQueryFields,
     pub(crate) caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) caller_chat_id: Option<ChatId>,
     pub(crate) caller_team: TeamName,
     pub(crate) seen_state_update: bool,
 }
@@ -198,6 +200,7 @@ impl ReadQuery {
                 timeout_secs,
             )?,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
             seen_state_update,
         })
@@ -225,6 +228,16 @@ impl ReadQuery {
 
     pub fn timeout_secs(&self) -> Option<u64> {
         self.mailbox.timeout_secs
+    }
+
+    pub fn caller_chat_id(&self) -> Option<&ChatId> {
+        self.caller_chat_id.as_ref()
+    }
+
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.caller_chat_id = caller_chat_id;
+        self
     }
 
     pub fn with_selection_mode(mut self, selection_mode: ReadSelection) -> Self {
@@ -355,6 +368,7 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
+        caller_chat_id: None,
         caller_team: query.caller_team,
         seen_state_update: false,
     };

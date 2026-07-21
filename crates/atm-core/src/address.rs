@@ -18,6 +18,25 @@ pub struct AgentAddress {
     pub host: Option<HostName>,
 }
 
+/// Selects which participant position a chat-qualified filter applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParticipantDirection {
+    From,
+    To,
+    Either,
+}
+
+/// Canonical participant filter. The absent chat id deliberately spans every
+/// chat context for the named agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageParticipantFilter {
+    pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<ChatId>,
+    pub direction: ParticipantDirection,
+}
+
 impl FromStr for AgentAddress {
     type Err = AtmError;
 
