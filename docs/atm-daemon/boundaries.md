@@ -265,12 +265,8 @@ Notes:
 - The live daemon dispatcher now implements `atm_core::ApiRouter` directly for
   HTTP-over-UDS requests. It is no longer governed by the retired
   `RequestDispatcher` boundary trait.
-- The active `ApiRouter` dispatcher owns:
-  - typed heartbeat request routing
-  - durable pid continuity checks through the SQLite boundary assembly
-  - daemon-backed doctor health projection over runtime status
-  - direct post-send emission that may surface typed sender warnings when a
-    receiver-owned graft path is unavailable
+- The active `ApiRouter` dispatcher receives typed `ApiRequest` values decoded
+  from HTTP-over-UDS and delegates them to the canonical application handlers.
 - The dispatcher must not own graft session registration, pending nudge
   queues, fetch/drain inspection, or any client-specific receive loop.
 - `R.20` planning treats this as an overgrown adapter surface. The follow-on
