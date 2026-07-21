@@ -11,7 +11,7 @@ use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
-use atm_runtime::RuntimeAssembly;
+use atm_runtime::{RuntimeAssembly, validate_enabled_peer_configuration};
 use atm_storage::PeerConfigStore;
 use std::fs::OpenOptions;
 #[cfg(test)]
@@ -640,6 +640,17 @@ pub(crate) fn compose_runtime(
             &SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability)),
         )
     })?;
+    validate_enabled_peer_configuration(runtime_assembly.peer_config_store().as_ref()).map_err(
+        |error| {
+            runtime_assembly_failed(
+                error,
+                &SubsystemObservability::new(
+                    DaemonSubsystem::Composition,
+                    Arc::clone(&observability),
+                ),
+            )
+        },
+    )?;
     RuntimeComposition::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
 }
 

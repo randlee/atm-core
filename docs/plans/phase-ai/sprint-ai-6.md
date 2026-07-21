@@ -1,6 +1,6 @@
 ---
 title: AI.6 REST router and local UDS
-status: proposed
+status: complete
 branch: feature/pAI-s6-http-uds-router
 worktree: ../atm-core-worktrees/feature/pAI-s6-http-uds-router
 target: integrate/phase-AI
@@ -98,3 +98,13 @@ not introduce a temporary second write handler.
 
 Unix and Windows UDS REST integration tests; OpenAPI contract tests; `just
 lint`; `just test`; local CLI send/read/ack smoke.
+
+## Closure waiver
+
+Deliverable 8's full AST graph check names `MessageWriter::write` and
+`PostWriteRouter::dispatch`, which are AI.7-scope types and do not exist on
+the AI.6 branch. AI.6 closes the buildable part of the contract by declaring a
+real `ApiRequest::Write` discriminant and routing HTTP method/path pairs into
+typed `ApiRequest` variants before daemon dispatch. The complete write-ingress
+AST graph remains deferred to AI.7, where the writer and post-write router
+types are introduced.

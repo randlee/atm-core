@@ -1,7 +1,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use atm_storage::{HostName, HttpsInterface, LocalCertificate, PeerConfigStore, TrustedPeer};
+use atm_storage::{
+    CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
+    PrivateKeyRef, TrustedPeer,
+};
 use rusqlite::{OptionalExtension, params};
 
 use crate::SqlitePeerConfigStore;
@@ -94,11 +97,8 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         certificate
             .map(|(fingerprint, private_key_ref)| {
                 Ok(LocalCertificate {
-                    fingerprint: require_non_blank(fingerprint, "certificate fingerprint")?,
-                    private_key_ref: require_non_blank(
-                        private_key_ref,
-                        "certificate key reference",
-                    )?,
+                    fingerprint: parse_fingerprint(fingerprint)?,
+                    private_key_ref: parse_private_key_ref(private_key_ref)?,
                 })
             })
             .transpose()
@@ -108,12 +108,8 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         &self,
         certificate: &LocalCertificate,
     ) -> Result<(), atm_storage::AtmError> {
-        let fingerprint =
-            require_non_blank(certificate.fingerprint.clone(), "certificate fingerprint")?;
-        let private_key_ref = require_non_blank(
-            certificate.private_key_ref.clone(),
-            "certificate key reference",
-        )?;
+        let fingerprint = certificate.fingerprint.as_str();
+        let private_key_ref = certificate.private_key_ref.as_str();
         self.db.with_connection(|connection| {
             connection
                 .execute(
@@ -151,7 +147,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.map_err(|error| self.db.error("failed to read trusted peer", error))?;
                     Ok(TrustedPeer {
                         host: parse_host(&host)?,
-                        fingerprint: require_non_blank(fingerprint, "trusted-peer fingerprint")?,
+                        fingerprint: parse_fingerprint(fingerprint)?,
                         enabled: enabled != 0,
                     })
                 })
@@ -173,7 +169,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         peer.map(|(fingerprint, enabled)| {
             Ok(TrustedPeer {
                 host: host.clone(),
-                fingerprint: require_non_blank(fingerprint, "trusted-peer fingerprint")?,
+                fingerprint: parse_fingerprint(fingerprint)?,
                 enabled: enabled != 0,
             })
         })
@@ -181,7 +177,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
     }
 
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), atm_storage::AtmError> {
-        let fingerprint = require_non_blank(peer.fingerprint.clone(), "trusted-peer fingerprint")?;
+        let fingerprint = peer.fingerprint.as_str();
         self.db.with_connection(|connection| {
             connection
                 .execute(
@@ -224,13 +220,12 @@ fn parse_host(value: &str) -> Result<HostName, atm_storage::AtmError> {
     })
 }
 
-fn require_non_blank(value: String, subject: &str) -> Result<String, atm_storage::AtmError> {
-    if value.trim().is_empty() {
-        return Err(atm_storage::AtmError::validation(format!(
-            "{subject} must not be blank"
-        )));
-    }
-    Ok(value)
+fn parse_fingerprint(value: String) -> Result<CertificateFingerprint, atm_storage::AtmError> {
+    value.parse()
+}
+
+fn parse_private_key_ref(value: String) -> Result<PrivateKeyRef, atm_storage::AtmError> {
+    value.parse()
 }
 
 #[cfg(test)]
@@ -249,14 +244,14 @@ mod tests {
         store.save_interface(&interface).expect("save interface");
         store
             .save_local_certificate(&LocalCertificate {
-                fingerprint: "sha256:test".to_string(),
-                private_key_ref: "keychain://atm/test".to_string(),
+                fingerprint: "sha256:test".parse().expect("fingerprint"),
+                private_key_ref: "keychain://atm/test".parse().expect("key reference"),
             })
             .expect("save certificate");
         store
             .save_trusted_peer(&TrustedPeer {
                 host: "peer.example".parse().expect("host"),
-                fingerprint: "sha256:peer".to_string(),
+                fingerprint: "sha256:peer".parse().expect("fingerprint"),
                 enabled: true,
             })
             .expect("save peer");
@@ -270,7 +265,8 @@ mod tests {
                 .local_certificate()
                 .expect("certificate")
                 .expect("present")
-                .fingerprint,
+                .fingerprint
+                .as_str(),
             "sha256:test"
         );
         assert_eq!(store.list_trusted_peers().expect("peers").len(), 1);
@@ -278,24 +274,7 @@ mod tests {
 
     #[test]
     fn peer_configuration_rejects_blank_secret_references_and_fingerprints() {
-        let backend = crate::SqliteStorageBackend::in_memory_for_test().expect("backend");
-        let store = backend.peer_config_store();
-        assert!(
-            store
-                .save_local_certificate(&LocalCertificate {
-                    fingerprint: " ".to_string(),
-                    private_key_ref: "keychain://atm/test".to_string(),
-                })
-                .is_err()
-        );
-        assert!(
-            store
-                .save_trusted_peer(&TrustedPeer {
-                    host: "peer.example".parse().expect("host"),
-                    fingerprint: " ".to_string(),
-                    enabled: true,
-                })
-                .is_err()
-        );
+        assert!(" ".parse::<atm_storage::CertificateFingerprint>().is_err());
+        assert!(" ".parse::<atm_storage::PrivateKeyRef>().is_err());
     }
 }

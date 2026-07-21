@@ -969,6 +969,14 @@ Implementation Branches:
 | --- | --- | --- | --- |
 | `AI.1` | `complete` | `feature/pAI-1-daemon-preag-reset` | deleted peer transport/replay state and retired daemon compatibility adapters |
 | `AI.2` | `complete` | `feature/pAI-s2-storage-topology` | storage topology cleanup, backend-neutral runtime factory, atm-core boundary retirement gate |
+| `AI.3` | `complete` | `feature/pAI-s3-error-contract-foundation` | serializable error contract foundation and retired protocol error envelope cleanup |
+| `AI.4` | `complete` | `feature/pAI-s4-error-consumer-migration` | consumers migrated onto the two-field error contract |
+| `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
+| `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
+| `AI.7` | `in progress` | `feature/pAI-s7-canonical-write-path` | one canonical write path for send and acknowledgement |
+| `AI.8` | `in progress` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
+| `AI.9` | `in progress` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
+| `AI.10` | `in progress` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

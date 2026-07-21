@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
-    read_http_request, read_http_response, write_http_request, write_http_response,
+    ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request, read_http_request,
+    read_http_response, write_http_request, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -76,7 +76,7 @@ impl fmt::Debug for TlsIdentity {
 
 impl TlsIdentity {
     fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
-        let path = Path::new(&certificate.private_key_ref);
+        let path = Path::new(certificate.private_key_ref.as_str());
         let pem = std::fs::read(path).map_err(|_source| {
             AtmError::daemon_unavailable("failed to open configured TLS certificate/key PEM bundle")
         })?;
@@ -89,7 +89,7 @@ impl TlsIdentity {
             .first()
             .ok_or_else(|| AtmError::validation("configured TLS PEM bundle has no certificate"))?;
         let fingerprint = certificate_fingerprint(first);
-        if normalize_fingerprint(&certificate.fingerprint) != fingerprint {
+        if normalize_fingerprint(certificate.fingerprint.as_str()) != fingerprint {
             return Err(AtmError::validation(
                 "configured TLS certificate fingerprint does not match the PEM bundle",
             ));
@@ -346,7 +346,7 @@ fn handle_peer_connection(
     let request = decode_request(request)?;
     let response = router
         .route(
-            ApiRequest::new(request),
+            request,
             AuthenticatedIngress::Peer,
             RequestDeadline::after(HTTPS_TIMEOUT),
         )
@@ -408,7 +408,7 @@ fn resolve_peer_address(host: &str) -> Result<SocketAddr, AtmError> {
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
     install_tls_provider();
-    let verifier = Arc::new(PinnedServerVerifier::new(peer.fingerprint.clone()));
+    let verifier = Arc::new(PinnedServerVerifier::new(peer.fingerprint.to_string()));
     ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(verifier)
@@ -506,7 +506,7 @@ impl PinnedClientVerifier {
             fingerprints: peers
                 .into_iter()
                 .filter(|peer| peer.enabled)
-                .map(|peer| normalize_fingerprint(&peer.fingerprint))
+                .map(|peer| normalize_fingerprint(peer.fingerprint.as_str()))
                 .collect(),
             algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
         }
@@ -573,6 +573,7 @@ fn normalize_fingerprint(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::net::{TcpListener, TcpStream};
+    use std::str::FromStr as _;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::{Duration, Instant};
@@ -585,7 +586,9 @@ mod tests {
     use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use atm_core::types::HostName;
-    use atm_storage::{HttpsInterface, LocalCertificate, TrustedPeer};
+    use atm_storage::{
+        CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
+    };
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
@@ -688,7 +691,8 @@ mod tests {
             &certificate,
             vec![TrustedPeer {
                 host: "localhost".parse().expect("host"),
-                fingerprint: "00".repeat(32),
+                fingerprint: CertificateFingerprint::from_str(&"00".repeat(32))
+                    .expect("fingerprint"),
                 enabled: true,
             }],
             router.clone(),
@@ -802,8 +806,10 @@ mod tests {
         std::fs::write(path.path(), bundle).expect("write temporary PEM");
         let path = path.into_temp_path().keep().expect("retain temporary PEM");
         let parsed = TlsIdentity::load(&LocalCertificate {
-            fingerprint: "0".repeat(64),
-            private_key_ref: path.display().to_string(),
+            fingerprint: CertificateFingerprint::from_str(&"0".repeat(64))
+                .expect("placeholder fingerprint"),
+            private_key_ref: PrivateKeyRef::from_str(&path.display().to_string())
+                .expect("private key reference"),
         });
         let fingerprint = match parsed {
             Ok(_) => unreachable!("placeholder fingerprint must not match"),
@@ -817,8 +823,9 @@ mod tests {
             }
         };
         LocalCertificate {
-            fingerprint,
-            private_key_ref: path.display().to_string(),
+            fingerprint: CertificateFingerprint::from_str(&fingerprint).expect("fingerprint"),
+            private_key_ref: PrivateKeyRef::from_str(&path.display().to_string())
+                .expect("private key reference"),
         }
     }
 }
