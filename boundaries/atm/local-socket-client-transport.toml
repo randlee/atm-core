@@ -67,8 +67,8 @@ review_gates = [
 ]
 
 [status]
-state = "active"
+state = "retired"
 notes = [
-  "thin extension clients such as atm-graft may reuse the contract shape without depending on atm internals",
-  "the current Phase R implementation uses a private Unix socket adapter with connect-first daemon auto-start",
+  "Historical ClientTransport trait boundary retired by AI.6.",
+  "The live CLI client now uses the sealed DaemonApiClient/HTTP-over-UDS path instead of the retired local socket frame transport contract.",
 ]

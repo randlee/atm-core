@@ -6,8 +6,16 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
+use crate::ack::AckRequest;
+use crate::clear::ClearQuery;
+use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
-use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
+use crate::list::ListQuery;
+use crate::protocol::{
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    TeamMemberHeartbeatRequest,
+};
+use crate::read::{PeekQuery, ReadQuery};
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
@@ -83,13 +91,22 @@ pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, 
     }))
 }
 
-pub fn decode_request(request: HttpRequest) -> Result<RequestEnvelope, AtmError> {
+pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
     if request.body.len() > MAX_HTTP_REQUEST_BODY_BYTES {
         return Err(AtmError::validation(
             "daemon HTTP request body exceeds 1048576 bytes",
         ));
     }
-    serde_json::from_slice(&request.body).map_err(AtmError::from)
+    let method = request.method.to_ascii_uppercase();
+    if route_is_teams(&method, &request.path) {
+        return Ok(ApiRequest::Teams(TeamRequest {
+            method,
+            path: request.path,
+        }));
+    }
+    let envelope: RequestEnvelope =
+        serde_json::from_slice(&request.body).map_err(AtmError::from)?;
+    ApiRequest::from_http_parts(method.as_str(), request.path.as_str(), envelope)
 }
 
 pub fn write_http_response(
@@ -193,18 +210,137 @@ fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ApiRequest {
-    request: RequestEnvelope,
+pub enum ApiRequest {
+    Messages(MessageCollectionRequest),
+    Write(SendRequestEnvelope),
+    Message(MessageRequest),
+    Clear(ClearQuery),
+    Doctor(DoctorQuery),
+    Teams(TeamRequest),
+    CompatibilityPreflight(CompatibilityPreflight),
+    Heartbeat(TeamMemberHeartbeatRequest),
+}
+
+#[derive(Debug, Clone)]
+pub enum MessageCollectionRequest {
+    List(ListQuery),
+    Peek(PeekQuery),
+    Receive(ReadQuery),
+}
+
+#[derive(Debug, Clone)]
+pub enum MessageRequest {
+    Acknowledge(AckRequest),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeamRequest {
+    pub method: String,
+    pub path: String,
 }
 
 impl ApiRequest {
-    pub const fn new(request: RequestEnvelope) -> Self {
-        Self { request }
+    pub fn new(request: RequestEnvelope) -> Self {
+        Self::from(request)
     }
 
     pub fn into_inner(self) -> RequestEnvelope {
-        self.request
+        match self {
+            Self::Messages(MessageCollectionRequest::List(query)) => RequestEnvelope::List(query),
+            Self::Messages(MessageCollectionRequest::Peek(query)) => RequestEnvelope::Peek(query),
+            Self::Messages(MessageCollectionRequest::Receive(query)) => {
+                RequestEnvelope::Receive(query)
+            }
+            Self::Write(request) => RequestEnvelope::Send(request),
+            Self::Message(MessageRequest::Acknowledge(request)) => {
+                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request))
+            }
+            Self::Clear(query) => RequestEnvelope::Clear(query),
+            Self::Doctor(query) => RequestEnvelope::Doctor(query),
+            Self::CompatibilityPreflight(preflight) => {
+                RequestEnvelope::CompatibilityPreflight(preflight)
+            }
+            Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
+            Self::Teams(request) => panic!(
+                "ApiRequest::Teams({}, {}) has no legacy RequestEnvelope representation",
+                request.method, request.path
+            ),
+        }
     }
+
+    fn from_http_parts(
+        method: &str,
+        path: &str,
+        envelope: RequestEnvelope,
+    ) -> Result<Self, AtmError> {
+        let request = Self::from(envelope);
+        if request.matches_route(method, path) {
+            return Ok(request);
+        }
+        Err(AtmError::validation(format!(
+            "daemon HTTP route {method} {path} does not match request body kind"
+        )))
+    }
+
+    fn matches_route(&self, method: &str, path: &str) -> bool {
+        match self {
+            Self::Messages(_) => method == "GET" && path == "/v1/atm/messages",
+            Self::Write(SendRequestEnvelope::Compose(_)) => {
+                method == "POST" && path == "/v1/atm/messages"
+            }
+            Self::Write(SendRequestEnvelope::Acknowledge(_)) => false,
+            Self::Message(MessageRequest::Acknowledge(_)) => {
+                method == "POST"
+                    && path
+                        .strip_prefix("/v1/atm/message/")
+                        .is_some_and(|suffix| suffix.ends_with("/ack"))
+            }
+            Self::Clear(_) => {
+                method == "DELETE" && (path == "/v1/atm/messages" || is_message_detail_path(path))
+            }
+            Self::Doctor(_) => method == "GET" && path == "/v1/atm/doctor",
+            Self::Teams(_) => route_is_teams(method, path),
+            Self::CompatibilityPreflight(_) => method == "POST" && path == "/v1/atm/compatibility",
+            Self::Heartbeat(_) => method == "POST" && path == "/v1/atm/heartbeat",
+        }
+    }
+}
+
+impl From<RequestEnvelope> for ApiRequest {
+    fn from(request: RequestEnvelope) -> Self {
+        match request {
+            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
+                Self::Write(SendRequestEnvelope::Compose(request))
+            }
+            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
+                Self::Message(MessageRequest::Acknowledge(request))
+            }
+            RequestEnvelope::List(query) => Self::Messages(MessageCollectionRequest::List(query)),
+            RequestEnvelope::Peek(query) => Self::Messages(MessageCollectionRequest::Peek(query)),
+            RequestEnvelope::Receive(query) => {
+                Self::Messages(MessageCollectionRequest::Receive(query))
+            }
+            RequestEnvelope::Clear(query) => Self::Clear(query),
+            RequestEnvelope::Doctor(query) => Self::Doctor(query),
+            RequestEnvelope::CompatibilityPreflight(preflight) => {
+                Self::CompatibilityPreflight(preflight)
+            }
+            RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
+        }
+    }
+}
+
+fn is_message_detail_path(path: &str) -> bool {
+    path.strip_prefix("/v1/atm/message/")
+        .is_some_and(|suffix| !suffix.is_empty() && !suffix.contains('/'))
+}
+
+fn route_is_teams(method: &str, path: &str) -> bool {
+    matches!(method, "GET" | "POST") && path == "/v1/atm/teams"
+        || matches!(method, "GET" | "PATCH" | "DELETE")
+            && path
+                .strip_prefix("/v1/atm/team/")
+                .is_some_and(|team| !team.is_empty() && !team.contains('/'))
 }
 
 #[derive(Debug, Clone)]
@@ -225,6 +361,12 @@ impl ApiResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticatedIngress {
     Local,
+    Peer(AuthenticatedPeer),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthenticatedPeer {
+    _private: (),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -260,10 +402,13 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request, write_http_request,
+        ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
+        write_http_request,
     };
     use crate::doctor::DoctorQuery;
-    use crate::protocol::RequestEnvelope;
+    use crate::protocol::{RequestEnvelope, SendRequestEnvelope};
+    use crate::send::{SendMessageSource, SendRequest};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -278,7 +423,73 @@ mod tests {
         )
         .expect("decode HTTP request");
 
-        assert!(matches!(decoded, RequestEnvelope::Doctor(_)));
+        assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn http_decode_uses_method_and_path_to_choose_write_variant() {
+        let request = RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                TEST_SENDER.parse().expect("sender"),
+                "receiver",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("hello".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send request"),
+        ));
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write HTTP request");
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode HTTP request");
+
+        assert!(matches!(
+            decoded,
+            ApiRequest::Write(SendRequestEnvelope::Compose(_))
+        ));
+    }
+
+    #[test]
+    fn http_decode_rejects_body_kind_that_does_not_match_route() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let body = serde_json::to_vec(&request).expect("body");
+        let raw = format!(
+            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            String::from_utf8(body).expect("utf8")
+        );
+
+        let decoded = decode_request(
+            read_http_request(&mut raw.as_bytes())
+                .expect("read HTTP request")
+                .expect("request"),
+        );
+
+        assert!(decoded.expect_err("route mismatch").is_validation());
+    }
+
+    #[test]
+    fn http_decode_declares_teams_route_correspondence() {
+        let raw = "GET /v1/atm/teams HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
+
+        let decoded = decode_request(
+            read_http_request(&mut raw.as_bytes())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode teams request");
+
+        assert!(matches!(decoded, ApiRequest::Teams(_)));
     }
 
     #[test]

@@ -12,8 +12,8 @@
   triage:severity "critical" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI6-APIREQUEST-SHAPE/pAI-s6/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
@@ -26,8 +26,8 @@
   triage:file "crates/atm-daemon/src/api.rs" ;
   triage:line 1 ;
   triage:snippet "pub struct ApiRequest { request: RequestEnvelope } (no Write discriminant in enum)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
 
