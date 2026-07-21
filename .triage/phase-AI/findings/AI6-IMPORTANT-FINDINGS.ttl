@@ -1,0 +1,32 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-IMPORTANT-FINDINGS>
+  a triage:Finding ;
+  triage:findingId "AI6-IMPORTANT-FINDINGS" ;
+  triage:title "AI6-QA-1 Important findings (non-blocking, fix promptly)" ;
+  triage:description "Grouped non-blocking findings: (1) OpenAPI document advertises /teams and /team/{teamName} endpoints with no router correspondence; (2) Contract test only checks YAML parseability, never validates router request/response against schema; (3) AuthenticatedIngress passed as unused _ingress parameter — Local/Peer distinction never consulted by routing logic; (4) Stale docs in architecture.md + boundaries.md still describe retired RpcEnvelope/frame-codec; (5) LoopbackClientTransport not cfg(test)-gated, ships in production atm-core library; (6) Error-cause swallowing at ~15 HTTP-over-UDS I/O boundaries (AtmError::daemon_unavailable swallows real io::Error); (7) Duplicated daemon_local_ipc_name_from_path diverging between atm-daemon-client and atm-core; (8) try_connect_with_traceability returns Result<bool, AtmError> but can never Err (dead fallibility at 4 call sites); (9) Hardcoded /tmp/atm-daemon.sock in doc example/test literal (cross-platform-guidelines grep gate)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:reviewedBy "req-qa" ;
+  triage:reviewedBy "rust-qa-agent" ;
+  triage:reviewedBy "rust-best-practices-agent" ;
+  triage:reviewedBy "ruthless-boundary-qa" .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
