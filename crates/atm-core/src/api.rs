@@ -6,7 +6,6 @@
 use std::io::{Read, Write};
 use std::time::{Duration, Instant};
 
-use crate::ack::AckRequest;
 use crate::clear::ClearQuery;
 use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
@@ -213,7 +212,6 @@ fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>,
 pub enum ApiRequest {
     Messages(Box<MessageCollectionRequest>),
     Write(Box<WriteRequest>),
-    Message(MessageRequest),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
@@ -225,11 +223,6 @@ pub enum MessageCollectionRequest {
     List(ListQuery),
     Peek(PeekQuery),
     Receive(ReadQuery),
-}
-
-#[derive(Debug, Clone)]
-pub enum MessageRequest {
-    Acknowledge(AckRequest),
 }
 
 impl ApiRequest {
@@ -245,9 +238,6 @@ impl ApiRequest {
                 MessageCollectionRequest::Receive(query) => RequestEnvelope::Receive(query),
             },
             Self::Write(request) => RequestEnvelope::Write(request),
-            Self::Message(MessageRequest::Acknowledge(request)) => {
-                RequestEnvelope::Write(Box::new(request.into_write_request()))
-            }
             Self::Clear(query) => RequestEnvelope::Clear(query),
             Self::Doctor(query) => RequestEnvelope::Doctor(query),
             Self::CompatibilityPreflight(preflight) => {
@@ -283,12 +273,6 @@ impl ApiRequest {
                 } else {
                     method == "POST" && path == "/v1/atm/messages"
                 }
-            }
-            Self::Message(MessageRequest::Acknowledge(_)) => {
-                method == "POST"
-                    && path
-                        .strip_prefix("/v1/atm/message/")
-                        .is_some_and(|suffix| suffix.ends_with("/ack"))
             }
             Self::Clear(_) => {
                 method == "DELETE" && (path == "/v1/atm/messages" || is_message_detail_path(path))

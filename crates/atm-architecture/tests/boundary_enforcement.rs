@@ -40,17 +40,52 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
 ];
 
 #[test]
+fn acknowledgement_cannot_restore_a_second_write_pipeline() {
+    let root = workspace_root();
+    let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
+        .expect("canonical write module must be readable");
+    let acknowledgement = fs::read_to_string(root.join("crates/atm-core/src/ack/mod.rs"))
+        .expect("acknowledgement module must be readable");
+    let api = fs::read_to_string(root.join("crates/atm-core/src/api.rs"))
+        .expect("transport-neutral API module must be readable");
+    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
+        .expect("daemon dispatcher module must be readable");
+
+    assert!(
+        send.contains("fn write_mail_with_runtime_impl"),
+        "AI.7 requires one canonical write pipeline"
+    );
+    assert!(
+        send.contains("resolve_acknowledgement_write"),
+        "AI.7 acknowledgement normalization must enter the canonical write pipeline"
+    );
+    assert!(
+        acknowledgement.contains("crate::send::write_mail_with_runtime("),
+        "the ack command must invoke the canonical write entry point"
+    );
+    for retired in [
+        "ack_mail_with_runtime_and_post_send_emitter",
+        "acknowledge_via_canonical_write",
+    ] {
+        assert!(
+            !acknowledgement.contains(retired),
+            "AI.7 forbids the retired separate acknowledgement write path `{retired}`"
+        );
+    }
+    assert!(
+        !api.contains("MessageRequest") && !daemon.contains("ApiRequest::Message("),
+        "AI.7 forbids a second acknowledgement API/daemon-dispatch variant"
+    );
+}
+
+#[test]
 fn production_code_cannot_restore_retired_error_contract_symbols() {
     let root = workspace_root().join("crates");
     let mut files = Vec::new();
     collect_rust_files(&root, &mut files);
     let violations = files
         .into_iter()
-        .filter(|path| {
-            !path
-                .components()
-                .any(|component| component.as_os_str() == "tests")
-        })
+        .filter(|path| !is_error_contract_guard_fixture(path))
         .filter_map(|path| {
             let contents = fs::read_to_string(&path)
                 .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
@@ -72,12 +107,27 @@ fn retired_error_contract_symbol(source: &str) -> Option<&'static str> {
         .find(|symbol| source.contains(symbol))
 }
 
+fn is_error_contract_guard_fixture(path: &Path) -> bool {
+    path == workspace_root().join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
 #[test]
 fn retired_error_contract_detector_rejects_duplicate_code_mapping_fixture() {
     assert_eq!(
         retired_error_contract_symbol("fn error_kind_for_code() {}"),
         Some("error_kind_for_code")
     );
+}
+
+#[test]
+fn retired_error_contract_guard_exempts_only_its_own_fixture() {
+    let root = workspace_root();
+    assert!(is_error_contract_guard_fixture(
+        &root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+    ));
+    assert!(!is_error_contract_guard_fixture(
+        &root.join("crates/atm-core/tests/error_contract_regression.rs")
+    ));
 }
 
 #[test]
