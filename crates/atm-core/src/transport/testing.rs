@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::ack;
-use crate::boundary::{self, ClientTransport};
+use crate::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use crate::boundary;
 use crate::clear;
 use crate::doctor;
 use crate::error::AtmError;
@@ -41,9 +42,9 @@ impl FakeClientTransport {
 
 impl boundary::sealed::Sealed for FakeClientTransport {}
 
-impl ClientTransport for FakeClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        (self.handler)(request)
+impl DaemonApiClient for FakeClientTransport {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        (self.handler)(request.into_inner()).map(ApiResponse::new)
     }
 }
 
@@ -66,11 +67,11 @@ impl LoopbackClientTransport {
 
 impl boundary::sealed::Sealed for LoopbackClientTransport {}
 
-impl ClientTransport for LoopbackClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match request {
+impl DaemonApiClient for LoopbackClientTransport {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        let response = match request.into_inner() {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(request, self.observability.as_ref())
+                send::send_mail(*request, self.observability.as_ref())
                     .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
@@ -98,7 +99,8 @@ impl ClientTransport for LoopbackClientTransport {
                 doctor::run_doctor(query, self.observability.as_ref())
                     .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
-        }
+        };
+        response.map(ApiResponse::new)
     }
 }
 

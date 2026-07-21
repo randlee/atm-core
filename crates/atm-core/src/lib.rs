@@ -1,7 +1,8 @@
-/// Acknowledgement workflows for ack-required mailbox messages.
 pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
+/// Acknowledgement workflows for ack-required mailbox messages.
+pub mod api;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -86,19 +87,22 @@ pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
 
+pub use api::{
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
+    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
+};
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ClientTransport,
-    ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
-    DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreMailboxMetadataCounts,
-    MailStoreMailboxMetadataRow, Message, MessageFingerprint, MessageKey, NotificationEvent,
-    NudgeTemplateOverrideStore, PostSendHookEmitter, PostSendHookEvent, RequestDispatcher,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    ServerTransport, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    AckTransition, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ConfigDoctor,
+    ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, DoctorFinding,
+    InternalNudgeEnvelope, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
+    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
+    MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
+    MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
+    PostSendHookEvent, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
     TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
@@ -108,7 +112,7 @@ pub use config::types::GraftConfig;
 /// boundary. Shared advisory/session protocol DTOs are not part of the
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
-pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };

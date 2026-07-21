@@ -4,7 +4,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
+    RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
@@ -200,7 +201,7 @@ fn apply_graft_post_send_deadline(
 }
 
 fn graft_transport_error(event: &PostSendHookEvent, error: AtmError) -> AtmError {
-    graft_recipient_unavailable_error(event, error.message)
+    graft_recipient_unavailable_error(event, error.detail())
 }
 
 fn graft_recipient_unavailable_error(
@@ -525,15 +526,15 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl DaemonRequestDispatcher {
+    pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail_with_runtime_and_post_send_emitter(
-                    request,
+                    *request,
                     self.observability.as_ref(),
                     &self.service_runtime,
                     &post_send_emitter,
@@ -584,7 +585,7 @@ impl DaemonRequestDispatcher {
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
+        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
             && preflight.client_release == daemon_release
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });
@@ -757,6 +758,22 @@ impl DaemonRequestDispatcher {
             version: Some(ReleaseVersion::current()),
         });
         Ok(report)
+    }
+}
+
+impl ApiRouter for DaemonRequestDispatcher {
+    fn route(
+        &self,
+        request: ApiRequest,
+        _ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "daemon API request exceeded its same-host deadline before routing",
+            ));
+        }
+        self.dispatch(request.into_inner()).map(ApiResponse::new)
     }
 }
 

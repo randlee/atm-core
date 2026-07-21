@@ -134,7 +134,7 @@ mod tests {
 
         let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::IdentityUnavailable
                 | crate::error_codes::AtmErrorCode::IdentityInvalid
                 | crate::error_codes::AtmErrorCode::IdentityConflict
@@ -177,7 +177,7 @@ mod tests {
 
         let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::IdentityUnavailable
                 | crate::error_codes::AtmErrorCode::IdentityInvalid
                 | crate::error_codes::AtmErrorCode::IdentityConflict

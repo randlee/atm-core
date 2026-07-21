@@ -445,12 +445,14 @@ fn prepare_send_context<
         Err(error) => (
             None,
             vec![WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
+                    request.caller_identity,
+                    request.caller_team,
+                    error.message()
                 ),
-                Some(error.message.clone()),
+                Some(error.message().to_owned()),
             )],
         ),
     };
@@ -496,10 +498,12 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.canonical_sender.clone(),
+            source_chat_id: None,
             text: body.to_string(),
             timestamp,
             read: false,
             source_team: Some(request.caller_team.clone()),
+            destination_chat_id: request.to.chat_id.clone(),
             summary: Some(summary.to_string()),
             message_id: Some(message_id),
             requires_ack: ack_intent.requires_ack,
@@ -515,10 +519,12 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
     let envelope = InboxMessage {
         from: context.canonical_sender.clone(),
+        source_chat_id: None,
         text: body.to_string(),
         timestamp,
         read: false,
         source_team: Some(request.caller_team.clone()),
+        destination_chat_id: request.to.chat_id.clone(),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -610,7 +616,7 @@ mod self_address_tests {
         )
         .expect_err("case-variant self target must be rejected");
 
-        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+        assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     }
 }
 

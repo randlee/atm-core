@@ -79,7 +79,7 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
 }
 
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
-    match error.code {
+    match error.code() {
         AtmErrorCode::ConfigHomeUnavailable
         | AtmErrorCode::AtmHomeUnresolved
         | AtmErrorCode::ConfigParseFailed
@@ -981,7 +981,7 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
     match home::host_log_dir() {
         Ok(log_dir) => Ok(log_dir),
         #[cfg(test)]
-        Err(error) if error.code == AtmErrorCode::ConfigHomeUnavailable => {
+        Err(error) if error.code() == AtmErrorCode::ConfigHomeUnavailable => {
             Ok(home::host_log_dir_from_home(_home_dir))
         }
         Err(error) => Err(error),
@@ -1098,7 +1098,7 @@ mod adapter_tests {
 
         let error = init_observability(false).expect_err("invalid ATM_LOG_DIR should fail closed");
         assert!(error.is_config());
-        assert!(error.message.contains("absolute path"));
+        assert!(error.message().contains("absolute path"));
     }
 
     #[test]

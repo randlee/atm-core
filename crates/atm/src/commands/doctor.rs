@@ -153,7 +153,7 @@ mod tests {
             .expect_err("invalid team override should fail");
         let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
 
-        assert!(atm_error.message.contains("Recovery:"));
+        assert!(atm_error.message().contains("Recovery:"));
     }
 
     #[test]

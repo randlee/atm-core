@@ -1,15 +1,15 @@
-use std::io::Write;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::thread;
 
-use atm_core::boundary::{AtmProtocol, RequestDispatcher};
+use atm_core::api::ApiRouter;
+use atm_core::api::{read_http_request, write_http_response};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
-use atm_core::protocol::{JsonAtmProtocolCodec, ResponseEnvelope};
+use atm_core::protocol::ResponseEnvelope;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
@@ -60,8 +60,8 @@ where
             subsystem = "local_ipc_transport",
             action = "reload_runtime_view",
             outcome = "rejected",
-            error_code = %error.code,
-            error_message = %error.message,
+            error_code = %error.code(),
+            error_message = %error.message(),
             "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
         ),
     }
@@ -72,12 +72,11 @@ pub(super) fn handle_shutdown_probe(
     stream: &mut LocalSocketStream,
     lifecycle_control: &LifecycleControlSourceAdapter,
     shutdown_beacon: &ShutdownBeacon,
-    codec: &JsonAtmProtocolCodec,
     endpoint_path: &Path,
     terminate_probe_pending: &mut bool,
 ) -> Result<AcceptLoopOutcome, AtmError> {
     record_shutdown_signal(lifecycle_control, shutdown_beacon);
-    match write_shutdown_response(stream, codec)? {
+    match write_shutdown_response(stream)? {
         ShutdownResponseOutcome::RejectedRequest => Ok(AcceptLoopOutcome::Break(None)),
         ShutdownResponseOutcome::NoFrame if *terminate_probe_pending => {
             Ok(AcceptLoopOutcome::Break(None))
@@ -107,7 +106,6 @@ pub(super) fn handle_shutdown_probe(
 
 pub(super) fn reject_connection_when_capped(
     stream: &mut LocalSocketStream,
-    codec: &JsonAtmProtocolCodec,
     active_connections: usize,
     observability: &SubsystemObservability,
 ) -> Result<bool, AtmError> {
@@ -138,13 +136,9 @@ pub(super) fn reject_connection_when_capped(
     ));
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let request_id = match atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame during connection-cap rejection",
-        "daemon request frame exceeded the maximum supported size during connection-cap rejection",
-    ) {
-        Ok(Some(frame)) => Some(frame.request_id),
-        Ok(None) => None,
+    let has_request = match read_http_request(stream) {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
         Err(error) => {
             tracing::debug!(
                 subsystem = "local_ipc_transport",
@@ -153,18 +147,11 @@ pub(super) fn reject_connection_when_capped(
                 %error,
                 "connection-cap rejection could not read a request frame to correlate the error response"
             );
-            None
+            false
         }
     };
-    if let Some(request_id) = request_id
-        && let Ok(frame) = codec.response_to_frame(request_id, response)
-    {
-        let _ = atm_core::protocol::write_frame(
-            stream,
-            &frame,
-            "failed to write daemon rejection response frame",
-        );
-        let _ = stream.flush();
+    if has_request {
+        let _ = write_http_response(stream, &response);
     }
     Ok(true)
 }
@@ -172,10 +159,9 @@ pub(super) fn reject_connection_when_capped(
 pub(super) fn spawn_connection_worker<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     stream: LocalSocketStream,
-    dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
     force_shutdown: &Arc<AtomicBool>,
     registry: &Arc<ActiveConnectionRegistry>,
-    codec: JsonAtmProtocolCodec,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     let active = registry.register();
@@ -193,7 +179,6 @@ pub(super) fn spawn_connection_worker<'scope>(
                     dispatcher,
                     force_shutdown.as_ref(),
                     registry,
-                    codec,
                     &observability,
                 )
             }));
@@ -241,15 +226,12 @@ mod tests {
     use crate::test_observability::TestDaemonObservability;
     use crate::test_support::connect_local_ipc_with_timeout;
     use crate::{DaemonSubsystem, SubsystemObservability};
+    use atm_core::api::{read_http_response, write_http_request};
     use atm_core::doctor::DoctorQuery;
     use atm_core::error_codes::AtmErrorCode;
-    use atm_core::protocol::{
-        JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, daemon_local_ipc_name_from_path,
-        next_request_id, request_to_frame_payload, response_from_frame_payload, write_frame,
-    };
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, daemon_local_ipc_name_from_path};
     use interprocess::local_socket::ListenerOptions;
     use interprocess::local_socket::traits::Listener as _;
-    use std::io::Write as _;
     use std::sync::Arc;
     use std::time::Duration;
     use tempfile::TempDir;
@@ -270,32 +252,20 @@ mod tests {
             .create_sync()
             .expect("bind listener");
         let client_tempdir = tempdir.path().to_path_buf();
-        let request_id = next_request_id();
         let client = std::thread::spawn(move || {
             let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
                 .expect("connect");
-            let frame = request_to_frame_payload(
-                request_id,
-                RequestEnvelope::Doctor(DoctorQuery {
+            write_http_request(
+                &mut stream,
+                &RequestEnvelope::Doctor(DoctorQuery {
                     home_dir: client_tempdir.join("home"),
                     current_dir: client_tempdir.join("cwd"),
                     team_override: None,
                     ..DoctorQuery::default()
                 }),
             )
-            .expect("request frame");
-            write_frame(&mut stream, &frame, "write capped request frame").expect("write");
-            stream.flush().expect("flush");
-            let response_frame = atm_core::protocol::read_frame(
-                &mut stream,
-                "read capped response frame",
-                "capped response frame too large",
-            )
-            .expect("read frame")
-            .expect("response frame");
-            let (response_id, response) =
-                response_from_frame_payload(response_frame).expect("decode response");
-            (response_id, response)
+            .expect("write request");
+            read_http_response(&mut stream).expect("read response")
         });
 
         let mut server_stream = listener.accept().expect("accept");
@@ -304,19 +274,13 @@ mod tests {
         );
         let subsystem =
             SubsystemObservability::new(DaemonSubsystem::LocalIpcTransport, observability);
-        let codec = JsonAtmProtocolCodec;
+        assert!(reject_connection_when_capped(&mut server_stream, 64, &subsystem).expect("reject"));
 
-        assert!(
-            reject_connection_when_capped(&mut server_stream, &codec, 64, &subsystem)
-                .expect("reject")
-        );
-
-        let (response_id, response) = client.join().expect("join client");
-        assert_eq!(response_id, request_id);
+        let response = client.join().expect("join client");
         match response {
             ResponseEnvelope::Error(error) => {
-                assert_eq!(error.code, AtmErrorCode::DaemonConnectionSaturated);
-                assert!(error.message.contains("connection cap exceeded"));
+                assert_eq!(error.code(), AtmErrorCode::DaemonConnectionSaturated);
+                assert!(error.message().contains("connection cap exceeded"));
             }
             other => panic!("unexpected response: {other:?}"),
         }

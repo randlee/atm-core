@@ -1,5 +1,5 @@
 use atm_core::ack::AckRequest;
-use atm_core::boundary::{RequestDispatcher, RosterHarness};
+use atm_core::boundary::RosterHarness;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
@@ -113,19 +113,21 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello graft".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
+            Box::new(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir,
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "qa-a@test-team",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello graft".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
+            ),
         )))
         .expect("send response");
 
@@ -148,19 +150,21 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
 
     let source_response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            SendRequest::new(
-                atm_home.clone(),
-                workspace_dir.clone(),
-                "qa-a".parse().expect("caller"),
-                &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("please ack".to_string()),
-                None,
-                true,
-                None,
-                false,
-            )
-            .expect("source send request"),
+            Box::new(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    "qa-a".parse().expect("caller"),
+                    &format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}"),
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("please ack".to_string()),
+                    None,
+                    true,
+                    None,
+                    false,
+                )
+                .expect("source send request"),
+            ),
         )))
         .expect("source send response");
     let source_message_id = match source_response {
@@ -244,19 +248,21 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     ]);
     let response = dispatcher
         .dispatch(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "qa-a@test-team",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("hello graft".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("send request"),
+            Box::new(
+                SendRequest::new(
+                    atm_home,
+                    workspace_dir,
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "qa-a@test-team",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline("hello graft".to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("send request"),
+            ),
         )))
         .expect("send response");
     let response = match response {

@@ -485,10 +485,10 @@ mod tests {
         let error = atm_home().expect_err("relative ATM_HOME should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::AtmHomeUnresolved
         );
-        assert!(error.message.contains("absolute path"));
+        assert!(error.message().contains("absolute path"));
     }
 
     #[test]
@@ -501,10 +501,10 @@ mod tests {
         let error = atm_home().expect_err("overlong ATM_HOME should fail");
 
         assert_eq!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::AtmHomeUnresolved
         );
-        assert!(error.message.contains("must not exceed"));
+        assert!(error.message().contains("must not exceed"));
     }
 
     #[cfg(unix)]
@@ -743,8 +743,8 @@ mod tests {
             .and_then(|team| team_dir_from_home(tempdir.path(), &team))
             .expect_err("invalid team");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
-        assert!(error.message.contains("team name"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.message().contains("team name"));
     }
 
     #[test]
@@ -756,8 +756,8 @@ mod tests {
             .and_then(|agent| inbox_path_from_home(tempdir.path(), &team, &agent))
             .expect_err("invalid agent");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::AddressParseFailed);
-        assert!(error.message.contains("agent name"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
+        assert!(error.message().contains("agent name"));
     }
 
     #[cfg(unix)]
@@ -772,7 +772,7 @@ mod tests {
 
         let error = host_log_dir().expect_err("non-absolute ATM_LOG_DIR should fail");
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -780,7 +780,7 @@ mod tests {
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert!(error.message.contains("absolute path"));
+        assert!(error.message().contains("absolute path"));
     }
 
     /// Windows ATM_LOG_DIR path-shape validation is covered by cross-compile CI
@@ -841,7 +841,7 @@ mod tests {
 
         let error = host_log_dir().expect_err("non-utf8 override should fail");
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -849,7 +849,7 @@ mod tests {
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert!(error.message.contains("UTF-8"));
+        assert!(error.message().contains("UTF-8"));
     }
 
     #[cfg(unix)]
@@ -865,7 +865,7 @@ mod tests {
 
         let error = host_log_dir().expect_err("overlong ATM_LOG_DIR should fail");
         assert!(matches!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::ConfigHomeUnavailable
                 | crate::error_codes::AtmErrorCode::ConfigParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigRetiredHookMembersKey
@@ -873,7 +873,7 @@ mod tests {
                 | crate::error_codes::AtmErrorCode::ConfigTeamParseFailed
                 | crate::error_codes::AtmErrorCode::ConfigTeamMissing
         ));
-        assert!(error.message.contains("4096"));
+        assert!(error.message().contains("4096"));
     }
 
     #[cfg(unix)]
@@ -887,8 +887,8 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("relative ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("absolute path"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("absolute path"));
     }
 
     #[cfg(unix)]
@@ -907,8 +907,8 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("non-utf8 ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("UTF-8"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("UTF-8"));
     }
 
     #[cfg(unix)]
@@ -923,7 +923,7 @@ mod tests {
         ]);
 
         let error = atm_home().expect_err("overlong ATM_HOME should fail");
-        assert_eq!(error.code, crate::error::AtmErrorCode::AtmHomeUnresolved);
-        assert!(error.message.contains("4096"));
+        assert_eq!(error.code(), crate::error::AtmErrorCode::AtmHomeUnresolved);
+        assert!(error.message().contains("4096"));
     }
 }
