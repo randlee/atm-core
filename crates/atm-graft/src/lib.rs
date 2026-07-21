@@ -193,8 +193,9 @@ impl GraftClient {
         })
     }
 
-    #[cfg(test)]
-    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    #[cfg(any(test, feature = "test-support"))]
+    #[doc(hidden)]
+    pub fn from_transport_for_test(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
         Self { transport }
     }
 
@@ -669,7 +670,7 @@ mod tests {
             }
             },
         )));
-        let client = GraftClient::from_transport(transport);
+        let client = GraftClient::from_transport_for_test(transport);
 
         let send_request = SendRequest::new(
             paths.home_dir.clone(),

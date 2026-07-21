@@ -27,8 +27,8 @@ pub enum ParticipantDirection {
     Either,
 }
 
-/// Canonical participant filter. The absent chat id deliberately spans every
-/// chat context for the named agent.
+/// Canonical participant filter. An absent chat id selects the base identity,
+/// distinct from every chat-qualified identity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageParticipantFilter {
     pub agent: AgentName,
