@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "AI7-BLOCKING-02-POSTWRITEROUTER-ROUTING" ;
   triage:title "PostWriteRouter host-based local-nudge vs HTTPS routing per ADR-035 is not implemented" ;
-  triage:description "AI7-QA-1 (arch-qa + ruthless-boundary-qa + req-qa independent confirmations). The sprint's Contract section specifies that PostWriteRouter.dispatch() is the only host-routing decision point and must emit a local nudge only for an empty host; every present host uses HTTPS. This behavior does not exist. Two independent post-write dispatch paths remain instead of one canonical router. ADR-035 remains status:proposed (not ratified), and the host-based routing logic is not implemented anywhere. Deliverable 2 requires routing CLI send/ack, graft, and REST to one write handler and one sealed storage method via PostWriteRouter." ;
+  triage:description "AI7-QA-1 (arch-qa + ruthless-boundary-qa + req-qa independent confirmations). NOTE: This finding was initially marked 'open' at triage time, but characterizations about it being 'correctly deferred' were incorrect. Post-merge audit (AI11-BLOCKING-03, 2026-07-21) confirms that PostWriteRouter.dispatch() is a no-op (debug_assert + let _ = message; Ok(())), and the host-routing decision remains in route_write BEFORE MessageWriter::write, contradicting the written contract (sprint-ai-7.md lines 40-41: 'PostWriteRouter is the only host-routing decision point'). The sprint's Contract section specifies that PostWriteRouter.dispatch() is the only host-routing decision point and must emit a local nudge only for an empty host; every present host uses HTTPS. This behavior does not exist. Two independent post-write dispatch paths remain instead of one canonical router. ADR-035 remains status:proposed (not ratified). Deliverable 2 requires routing CLI send/ack, graft, and REST to one write handler and one sealed storage method via PostWriteRouter. SEE AI11-BLOCKING-03 for the definitive post-merge record." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
   triage:category "architecture" ;
@@ -21,7 +21,7 @@
   triage:highestFixedBranch "none" ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:reviewedBy "qa-triage" ;
-  triage:notes "Related findings: B1 (trait missing), B5 (ADR-035 status:proposed). This blocks AI.8-10 crosshost dispatch. Scope: atm-daemon post-write routing paths. The single-dispatch-point invariant is structural in DaemonRequestDispatcher but the downstream handling is not unified via PostWriteRouter." .
+  triage:notes "Related findings: B1 (trait missing), B5 (ADR-035 status:proposed). This blocks AI.8-10 crosshost dispatch. Scope: atm-daemon post-write routing paths. The single-dispatch-point invariant is structural in DaemonRequestDispatcher but the downstream handling is not unified via PostWriteRouter. SUPERSEDED BY: AI11-BLOCKING-03-POSTWRITEROUTER-NOOP (post-merge audit, 2026-07-21) which provides the definitive finding: PostWriteRouter is a no-op and host-check remains in route_write, violating the contract. Use AI11-BLOCKING-03 as the authoritative record for scope decisions and fixes." .
 
 <urn:atm:triage:occurrence/AI7-BLOCKING-02/pAI-10/1>
   a triage:Occurrence ;

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-BLOCKING-02-HTTP-CONTRACT-GENERIC>
+  a triage:Finding ;
+  triage:findingId "AI11-BLOCKING-02-HTTP-CONTRACT-GENERIC" ;
+  triage:title "HTTP response always status 200; missing detail/read routes documented in OpenAPI" ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Two defects in HTTP API contract enforcement: (1) write_http_response (crates/atm-core/src/api.rs:107-114) hardcodes literal 'HTTP/1.1 200 OK' regardless of envelope content/error state, contradicting openapi.yaml documented 200/201/204 statuses and error-response handling contract. (2) ApiRequest::matches_route (api.rs:264-284) has no matching case for GET /v1/atm/message/{id} detail route or /v1/atm/message/{id}/read route, despite both documented in openapi.yaml. Note: /v1/atm/teams route removal is already an accepted waiver (openapi_surface_reviewed_removals.json); this finding addresses only the missing detail/read routes and always-200 status bug, which are NOT in that allowlist. Sprint-ai-9.md Deliverable 2 requires HTTP API contract parity with OpenAPI spec." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "api-contract-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-11-remediation/0> ;
+  triage:highestOpenBranch "feature/pAI-s11-post-merge-remediation" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. Scope: crates/atm-core/src/api.rs (response encoding, request routing). Issue 1: write_http_response must emit correct status per ResponseEnvelope variant. Issue 2: ApiRequest::matches_route must include pattern matches for /v1/atm/message/{id} and /v1/atm/message/{id}/read routes. Waiver check: openapi_surface_reviewed_removals.json allowlists only /v1/atm/teams deletion, not these routes." .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 112 ;
+  triage:snippet "write!(writer, \"HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n...\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 264 ;
+  triage:snippet "fn matches_route(&self, method: &str, path: &str) -> bool { ... Self::Messages(_) => method == \"GET\" && path == \"/v1/atm/messages\", ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-11-remediation/0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "0" ;
+  triage:orderIndex 0 .

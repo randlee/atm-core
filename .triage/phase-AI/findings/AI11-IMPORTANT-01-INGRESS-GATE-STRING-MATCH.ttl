@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH>
+  a triage:Finding ;
+  triage:findingId "AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH" ;
+  triage:title "canonical_write_router_has_one_host_routing_decision uses string matching; AST-based check deferred then never delivered" ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Sprint-ai-6.md Deliverable 8 explicitly required AST-based boundary checking ('String matching is not an acceptable graph check') and was granted a Closure Waiver deferring the implementation to AI.7 'where the writer and post-write router types are introduced.' AI.7 is now merged and complete but never delivered the AST-based check. The test at crates/atm-architecture/tests/boundary_enforcement.rs:82-112 (canonical_write_router_has_one_host_routing_decision) remains pure string matching using source.contains(...) and source.matches(...).count() semantics. The waiver's deferred condition was met (AI.7 types exist) but the required deliverable was never fulfilled. Verdict: waiver condition satisfied but enforcement not delivered; this is a regression against an explicitly documented requirement with a specific deferral timeline." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-enforcement-tool" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-IMPORTANT-01/pAI-11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-11-remediation/0> ;
+  triage:highestOpenBranch "feature/pAI-s11-post-merge-remediation" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. Scope: crates/atm-architecture/tests/boundary_enforcement.rs (test only, not production code). Historical context: AI.6 Deliverable 8 recorded a Closure Waiver on this check deferring AST-based implementation to AI.7 (waiver text in .triage/.../AI6-DELIVERABLE-8-ARCHITECTURE-TEST.ttl or related). AI.7 delivered MessageWriter trait and PostWriteRouter trait (meeting waiver condition), but did not deliver the upgraded boundary check using those types as AST anchors. The test should use syn crate to parse and validate routing decisions, not source.contains() text matching. Recommended: upgrade boundary_enforcement.rs canonical_write_router_has_one_host_routing_decision to use syn::parse_file + trait traversal." .
+
+<urn:atm:triage:occurrence/AI11-IMPORTANT-01/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 82 ;
+  triage:snippet "#[test] fn canonical_write_router_has_one_host_routing_decision() { ... source.contains(...) ... source.matches(...).count() ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-11-remediation/0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "0" ;
+  triage:orderIndex 0 .
