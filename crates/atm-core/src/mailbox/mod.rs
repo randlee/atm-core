@@ -260,7 +260,7 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<InboxReadItem> {
                         path.display(),
                         index + 1
                     ),
-                    warning: error.message,
+                    warning: error.into_message(),
                     raw_fragment: Some(truncate_raw_fragment(line)),
                 }),
             }
@@ -290,7 +290,7 @@ fn parse_mailbox_item(value: &mut Value, path: &Path, line_number: usize) -> Inb
                 path.display(),
                 line_number
             ),
-            warning: mailbox_record_parse_error(path, line_number, error).message,
+            warning: mailbox_record_parse_error(path, line_number, error).into_message(),
             raw_fragment,
         },
     }
@@ -367,7 +367,7 @@ fn parse_salvaged_array_fragment(raw: &str, path: &Path, object_index: usize) ->
                 path.display(),
                 object_index
             ),
-            warning: mailbox_record_parse_error(path, object_index, error).message,
+            warning: mailbox_record_parse_error(path, object_index, error).into_message(),
             // bounded: one degraded fragment clone is capped independently
             raw_fragment: Some(truncate_raw_fragment(raw)),
         },
@@ -635,9 +635,9 @@ mod tests {
 
         let error = load_compat_mailbox_messages(&path).expect_err("oversized mailbox should fail");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
-        assert!(error.message.contains("exceeds"));
-        assert!(error.message.contains("Recovery:"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.message().contains("exceeds"));
+        assert!(error.message().contains("Recovery:"));
     }
 
     #[test]
@@ -775,8 +775,8 @@ mod tests {
         fs::write(&path, "[not-even-one-object").expect("write");
 
         let error = load_compat_mailbox_items(&path).expect_err("terminal malformed array");
-        assert!(error.code == crate::error_codes::AtmErrorCode::MailboxReadFailed);
-        assert!(error.message.contains("failed to parse mailbox array"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.message().contains("failed to parse mailbox array"));
     }
 
     #[test]
@@ -873,6 +873,7 @@ mod tests {
     fn sample_message(message_id: AtmMessageId, body: &str) -> InboxMessage {
         InboxMessage {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: body.into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -881,6 +882,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: false,

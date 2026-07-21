@@ -656,10 +656,12 @@ mod tests {
     fn write_inbox(path: &Path, text: &str) {
         let envelope = crate::schema::InboxMessage {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: crate::types::IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -693,10 +695,10 @@ mod tests {
 
         let error = prepare_restore_workspace(&team_dir, &backup_dir).expect_err("staging error");
 
-        assert!(error.code == crate::error_codes::AtmErrorCode::FilePolicyRejected);
+        assert!(error.code() == crate::error_codes::AtmErrorCode::FilePolicyRejected);
         assert!(
             error
-                .message
+                .message()
                 .contains("restore staging directory already exists")
         );
         assert!(!restore_marker_path(&team_dir).exists());
@@ -913,7 +915,7 @@ mod tests {
 
         let error = result.expect_err("restore should fail on injected inbox stage error");
         assert_eq!(
-            error.code,
+            error.code(),
             crate::error_codes::AtmErrorCode::MailboxWriteFailed
         );
         assert!(!restore_staging_dir(&team_dir).exists());

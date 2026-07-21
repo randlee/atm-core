@@ -5,12 +5,17 @@ pub use atm_storage::validate_path_segment;
 use serde::{Deserialize, Serialize};
 
 use crate::error::AtmError;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentIdentity, AgentName, ChatId, HostName, TeamName};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
     pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<ChatId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host: Option<HostName>,
 }
 
 impl FromStr for AgentAddress {
@@ -23,23 +28,43 @@ impl FromStr for AgentAddress {
         }
 
         match trimmed.split_once('@') {
-            Some((agent, team)) => Ok(Self {
-                agent: agent.parse()?,
-                team: Some(team.parse()?),
-            }),
-            None => Ok(Self {
-                agent: trimmed.parse()?,
-                team: None,
-            }),
+            Some((identity, destination)) => {
+                if destination.contains('@') {
+                    return Err(AtmError::address_parse("address may contain only one '@'"));
+                }
+                let identity: AgentIdentity = identity.parse()?;
+                let (team, host) = match destination.split_once('.') {
+                    Some((team, host)) => (team.parse()?, Some(host.parse()?)),
+                    None => (destination.parse()?, None),
+                };
+                Ok(Self {
+                    agent: identity.agent,
+                    chat_id: identity.chat_id,
+                    team: Some(team),
+                    host,
+                })
+            }
+            None => {
+                let identity: AgentIdentity = trimmed.parse()?;
+                Ok(Self {
+                    agent: identity.agent,
+                    chat_id: identity.chat_id,
+                    team: None,
+                    host: None,
+                })
+            }
         }
     }
 }
 
 impl fmt::Display for AgentAddress {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.team {
-            Some(team) => write!(f, "{}@{}", self.agent, team),
-            None => f.write_str(&self.agent),
+        let identity = AgentIdentity::new(self.agent.clone(), self.chat_id.clone());
+        match (&self.team, &self.host) {
+            (Some(team), Some(host)) => write!(f, "{identity}@{team}.{host}"),
+            (Some(team), None) => write!(f, "{identity}@{team}"),
+            (None, None) => write!(f, "{identity}"),
+            (None, Some(_)) => Err(fmt::Error),
         }
     }
 }
@@ -50,20 +75,24 @@ mod tests {
 
     use super::AgentAddress;
     use crate::test_support::{TEST_SENDER, TEST_SENDER_ADDRESS, TEST_TEAM};
-    use crate::types::{AgentName, TeamName};
+    use crate::types::{AgentName, ChatId, HostName, TeamName};
 
     #[test]
     fn parses_bare_agent_address() {
         let parsed = AgentAddress::from_str(TEST_SENDER).expect("address");
         assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
+        assert_eq!(parsed.chat_id, None);
         assert_eq!(parsed.team, None);
+        assert_eq!(parsed.host, None);
     }
 
     #[test]
     fn parses_agent_with_team() {
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
         assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
+        assert_eq!(parsed.chat_id, None);
         assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
+        assert_eq!(parsed.host, None);
     }
 
     #[test]
@@ -85,7 +114,7 @@ mod tests {
         assert!(AgentAddress::from_str("team/subdir").is_err());
         assert!(AgentAddress::from_str(r"team\\subdir").is_err());
         assert!(AgentAddress::from_str(".hidden").is_err());
-        assert!(AgentAddress::from_str("bad:name").is_err());
+        assert!(AgentAddress::from_str("bad:name:again").is_err());
         assert!(AgentAddress::from_str("bad name").is_err());
         assert!(AgentAddress::from_str("a..b@team").is_err());
         assert!(AgentAddress::from_str("a...b@team").is_err());
@@ -100,6 +129,23 @@ mod tests {
         let parsed = AgentAddress::from_str(TEST_SENDER_ADDRESS).expect("address");
         assert_eq!(parsed.agent, AgentName::from_validated(TEST_SENDER));
         assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
+    }
+
+    #[test]
+    fn parses_and_renders_chat_qualified_addresses() {
+        let address = format!("omega-prime:1234@{TEST_TEAM}.localhost");
+        let parsed = AgentAddress::from_str(&address).expect("chat-qualified address");
+        assert_eq!(parsed.agent, AgentName::from_validated("omega-prime"));
+        assert_eq!(
+            parsed.chat_id,
+            Some("1234".parse::<ChatId>().expect("chat id"))
+        );
+        assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
+        assert_eq!(
+            parsed.host,
+            Some("localhost".parse::<HostName>().expect("host"))
+        );
+        assert_eq!(parsed.to_string(), address);
     }
 
     #[test]

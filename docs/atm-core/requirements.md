@@ -276,7 +276,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)

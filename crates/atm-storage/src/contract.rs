@@ -633,10 +633,12 @@ mod tests {
             message_key: key.clone(),
             envelope: MessageEnvelope {
                 from: agent.clone(),
+                source_chat_id: None,
                 text: "hello".to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team.clone()),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,
@@ -721,10 +723,12 @@ mod tests {
     fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
         let base = MessageEnvelope {
             from: "sender".parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,

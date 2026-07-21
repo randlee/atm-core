@@ -74,6 +74,16 @@ fn execute_upsert_message(
         .acknowledged_at
         .map(|value: IsoTimestamp| value.into_inner().to_rfc3339());
     let from_agent = record.envelope.from.to_string();
+    let source_chat_id = record
+        .envelope
+        .source_chat_id
+        .as_ref()
+        .map(ToString::to_string);
+    let destination_chat_id = record
+        .envelope
+        .destination_chat_id
+        .as_ref()
+        .map(ToString::to_string);
     let message_text = record.envelope.text.clone();
     let summary = record.envelope.summary.clone();
     let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
@@ -90,6 +100,8 @@ fn execute_upsert_message(
                 record.message_key.as_ref(),
                 envelope_json,
                 from_agent,
+                source_chat_id,
+                destination_chat_id,
                 message_text,
                 summary,
                 message_at,
@@ -103,12 +115,8 @@ fn execute_upsert_message(
             crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
         })?
         == 1;
-    let timestamps = InitialStateTimestamps {
-        pending_ack_at,
-        acknowledged_at,
-        expires_at,
-        recorded_at,
-    };
+    let timestamps =
+        initial_state_timestamps(pending_ack_at, acknowledged_at, expires_at, recorded_at);
     insert_initial_message_state(connection, cache, target, record, timestamps)?;
 
     Ok(WriteOpResult::UpsertMessage { inserted })
@@ -119,6 +127,20 @@ struct InitialStateTimestamps {
     acknowledged_at: Option<String>,
     expires_at: Option<String>,
     recorded_at: String,
+}
+
+fn initial_state_timestamps(
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+    recorded_at: String,
+) -> InitialStateTimestamps {
+    InitialStateTimestamps {
+        pending_ack_at,
+        acknowledged_at,
+        expires_at,
+        recorded_at,
+    }
 }
 
 fn insert_initial_message_state(
@@ -250,11 +272,23 @@ fn validate_message_id_uniqueness(
 #[derive(Serialize)]
 struct StorageEnvelope<'a> {
     from: &'a atm_storage::types::AgentName,
+    #[serde(
+        rename = "sourceChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    source_chat_id: &'a Option<atm_storage::types::ChatId>,
     text: &'a str,
     timestamp: IsoTimestamp,
     read: bool,
     #[serde(default)]
     source_team: &'a Option<atm_storage::types::TeamName>,
+    #[serde(
+        rename = "destinationChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    destination_chat_id: &'a Option<atm_storage::types::ChatId>,
     #[serde(default)]
     summary: &'a Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -289,10 +323,12 @@ impl<'a> StorageEnvelope<'a> {
     fn new(envelope: &'a MessageEnvelope) -> Self {
         Self {
             from: &envelope.from,
+            source_chat_id: &envelope.source_chat_id,
             text: envelope.text.as_str(),
             timestamp: envelope.timestamp,
             read: envelope.read,
             source_team: &envelope.source_team,
+            destination_chat_id: &envelope.destination_chat_id,
             summary: &envelope.summary,
             message_id: envelope.message_id.as_ref().map(ToString::to_string),
             pending_ack_at: envelope.pending_ack_at,

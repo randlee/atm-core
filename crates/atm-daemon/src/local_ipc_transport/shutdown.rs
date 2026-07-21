@@ -1,5 +1,4 @@
 use super::*;
-#[cfg(any(unix, windows))]
 use std::fs;
 use std::time::Instant;
 
@@ -106,7 +105,6 @@ pub(super) fn record_shutdown_signal(
     let _ = lifecycle_control.notify_state_change();
 }
 
-#[cfg(unix)]
 pub(super) fn prepare_local_ipc_endpoint(
     endpoint_path: &Path,
 ) -> Result<LocalIpcEndpointPreparation, AtmError> {
@@ -122,30 +120,6 @@ pub(super) fn prepare_local_ipc_endpoint(
     Ok(LocalIpcEndpointPreparation::FilesystemEndpointPrepared)
 }
 
-#[cfg(not(unix))]
-pub(super) fn prepare_local_ipc_endpoint(
-    endpoint_path: &Path,
-) -> Result<LocalIpcEndpointPreparation, AtmError> {
-    #[cfg(windows)]
-    {
-        const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
-
-        let raw = endpoint_path.to_string_lossy();
-        if !raw.starts_with(WINDOWS_PIPE_PREFIX)
-            && let Some(parent) = endpoint_path.parent()
-        {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon local IPC directory at {}",
-                    parent.display()
-                ))
-            })?;
-        }
-    }
-    Ok(LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared)
-}
-
-#[cfg(unix)]
 pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
     if !endpoint_path.exists() {
         return Ok(());
@@ -162,33 +136,16 @@ pub(super) fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError
 
 pub(super) fn write_shutdown_response(
     stream: &mut LocalSocketStream,
-    codec: &JsonAtmProtocolCodec,
 ) -> Result<ShutdownResponseOutcome, AtmError> {
     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
     let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let Some(frame) = atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame during shutdown rejection",
-        "daemon request frame exceeded the maximum supported size during shutdown rejection",
-    )?
-    else {
+    if atm_core::api::read_http_request(stream)?.is_none() {
         return Ok(ShutdownResponseOutcome::NoFrame);
-    };
-    let Ok((request_id, _request)) = codec.request_from_frame(frame) else {
-        return Ok(ShutdownResponseOutcome::NoFrame);
-    };
+    }
     let response = ResponseEnvelope::Error(AtmError::daemon_unavailable(
         "daemon is shutting down and not accepting new requests",
     ));
-    let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(
-        stream,
-        &frame,
-        "failed to write daemon shutdown rejection response frame",
-    )?;
-    stream.flush().map_err(|_source| {
-        AtmError::daemon_unavailable("failed to flush daemon shutdown rejection response frame")
-    })?;
+    atm_core::api::write_http_response(stream, &response)?;
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 

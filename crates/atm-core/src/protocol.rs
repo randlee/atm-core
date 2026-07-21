@@ -2,8 +2,6 @@
 
 use std::env;
 use std::fmt;
-use std::io::Read;
-use std::io::Write;
 use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
@@ -12,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
 use serde::{Deserialize, Serialize};
 
-use crate::ack::{AckOutcome, AckRequest};
+use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::AtmError;
@@ -20,17 +18,10 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
-use crate::send::{SendOutcome, SendRequest};
+use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
-
-/// Shared protocol send-shaped request envelope.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum SendRequestEnvelope {
-    Compose(SendRequest),
-    Acknowledge(AckRequest),
-}
 
 /// Shared protocol send-shaped response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +33,7 @@ pub enum SendResponseEnvelope {
 /// Shared protocol request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RequestEnvelope {
-    Send(SendRequestEnvelope),
+    Write(Box<WriteRequest>),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     List(ListQuery),
@@ -121,22 +112,6 @@ pub enum CompatibilityVerdict {
     },
 }
 
-/// Raw protocol frame payload plus the shared ATM frame header fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FramePayload {
-    pub request_id: RequestId,
-    pub message_kind: MessageKind,
-    pub flags: u16,
-    pub bytes: Vec<u8>,
-}
-
-/// Maximum encoded daemon request/response frame size.
-pub const MAX_DAEMON_FRAME_BYTES: usize = 1024 * 1024;
-pub const ATM_FRAME_MAGIC: u32 = u32::from_be_bytes(*b"ATMD");
-pub const ATM_FRAME_VERSION_V1: u16 = 1;
-pub const ATM_FRAME_FLAGS_V1: u16 = 0;
-pub const ATM_FRAME_HEADER_BYTES: usize = 22;
-
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -162,467 +137,12 @@ impl fmt::Display for RequestId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u16)]
-pub enum MessageKind {
-    SendComposeRequest = 0x0001,
-    SendAcknowledgeRequest = 0x0002,
-    HeartbeatRequest = 0x0003,
-    CompatibilityPreflightRequest = 0x0009,
-    ListRequest = 0x0004,
-    PeekRequest = 0x0005,
-    ReceiveRequest = 0x0006,
-    ClearRequest = 0x0007,
-    DoctorRequest = 0x0008,
-    SendSentResponse = 0x1001,
-    SendAcknowledgedResponse = 0x1002,
-    HeartbeatResponse = 0x1003,
-    CompatibilityVerdictResponse = 0x1009,
-    ListResponse = 0x1004,
-    PeekResponse = 0x1005,
-    ReceiveResponse = 0x1006,
-    ClearResponse = 0x1007,
-    DoctorResponse = 0x1008,
-    ErrorResponse = 0x1fff,
-}
-
-impl MessageKind {
-    pub const fn code(self) -> u16 {
-        self as u16
-    }
-
-    pub const fn is_request(self) -> bool {
-        matches!(
-            self,
-            Self::SendComposeRequest
-                | Self::SendAcknowledgeRequest
-                | Self::HeartbeatRequest
-                | Self::CompatibilityPreflightRequest
-                | Self::ListRequest
-                | Self::PeekRequest
-                | Self::ReceiveRequest
-                | Self::ClearRequest
-                | Self::DoctorRequest
-        )
-    }
-
-    pub const fn is_response(self) -> bool {
-        !self.is_request()
-    }
-}
-
-impl TryFrom<u16> for MessageKind {
-    type Error = AtmError;
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
-        let kind = match value {
-            0x0001 => Self::SendComposeRequest,
-            0x0002 => Self::SendAcknowledgeRequest,
-            0x0003 => Self::HeartbeatRequest,
-            0x0009 => Self::CompatibilityPreflightRequest,
-            0x0004 => Self::ListRequest,
-            0x0005 => Self::PeekRequest,
-            0x0006 => Self::ReceiveRequest,
-            0x0007 => Self::ClearRequest,
-            0x0008 => Self::DoctorRequest,
-            0x1001 => Self::SendSentResponse,
-            0x1002 => Self::SendAcknowledgedResponse,
-            0x1003 => Self::HeartbeatResponse,
-            0x1009 => Self::CompatibilityVerdictResponse,
-            0x1004 => Self::ListResponse,
-            0x1005 => Self::PeekResponse,
-            0x1006 => Self::ReceiveResponse,
-            0x1007 => Self::ClearResponse,
-            0x1008 => Self::DoctorResponse,
-            0x1fff => Self::ErrorResponse,
-            _ => {
-                return Err(AtmError::validation(format!(
-                    "unsupported ATM daemon frame message kind 0x{value:04x}"
-                )));
-            }
-        };
-        Ok(kind)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct JsonAtmProtocolCodec;
-
-impl crate::boundary::sealed::Sealed for JsonAtmProtocolCodec {}
-
-impl crate::boundary::AtmProtocol for JsonAtmProtocolCodec {
-    fn request_to_frame(
-        &self,
-        request_id: RequestId,
-        request: RequestEnvelope,
-    ) -> Result<FramePayload, AtmError> {
-        request_to_frame_payload(request_id, request)
-    }
-
-    fn request_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, RequestEnvelope), AtmError> {
-        request_from_frame_payload(frame)
-    }
-
-    fn response_to_frame(
-        &self,
-        request_id: RequestId,
-        response: ResponseEnvelope,
-    ) -> Result<FramePayload, AtmError> {
-        response_to_frame_payload(request_id, response)
-    }
-
-    fn response_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, ResponseEnvelope), AtmError> {
-        response_from_frame_payload(frame)
-    }
-}
-
 pub fn next_request_id() -> RequestId {
     loop {
         let request_id = NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
         if let Some(request_id) = NonZeroU64::new(request_id) {
             return RequestId(request_id);
         }
-    }
-}
-
-pub fn request_to_frame_payload(
-    request_id: RequestId,
-    request: RequestEnvelope,
-) -> Result<FramePayload, AtmError> {
-    Ok(FramePayload {
-        request_id,
-        message_kind: request_message_kind(&request),
-        flags: ATM_FRAME_FLAGS_V1,
-        bytes: serde_json::to_vec(&request).map_err(AtmError::from)?,
-    })
-}
-
-pub fn request_from_frame_payload(
-    frame: FramePayload,
-) -> Result<(RequestId, RequestEnvelope), AtmError> {
-    if !frame.message_kind.is_request() {
-        return Err(AtmError::validation(format!(
-            "ATM daemon request decoder received non-request message kind 0x{:04x}",
-            frame.message_kind.code()
-        )));
-    }
-    let request = match frame.message_kind {
-        MessageKind::SendComposeRequest
-        | MessageKind::SendAcknowledgeRequest
-        | MessageKind::ListRequest
-        | MessageKind::PeekRequest
-        | MessageKind::ReceiveRequest
-        | MessageKind::ClearRequest => {
-            let value = serde_json::from_slice::<serde_json::Value>(&frame.bytes)
-                .map_err(AtmError::from)?;
-            validate_required_caller_context_fields(frame.message_kind, &value)?;
-            serde_json::from_value(value).map_err(AtmError::from)?
-        }
-        _ => serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?,
-    };
-    Ok((frame.request_id, request))
-}
-
-fn validate_required_caller_context_fields(
-    message_kind: MessageKind,
-    value: &serde_json::Value,
-) -> Result<(), AtmError> {
-    let envelope = value.as_object().ok_or_else(|| {
-        AtmError::caller_context_request_invalid(
-            "daemon request payload must be a JSON object with caller_identity and caller_team",
-        )
-    })?;
-    let payload = caller_context_payload_object(message_kind, envelope)?;
-    parse_required_caller_identity(payload)?;
-    parse_required_caller_team(payload)?;
-    Ok(())
-}
-
-fn caller_context_payload_object(
-    message_kind: MessageKind,
-    envelope: &serde_json::Map<String, serde_json::Value>,
-) -> Result<&serde_json::Map<String, serde_json::Value>, AtmError> {
-    match message_kind {
-        MessageKind::SendComposeRequest => nested_payload_object(envelope, &["Send", "Compose"]),
-        MessageKind::SendAcknowledgeRequest => {
-            nested_payload_object(envelope, &["Send", "Acknowledge"])
-        }
-        MessageKind::ListRequest => nested_payload_object(envelope, &["List"]),
-        MessageKind::PeekRequest => nested_payload_object(envelope, &["Peek"]),
-        MessageKind::ReceiveRequest => nested_payload_object(envelope, &["Receive"]),
-        MessageKind::ClearRequest => nested_payload_object(envelope, &["Clear"]),
-        _ => unreachable!("caller-context validation only runs for caller-owned request kinds"),
-    }
-}
-
-fn nested_payload_object<'a>(
-    object: &'a serde_json::Map<String, serde_json::Value>,
-    path: &[&str],
-) -> Result<&'a serde_json::Map<String, serde_json::Value>, AtmError> {
-    let mut current = object;
-    for key in path {
-        let next = current.get(*key).ok_or_else(|| {
-            AtmError::caller_context_request_invalid(format!(
-                "daemon request payload is missing `{key}` envelope field"
-            ))
-        })?;
-        current = next.as_object().ok_or_else(|| {
-            AtmError::caller_context_request_invalid(format!(
-                "daemon request `{key}` envelope field must be a JSON object"
-            ))
-        })?;
-    }
-    Ok(current)
-}
-
-fn parse_required_caller_identity(
-    object: &serde_json::Map<String, serde_json::Value>,
-) -> Result<AgentName, AtmError> {
-    let value = object.get("caller_identity").ok_or_else(|| {
-        AtmError::caller_context_request_invalid("daemon request is missing caller_identity")
-    })?;
-    let raw = value.as_str().ok_or_else(|| {
-        AtmError::caller_context_request_invalid("daemon request caller_identity must be a string")
-    })?;
-    raw.parse::<AgentName>().map_err(|error| {
-        AtmError::caller_context_request_invalid(format!(
-            "daemon request caller_identity is invalid: {}",
-            error.message
-        ))
-    })
-}
-
-fn parse_required_caller_team(
-    object: &serde_json::Map<String, serde_json::Value>,
-) -> Result<TeamName, AtmError> {
-    let value = object.get("caller_team").ok_or_else(|| {
-        AtmError::caller_context_request_invalid("daemon request is missing caller_team")
-    })?;
-    let raw = value.as_str().ok_or_else(|| {
-        AtmError::caller_context_request_invalid("daemon request caller_team must be a string")
-    })?;
-    raw.parse::<TeamName>().map_err(|error| {
-        AtmError::caller_context_request_invalid(format!(
-            "daemon request caller_team is invalid: {}",
-            error.message
-        ))
-    })
-}
-
-pub fn response_to_frame_payload(
-    request_id: RequestId,
-    response: ResponseEnvelope,
-) -> Result<FramePayload, AtmError> {
-    Ok(FramePayload {
-        request_id,
-        message_kind: response_message_kind(&response),
-        flags: ATM_FRAME_FLAGS_V1,
-        bytes: serde_json::to_vec(&response).map_err(AtmError::from)?,
-    })
-}
-
-pub fn response_from_frame_payload(
-    frame: FramePayload,
-) -> Result<(RequestId, ResponseEnvelope), AtmError> {
-    if !frame.message_kind.is_response() {
-        return Err(AtmError::validation(format!(
-            "ATM daemon response decoder received non-response message kind 0x{:04x}",
-            frame.message_kind.code()
-        )));
-    }
-    let response = serde_json::from_slice(&frame.bytes).map_err(AtmError::from)?;
-    Ok((frame.request_id, response))
-}
-
-pub fn write_frame(
-    writer: &mut impl Write,
-    frame: &FramePayload,
-    write_error: &'static str,
-) -> Result<(), AtmError> {
-    if frame.flags != ATM_FRAME_FLAGS_V1 {
-        return Err(AtmError::validation(format!(
-            "unsupported ATM daemon frame flags 0x{:04x} for version {}",
-            frame.flags, ATM_FRAME_VERSION_V1
-        )));
-    }
-    if frame.bytes.len() > MAX_DAEMON_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(
-            "daemon frame exceeded the maximum supported size",
-        ));
-    }
-    let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
-    header[0..4].copy_from_slice(&ATM_FRAME_MAGIC.to_be_bytes());
-    header[4..6].copy_from_slice(&ATM_FRAME_VERSION_V1.to_be_bytes());
-    header[6..8].copy_from_slice(&frame.message_kind.code().to_be_bytes());
-    header[8..10].copy_from_slice(&frame.flags.to_be_bytes());
-    header[10..18].copy_from_slice(&frame.request_id.into_inner().to_be_bytes());
-    header[18..22].copy_from_slice(&(frame.bytes.len() as u32).to_be_bytes());
-    writer
-        .write_all(&header)
-        .and_then(|_| writer.write_all(&frame.bytes))
-        .map_err(|_source| AtmError::daemon_unavailable(write_error))
-}
-
-pub fn read_frame(
-    reader: &mut impl Read,
-    read_error: &'static str,
-    oversize_error: &'static str,
-) -> Result<Option<FramePayload>, AtmError> {
-    let Some(header) = read_frame_header(reader, read_error)? else {
-        return Ok(None);
-    };
-
-    let header = decode_frame_header(header, oversize_error)?;
-    Ok(Some(read_frame_payload(reader, header, read_error)?))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FrameHeader {
-    pub request_id: RequestId,
-    pub message_kind: MessageKind,
-    pub flags: u16,
-    pub payload_length: usize,
-}
-
-pub fn decode_frame_header(
-    header: [u8; ATM_FRAME_HEADER_BYTES],
-    oversize_error: &'static str,
-) -> Result<FrameHeader, AtmError> {
-    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
-    if magic != ATM_FRAME_MAGIC {
-        return Err(AtmError::validation(format!(
-            "unsupported ATM daemon frame magic 0x{magic:08x}"
-        )));
-    }
-
-    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
-    if version != ATM_FRAME_VERSION_V1 {
-        return Err(AtmError::validation(format!(
-            "unsupported ATM daemon frame version {version}"
-        )));
-    }
-
-    let message_kind =
-        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().expect("kind")))?;
-    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
-    if flags != ATM_FRAME_FLAGS_V1 {
-        return Err(AtmError::validation(format!(
-            "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
-        )));
-    }
-    let request_id = RequestId::new(u64::from_be_bytes(
-        header[10..18].try_into().expect("request id"),
-    ))?;
-    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
-    if payload_length > MAX_DAEMON_FRAME_BYTES {
-        return Err(AtmError::daemon_unavailable(oversize_error));
-    }
-
-    Ok(FrameHeader {
-        request_id,
-        message_kind,
-        flags,
-        payload_length,
-    })
-}
-
-pub fn read_frame_payload(
-    reader: &mut impl Read,
-    header: FrameHeader,
-    read_error: &'static str,
-) -> Result<FramePayload, AtmError> {
-    let mut bytes = vec![0u8; header.payload_length];
-    reader
-        .read_exact(&mut bytes)
-        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
-    Ok(FramePayload {
-        request_id: header.request_id,
-        message_kind: header.message_kind,
-        flags: header.flags,
-        bytes,
-    })
-}
-
-pub fn read_frame_header(
-    reader: &mut impl Read,
-    read_error: &'static str,
-) -> Result<Option<[u8; ATM_FRAME_HEADER_BYTES]>, AtmError> {
-    let mut header = [0u8; ATM_FRAME_HEADER_BYTES];
-    let read = reader
-        .read(&mut header[..1])
-        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
-    if read == 0 {
-        return Ok(None);
-    }
-    reader
-        .read_exact(&mut header[1..])
-        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
-    Ok(Some(header))
-}
-
-fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
-    match request {
-        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => MessageKind::SendComposeRequest,
-        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(_)) => {
-            MessageKind::SendAcknowledgeRequest
-        }
-        RequestEnvelope::CompatibilityPreflight(_) => MessageKind::CompatibilityPreflightRequest,
-        RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
-        RequestEnvelope::List(_) => MessageKind::ListRequest,
-        RequestEnvelope::Peek(_) => MessageKind::PeekRequest,
-        RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
-        RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
-        RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
-    }
-}
-
-fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
-    match response {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_)) => MessageKind::SendSentResponse,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {
-            MessageKind::SendAcknowledgedResponse
-        }
-        ResponseEnvelope::CompatibilityVerdict(_) => MessageKind::CompatibilityVerdictResponse,
-        ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
-        ResponseEnvelope::List(_) => MessageKind::ListResponse,
-        ResponseEnvelope::Peek(_) => MessageKind::PeekResponse,
-        ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
-        ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
-        ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,
-        ResponseEnvelope::Error(_) => MessageKind::ErrorResponse,
-    }
-}
-
-/// Read one daemon frame into memory while enforcing the shared size cap.
-///
-/// # Errors
-///
-/// Returns [`AtmError`] when the stream cannot be read or when the payload
-/// exceeds [`MAX_DAEMON_FRAME_BYTES`].
-pub fn read_bounded_stream(
-    stream: &mut impl Read,
-    read_error: &'static str,
-    oversize_error: &'static str,
-) -> Result<Vec<u8>, AtmError> {
-    let mut bytes = Vec::new();
-    let mut chunk = [0u8; 8192];
-    loop {
-        let read = stream
-            .read(&mut chunk)
-            .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
-        if read == 0 {
-            return Ok(bytes);
-        }
-        if bytes.len().saturating_add(read) > MAX_DAEMON_FRAME_BYTES {
-            return Err(AtmError::daemon_unavailable(oversize_error));
-        }
-        bytes.extend_from_slice(&chunk[..read]);
     }
 }
 
@@ -637,16 +157,12 @@ pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
             "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
         ));
     }
-    Ok(platform_local_ipc_endpoint_path(
-        home::current_host_runtime_scope()?.socket,
-    ))
+    Ok(home::current_host_runtime_scope()?.socket)
 }
 
 /// Resolve the canonical daemon socket path for one accepted ATM home root.
 pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
-    platform_local_ipc_endpoint_path(
-        home::host_runtime_dir_from_home(home_dir).join(DAEMON_SOCKET_FILENAME),
-    )
+    home::host_runtime_dir_from_home(home_dir).join(DAEMON_SOCKET_FILENAME)
 }
 
 /// Resolve the active local IPC name for the ATM request transport.
@@ -667,8 +183,8 @@ pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
 /// Returns [`AtmError`] when the endpoint cannot be represented by the current
 /// platform-local IPC implementation.
 pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
-    let normalized = platform_local_ipc_endpoint_path(endpoint_path.to_path_buf());
-    normalized
+    endpoint_path
+        .to_path_buf()
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
         .map_err(|_source| {
@@ -677,38 +193,6 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
                 endpoint_path.display()
             ))
         })
-}
-
-#[cfg(windows)]
-fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
-    const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
-
-    let raw = path.to_string_lossy();
-    if raw.starts_with(WINDOWS_PIPE_PREFIX) {
-        return path;
-    }
-
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in raw.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-
-    let mut leaf = path
-        .file_stem()
-        .map(|value| value.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "atm-daemon".to_string());
-    leaf.retain(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
-    if leaf.is_empty() {
-        leaf = "atm-daemon".to_string();
-    }
-
-    PathBuf::from(format!(r"\\.\pipe\atm-{}-{hash:016x}", leaf))
-}
-
-#[cfg(not(windows))]
-fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
-    path
 }
 
 /// Shared notification event payload.
@@ -826,8 +310,7 @@ mod tests {
         DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
         RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
         RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home, next_request_id,
-        platform_local_ipc_endpoint_path, request_from_frame_payload, request_to_frame_payload,
+        daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -925,7 +408,7 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path_from_home(tempdir.path()),
-            platform_local_ipc_endpoint_path(logical_endpoint)
+            logical_endpoint
         );
     }
 
@@ -943,11 +426,9 @@ mod tests {
 
         assert_eq!(
             daemon_socket_path().expect("daemon socket path"),
-            platform_local_ipc_endpoint_path(
-                crate::home::current_host_runtime_scope()
-                    .expect("host scope")
-                    .socket,
-            )
+            crate::home::current_host_runtime_scope()
+                .expect("host scope")
+                .socket
         );
     }
 
@@ -970,7 +451,7 @@ mod tests {
             panic!("expected error response");
         };
         assert_eq!(round_trip, error);
-        assert_eq!(round_trip.code, AtmErrorCode::MemberNotFound);
+        assert_eq!(round_trip.code(), AtmErrorCode::MemberNotFound);
     }
 
     fn test_atm_home_dir() -> PathBuf {
@@ -982,8 +463,8 @@ mod tests {
     }
 
     #[test]
-    fn request_from_frame_payload_accepts_nested_send_caller_context() {
-        let request = RequestEnvelope::Send(super::SendRequestEnvelope::Compose(
+    fn request_envelope_round_trips_nested_send_caller_context() {
+        let request = RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 test_atm_home_dir(),
                 test_workspace_dir(),
@@ -999,12 +480,12 @@ mod tests {
             .expect("send request"),
         ));
 
-        let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
-        let (_request_id, decoded) =
-            request_from_frame_payload(frame).expect("decode nested send request");
+        let decoded: RequestEnvelope =
+            serde_json::from_slice(&serde_json::to_vec(&request).expect("encode request"))
+                .expect("decode nested send request");
 
         match decoded {
-            RequestEnvelope::Send(super::SendRequestEnvelope::Compose(request)) => {
+            RequestEnvelope::Write(request) => {
                 assert_eq!(request.caller_identity.as_str(), TEST_SENDER);
                 assert_eq!(request.caller_team.as_str(), TEST_TEAM);
             }
@@ -1013,7 +494,7 @@ mod tests {
     }
 
     #[test]
-    fn request_from_frame_payload_accepts_nested_list_caller_context() {
+    fn request_envelope_round_trips_nested_list_caller_context() {
         let request = RequestEnvelope::List(
             ListQuery::new(
                 test_atm_home_dir(),
@@ -1032,9 +513,9 @@ mod tests {
             .expect("list query"),
         );
 
-        let frame = request_to_frame_payload(next_request_id(), request).expect("frame");
-        let (_request_id, decoded) =
-            request_from_frame_payload(frame).expect("decode nested list request");
+        let decoded: RequestEnvelope =
+            serde_json::from_slice(&serde_json::to_vec(&request).expect("encode request"))
+                .expect("decode nested list request");
 
         match decoded {
             RequestEnvelope::List(query) => {
