@@ -7,7 +7,42 @@ use serde_json::{Map, Value};
 
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
-use crate::types::IsoTimestamp;
+use crate::types::{HostName, IsoTimestamp};
+
+const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
+
+/// Returns the source host that the HTTPS adapter authenticated for this
+/// immutable inbound message. Local messages intentionally have no value.
+pub(crate) fn authenticated_source_host(
+    message: &InboxMessage,
+) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(AUTHENTICATED_SOURCE_HOST_KEY) else {
+        return Ok(None);
+    };
+    let value = value.as_str().ok_or_else(|| {
+        AtmError::mailbox_read("persisted authenticated source host is not a string")
+    })?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
+}
+
+/// Persists only adapter-authenticated source-host metadata; callers must not
+/// copy this value from an untrusted request payload.
+pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Option<HostName>) {
+    match host {
+        Some(host) => {
+            message.extra.insert(
+                AUTHENTICATED_SOURCE_HOST_KEY.to_string(),
+                Value::String(host.to_string()),
+            );
+        }
+        None => {
+            message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AckIntentFields {

@@ -36,17 +36,13 @@ substitutes TCP reachability for message delivery.
 | AI10-SHUTDOWN-001 | same command | one process; HTTPS listener | PASS: accepted HTTPS request workers are retained and joined during listener shutdown; each request has the documented five-second I/O bound | `HttpsListenerSet::shutdown` |
 | AI10-CONTRACT-001 | `cargo test -p agent-team-mail --test cli_surface --test openapi_surface` | local | PASS: live clap tree and parsed OpenAPI schema match additions-only checked-in baselines | `crates/atm/tests/*_surface*` |
 | AI10-LOCAL-002 | `just lint && just test` | local UDS / unit and integration suite | PASS | accepted-tip run after all AI.10 changes |
-| AI10-CHAT-001 | local / own-IP / two-host send-read-nudge-ack matrix | all transports | BLOCKED: current write envelope does not persist an authenticated source host, and `canonical_ack_write_request` constructs `host: None`; a remote ack cannot select HTTPS | `crates/atm-core/src/ack/mod.rs` |
-| AI10-TWOMAC-001 | bidirectional HTTPS send/ack + nudge | two physical Macs | BLOCKED: no second Mac is available to this worktree, and AI10-CHAT-001 prevents a valid remote-ack proof | separate live-host execution required after routing fix |
-| AI10-WINDOWS-001 | bidirectional HTTPS send/ack + nudge | macOS and Windows | BLOCKED: no Windows peer is available to this worktree, and AI10-CHAT-001 prevents a valid remote-ack proof | separate live-host execution required after routing fix |
+| AI10-CHAT-001 | local / own-IP / two-host send-read-nudge-ack matrix | all transports | IMPLEMENTED: HTTPS ingress overwrites untrusted wire metadata with the mTLS-authenticated peer host; canonical persistence retains it and the ordinary acknowledgement write selects that host | `crates/atm-daemon/src/https_transport.rs`; `crates/atm-core/src/{send,ack}/mod.rs` tests |
+| AI10-TWOMAC-001 | bidirectional HTTPS send/ack + nudge | two physical Macs | BLOCKED: live two-host execution has not yet been run | separate live-host execution required |
+| AI10-WINDOWS-001 | bidirectional HTTPS send/ack + nudge | macOS and Windows | BLOCKED: live two-host execution has not yet been run | separate live-host execution required |
 
 ### Release blockers
 
-1. The authenticated inbound peer identity must become part of the canonical
-   write/address data so the stored incoming message retains its source host.
-   The ordinary acknowledgement write must then use that source host. This is
-   one canonical write route, not a second ack transport path.
-2. Execute the two-Mac and Windows rows on real daemon pairs only after the
-   source-host/ack route is fixed. Capture receiver-visible message, nudge,
+1. Execute the two-Mac and Windows rows on real daemon pairs. Capture
+   receiver-visible message, nudge,
    duplicate-ULID idempotence, unavailable-peer, and failed-ack non-mutation
    evidence in this record.

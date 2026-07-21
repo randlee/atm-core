@@ -363,6 +363,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         caller_identity: AgentName::from_validated(TEST_SENDER),
         caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
+        authenticated_source_host: None,
         to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),

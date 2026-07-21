@@ -14,9 +14,6 @@ Planning source of truth:
 Historical planning artifacts:
 
 - `plan-phase-AG.md`
-- `cross-host-setup-runbook.md`
-- `cross-host-smoke-checklist.md`
-- `cross-host-findings-ledger.md`
 - `readiness.md`
 - `sprint-AG1.md`
 - `sprint-AG2.md`

@@ -765,9 +765,6 @@ Execution shape:
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
-- `docs/plans/phase-AG/cross-host-setup-runbook.md`
-- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
-- `docs/plans/phase-AG/cross-host-findings-ledger.md`
 - `docs/plans/phase-AG/readiness.md`
 - `docs/plans/phase-AG/sprint-AG1.md`
 - `docs/plans/phase-AG/sprint-AG2.md`

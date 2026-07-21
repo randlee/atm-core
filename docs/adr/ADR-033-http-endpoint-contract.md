@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-033 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
 | Relates to | ADR-003, ADR-032, ADR-035, Phase AI |
 
