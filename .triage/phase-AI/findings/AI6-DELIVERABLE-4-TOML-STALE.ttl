@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI6-DELIVERABLE-4>
+  a triage:Finding ;
+  triage:findingId "AI6-DELIVERABLE-4" ;
+  triage:title "Deliverable #4 incomplete: 7 boundary TOML records never retired" ;
+  triage:description "Boundary TOML files remain with active/stub_landed/concrete_landed status for AtmProtocol, ClientTransport, ServerTransport, RequestDispatcher traits that no longer exist in source. Source-level deletion (traits, named-pipe code, protocol-icd.md) is clean — only the machine-readable gate artifacts were left stale, falsely re-legitimizing a retired boundary family. Files: boundaries/atm-core/{atm-protocol,client-transport,server-transport,request-dispatcher}.toml, boundaries/atm-daemon/{socket-server-transport,daemon-request-dispatcher}.toml, boundaries/atm/local-socket-client-transport.toml" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-20T16:58:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/7> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s6/764bdd32> ;
+  triage:reviewedBy "req-qa" ;
+  triage:reviewedBy "arch-qa" ;
+  triage:reviewedBy "ruthless-boundary-qa" .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/atm-protocol.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/2>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/client-transport.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/3>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/server-transport.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/4>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-core/request-dispatcher.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/5>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/socket-server-transport.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/6>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-request-dispatcher.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:occurrence/AI6-DELIVERABLE-4/pAI-s6/7>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm/local-socket-client-transport.toml" ;
+  triage:line 1 ;
+  triage:snippet "status: active (trait no longer in source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s6/764bdd32> .
+
+<urn:atm:triage:worktree/pAI-s6/764bdd32>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s6-http-uds-router" ;
+  triage:headSha "764bdd32" ;
+  triage:orderIndex 1 ;
+  triage:prNumber 601 ;
+  triage:targetBranch "integrate/phase-AI" .
