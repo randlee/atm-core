@@ -12,8 +12,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "single_site" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI4-WINLINT-001/pAI-4/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-4/baf86e22> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-5/17bfb4c0> ;
@@ -26,7 +26,7 @@
   triage:file "crates/atm-daemon-client/src/lib.rs" ;
   triage:line 455 ;
   triage:snippet ".map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn daemon local IPC read helper\") })  -- source unused, must be _source (Windows cfg-gated site, 5 sibling sites already correctly renamed)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:closed false ;
   triage:branch "feature/pAI-s4-error-consumer-migration" ;
   triage:headSha "baf86e22" ;
