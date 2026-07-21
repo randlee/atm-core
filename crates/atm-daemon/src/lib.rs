@@ -13,6 +13,7 @@ mod daemon_runtime_observability;
 // fork while only one daemon can publish the local IPC endpoint; see
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
+mod https_peer_transport;
 mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;

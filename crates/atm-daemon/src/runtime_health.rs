@@ -34,6 +34,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::https_peer_transport::{PeerHttpTransport, PeerRequestDeadline};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -228,6 +229,7 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    peer_transport: std::sync::Mutex<Option<Arc<dyn PeerHttpTransport>>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -239,6 +241,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("peer_transport", &"dyn PeerHttpTransport")
             .finish()
     }
 }
@@ -498,7 +501,29 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
+            peer_transport: std::sync::Mutex::new(None),
         }
+    }
+
+    pub(crate) fn install_peer_transport(
+        &self,
+        transport: Arc<dyn PeerHttpTransport>,
+    ) -> Result<(), AtmError> {
+        let mut slot = self
+            .peer_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = Some(transport);
+        Ok(())
+    }
+
+    pub(crate) fn clear_peer_transport(&self) -> Result<(), AtmError> {
+        let mut slot = self
+            .peer_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        *slot = None;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -531,6 +556,18 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl DaemonRequestDispatcher {
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        if let RequestEnvelope::Write(write) = &request
+            && write
+                .to
+                .as_ref()
+                .is_some_and(|address| address.host.is_some())
+        {
+            return self.dispatch_peer_write((**write).clone());
+        }
+        self.dispatch_local(request)
+    }
+
+    fn dispatch_local(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
@@ -574,6 +611,43 @@ impl DaemonRequestDispatcher {
                 self.project_doctor_report(query)?,
             ))),
         }
+    }
+
+    fn dispatch_peer_write(
+        &self,
+        request: atm_core::send::WriteRequest,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let host = request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+            .ok_or_else(|| AtmError::validation("peer write requires a destination host"))?;
+        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
+            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
+        })?;
+        let transport = self
+            .peer_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
+            })?;
+        transport.deliver(request, &peer, PeerRequestDeadline::default())
+    }
+
+    fn dispatch_peer_ingress(
+        &self,
+        mut request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        if let RequestEnvelope::Write(write) = &mut request
+            && let Some(destination) = write.to.as_mut()
+        {
+            // One routing decision has already occurred at the sender. The
+            // receiving daemon now follows the canonical local write path.
+            destination.host = None;
+        }
+        self.dispatch_local(request)
     }
 }
 
@@ -770,7 +844,7 @@ impl ApiRouter for DaemonRequestDispatcher {
     fn route(
         &self,
         request: ApiRequest,
-        _ingress: AuthenticatedIngress,
+        ingress: AuthenticatedIngress,
         deadline: RequestDeadline,
     ) -> Result<ApiResponse, AtmError> {
         if deadline.expired() {
@@ -778,7 +852,12 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        self.dispatch(request.into_inner()).map(ApiResponse::new)
+        let request = request.into_inner();
+        match ingress {
+            AuthenticatedIngress::Local => self.dispatch(request),
+            AuthenticatedIngress::Peer => self.dispatch_peer_ingress(request),
+        }
+        .map(ApiResponse::new)
     }
 }
 
@@ -924,6 +1003,7 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
+            peer_transport: std::sync::Mutex::new(None),
         }
     }
 }
