@@ -27,7 +27,7 @@ use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, CommandAction, IsoTimestamp, TaskId, TeamName};
 
 mod delivery_persistence;
 pub(crate) mod file_policy;
@@ -62,6 +62,8 @@ pub struct WriteRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
     /// Destination is omitted only by an `atm ack` command.  The daemon
     /// resolves that destination from the acknowledged source before calling
@@ -99,6 +101,7 @@ impl WriteRequest {
             home_dir,
             current_dir,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
             to: Some(to.parse()?),
             message_source,
@@ -111,6 +114,12 @@ impl WriteRequest {
             acknowledges_message_id: None,
             dry_run,
         })
+    }
+
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.caller_chat_id = caller_chat_id;
+        self
     }
 }
 
@@ -609,7 +618,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if request.dry_run {
         return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
             from: context.canonical_sender.clone(),
-            source_chat_id: None,
+            source_chat_id: request.caller_chat_id.clone(),
             text: body.to_string(),
             timestamp,
             read: false,
@@ -633,7 +642,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
     let envelope = InboxMessage {
         from: context.canonical_sender.clone(),
-        source_chat_id: None,
+        source_chat_id: request.caller_chat_id.clone(),
         text: body.to_string(),
         timestamp,
         read: false,

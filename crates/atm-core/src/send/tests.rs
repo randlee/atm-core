@@ -361,6 +361,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         home_dir: home_dir.to_path_buf(),
         current_dir: home_dir.to_path_buf(),
         caller_identity: AgentName::from_validated(TEST_SENDER),
+        caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
         to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
         message_source: SendMessageSource::Inline("hello".to_string()),

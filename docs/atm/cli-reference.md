@@ -280,6 +280,8 @@ Read one ATM mailbox message and optionally update read state
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--team` |  | no |  |
+| `--chat-id` |  | no |  |
+| `--as` |  | no |  |
 | `--all` |  | no |  |
 | `--unread` |  | no |  |
 | `--unread-only` |  | no |  |
@@ -306,6 +308,8 @@ Send one ATM mailbox message
 | `<to>` |  | yes |  |
 | `<message>` |  | no |  |
 | `--team` |  | no |  |
+| `--chat-id` |  | no |  |
+| `--as` |  | no |  |
 | `--file` |  | no |  |
 | `--stdin` |  | no |  |
 | `--summary` |  | no |  |
