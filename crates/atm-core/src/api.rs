@@ -100,12 +100,6 @@ pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
         ));
     }
     let method = request.method.to_ascii_uppercase();
-    if route_is_teams(&method, &request.path) {
-        return Ok(ApiRequest::Teams(TeamRequest {
-            method,
-            path: request.path,
-        }));
-    }
     let envelope: RequestEnvelope =
         serde_json::from_slice(&request.body).map_err(AtmError::from)?;
     ApiRequest::from_http_parts(method.as_str(), request.path.as_str(), envelope)
@@ -222,7 +216,6 @@ pub enum ApiRequest {
     Message(MessageRequest),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
-    Teams(TeamRequest),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
 }
@@ -237,12 +230,6 @@ pub enum MessageCollectionRequest {
 #[derive(Debug, Clone)]
 pub enum MessageRequest {
     Acknowledge(AckRequest),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TeamRequest {
-    pub method: String,
-    pub path: String,
 }
 
 impl ApiRequest {
@@ -267,10 +254,6 @@ impl ApiRequest {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
-            Self::Teams(request) => panic!(
-                "ApiRequest::Teams({}, {}) has no legacy RequestEnvelope representation",
-                request.method, request.path
-            ),
         }
     }
 
@@ -311,7 +294,6 @@ impl ApiRequest {
                 method == "DELETE" && (path == "/v1/atm/messages" || is_message_detail_path(path))
             }
             Self::Doctor(_) => method == "GET" && path == "/v1/atm/doctor",
-            Self::Teams(_) => route_is_teams(method, path),
             Self::CompatibilityPreflight(_) => method == "POST" && path == "/v1/atm/compatibility",
             Self::Heartbeat(_) => method == "POST" && path == "/v1/atm/heartbeat",
         }
@@ -344,14 +326,6 @@ impl From<RequestEnvelope> for ApiRequest {
 fn is_message_detail_path(path: &str) -> bool {
     path.strip_prefix("/v1/atm/message/")
         .is_some_and(|suffix| !suffix.is_empty() && !suffix.contains('/'))
-}
-
-fn route_is_teams(method: &str, path: &str) -> bool {
-    matches!(method, "GET" | "POST") && path == "/v1/atm/teams"
-        || matches!(method, "GET" | "PATCH" | "DELETE")
-            && path
-                .strip_prefix("/v1/atm/team/")
-                .is_some_and(|team| !team.is_empty() && !team.contains('/'))
 }
 
 #[derive(Debug, Clone)]
@@ -484,20 +458,6 @@ mod tests {
         );
 
         assert!(decoded.expect_err("route mismatch").is_validation());
-    }
-
-    #[test]
-    fn http_decode_declares_teams_route_correspondence() {
-        let raw = "GET /v1/atm/teams HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
-
-        let decoded = decode_request(
-            read_http_request(&mut raw.as_bytes())
-                .expect("read HTTP request")
-                .expect("request"),
-        )
-        .expect("decode teams request");
-
-        assert!(matches!(decoded, ApiRequest::Teams(_)));
     }
 
     #[test]
