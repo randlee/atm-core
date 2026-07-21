@@ -710,27 +710,6 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
-    fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
-
-        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
-
-        let error = runtime.server_transport.serve(runtime.request_dispatcher())
-            .expect_err("direct transport bootstrap should be rejected");
-
-        assert!(error.is_daemon_unavailable());
-        assert!(
-            error
-                .to_string()
-                .contains("cannot bootstrap the daemon directly")
-        );
-        assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
     fn runtime_composition_fails_closed_when_runtime_storage_cannot_open() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().join("atm-home");

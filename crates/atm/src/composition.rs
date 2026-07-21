@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::boundary;
 use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use atm_core::boundary;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
@@ -17,7 +17,10 @@ use atm_core::graft::AtmGraftClient;
 use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
+    SendResponseEnvelope,
+};
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 #[cfg(not(test))]
@@ -144,10 +147,27 @@ impl LocalIpcClientTransportAdapter {
 
     /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
     fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        if request_requires_compatibility_verification(&request) {
+            let mut verified = atm_daemon_client::verify_connection_compatibility(
+                &self.endpoint,
+                CompatibilityPreflight {
+                    client_release: atm_daemon_client::ReleaseVersion::current(),
+                    wire_version: 1,
+                },
+                SAME_HOST_REQUEST_DEADLINE,
+            )?;
+            return verified.dispatch_write(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE);
+        }
         daemon_exchange_request(&self.endpoint, &request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
 
+fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(
+        request,
+        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
+    )
+}
 
 impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
@@ -220,7 +240,11 @@ impl<'a> CliComposition<'a> {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.execute(ApiRequest::new(request))?.into_inner() {
+        match self
+            .transport
+            .execute(ApiRequest::new(request))?
+            .into_inner()
+        {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
@@ -251,7 +275,9 @@ impl<'a> CliComposition<'a> {
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
@@ -449,7 +475,6 @@ impl<'a> CliComposition<'a> {
     }
 }
 
-
 fn bootstrap_trace_to_core(
     report: atm_daemon_client::BootstrapTraceReport,
 ) -> BootstrapTraceReport {
@@ -506,7 +531,6 @@ mod tests {
 
     use atm_core::ack::AckRequest;
     use atm_core::boundary;
-    use atm_core::{ApiRequest, DaemonApiClient};
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -527,6 +551,7 @@ mod tests {
     };
     use atm_core::types::ReadSelection;
     use atm_core::types::{AgentName, TeamName};
+    use atm_core::{ApiRequest, DaemonApiClient};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
     use serde_json::{Map, Value};
@@ -1081,14 +1106,14 @@ mod tests {
             let first_transport = transport.clone();
             let second_transport = transport.clone();
             let first = scope.spawn(move || {
-                first_transport.execute(ApiRequest::new(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-                    Box::new(first_request),
-                ))))
+                first_transport.execute(ApiRequest::new(RequestEnvelope::Send(
+                    SendRequestEnvelope::Compose(Box::new(first_request)),
+                )))
             });
             let second = scope.spawn(move || {
-                second_transport.execute(ApiRequest::new(RequestEnvelope::Send(SendRequestEnvelope::Compose(
-                    Box::new(second_request),
-                ))))
+                second_transport.execute(ApiRequest::new(RequestEnvelope::Send(
+                    SendRequestEnvelope::Compose(Box::new(second_request)),
+                )))
             });
             (
                 first.join().expect("first transport result"),

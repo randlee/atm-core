@@ -2,8 +2,7 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use atm_core::protocol::{
-    self, CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope,
-    ResponseEnvelope,
+    CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope,
 };
 use atm_storage::{AtmError, AtmErrorCode};
 
@@ -141,7 +140,8 @@ mod tests {
             client_release: ReleaseVersion::parse("1.3.1").expect("version"),
             wire_version: 1,
         };
-        let request = atm_core::protocol::RequestEnvelope::CompatibilityPreflight(preflight.clone());
+        let request =
+            atm_core::protocol::RequestEnvelope::CompatibilityPreflight(preflight.clone());
         let (_, path) = atm_core::api::endpoint_for(&request);
         assert_eq!(path, "/v1/atm/compatibility");
     }

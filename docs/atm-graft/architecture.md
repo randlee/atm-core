@@ -108,7 +108,7 @@ Required follow-on ownership in `atm-core`:
   - activation rejection / shutdown notices if surfaced to the client
 - typed config models for `[atm.graft]`
 - protocol/interface documentation updates in
-  `docs/atm-daemon/protocol-icd.md` for every graft-facing request, response,
+  `docs/atm-daemon/http-api.md` for every graft-facing request, response,
   and daemon-originated event boundary added by `U.8` / `U.10`
 
 Boundary correction note:

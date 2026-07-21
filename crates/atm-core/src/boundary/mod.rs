@@ -30,7 +30,6 @@ mod store;
 pub use mail::*;
 pub use store::*;
 
-
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {
     /// # Errors

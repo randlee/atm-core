@@ -59,42 +59,44 @@ impl ApiRouter for DoctorOnlyDispatcher {
         _deadline: RequestDeadline,
     ) -> Result<ApiResponse, atm_core::error::AtmError> {
         match request.into_inner() {
-            RequestEnvelope::Doctor(_) => Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(DoctorReport {
-                summary: DoctorSummary {
-                    status: DoctorStatus::Healthy,
-                    message: "ok".to_string(),
-                    info_count: 0,
-                    warning_count: 0,
-                    error_count: 0,
+            RequestEnvelope::Doctor(_) => Ok(ApiResponse::new(ResponseEnvelope::Doctor(Box::new(
+                DoctorReport {
+                    summary: DoctorSummary {
+                        status: DoctorStatus::Healthy,
+                        message: "ok".to_string(),
+                        info_count: 0,
+                        warning_count: 0,
+                        error_count: 0,
+                    },
+                    findings: Vec::new(),
+                    recommendations: Vec::new(),
+                    environment: DoctorEnvironmentVisibility {
+                        atm_home: None,
+                        atm_team: None,
+                        atm_identity: None,
+                        team_override: None,
+                    },
+                    client_context: atm_core::doctor::DoctorExecutionContext::default(),
+                    daemon_context: None,
+                    member_roster: None,
+                    observability: AtmObservabilityHealth {
+                        active_log_path: None,
+                        logging_state: AtmObservabilityHealthState::Healthy,
+                        query_state: Some(AtmObservabilityHealthState::Healthy),
+                        maintenance: None,
+                        diagnostic: None,
+                        detail: None,
+                    },
+                    post_send: atm_core::doctor::PostSendDoctorReport::default(),
+                    config: atm_core::boundary::ConfigDoctorReport::default(),
+                    mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
+                    roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
+                    daemon_runtime: None,
+                    drift_findings: Vec::new(),
+                    runtime_status: None,
+                    bootstrap_trace: None,
                 },
-                findings: Vec::new(),
-                recommendations: Vec::new(),
-                environment: DoctorEnvironmentVisibility {
-                    atm_home: None,
-                    atm_team: None,
-                    atm_identity: None,
-                    team_override: None,
-                },
-                client_context: atm_core::doctor::DoctorExecutionContext::default(),
-                daemon_context: None,
-                member_roster: None,
-                observability: AtmObservabilityHealth {
-                    active_log_path: None,
-                    logging_state: AtmObservabilityHealthState::Healthy,
-                    query_state: Some(AtmObservabilityHealthState::Healthy),
-                    maintenance: None,
-                    diagnostic: None,
-                    detail: None,
-                },
-                post_send: atm_core::doctor::PostSendDoctorReport::default(),
-                config: atm_core::boundary::ConfigDoctorReport::default(),
-                mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
-                roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
-                daemon_runtime: None,
-                drift_findings: Vec::new(),
-                runtime_status: None,
-                bootstrap_trace: None,
-            })))),
+            )))),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
@@ -145,7 +147,10 @@ impl ApiRouter for PanicDispatcherWithUnwindSignal {
                 .take(),
         );
         let _keep_unwind_signal_until_panic_unwinds = unwind_signal;
-        panic!("intentional router panic for test: {:?}", request.into_inner());
+        panic!(
+            "intentional router panic for test: {:?}",
+            request.into_inner()
+        );
     }
 }
 

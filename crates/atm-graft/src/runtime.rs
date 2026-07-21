@@ -1319,7 +1319,7 @@ mod tests {
         let result = apply_receiver_deadline(
             Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "named pipes do not support I/O timeouts",
+                "local socket backend does not support I/O timeouts",
             )),
             "failed to apply graft receiver receive timeout",
         );

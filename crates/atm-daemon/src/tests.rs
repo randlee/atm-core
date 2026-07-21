@@ -30,7 +30,6 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;

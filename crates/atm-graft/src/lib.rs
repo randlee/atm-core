@@ -217,7 +217,11 @@ impl GraftClient {
     }
 
     fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.execute(ApiRequest::new(request))?.into_inner() {
+        match self
+            .transport
+            .execute(ApiRequest::new(request))?
+            .into_inner()
+        {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }
@@ -226,7 +230,9 @@ impl GraftClient {
 
 impl AtmGraftClient for GraftClient {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(Box::new(request))))? {
+        match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(
+            Box::new(request),
+        )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => Ok(outcome),
             other => Err(unexpected_response("send", other)),
         }

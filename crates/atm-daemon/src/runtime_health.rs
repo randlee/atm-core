@@ -4,8 +4,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
+    RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
@@ -585,7 +585,7 @@ impl DaemonRequestDispatcher {
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
+        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
             && preflight.client_release == daemon_release
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });

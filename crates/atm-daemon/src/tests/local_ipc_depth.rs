@@ -19,7 +19,6 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(unix)]

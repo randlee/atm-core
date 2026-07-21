@@ -1,7 +1,7 @@
-use atm_core::boundary;
 use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+use atm_core::protocol::{CompatibilityPreflight, RequestEnvelope, ResponseEnvelope};
 use atm_daemon_client::{
     DaemonLocalIpcEndpoint, exchange_request as daemon_exchange_request,
     try_connect as daemon_try_connect,
@@ -29,10 +29,27 @@ impl GraftLocalIpcClientTransport {
         &self,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
+        if request_requires_compatibility_verification(&request) {
+            let mut verified = atm_daemon_client::verify_connection_compatibility(
+                &self.endpoint,
+                CompatibilityPreflight {
+                    client_release: atm_daemon_client::ReleaseVersion::current(),
+                    wire_version: 1,
+                },
+                SAME_HOST_REQUEST_DEADLINE,
+            )?;
+            return verified.dispatch_write(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE);
+        }
         daemon_exchange_request(&self.endpoint, &request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
 
+fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
+    matches!(
+        request,
+        RequestEnvelope::Send(_) | RequestEnvelope::Clear(_)
+    )
+}
 
 impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}
 

@@ -10,6 +10,8 @@ use crate::error::AtmError;
 use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendRequestEnvelope};
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
+/// Version of the daemon's HTTP request contract.
+pub const HTTP_API_VERSION: u16 = 1;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,11 +23,12 @@ pub struct HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
-        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => ("POST", "/v1/atm/messages".to_string()),
-        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(ack)) => (
-            "POST",
-            format!("/v1/atm/message/{}/ack", ack.message_id),
-        ),
+        RequestEnvelope::Send(SendRequestEnvelope::Compose(_)) => {
+            ("POST", "/v1/atm/messages".to_string())
+        }
+        RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(ack)) => {
+            ("POST", format!("/v1/atm/message/{}/ack", ack.message_id))
+        }
         RequestEnvelope::List(_) | RequestEnvelope::Peek(_) | RequestEnvelope::Receive(_) => {
             ("GET", "/v1/atm/messages".to_string())
         }
@@ -48,9 +51,9 @@ pub fn write_http_request(
         body.len()
     )
     .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP request headers"))?;
-    writer
-        .write_all(&body)
-        .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP request body"))?;
+    writer.write_all(&body).map_err(|_source| {
+        AtmError::daemon_unavailable("failed to write daemon HTTP request body")
+    })?;
     writer
         .flush()
         .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP request"))
@@ -61,10 +64,16 @@ pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, 
         return Ok(None);
     };
     let mut parts = start_line.split_whitespace();
-    let method = parts.next().ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
-    let path = parts.next().ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
+    let method = parts
+        .next()
+        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
+    let path = parts
+        .next()
+        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
     if parts.next().is_none() {
-        return Err(AtmError::validation("malformed daemon HTTP request version"));
+        return Err(AtmError::validation(
+            "malformed daemon HTTP request version",
+        ));
     }
     let body = read_http_body(reader, &headers)?;
     Ok(Some(HttpRequest {
@@ -76,7 +85,9 @@ pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, 
 
 pub fn decode_request(request: HttpRequest) -> Result<RequestEnvelope, AtmError> {
     if request.body.len() > MAX_HTTP_REQUEST_BODY_BYTES {
-        return Err(AtmError::validation("daemon HTTP request body exceeds 1048576 bytes"));
+        return Err(AtmError::validation(
+            "daemon HTTP request body exceeds 1048576 bytes",
+        ));
     }
     serde_json::from_slice(&request.body).map_err(AtmError::from)
 }
@@ -92,9 +103,9 @@ pub fn write_http_response(
         body.len()
     )
     .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP response headers"))?;
-    writer
-        .write_all(&body)
-        .map_err(|_source| AtmError::daemon_unavailable("failed to write daemon HTTP response body"))?;
+    writer.write_all(&body).map_err(|_source| {
+        AtmError::daemon_unavailable("failed to write daemon HTTP response body")
+    })?;
     writer
         .flush()
         .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon HTTP response"))
@@ -102,10 +113,14 @@ pub fn write_http_response(
 
 pub fn read_http_response(reader: &mut impl Read) -> Result<ResponseEnvelope, AtmError> {
     let Some((status_line, headers)) = read_http_headers(reader)? else {
-        return Err(AtmError::daemon_unavailable("daemon closed HTTP connection before a response"));
+        return Err(AtmError::daemon_unavailable(
+            "daemon closed HTTP connection before a response",
+        ));
     };
     if !status_line.starts_with("HTTP/1.1 2") {
-        return Err(AtmError::daemon_unavailable(format!("daemon returned HTTP status `{status_line}`")));
+        return Err(AtmError::daemon_unavailable(format!(
+            "daemon returned HTTP status `{status_line}`"
+        )));
     }
     let body = read_http_body(reader, &headers)?;
     serde_json::from_slice(&body).map_err(AtmError::from)
@@ -117,36 +132,58 @@ fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<Strin
     loop {
         match reader.read(&mut one) {
             Ok(0) if bytes.is_empty() => return Ok(None),
-            Ok(0) => return Err(AtmError::daemon_unavailable("daemon HTTP headers ended unexpectedly")),
+            Ok(0) => {
+                return Err(AtmError::daemon_unavailable(
+                    "daemon HTTP headers ended unexpectedly",
+                ));
+            }
             Ok(_) => {
                 bytes.push(one[0]);
                 if bytes.len() > MAX_HTTP_HEADER_BYTES {
-                    return Err(AtmError::validation("daemon HTTP headers exceed 16384 bytes"));
+                    return Err(AtmError::validation(
+                        "daemon HTTP headers exceed 16384 bytes",
+                    ));
                 }
                 if bytes.ends_with(b"\r\n\r\n") {
                     break;
                 }
             }
-            Err(_source) => return Err(AtmError::daemon_unavailable("failed to read daemon HTTP headers")),
+            Err(_source) => {
+                return Err(AtmError::daemon_unavailable(
+                    "failed to read daemon HTTP headers",
+                ));
+            }
         }
     }
     let text = std::str::from_utf8(&bytes)
         .map_err(|_source| AtmError::validation("daemon HTTP headers are not UTF-8"))?;
     let mut lines = text.split("\r\n");
     let start_line = lines.next().unwrap_or_default().to_string();
-    Ok(Some((start_line, lines.filter(|line| !line.is_empty()).map(str::to_string).collect())))
+    Ok(Some((
+        start_line,
+        lines
+            .filter(|line| !line.is_empty())
+            .map(str::to_string)
+            .collect(),
+    )))
 }
 
 fn read_http_body(reader: &mut impl Read, headers: &[String]) -> Result<Vec<u8>, AtmError> {
     let length = headers
         .iter()
-        .find_map(|header| header.split_once(':').filter(|(name, _)| name.eq_ignore_ascii_case("content-length")))
+        .find_map(|header| {
+            header
+                .split_once(':')
+                .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+        })
         .map(|(_, value)| value.trim().parse::<usize>())
         .transpose()
         .map_err(|_source| AtmError::validation("daemon HTTP Content-Length is invalid"))?
         .unwrap_or(0);
     if length > MAX_HTTP_REQUEST_BODY_BYTES {
-        return Err(AtmError::validation("daemon HTTP body exceeds 1048576 bytes"));
+        return Err(AtmError::validation(
+            "daemon HTTP body exceeds 1048576 bytes",
+        ));
     }
     let mut body = vec![0_u8; length];
     reader
@@ -218,4 +255,41 @@ pub trait ApiRouter: crate::boundary::sealed::Sealed + Send + Sync {
 pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
     /// Executes one API request through the configured transport adapter.
     fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request, write_http_request,
+    };
+    use crate::doctor::DoctorQuery;
+    use crate::protocol::RequestEnvelope;
+
+    #[test]
+    fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write HTTP request");
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode HTTP request");
+
+        assert!(matches!(decoded, RequestEnvelope::Doctor(_)));
+    }
+
+    #[test]
+    fn declared_oversized_http_body_is_rejected_before_decode() {
+        let request = format!(
+            "POST /v1/atm/messages HTTP/1.1\r\nContent-Length: {}\r\n\r\n",
+            MAX_HTTP_REQUEST_BODY_BYTES + 1
+        );
+
+        let error = read_http_request(&mut request.as_bytes()).expect_err("oversized body");
+
+        assert!(error.is_validation());
+    }
 }
