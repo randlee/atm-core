@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI7-MINOR-01-HOOK-TMUX>
+  a triage:Finding ;
+  triage:findingId "AI7-MINOR-01-HOOK-TMUX" ;
+  triage:title "Dead-code duplicate hook_tmux.rs file left in tree, contrary to sprint's deletion deliverable" ;
+  triage:description "AI7-QA-1 (rust-qa-agent confirmation). The file crates/atm-core/src/send/hook_tmux.rs exists but is marked with #[expect(dead_code, reason = 'The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles.')]. This is dead code awaiting cleanup. Deliverable 4 of the sprint specifies deletion of duplicate handlers and code paths. The comment suggests this is a temporary artifact from an earlier merge-forward that should have been cleaned up before delivery." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-cleanliness" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI7-MINOR-01/pAI-10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-10/7a7e6341> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-10/7a7e6341> ;
+  triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage" ;
+  triage:notes "Code cleanliness issue. Scope: crates/atm-core/src/send/hook_tmux.rs and crates/atm-core/src/send/mod.rs:35-39. The module should be deleted and the #[expect(dead_code)] marker removed from mod.rs, or the reason should be updated if intentional retention is justified." .
+
+<urn:atm:triage:occurrence/AI7-MINOR-01/pAI-10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/hook_tmux.rs" ;
+  triage:line 1 ;
+  triage:snippet "#[expect(dead_code, reason = '...')] mod hook_tmux" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "7a7e6341" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-10/7a7e6341> .
+
+<urn:atm:triage:worktree/pAI-10/7a7e6341>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "7a7e6341" ;
+  triage:orderIndex 3 .

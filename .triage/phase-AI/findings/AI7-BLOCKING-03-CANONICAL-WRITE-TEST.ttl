@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI7-BLOCKING-03-CANONICAL-WRITE-TEST>
+  a triage:Finding ;
+  triage:findingId "AI7-BLOCKING-03-CANONICAL-WRITE-TEST" ;
+  triage:title "No canonical-write architecture gate test exists to enforce single-dispatch-point invariant" ;
+  triage:description "AI7-QA-1 (req-qa and arch-qa independent confirmations). Sprint-ai-7.md explicitly lists in its 'Required validation' section: 'canonical-write architecture gate'. This test does not exist. The acceptance criteria specify 'One structural call graph reaches storage and post-write emission for all write ingress sources' — this is the architectural invariant that must be enforced by a gate test and cannot be verified manually. The test must prevent regression of multiple dispatch paths." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture" ;
+  triage:severity "critical" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI7-BLOCKING-03/pAI-10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-10/7a7e6341> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-10/7a7e6341> ;
+  triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage" ;
+  triage:notes "Related: B1 (trait missing), B2 (routing not implemented). The gate test is the validation mechanism that ensures both B1 and B2 are truly complete. Not sweepable; gate test is a unique artifact per sprint requirement." .
+
+<urn:atm:triage:occurrence/AI7-BLOCKING-03/pAI-10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/" ;
+  triage:line 0 ;
+  triage:snippet "canonical-write architecture gate test (nonexistent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "7a7e6341" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-10/7a7e6341> .
+
+<urn:atm:triage:worktree/pAI-10/7a7e6341>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "7a7e6341" ;
+  triage:orderIndex 3 .
