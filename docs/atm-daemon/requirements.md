@@ -21,7 +21,7 @@ The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
 The canonical daemon transport wire contract lives in:
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 
 The canonical daemon observability boundary contract lives in:
 - [`./observability.md`](./observability.md)
@@ -325,7 +325,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./observability.md`](./observability.md)
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 - [`./logging.md`](./logging.md)
 - [`./recovery-text-rules.md`](./recovery-text-rules.md)
 

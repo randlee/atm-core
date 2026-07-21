@@ -9,6 +9,8 @@ pub use crate::error_codes::AtmErrorCode;
 pub struct AtmError {
     code: AtmErrorCode,
     message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cause: Option<String>,
 }
 
 impl AtmError {
@@ -17,6 +19,7 @@ impl AtmError {
         Self {
             code,
             message: crate::error_catalog::render(code, detail),
+            cause: None,
         }
     }
 
@@ -25,6 +28,7 @@ impl AtmError {
         Self {
             code,
             message: crate::error_catalog::render_code(code),
+            cause: None,
         }
     }
 
@@ -36,6 +40,19 @@ impl AtmError {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    /// Returns the machine-preserved lower-level cause, when an adapter has one.
+    #[must_use]
+    pub fn cause(&self) -> Option<&str> {
+        self.cause.as_deref()
+    }
+
+    /// Attaches a lower-level adapter cause without changing the stable code or message.
+    #[must_use]
+    pub fn with_cause(mut self, cause: impl fmt::Display) -> Self {
+        self.cause = Some(cause.to_string());
+        self
     }
 
     /// Returns the detail portion for a higher-level constructor. This avoids
@@ -136,6 +153,14 @@ impl AtmError {
 
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::DaemonUnavailable, message)
+    }
+
+    /// Builds an unavailable-daemon error while preserving its adapter-level cause.
+    pub fn daemon_unavailable_with_cause(
+        message: impl Into<String>,
+        cause: impl fmt::Display,
+    ) -> Self {
+        Self::daemon_unavailable(message).with_cause(cause)
     }
 
     pub fn runtime_root_invalid(message: impl Into<String>) -> Self {
@@ -356,5 +381,21 @@ mod tests {
 
         assert_eq!(outer.message().matches("Recovery:").count(), 1);
         assert!(outer.message().contains("invalid caller identity"));
+    }
+
+    #[test]
+    fn adapter_cause_is_preserved_without_changing_the_error_code() {
+        let error = AtmError::daemon_unavailable_with_cause(
+            "daemon connection failed",
+            std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "connection refused"),
+        );
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.cause(), Some("connection refused"));
+        assert!(
+            serde_json::to_string(&error)
+                .expect("serialize error")
+                .contains(r#""cause":"connection refused""#)
+        );
     }
 }

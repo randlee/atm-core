@@ -315,7 +315,7 @@ Required frame direction:
 - transport implementations may vary, but they must share one ATM packet
   family and one framed helper layer
 - the canonical ATM daemon wire contract is documented in
-  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+  [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - the same protocol ICD governs same-host local IPC and cross-host
   daemon-to-daemon transport
 

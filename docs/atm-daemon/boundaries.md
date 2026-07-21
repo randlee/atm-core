@@ -252,17 +252,21 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-request-dispatcher.toml](../../boundaries/atm-daemon/daemon-request-dispatcher.toml)
 
 
+Historical status:
+- retired by `AI.6`
+- retained only as a historical boundary record for the deleted
+  `RequestDispatcher` frame boundary
+
 Purpose:
-- Owns the runtime dispatcher implementation that routes protocol requests into core services.
+- Historically owned the runtime dispatcher implementation behind the retired
+  `RequestDispatcher` contract.
 
 Notes:
-- This adapter exists to keep transport loops and service logic separate.
-- The active dispatcher now owns:
-  - typed heartbeat request routing
-  - durable pid continuity checks through the SQLite boundary assembly
-  - daemon-backed doctor health projection over runtime status
-  - direct post-send emission that may surface typed sender warnings when a
-    receiver-owned graft path is unavailable
+- The live daemon dispatcher now implements `atm_core::ApiRouter` directly for
+  HTTP-over-UDS requests. It is no longer governed by the retired
+  `RequestDispatcher` boundary trait.
+- The active `ApiRouter` dispatcher receives typed `ApiRequest` values decoded
+  from HTTP-over-UDS and delegates them to the canonical application handlers.
 - The dispatcher must not own graft session registration, pending nudge
   queues, fetch/drain inspection, or any client-specific receive loop.
 - `R.20` planning treats this as an overgrown adapter surface. The follow-on

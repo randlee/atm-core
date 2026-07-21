@@ -4,8 +4,10 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
+    RequestEnvelope, ResponseEnvelope,
     ack::ack_mail_with_runtime_and_post_send_emitter,
+    api::{MessageCollectionRequest, MessageRequest},
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -525,8 +527,8 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-impl boundary::RequestDispatcher for DaemonRequestDispatcher {
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+impl DaemonRequestDispatcher {
+    pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
@@ -584,7 +586,7 @@ impl DaemonRequestDispatcher {
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::protocol::ATM_FRAME_VERSION_V1
+        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
             && preflight.client_release == daemon_release
         {
             return Ok(CompatibilityVerdict::Compatible { daemon_release });
@@ -757,6 +759,58 @@ impl DaemonRequestDispatcher {
             version: Some(ReleaseVersion::current()),
         });
         Ok(report)
+    }
+}
+
+impl ApiRouter for DaemonRequestDispatcher {
+    fn route(
+        &self,
+        request: ApiRequest,
+        ingress: AuthenticatedIngress,
+        deadline: RequestDeadline,
+    ) -> Result<ApiResponse, AtmError> {
+        if deadline.expired() {
+            return Err(AtmError::daemon_unavailable(
+                "daemon API request exceeded its same-host deadline before routing",
+            ));
+        }
+        match ingress {
+            AuthenticatedIngress::Local => {}
+            AuthenticatedIngress::Peer(_) => {
+                return Err(AtmError::daemon_unavailable(
+                    "authenticated peer ingress is declared for AI.9 and is not accepted by the AI.6 local router",
+                ));
+            }
+        }
+        self.route_api_request(request).map(ApiResponse::new)
+    }
+}
+
+impl DaemonRequestDispatcher {
+    fn route_api_request(&self, request: ApiRequest) -> Result<ResponseEnvelope, AtmError> {
+        match request {
+            ApiRequest::Messages(messages) => match *messages {
+                MessageCollectionRequest::List(query) => {
+                    self.dispatch(RequestEnvelope::List(query))
+                }
+                MessageCollectionRequest::Peek(query) => {
+                    self.dispatch(RequestEnvelope::Peek(query))
+                }
+                MessageCollectionRequest::Receive(query) => {
+                    self.dispatch(RequestEnvelope::Receive(query))
+                }
+            },
+            ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Send(request)),
+            ApiRequest::Message(MessageRequest::Acknowledge(request)) => self.dispatch(
+                RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)),
+            ),
+            ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
+            ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
+            ApiRequest::CompatibilityPreflight(preflight) => {
+                self.dispatch(RequestEnvelope::CompatibilityPreflight(preflight))
+            }
+            ApiRequest::Heartbeat(request) => self.dispatch(RequestEnvelope::Heartbeat(request)),
+        }
     }
 }
 

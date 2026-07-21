@@ -1,5 +1,5 @@
 use atm_core::ack::AckRequest;
-use atm_core::boundary::{RequestDispatcher, RosterHarness};
+use atm_core::boundary::RosterHarness;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,

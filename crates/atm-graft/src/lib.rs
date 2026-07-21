@@ -10,7 +10,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::boundary::{ClientTransport, PostSendHookEvent};
+use atm_core::api::{ApiRequest, DaemonApiClient};
+use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
 use atm_core::observability::{
@@ -141,13 +142,13 @@ impl GraftSessionOptions {
 /// Thin daemon-backed same-host client for embedded graft consumers.
 #[derive(Clone)]
 pub struct GraftClient {
-    transport: Arc<dyn ClientTransport + Send + Sync>,
+    transport: Arc<dyn DaemonApiClient + Send + Sync>,
 }
 
 impl fmt::Debug for GraftClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GraftClient")
-            .field("transport", &"dyn ClientTransport")
+            .field("transport", &"dyn DaemonApiClient")
             .finish()
     }
 }
@@ -189,13 +190,13 @@ impl GraftClient {
             transport.probe_connection()
         })?;
         Ok(Self {
-            transport: transport as Arc<dyn ClientTransport + Send + Sync>,
+            transport: transport as Arc<dyn DaemonApiClient + Send + Sync>,
         })
     }
 
     #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
-    pub fn from_transport_for_test(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    pub fn from_transport_for_test(transport: Arc<dyn DaemonApiClient + Send + Sync>) -> Self {
         Self { transport }
     }
 
@@ -217,7 +218,11 @@ impl GraftClient {
     }
 
     fn send_request(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match self.transport.send(request)? {
+        match self
+            .transport
+            .execute(ApiRequest::new(request))?
+            .into_inner()
+        {
             ResponseEnvelope::Error(error) => Err(error),
             response => Ok(response),
         }

@@ -12,14 +12,13 @@ use crate::test_support::{
     DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcherWithUnwindSignal,
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 #[cfg(unix)]
@@ -72,18 +71,8 @@ fn send_doctor_request(
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read response", "response frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
-    response
+    atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
+    atm_core::api::read_http_response(&mut stream).expect("read doctor response")
 }
 
 #[test]
@@ -102,7 +91,7 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle);
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (inject_tx, inject_rx) = mpsc::sync_channel(1);
     install_injected_accept_error_for_test(&mut runtime, inject_tx);
@@ -159,7 +148,7 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
@@ -247,7 +236,7 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
     let (panic_unwound_tx, panic_unwound_rx) = mpsc::sync_channel(1);
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(PanicDispatcherWithUnwindSignal::new(panic_unwound_tx));
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
