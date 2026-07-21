@@ -6,7 +6,7 @@ use std::time::Duration;
 use atm_core::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, LocalServiceRuntime, RequestDeadline,
     RequestEnvelope, ResponseEnvelope,
-    api::{MessageCollectionRequest, MessageRequest},
+    api::MessageCollectionRequest,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
     doctor::{
@@ -809,9 +809,6 @@ impl DaemonRequestDispatcher {
                 }
             },
             ApiRequest::Write(request) => self.dispatch(RequestEnvelope::Write(request)),
-            ApiRequest::Message(MessageRequest::Acknowledge(request)) => self.dispatch(
-                RequestEnvelope::Write(Box::new(request.into_write_request())),
-            ),
             ApiRequest::Clear(query) => self.dispatch(RequestEnvelope::Clear(query)),
             ApiRequest::Doctor(query) => self.dispatch(RequestEnvelope::Doctor(query)),
             ApiRequest::CompatibilityPreflight(preflight) => {
