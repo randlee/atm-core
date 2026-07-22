@@ -48,7 +48,7 @@ sunset_sprint = "follow-up: require resolve_team callers to pass an already-reso
 rule = "ATM-ENV-BOUNDARY-001"
 path = "crates/atm-core/src/identity/mod.rs"
 symbol = "resolve_runtime_sender_identity"
-line = "read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)"
+line = "read_cli_identity_from_env()?"
 why = "obsolete caller-owned identity fallback (already dead_code-gated for Phase AD removal); still reads ATM_IDENTITY via read_cli_identity_from_env() until the retirement sprint deletes the module."
 sunset_sprint = "follow-up: delete the obsolete identity module once its remaining test coverage is retired"
 

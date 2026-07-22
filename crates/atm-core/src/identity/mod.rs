@@ -65,7 +65,9 @@ pub(crate) fn resolve_sender_identity(
 pub(crate) fn resolve_runtime_sender_identity(
     _config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
-    read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)
+    read_cli_identity_from_env()?
+        .map(|identity| identity.agent)
+        .ok_or_else(AtmError::identity_unavailable)
 }
 
 fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
