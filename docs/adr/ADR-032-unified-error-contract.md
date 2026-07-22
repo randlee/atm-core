@@ -33,8 +33,9 @@ that context is neither serialized nor exposed through a second accessor.
 
 ## Required invariants
 
-- One error response schema is used by UDS HTTP, HTTPS/TCP, CLI, graft, and
-  tests.
+- One error response schema is used by Unix UDS HTTP, loopback-TCP HTTP,
+  HTTPS/TCP, CLI, graft, and tests. HTTP failures use the normal HTTP status
+  plus this body; no outer `ResponseEnvelope::Error` wire variant exists.
 - A code has one canonical template or explicitly supplied safe detail; a
   second code-to-kind or code-to-text translation table is forbidden.
 - Error construction is centralized. Direct ad-hoc construction outside the

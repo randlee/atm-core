@@ -142,17 +142,15 @@ Phase-R redesign note:
   dependency; `sc-lint` is not part of the ATM product surface even when its
   verification model constrains Phase R gates
 
-Phase-S portability note:
-- Phase S closes the missed requirement that ATM daemon functionality must be
-  first-class on Windows as well as Unix-like hosts
-- the current authoritative target for same-host daemon access is one
-  cross-platform local IPC contract rather than a Unix-only local transport
-- the canonical daemon wire contract is documented in
-  [`./atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact frame constants, packet-kind numeric assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD rather
-  than restated piecemeal across product docs
-- the current daemon request/response packet family covers:
+Phase-AI portability note:
+- ATM daemon functionality is first-class on Windows as well as Unix-like hosts
+- the authoritative local access contract is Unix HTTP/UDS or loopback TCP and
+  Windows loopback TCP; peer access is HTTPS/TCP
+- the canonical daemon interface is documented in
+  [`./atm-daemon/http-api.md`](./atm-daemon/http-api.md) and ADR-033
+- route-specific schemas, HTTP status codes, and the OpenAPI artifact are
+  owned by that contract rather than restated piecemeal across product docs
+- the current daemon HTTP resource surface covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
   - `read`
@@ -308,7 +306,8 @@ Satisfied by:
 - SQLite-backed ATM mail source of truth
 - SQLite-backed team roster source of truth
 - singleton daemon runtime
-- Phase AI target daemon API: HTTP over local UDS and HTTPS over TCP for remote
+- Phase AI target daemon API: Unix HTTP over local UDS and loopback TCP,
+  Windows HTTP over loopback TCP, and HTTPS over TCP for remote
   peers. AI.1 intentionally retains the pre-migration local IPC baseline; the
   local HTTP target becomes live in AI.6 and the remote HTTPS target in AI.9.
 - Claude-compatible JSONL inbox ingress and export
@@ -2750,10 +2749,9 @@ Required testing architecture:
 - there is no approved "test daemon launch" path for ordinary ATM correctness
   tests
 - the primary test tiers are:
-  - CLI/composition tests using injected transport doubles such as
-    `FakeClientTransport`
-  - in-process integration tests using `LoopbackClientTransport` over the
-    shared request/response contracts
+  - CLI/composition tests using a fake HTTP application client
+  - in-process integration tests using the HTTP adapter over the shared
+    request/response contracts
   - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
     requirements only
 - real daemon process tests, if any, must be isolated to the daemon-runtime
@@ -3577,24 +3575,32 @@ mail correctness.
 ### 22.4 Transport And Routing Model
 
 - `REQ-CORE-TRANSPORT-001` Phase AI must replace the local frame protocol with
-  one HTTP daemon API with two production
-  adapters and one test adapter.
+  one HTTP daemon API with local and peer production ingress classes plus one
+  test adapter.
 
   Required behavior:
-  - same-host clients use HTTP over a Unix-domain socket on Unix and Windows
-    AF_UNIX; named-pipe support and fallback are forbidden
+  - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
+    Windows same-host clients use HTTP over loopback TCP only
   - remote peers use HTTPS over TCP
-  - both adapters call one HTTP router and the same application handlers
+  - all production adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
-    `/v1/atm/doctor`; their methods and schemas are the versioned OpenAPI
-    contract
+    `/v1/atm/doctor`; their typed route-specific schemas and methods are the
+    versioned OpenAPI contract
   - the test adapter exercises the same router/handler contract without a live
     socket
   - HTTP adapters perform decode, authentication, and response translation
   only; they must not perform SQLite mutation, acknowledgement mutation,
   recipient routing, or post-send emission
-  - Unix/Windows parity requires the same UDS HTTP tests on both platforms
+  - Windows loopback TCP binds only a loopback address and requires a daemon
+    created owner-readable endpoint record plus a 32-byte base64url local
+    capability; Unix UDS uses owner-only endpoint permissions
+  - ingress authentication creates `AuthenticatedIngress::Local` only after
+    the local capability or UDS ownership check, and
+    `AuthenticatedIngress::Peer` only after mTLS plus allowlist verification;
+    adapters must not infer local/peer status from socket family or address
+  - Unix/Windows parity requires equivalent local HTTP request/response tests:
+    UDS plus loopback TCP on Unix and loopback TCP on Windows
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
   router and injectable typed application handlers.
@@ -3657,6 +3663,12 @@ mail correctness.
   - one post-write router selects local nudge for an empty destination host and
     the HTTPS adapter for every present destination host, including `localhost`
     and the daemon's own advertised or bound IP address
+  - every canonical write orders idempotent persistence, optional receiver-side
+    acknowledgement mutation, and exactly one post-write router dispatch;
+    nudge or peer delivery must never occur before persistence
+  - a destination host is consumed as an origin-side routing selector before
+    an authenticated peer request reaches receiver-side routing; source host is
+    durable provenance shown by read/nudge/ack projections
   - the canonical local write may persist the sender's immutable outbound
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
@@ -3705,6 +3717,31 @@ mail correctness.
   - an unavailable peer returns one normal transport error for the attempted
     write; retry is an ordinary repeat of the immutable message identity
   - duplicate arrival is idempotent at storage by the existing message ULID
+  - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
+    reconciliation scan; it creates no delivery state
+
+- `REQ-CORE-TRANSPORT-003A` Bounded peer reconciliation may re-send canonical
+  immutable records after a peer reconnects without adding delivery state.
+
+  Required behavior:
+  - durable backend-neutral `PeerSyncPolicy.max_message_age` and
+    `max_batch_messages` control the feature; zero age disables it by default
+    and the batch cap defaults to 100
+  - an operator can enable policy and request a one-shot sync; after a normal
+    HTTPS write succeeds the daemon may run the same bounded sync for that peer
+  - storage queries locally persisted outbound records for the exact peer newer
+    than the configured age and returns their original ULID and immutable
+    payload through a storage trait
+  - every selected record uses the ordinary canonical HTTPS write request; no
+    receiver-specific replay path exists
+  - no outbox, replay store, retry queue, background monitor, checkpoint,
+    cursor, receipt, retry budget, or per-message delivery state is allowed
+  - an exact duplicate ULID/payload is a no-op; same ULID with different
+    immutable data returns a typed conflict, logs the discrepancy, preserves
+    the original record, and has no side effect or panic
+  - automatic sync is limited to one peer batch per 60 seconds using a bounded
+    in-memory peer cooldown with no payload or message-ID state; explicit sync
+    runs one batch immediately and neither path retries or backs off
 
 - `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
   accepts the canonical write request.
@@ -3721,6 +3758,9 @@ mail correctness.
   - acknowledgement is an ordinary canonical write with
     `acknowledges_message_id` populated; its state transition occurs only in
     the receiver's shared write handler
+  - the origin-created message ULID and all immutable fields are preserved on
+    the receiver; exact duplicates do not repeat a nudge or acknowledgement
+    transition, while a conflicting payload for the same ULID is a typed error
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
@@ -3746,8 +3786,8 @@ mail correctness.
   - if the configured listener bind address itself changes or disappears, the
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
-  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS and
-    HTTPS shutdown stop accepts then drain or cancel tracked requests within
+  - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
+    loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
     the one documented daemon shutdown deadline
 
 ### 22.5 Direct Post-Send And Native Agent Path

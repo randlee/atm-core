@@ -6,7 +6,15 @@ worktree: ../atm-core-worktrees/feature/pAI-s7-canonical-write-path
 target: integrate/phase-AI
 ---
 
-# AI.7 — canonical write path
+# AI.7 — canonical write path (historical, partially superseded)
+
+> **Known routing defect, owned by AI.12:** at the current integrated tip,
+> `DaemonRequestDispatcher::route_write` still branches on `request.to.host`
+> before persistence and directly invokes peer delivery; the retained
+> `PostWriteRouter::dispatch` is a no-op. AI.12 deletes that pre-persistence
+> branch and makes the ADR-035 pipeline true. This sprint's local ingress and
+> shared request work remains historical evidence, not proof that host routing
+> is already canonical.
 
 ## Deliverables
 
@@ -36,22 +44,24 @@ pub trait PostWriteRouter: Send + Sync {
 ```
 
 `acknowledges_message_id` is the sole semantic difference between send and
-ack. The handler owns persistence and receiver-side acknowledgement mutation;
-`PostWriteRouter` is the only host-routing decision point. It emits a local
-nudge only for an empty host; every present host uses HTTPS.
+ack. The handler owns persistence and receiver-side acknowledgement mutation.
+**Historical target, not current-tip fact:** `PostWriteRouter` is the only
+host-routing decision point, emitting a local nudge only for an empty host and
+HTTPS for every present host. AI.12 enforces that target.
 
 ## Acceptance criteria
 
 - The REST ack endpoint differs from send only by `acknowledges_message_id` on
   `WriteRequest`.
-- One structural call graph reaches storage and post-write emission for all
-  write ingress sources.
+- **Historical target, enforced by AI.12:** one structural call graph reaches
+  storage and post-write emission for all write ingress sources.
 - Same-message ULID replay is idempotent and does not duplicate a nudge.
 - A chat-qualified reply or ack preserves the original address and does not
   leak into a base-agent mailbox.
-- Exact self-address with an empty host is rejected once before write routing;
-  every present host, including localhost and own IP, follows ordinary HTTPS
-  routing with no special send or ack exception.
+- **Historical target, enforced by AI.12:** exact self-address with an empty
+  host is rejected once before write routing; every present host, including
+  localhost and own IP, follows ordinary HTTPS routing with no special send or
+  ack exception.
 
 ## Required validation
 

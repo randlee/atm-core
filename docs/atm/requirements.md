@@ -12,7 +12,7 @@ business logic or `atm-daemon` runtime behavior.
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-The canonical daemon packet contract lives in:
+The canonical daemon HTTP contract lives in:
 - [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2. Ownership
@@ -70,7 +70,7 @@ Initial crate requirement IDs:
   `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`, `REQ-P-OBS-002`,
   `REQ-P-OBS-003`.
 - `REQ-ATM-RUNTIME-001` `atm` owns CLI-to-runtime request mapping and daemon
-  client use in production over `AtmProtocol` and `ClientTransport` while
+  client use in production over the shared HTTP `DaemonApiClient` contract while
   preserving in-process testability. Satisfies the CLI/runtime-entry aspects of:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-TEST-RUNTIME-001`.
 - `REQ-ATM-RUNTIME-002` `atm` owns production daemon-unavailable behavior and
@@ -253,9 +253,9 @@ Requirement ID:
 Required Phase R rules:
 - in production, `atm` acts as a client of the runtime/daemon API rather than
   talking to SQLite or inbox JSONL directly
-- in production, `atm` depends on the shared `AtmProtocol` and the
-  `ClientTransport` contract rather than daemon internals
-- the daemon request/response packet surface currently covers:
+- in production, `atm` depends on the shared HTTP `DaemonApiClient` contract
+  rather than daemon internals
+- the daemon HTTP resource surface currently covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
   - `list`
@@ -289,8 +289,8 @@ Required Phase R rules:
   CLI-private bootstrap helper surface
 - CLI tests must not rely on `warm_daemon`, `ATM_DAEMON_BIN`, or other daemon
   spawn helpers to exercise normal command behavior
-- `CliComposition::from_transport(...)` remains the primary seam for injected
-  `FakeClientTransport` and loopback transport tests
+- `CliComposition` retains a primary seam for injected fake HTTP-client and
+  in-process HTTP-adapter tests
 - if a direct in-process service harness exists for tests, it must not become a
   second production path with divergent semantics
 - if the daemon is unavailable in production, `atm` must:

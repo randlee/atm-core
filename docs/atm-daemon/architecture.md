@@ -1,8 +1,9 @@
 # ATM-Daemon Crate Architecture
 
 > **Phase AI supersession notice:** the planned daemon has one REST router,
-> reached through HTTP/UDS locally and HTTPS/TCP remotely. Named pipes, custom
-> ATM frames, replay/retry runtime state, and separate peer handling are not
+> reached through Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and
+> HTTPS/TCP remotely. Legacy Windows local transports, custom ATM frames,
+> replay/retry runtime state, and separate peer handling are not
 > accepted architecture for new work; ADR-033 through ADR-036 govern the
 > migration.
 
@@ -13,7 +14,9 @@ This document defines the `atm-daemon` crate architectural boundary.
 It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns runtime composition only.
 
-The canonical daemon wire contract lives in:
+The legacy frame protocol ICD was intentionally deleted with the AI.6 HTTP
+router landing (`764bdd32`); it is not a retained or fallback contract.
+Phase AI's versioned target contract is:
 - [`./http-api.md`](./http-api.md)
 
 The crate-local machine-readable boundary inventory lives in:
@@ -183,8 +186,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   shared mutable coordination locks to callers
 - daemon watch/reconcile lanes are historical only and are not part of the
   accepted runtime architecture
-- `atm-daemon` owns one cross-platform local IPC protocol and the in-process
-  `LoopbackClientTransport` (`test-socket`) used to test its handler boundary.
+- Phase AI replaces the retired frame protocol with one HTTP application
+  contract served through local and peer adapters; the in-process test adapter
+  exercises the same router/handler boundary without a live socket.
 - the accepted same-host Windows local-IPC depth contract is fail-fast and
   unary:
   - a dispatcher panic during shutdown must record one panic-path failure and
@@ -197,9 +201,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - same-host local IPC endpoint naming and same-user access-control semantics
   must be owned by the local-IPC adapter rather than by callers constructing
   platform-specific socket paths, pipe names, or ACL details
-- the shared endpoint helper may derive a Windows named-pipe path from the
-  logical ATM endpoint contract, but that mapping must stay inside the
-  same-host transport boundary and remain identical for the daemon and CLI
+- the shared endpoint helper may publish a Windows loopback-TCP endpoint record
+  and local capability from the logical ATM endpoint contract; callers must
+  consume that record rather than derive a path, port, or capability
 - same-host daemon functionality must ship with feature parity on every
   supported operating system; Windows is not a compile-only or degraded-host
   target
@@ -214,10 +218,39 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
     owned adapter modules
-  - runtime composition, dispatcher, status cache, and runtime lanes
+  - runtime composition, dispatcher, replay, status cache, and runtime lanes
     must not depend directly on Unix-only host APIs
-- graceful shutdown finalization must remain bounded; observability flush
-  steps must time out rather than block daemon exit indefinitely
+- cross-host delivery is daemon-to-daemon only.
+- remote send success is defined by remote daemon acceptance for that one
+  request. Failure returns one typed transport error and creates no retry
+  state. ADR-038's explicit bounded canonical-record scan is the sole recovery
+  mechanism.
+  failures:
+  - timeout
+  - connection refused
+  - connection reset / aborted
+  - broken pipe
+  - host unreachable / network unreachable
+- non-retryable peer failures include protocol/frame corruption, TLS or
+  certificate mismatch, authentication mismatch, and explicit remote daemon
+  rejection
+- if the request body has been fully written but remote acceptance has not been
+  confirmed when the connection drops, the runtime returns one typed transport
+  failure and does not guess success or create delivery state
+- outbound peer attempts resolve and dial per attempt so ordinary interface
+  changes on the sender host do not require daemon restart
+- inbound TCP/TLS listeners should bind wildcard/unspecified addresses by
+  default; ordinary cable unplug / replug or Wi-Fi to ethernet rebinding must
+  not require restart in that default mode
+- if the configured listener bind address is an explicit local IP that later
+  disappears or changes, the runtime must enter degraded status and require
+  bounded reload/rebind via the runtime reload path
+- graceful shutdown finalization must remain bounded; best-effort SQLite WAL
+  checkpoint and observability flush steps must time out rather than block
+  daemon exit indefinitely
+- startup does not run a replay-resume sweep or require a SQLite-backed replay
+  store. ADR-038's explicitly requested, bounded canonical record scan is the
+  only reconciliation behavior and uses storage traits after peer success.
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
@@ -256,7 +289,7 @@ only in these daemon-owned areas:
 
 1. Same-host local IPC transport
    - Unix: Unix domain socket
-   - Windows: AF_UNIX HTTP local IPC
+   - Windows: loopback TCP HTTP local IPC
 2. Runtime lifecycle-control source
    - Unix: signal-based control source
    - Windows: console or service-control source
@@ -278,10 +311,9 @@ implementation is accepted.
 
 ## 3.0.2 Historical Shared Frame Contract
 
-Through AI.5, the daemon host shell uses the shared ATM frame contract defined
-in the retired custom frame contract. AI.6 replaces it with ADR-033's
-HTTP-over-UDS contract; the frame contract must not be extended or preserved as
-a fallback.
+Through AI.5, the daemon host shell used the shared ATM frame contract. AI.6
+retired that contract for ADR-033's HTTP contract; the frame contract must not
+be extended or preserved as a fallback.
 
 That includes:
 - one fixed ATM frame header
@@ -441,6 +473,7 @@ V.2 migration targets:
 - `runtime_health.rs`
 - `local_ipc_transport.rs`
 - `advisory_runtime.rs`
+- `peer_transport.rs`
 - `host_ownership.rs`
 - `lifecycle_control.rs`
 - `runtime_status_cache.rs`
@@ -453,7 +486,7 @@ V.3 deletion targets:
   meaning after the fact
 
 Transport dispatcher rule:
-- local-IPC listener/connection receive loops are deliberately tiny
+- local-IPC and TCP/TLS listener/connection receive loops are deliberately tiny
 - they may:
   - read a framed request
   - parse a qualified request type
@@ -465,7 +498,8 @@ Transport dispatcher rule:
   - emit notifications directly
   - embed workflow/business-state transitions
 - the same dispatcher/handler contract must back the in-process `test-socket`
-  transport so handler behavior is testable without host socket code
+  transport so handler behavior is testable without Unix-specific or TCP/TLS
+  host code
 - same-host functional coverage must also exercise the real local-IPC adapter
   on Unix and Windows through one shared harness shape; a Unix-only host test
   suite is not sufficient for Phase S closeout
@@ -480,7 +514,8 @@ Dispatcher/handler rule:
   adapter
 - concrete request-family behavior belongs to injectable handlers behind that
   dispatcher
-- local IPC and the test transport share the same dispatcher/handler contract
+- same-host local-IPC and TCP/TLS adapters share the same dispatcher/handler
+  contract
 - the dispatcher itself stays thin and must not absorb request-family business
   logic
 
@@ -504,6 +539,9 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
+- `peer_transport`
+  - owns remote delivery, replay, retry, and remote transport-specific failure
+    handling
 
 Historical-only retired partitions:
 - `watch_runtime`
@@ -643,6 +681,7 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
+- bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 
@@ -653,6 +692,7 @@ Required saturation behavior:
   in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
   reporting through `DaemonIngestQueueSaturated`; no silent drop
+- retry queue full: fail remote send attempt rather than enqueueing unbounded
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
   removed entries project as explicit `unknown` on later snapshot/doctor reads
@@ -692,6 +732,9 @@ Architectural rules:
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
+- per-leg TCP/TLS connect deadline: `5s`
+- per-leg TCP/TLS read/write deadline: `5s`
+- remote synchronous wait deadline: `10s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
@@ -758,12 +801,16 @@ Doctor health contract distinction:
 Crash recovery must preserve durable truth and compatibility export ordering.
 
 Required rules:
-- durable ordering is `SQLite commit -> Claude export`
+- durable ordering is `SQLite commit -> Claude export / remote handoff`
 - export/re-export must be keyed by durable `message_key`
 - if a crash occurs after SQLite commit but before export completes, recovery
   must resume from durable state keyed by `message_key`
+- bounded retry/re-export state required after daemon crash must be stored in
+  SQLite with an expiry/deadline, not only in RAM
 - WAL checkpoint is attempted on graceful shutdown, but crash recovery must not
   depend on graceful shutdown having completed
+- recovery must not turn bounded transient retry state into a long-lived
+  durable remote outbox; expired retry rows are purged/fail closed on replay
 
 ## 4. ADR Namespace
 

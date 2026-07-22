@@ -9,8 +9,9 @@
 
 ## Transport and handler rule
 
-The same REST router serves HTTP over local UDS and HTTPS over TCP. A local
-client supplies the structured caller address in the canonical write request;
+The same REST router serves HTTP over Unix UDS, local loopback TCP, and HTTPS
+over TCP. Windows uses loopback TCP only; Unix supports both UDS and loopback
+TCP. A local client supplies the structured caller address in the canonical write request;
 the shared handler validates it under the local caller/roster policy. HTTPS
 authentication establishes the peer identity for transport authorization and
 never rewrites that caller address. The router maps resources to shared
@@ -27,8 +28,11 @@ and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
 
 Remote HTTPS requires mTLS plus the configured exact peer identity and pinned
-certificate fingerprint. Local UDS uses endpoint ownership/permissions. These
-are adapter concerns and do not alter endpoint schemas.
+certificate fingerprint. Unix UDS uses endpoint ownership/permissions.
+Loopback TCP binds only a loopback address and requires the daemon-created
+owner-readable endpoint record plus `X-ATM-Local-Capability` (32-byte base64url
+capability). These checks create typed local or peer ingress context before the
+router; socket family and address never determine request semantics.
 
 All routes have a bounded request deadline and reject a body over `1_048_576`
 bytes before decode. UDS uses the `3s` same-host deadline; HTTPS uses the documented `5s`
@@ -68,7 +72,9 @@ destination without a separate acknowledgement route.
 - Successful creation returns `201 Created`, the immutable message identity,
   and a `Location` pointing to `/message/{message-id}`.
 - Idempotent creation of an existing message ULID returns the existing resource
-  projection without a second persistence or nudge event.
+  projection without a second persistence or nudge event. Reusing a ULID with
+  different immutable content returns the typed conflict error; it preserves
+  the original record and performs no side effect.
 - Every failure uses ADR-032's JSON `{ "code", "message" }` error shape.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.

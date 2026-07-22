@@ -1,10 +1,10 @@
 # ATM CLI Architecture
 
-> **Phase AI supersession notice:** the planned daemon API is REST over HTTP:
-> local UDS on Unix and Windows AF_UNIX, and HTTPS/TCP for remote peers. Older
-> references to named pipes, custom ATM frames, remote replay/retry state, or
-> a separate peer runtime are historical only. ADR-032 through ADR-036 and
-> `REQ-CORE-TRANSPORT-*` govern new work.
+> **Phase AI target — not yet implemented:** the daemon API becomes REST over
+> HTTP: Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and HTTPS/TCP for
+> remote peers. ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern that
+> migration. The current implementation remains the custom transport contract
+> documented by the current boundary manifests.
 
 ## 1. Overview
 
@@ -82,7 +82,7 @@ moved into:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
-- [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
@@ -110,13 +110,9 @@ Phase-S portability note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
-- Phase-S custom-frame protocol material is historical only. The active daemon
-  transport contract is HTTP: local HTTP-over-UDS and peer HTTPS, as defined
-  by ADR-033 and the daemon OpenAPI document.
-- The current daemon API surface is intentionally smaller than the retained
-  CLI surface:
-  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
-  - non-packet retained surfaces: `log`, `teams`, `members`
+- the legacy frame protocol is deleted and has no fallback contract
+- Phase AI's target HTTP resources and schemas are owned by
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md)
 - S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
   implementation line that refines the queue-query packet mapping instead of
   preserving the old multi-message `read` response shape as the final
@@ -163,7 +159,7 @@ The post-Q product runtime is implemented by five crates:
 - `atm`
 - `atm-daemon`
 - `atm-runtime`
-- `atm-storage-rusqlite`
+- `atm-rusqlite`
 
 Product-level boundary rules:
 
@@ -174,14 +170,14 @@ Product-level boundary rules:
   runtime state, request routing, and daemon-owned runtime projection.
 - `atm-runtime` owns concrete runtime/store composition and storage-neutral
   doctor/runtime assembly for daemon and direct CLI doctor callers.
-- `atm-storage-rusqlite` owns the first concrete SQLite implementation of the durable
+- `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
 - `atm-runtime` must remain a thin composition crate rather than a second
   daemon or workflow host.
-- `atm-storage-rusqlite` must not absorb workflow or command logic; it implements store
+- `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
   machine-readable contract used to drive architectural linting and review
@@ -240,25 +236,31 @@ Crate-local boundary detail is owned by:
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
-- [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
-- [`docs/atm-storage-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+- [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current daemon boundary direction:
-- shared request/response contract: `ApiRequest` and `ApiResponse` in `atm-core`
-- client boundary: `DaemonApiClient`, used by CLI, graft, and test adapters
-- ingress routing boundary: `ApiRouter`, reached from HTTP-over-UDS locally
+Current Phase R boundary direction:
+- shared protocol contract: `AtmProtocol` in `atm-core`
+- outbound transport boundary: `ClientTransport`
+- inbound transport boundary: `ServerTransport`
+- request routing boundary: `RequestDispatcher`
 - outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
 - current production composition ownership:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+- Phase AI target boundaries (not yet implemented):
+  - `ApiRequest` / `ApiResponse` application contract
+  - `DaemonApiClient` for CLI, graft, and tests
+  - `ApiRouter` reached by every HTTP transport adapter
+  - `PostWriteRouter` invoked after canonical persistence
 - Phase AA target ownership:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
-  - relocked boundary records forbid a direct `atm-daemon -> atm-storage-rusqlite`
+  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
     edge; any reintroduction must fail the Rust
     `crates/atm-architecture/` dependency guard (`cargo test --package
     atm-architecture`), which is the sole code-driven boundary enforcement
@@ -1793,22 +1795,27 @@ Logging architecture:
 
 ## 15. Error Model
 
-**Historical through AI.2.** AI.3 replaces this shape with ADR-032's
-serializable `{ code, message }` `AtmError`; `AtmErrorKind`, recovery, and
-captured source fields are not accepted protocol contract after AI.3.
+**Current implementation.** `AtmError` is defined in `atm-storage`. Its
+structured internal form remains distinct from the Phase AI target HTTP error
+body, which ADR-032 proposes as serializable `{ code, message }` and does not
+redefine the internal error type.
 
 Root public error:
 
 ```rust
 pub struct AtmError {
     pub code: AtmErrorCode,
+    pub kind: AtmErrorKind,
     pub message: String,
+    pub recovery: Vec<String>,
+    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub backtrace: Backtrace,
 }
 ```
 
 ```rust
 pub enum AtmErrorCode {
-    // single central registry defined in crates/atm-storage/src/error_codes.rs
+    // single central registry re-exported from atm-storage
 }
 ```
 
@@ -2229,7 +2236,7 @@ Phase U removed weak round-trip provenance from the durable mailbox contract.
 Current executed rule:
 - `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
   no longer part of the mailbox-row schema
-- `recorded_at` remains SQLite-owned ingest timing in `atm-storage-rusqlite`, not
+- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
   caller-supplied message data
 
 Governing ADR:
@@ -2529,6 +2536,8 @@ concrete SQLite table names:
     - compatibility `message_id`
 - one canonical mutable message-state table
   - logical `message_state` projection
+- `mail_ingest_replay_states`
+  - logical `inbox_ingest` replay/high-water projection
 - one canonical roster/member table
   - per-member durable projection keyed by `(team_name, agent_name)`
 
@@ -2549,6 +2558,7 @@ Minimum index/constraint rules:
   - recipient/team mailbox projection
   - task lookup
   - message-state projection
+  - ingest replay/high-water tracking
 
 Minimum canonical roster-member durable fields:
 - `team_name`
@@ -2715,7 +2725,7 @@ Architectural rules:
 
 ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform HTTP-over-AF_UNIX IPC contract on Unix and Windows
+- same-host target: HTTP over Unix UDS or loopback TCP; Windows loopback TCP
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
@@ -2807,6 +2817,7 @@ Minimum method set:
 - run transaction
 - upsert/load message rows
 - upsert/load unified message state
+- record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
@@ -2979,7 +2990,7 @@ Architectural rules:
   lists and the inline notes that supersede them under the current runtime
 - SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
   `rusqlite` blocking-I/O rules are defined in
-  [`docs/atm-storage-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+  [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
   Sections 4, 5, and 6 and are part of this same current-runtime error boundary
 - `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission

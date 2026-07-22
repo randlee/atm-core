@@ -60,7 +60,7 @@ endpoint-preparation defects.
 4. Close `ATM-QA-S4-001` in
    `crates/atm-daemon/src/local_ipc_transport.rs::prepare_local_ipc_endpoint`.
 4.1 Replace the silent non-Unix `Ok(())` path with explicit documented
-    behavior that matches the named-pipe endpoint-preparation contract.
+    behavior that matches the retired endpoint-preparation contract.
 4.2 Keep the adapter behavior platform-neutral above the owned local-IPC
     implementation layer.
 

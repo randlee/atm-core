@@ -957,7 +957,7 @@ baseline. It retains only the local-IPC singleton while deleting peer transport,
 replay/store support, and retired boundary adapters. It supersedes the abandoned
 PR #590 line. AI.2 onward rebuild from that baseline: HTTP over UDS replaces the
 custom local frame protocol, and the same router later serves authenticated
-HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
+HTTPS/TCP peers. The final line has no legacy Windows local-transport fallback, peer/replay state, parallel
 send/ack paths, or cross-host-specific mailbox logic.
 
 Implementation Branches:

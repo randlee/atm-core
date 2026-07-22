@@ -1,6 +1,6 @@
 # ATM-Daemon Boundary Inventory
 
-> **Phase AI supersession notice:** the daemon consumes storage traits and may
+> **Phase AI target — not yet implemented:** the daemon consumes storage traits and may
 > not acquire a SQLite/replay boundary through `atm-runtime` or another
 > indirection. ADR-036 is the governing crate-topology decision.
 
@@ -114,24 +114,44 @@ Canonical machine-readable boundary source:
 
 Purpose:
 - Historically owned the same-host listener for the custom-frame contract.
-  AI.6 replaces it with an HTTP-over-UDS adapter that calls `ApiRouter`.
+  AI.11 is planned to replace it with Unix HTTP-over-UDS and loopback TCP, plus Windows
+  loopback-TCP, adapters that call `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The target boundary is one cross-platform HTTP-over-AF_UNIX contract on Unix
-  and Windows. Named pipes, custom frame headers, and frame decoders are
-  retired and must not be retained as fallback.
+- The target boundary is Unix HTTP-over-UDS plus loopback TCP, and Windows
+  loopback TCP only. Legacy Windows local transports, custom frame headers, and
+  frame decoders are retired and must not be retained as fallback.
 - The adapter owns HTTP decode/response translation and same-user endpoint
   ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
-  Windows pipe names, or platform-specific ACL details directly
+  loopback ports/capabilities, Windows pipe names, or platform-specific ACL
+  details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
 - the current integrate/phase-S branch still keeps `handle_connection(...)`
   co-located with the listener runtime inside `atm_daemon::local_ipc_transport`
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
+
+## PeerClientTransportAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
+
+Current implementation:
+- `PeerClientTransport` is a private `ClientTransport` implementation in
+  `atm_daemon::peer_transport`, constructed only by
+  `atm_daemon::composition::compose_runtime`.
+- It owns outbound remote protocol requests, peer request deadlines, and peer
+  response decoding for the current `AtmProtocol` request/response contract.
+- It must not access SQLite or spawn processes. No external crate may depend
+  on it or construct it directly.
+- The active implementation's bounded timeout/retry and durable replay-resume
+  behavior is legacy transport behavior. Phase AI's proposed HTTP peer adapter
+  is specified separately and does not change this active manifest until its
+  owning sprint lands.
 
 ## LifecycleControlSourceAdapter
 
