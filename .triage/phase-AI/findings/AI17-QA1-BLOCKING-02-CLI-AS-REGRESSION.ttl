@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION" ;
+  triage:title "resolve_cli_inspection_caller_context unconditionally resolves ambient ATM_IDENTITY before --as check" ;
+  triage:description "resolve_cli_inspection_caller_context calls resolve_identity_component(None) to resolve ambient_identity unconditionally before checking overrides.identity_override, so `atm list --as <agent>` / `atm peek --as <agent>` fails with IdentityUnavailable when ATM_IDENTITY is unset. Breaks documented '--as, else ATM_IDENTITY' OR semantics (requirements.md 4.1). Untested by existing suite." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "functional-regression" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 37 ;
+  triage:snippet "let ambient_identity = resolve_identity_component(None)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

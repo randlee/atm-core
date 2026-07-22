@@ -22,7 +22,7 @@
   triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
   triage:reviewedBy "req-qa" ;
   triage:reviewedBy "team-lead" ;
-  triage:resolution "FIXED (verified directly by team-lead, docs-only): docs/plans/phase-ai/sprint-ai-6.md frontmatter now status: complete, with an explicit 'Closure waiver' section (lines 102-109) recording the deferral of Deliverable 8's full AST graph (MessageWriter::write/PostWriteRouter::dispatch, AI.7-scope types) to AI.7, while AI.6 closes the buildable part via a real ApiRequest::Write discriminant. docs/project-plan.md now carries an AI.6 row (line 974: complete, feature/pAI-s6-http-uds-router, notes the AI.7 write-graph waiver). Verified present at branch tip 6b4645df on feature/pAI-s6-http-uds-router." ;
+  triage:resolution "FIXED (verified directly by team-lead, docs-only): docs/plans/phase-ai/sprint-ai-6.md frontmatter now status: complete, with an explicit 'Closure waiver' section (lines 102-109) recording the deferral of Deliverable 8's full AST graph (MessageWriter::write/PostWriteRouter::dispatch, AI.7-scope types) to AI.7, while AI.6 closes the buildable part via a real ApiRequest::Write discriminant. docs/project-plan.md now carries an AI.6 row (line 974: complete, feature/pAI-s6-http-uds-router, notes the AI.7 write-graph waiver). Verified present at branch tip 6b4645df on feature/pAI-s6-http-uds-router." .
 
 <urn:atm:triage:occurrence/AI6-SPRINT-DOC-WAIVER-MISSING/pAI-s6/1>
   a triage:Occurrence ;

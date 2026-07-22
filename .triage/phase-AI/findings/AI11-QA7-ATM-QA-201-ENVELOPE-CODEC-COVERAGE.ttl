@@ -19,6 +19,11 @@
   triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
   triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> .
 
+<urn:atm:triage:finding/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE>
+  triage:assignedTo "cwin" ;
+  triage:dispatchChannel "direct-paste-non-atm" ;
+  triage:notes "ASSIGNMENT UPDATE (team-lead, 2026-07-22): the AI.11 QA-7 fast-follow batch (this finding plus AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST and AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK) was reassigned from arch-ctm to cwin. Original ATM dispatch was message 01KY5PZ9PCJMZP3ZFA92NGCGS5 (task id AI11-QA7-FASTFOLLOW-DELETION-GATE-SCOPE, sent to arch-ctm). arch-ctm was subsequently stood down from this batch via ATM message 01KY5S0ZFQCPA89KD5WTM0Z6CA. cwin has no ATM identity, so the reassignment dispatch to cwin was delivered by direct-paste outside the ATM channel and left no ATM message trail on cwin's side; the stand-down message to arch-ctm is the only ATM-side record of the handoff. This note is the canonical audit trail for the reassignment." .
+
 <urn:atm:triage:occurrence/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE/s11/1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
