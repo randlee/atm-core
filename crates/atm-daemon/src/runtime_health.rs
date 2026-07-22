@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::io::Write as _;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
