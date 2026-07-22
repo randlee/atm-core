@@ -2,7 +2,7 @@
 //! arguments, flags) only ever grows across a release.
 //!
 //! This walks the *live* `clap::Command` tree of the real `atm` binary (via
-//! the hidden `ATM_CLI_SURFACE_DUMP=json` seam documented in
+//! the hidden `__dump-cli-surface --format json` command documented in
 //! `crates/atm/src/cli_surface.rs` and `crates/atm/src/main.rs` — not by
 //! parsing `--help` text) and diffs it structurally against the committed
 //! `cli_surface_baseline.json`. It hard-fails on:
@@ -21,8 +21,9 @@
 //! ```
 //!
 //! or via `cargo run -p agent-team-mail --example gen_cli_docs`, which
-//! regenerates both this baseline and `docs/atm/cli-reference.md` from the
-//! same live tree in one step. No established bless/regen convention exists
+//! regenerates both this baseline and the version-suffixed
+//! `docs/atm/cli-reference-<version>.md` from the same live tree in one
+//! step. No established bless/regen convention exists
 //! elsewhere in this repo (searched for `bless`/`UPDATE_*` env vars in
 //! existing golden-file tests and found none), so this follows the common
 //! Rust ecosystem `UPDATE_<THING>=1` pattern (cf. `UPDATE_EXPECT`,
@@ -40,13 +41,13 @@ fn baseline_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BASELINE_PATH_COMPONENTS)
 }
 
-/// Invokes the real `atm` binary's hidden CLI-surface JSON dump and parses
-/// the result. This is the exact same [`clap::Command`] tree `atm` uses at
-/// runtime — there is no separate/parallel definition to drift from it.
+/// Invokes the real `atm` binary's hidden parsed CLI-surface JSON command and
+/// parses the result. This uses the normal parser/bootstrap path and the exact
+/// same [`clap::Command`] tree `atm` uses at runtime.
 fn live_surface_json() -> Value {
     let atm_bin = env!("CARGO_BIN_EXE_atm");
     let output = Command::new(atm_bin)
-        .env("ATM_CLI_SURFACE_DUMP", "json")
+        .args(["__dump-cli-surface", "--format", "json"])
         .output()
         .expect("failed to run `atm` for CLI-surface introspection");
     assert!(
@@ -58,6 +59,28 @@ fn live_surface_json() -> Value {
     let stdout =
         String::from_utf8(output.stdout).expect("CLI-surface dump output must be valid UTF-8");
     serde_json::from_str(&stdout).expect("CLI-surface dump output must be valid JSON")
+}
+
+#[test]
+fn legacy_environment_variable_cannot_bypass_clap_parsing() {
+    let atm_bin = env!("CARGO_BIN_EXE_atm");
+    let output = Command::new(atm_bin)
+        .env("ATM_CLI_SURFACE_DUMP", "json")
+        .arg("--version")
+        .output()
+        .expect("failed to run `atm --version`");
+
+    assert!(
+        output.status.success(),
+        "`atm --version` exited with {:?}: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).expect("version output must be valid UTF-8");
+    assert!(
+        stdout.starts_with("atm "),
+        "legacy environment variable must not replace parsed --version output: {stdout:?}"
+    );
 }
 
 fn as_str<'a>(value: &'a Value, field: &str) -> &'a str {

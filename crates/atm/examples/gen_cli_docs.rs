@@ -3,28 +3,30 @@
 //!
 //! `crates/atm` ships only a `[[bin]]` target (no library), so this example
 //! cannot import `commands::Cli` directly. Instead it builds (if needed) and
-//! shells out to the sibling `atm` binary with the hidden
-//! `ATM_CLI_SURFACE_DUMP` environment variable (see
-//! `crates/atm/src/cli_surface.rs` and `crates/atm/src/main.rs`), which walks
-//! the live `clap::Command` tree in-process and prints canonical output
-//! before any normal argument parsing occurs. This keeps a single source of
-//! truth for the walk/render logic — this example is just a thin driver that
-//! writes the two outputs to disk.
+//! shells out to the sibling `atm` binary with the hidden parsed
+//! `__dump-cli-surface` subcommand (see `crates/atm/src/cli_surface.rs` and
+//! `crates/atm/src/main.rs`), which walks the live `clap::Command` tree and
+//! prints canonical output through the normal CLI bootstrap path. This keeps a
+//! single source of truth for the walk/render logic — this example is just a
+//! thin driver that writes the two outputs to disk.
 //!
 //! # Usage
 //!
 //! ```text
-//! cargo run -p agent-team-mail --example gen_cli_docs
+//! cargo run -p agent-team-mail --features cli-surface-dump --example gen_cli_docs
 //! ```
 //!
 //! This regenerates:
 //! - `crates/atm/tests/cli_surface_baseline.json` (consumed by the
 //!   `cli_surface` diff-gate integration test)
-//! - `docs/atm/cli-reference.md` (a generated, human-readable CLI reference;
-//!   do not hand-edit)
+//! - `docs/atm/cli-reference-<version>.md` (a generated, human-readable CLI
+//!   reference for the current crate version; do not hand-edit)
 //!
-//! Run this in the same commit that adds or changes any `atm` subcommand or
-//! argument, then review the diff before committing.
+//! The reference doc's filename is version-suffixed (e.g.
+//! `cli-reference-1-3-1.md` for version `1.3.1`) so each release's snapshot
+//! is preserved as a historical baseline rather than overwritten by the
+//! next regeneration. Run this in the same commit that adds or changes any
+//! `atm` subcommand or argument, then review the diff before committing.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,6 +41,12 @@ fn workspace_root() -> PathBuf {
         .and_then(Path::parent)
         .expect("crates/atm has a workspace root two directories up")
         .to_path_buf()
+}
+
+/// Turns the crate version (e.g. `1.3.1`) into the dash-separated slug used
+/// in the versioned CLI reference filename (e.g. `1-3-1`).
+fn version_slug() -> String {
+    env!("CARGO_PKG_VERSION").replace('.', "-")
 }
 
 /// Locates the sibling `atm` binary alongside this example's own executable,
@@ -63,7 +71,7 @@ fn ensure_atm_binary_built() -> PathBuf {
         .file_name()
         .is_some_and(|name| name == "release");
     let mut build = Command::new(env!("CARGO"));
-    build.args(["build", "--bin", "atm"]);
+    build.args(["build", "--bin", "atm", "--features", "cli-surface-dump"]);
     if release {
         build.arg("--release");
     }
@@ -83,7 +91,7 @@ fn ensure_atm_binary_built() -> PathBuf {
 
 fn dump(atm_bin: &Path, mode: &str) -> String {
     let output = Command::new(atm_bin)
-        .env("ATM_CLI_SURFACE_DUMP", mode)
+        .args(["__dump-cli-surface", "--format", mode])
         .output()
         .unwrap_or_else(|error| panic!("failed to run {} ({mode}): {error}", atm_bin.display()));
     assert!(
@@ -105,7 +113,7 @@ fn main() {
     println!("wrote {}", baseline_path.display());
 
     let markdown = dump(&atm_bin, "markdown");
-    let doc_path = workspace_root().join("docs/atm/cli-reference.md");
+    let doc_path = workspace_root().join(format!("docs/atm/cli-reference-{}.md", version_slug()));
     std::fs::write(&doc_path, markdown)
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", doc_path.display()));
     println!("wrote {}", doc_path.display());
