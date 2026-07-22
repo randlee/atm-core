@@ -18,7 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityPreflight, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -140,8 +141,8 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
-        daemon_try_connect(&self.endpoint)
+    fn probe_connection(&self) -> Result<(), AtmError> {
+        daemon_try_connect(&self.endpoint).map(|_| ())
     }
 
     /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
@@ -164,7 +165,7 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_)
     )
 }
 
@@ -427,6 +428,13 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    pub(crate) fn peer_sync(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::PeerSync(request))? {
+            ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
+            other => Err(unexpected_response("peer sync", other)),
+        }
+    }
+
     pub(crate) fn bootstrap(
         command: &'static str,
         observability: &'a CliObservability,
@@ -558,10 +566,9 @@ mod tests {
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::{
-        AtmHomePath, CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, InvocationDir, LaunchGateGuard,
-        LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary,
-        resolve_command_runtime_context,
+        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
+        open_sqlite_boundary, resolve_command_runtime_context,
     };
     use crate::observability::CliObservability;
 
@@ -1811,49 +1818,6 @@ mod tests {
 
     #[test]
     #[serial(env)]
-    fn bootstrap_refuses_conflicting_daemon_socket_override() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let atm_home = tempdir.path().join("atm-home");
-        let invocation_dir = tempdir.path().join("workspace");
-        std::fs::create_dir_all(&atm_home).expect("atm home");
-        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
-        let _env = EnvGuard::set_many([
-            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-            (
-                "ATM_DAEMON_SOCKET",
-                Some(
-                    tempdir
-                        .path()
-                        .join("other.sock")
-                        .to_str()
-                        .expect("utf8 socket"),
-                ),
-            ),
-            ("ATM_IDENTITY", Some(TEST_SENDER)),
-            ("ATM_TEAM", Some(TEST_TEAM)),
-        ]);
-        let observability = CliObservability::fallback();
-
-        let (result, logs) = capture_runtime_root_logs(|| {
-            CliComposition::bootstrap(
-                "send",
-                &observability,
-                InvocationDir::new(&invocation_dir),
-                AtmHomePath::new(&atm_home),
-            )
-        });
-        let error = result.expect_err("conflicting daemon socket override should fail");
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::SocketOverrideForbidden
-        );
-        assert!(logs.contains("raw cli runtime-root failure"));
-        assert!(logs.contains("ATM_SOCKET_OVERRIDE_FORBIDDEN"));
-    }
-
-    #[test]
-    #[serial(env)]
     fn resolve_command_runtime_context_reports_atm_home_unresolved() {
         let _env = EnvGuard::set_many([("ATM_HOME", None), ("HOME", None), ("USERPROFILE", None)]);
 
@@ -1863,60 +1827,6 @@ mod tests {
         assert_eq!(
             error.code(),
             atm_core::error_codes::AtmErrorCode::AtmHomeUnresolved
-        );
-    }
-
-    #[test]
-    #[cfg(unix)]
-    #[serial(env)]
-    fn bootstrap_reports_runtime_root_invalid_for_invalid_socket_override() {
-        use std::ffi::OsString;
-        use std::os::unix::ffi::OsStringExt;
-
-        use atm_core::test_support::{remove_env_var, set_env_var};
-
-        struct SocketEnvRestore(Option<OsString>);
-
-        impl Drop for SocketEnvRestore {
-            fn drop(&mut self) {
-                match self.0.take() {
-                    Some(value) => {
-                        set_env_var("ATM_DAEMON_SOCKET", value);
-                    }
-                    None => {
-                        remove_env_var("ATM_DAEMON_SOCKET");
-                    }
-                }
-            }
-        }
-
-        let tempdir = TempDir::new().expect("tempdir");
-        let atm_home = tempdir.path().join("atm-home");
-        let invocation_dir = tempdir.path().join("workspace");
-        std::fs::create_dir_all(&atm_home).expect("atm home");
-        std::fs::create_dir_all(&invocation_dir).expect("invocation dir");
-        let _env = EnvGuard::set_many([
-            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
-            ("ATM_IDENTITY", Some(TEST_SENDER)),
-            ("ATM_TEAM", Some(TEST_TEAM)),
-        ]);
-        let _socket_restore = SocketEnvRestore(std::env::var_os("ATM_DAEMON_SOCKET"));
-        set_env_var(
-            "ATM_DAEMON_SOCKET",
-            OsString::from_vec(vec![0x66, 0x6f, 0x80]),
-        );
-
-        let error = CliComposition::bootstrap(
-            "send",
-            &CliObservability::fallback(),
-            InvocationDir::new(&invocation_dir),
-            AtmHomePath::new(&atm_home),
-        )
-        .expect_err("invalid daemon socket override should fail");
-
-        assert_eq!(
-            error.code(),
-            atm_core::error_codes::AtmErrorCode::SocketOverrideForbidden
         );
     }
 

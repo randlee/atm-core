@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "sprint": "AI.15",
+  "evidence_class": "mock-runner",
+  "physical_peer_pair": false,
+  "physical_windows_hardware": false,
+  "marker": "The AI.13 bidirectional peer-pair runner was exercised in mock/validate-only mode with placeholder loopback commands. No real send/read/nudge/ack crossed a network and no daemon was started. This is NOT ATM peer-pair evidence.",
+  "commit": "436493ab",
+  "runner": "scripts/smoke/run_peer_pair.py",
+  "invocation": [
+    "python3",
+    "scripts/smoke/run_peer_pair.py",
+    "--config",
+    "<mock-loopback-config>",
+    "--evidence-dir",
+    "<scratch>",
+    "--validate-only"
+  ],
+  "validate_only_exit_code": 0,
+  "mock_config": {
+    "role": "A",
+    "commit": "mock-loopback-not-a-tested-release",
+    "daemon_endpoint": "127.0.0.1:43101",
+    "peer_security": {
+      "trust_id": "mock-trust-record",
+      "certificate_fingerprint": "MOCKFINGERPRINTNOTAREALCERT0000000000000000000000000000000000000"
+    },
+    "cases_present_in_required_order": [
+      "preflight",
+      "local_smoke",
+      "send_read_nudge",
+      "reverse_send_read_nudge",
+      "requires_ack_reply",
+      "duplicate_ulid",
+      "unavailable_peer",
+      "untrusted_or_allowlist_rejection",
+      "failed_remote_ack"
+    ],
+    "commands": "placeholder true/false shims only; no atm or daemon-client calls"
+  },
+  "what_this_proves": "The runner's config schema, the required ordered AI.13 case set, the typed-error case contract, and the evidence-record mechanics accept a well-formed configuration on this host.",
+  "what_this_does_not_prove": "It does not run any real bidirectional Mac<->Windows case, does not exercise HTTPS/mTLS transport, and produces no same-ULID cross-host delivery evidence. Physical execution across a real macOS host and a real Windows host remains open (AI10-WINDOWS-001, AI14-QA1-EVIDENCE-GAP)."
+}

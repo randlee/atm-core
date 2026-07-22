@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
 );
 
+CREATE TABLE IF NOT EXISTS peer_sync_policies (
+    host TEXT NOT NULL PRIMARY KEY,
+    max_message_age_seconds INTEGER NOT NULL CHECK(max_message_age_seconds >= 0),
+    max_batch_messages INTEGER NOT NULL CHECK(max_batch_messages BETWEEN 1 AND 65535),
+    FOREIGN KEY(host) REFERENCES peer_trusted_peers(host) ON DELETE CASCADE
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
@@ -134,6 +141,9 @@ CREATE INDEX IF NOT EXISTS idx_peer_https_interfaces_enabled
 
 CREATE INDEX IF NOT EXISTS idx_peer_trusted_peers_enabled
     ON peer_trusted_peers(enabled);
+
+CREATE INDEX IF NOT EXISTS idx_peer_sync_policies_host
+    ON peer_sync_policies(host);
 "#;
 // `team_roster` is the single canonical durable roster truth. Runtime pid
 // continuity is transient daemon-owned state and must not be persisted here.

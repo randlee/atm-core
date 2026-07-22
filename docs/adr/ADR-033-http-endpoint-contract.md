@@ -20,8 +20,9 @@ The initial stable application surface is resource-oriented REST under
 | Resource | Initial operations |
 | --- | --- |
 | `/messages` | `GET` list/query, `POST` create/send |
-| `/message/{message-id}` | `GET` non-mutating inspection, `DELETE` clear where authorized |
-| `/message/{message-id}/read` | `POST` owner-only read-state mutation |
+| `/messages/inspect` | `POST` non-mutating inspection/query |
+| `/messages` | `DELETE` clear selected messages where authorized |
+| `/messages/read` | `POST` owner-only read-state mutation |
 | `/message/{message-id}/ack` | `POST` acknowledgement |
 | `/doctor` | `GET` doctor report |
 
@@ -70,6 +71,11 @@ UDS ownership authentication, and `AuthenticatedIngress::Peer` only after
 mTLS verification; socket family and address never classify an ingress. The
 adapter cannot perform recipient routing, storage mutation, acknowledgement
 mutation, or nudging.
+
+`local-http.json` includes the serving singleton instance ID. A loopback TCP
+client verifies that ID against the owner record before connecting; it rejects
+missing, stale, revoked, or mismatched metadata. Orderly shutdown records
+revocation and syncs it before removing the endpoint publication.
 
 Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and
 loopback-TCP HTTP. Windows has no alternate local transport or address-derived

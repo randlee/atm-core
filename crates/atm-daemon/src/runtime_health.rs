@@ -1,4 +1,4 @@
-use std::io::Write as _;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -14,21 +14,20 @@ use atm_core::{
     },
     error::{AtmError, AtmErrorCode},
     graft::{
-        GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-        read_graft_post_send_message, write_graft_post_send_message,
+        GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
+        graft_receiver_record_path_from_home,
     },
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
+        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::{WriteOutcome, WriteRequest, write_mail_with_runtime_and_post_send_emitter},
+    send::{PreparedWrite, WriteOutcome, WriteRequest, prepare_write_with_runtime},
 };
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
@@ -41,8 +40,8 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
+use atm_storage::{OutboundMessageQuery, PeerConfigStore};
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -92,111 +91,32 @@ impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
                 "recipient has no authoritative home_dir for graft post-send delivery",
             )
         })?;
-        let endpoint_path = graft_receiver_socket_path_from_home(
+        let record_path = graft_receiver_record_path_from_home(
             recipient_home_dir.as_path(),
             &target.recipient_team,
             &target.recipient,
         );
-        deliver_post_send_to_graft_receiver(&endpoint_path, event)
+        deliver_post_send_to_graft_receiver(&record_path, event)
     }
 }
 
 fn deliver_post_send_to_graft_receiver(
-    endpoint_path: &std::path::Path,
+    record_path: &std::path::Path,
     event: &PostSendHookEvent,
 ) -> Result<(), AtmError> {
-    let mut stream = connect_graft_receiver(endpoint_path, event)?;
-    apply_graft_post_send_deadlines(&stream, event)?;
     let request = GraftPostSendRequest {
         event: event.clone(),
     };
-    write_graft_post_send_message(
-        &mut stream,
+    match deliver_graft_post_send(
+        record_path,
         &request,
-        "failed to write graft post-send request",
-        "graft post-send request exceeded the bounded payload cap",
-    )
-    .map_err(|error| graft_transport_error(event, error))?;
-    stream.flush().map_err(|_source| {
-        graft_transport_error(
-            event,
-            AtmError::daemon_unavailable("failed to flush graft post-send request"),
-        )
-    })?;
-    match read_graft_post_send_message::<GraftPostSendResponse>(
-        &mut stream,
-        "failed to read graft post-send response",
-        "graft post-send response exceeded the bounded payload cap",
+        GRAFT_POST_SEND_CONNECT_DEADLINE,
+        GRAFT_POST_SEND_IO_DEADLINE,
     )
     .map_err(|error| graft_transport_error(event, error))?
     {
         GraftPostSendResponse::Delivered => Ok(()),
         GraftPostSendResponse::Error(error) => Err(error),
-    }
-}
-
-fn connect_graft_receiver(
-    endpoint_path: &std::path::Path,
-    event: &PostSendHookEvent,
-) -> Result<LocalSocketStream, AtmError> {
-    let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("graft-post-send-connect".to_string())
-        .spawn(move || {
-            let _ = result_tx.send(LocalSocketStream::connect(name));
-        })
-        .map_err(|_source| {
-            graft_recipient_unavailable_error(
-                event,
-                "failed to spawn bounded graft post-send connect helper",
-            )
-        })?;
-    match result_rx.recv_timeout(GRAFT_POST_SEND_CONNECT_DEADLINE) {
-        Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(_source)) => Err(graft_recipient_unavailable_error(
-            event,
-            "recipient has no active graft receiver path",
-        )),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(graft_recipient_unavailable_error(
-            event,
-            "timed out connecting to the graft receiver path",
-        )),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            Err(graft_recipient_unavailable_error(
-                event,
-                "graft post-send connect helper disconnected unexpectedly",
-            ))
-        }
-    }
-}
-
-fn apply_graft_post_send_deadlines(
-    stream: &LocalSocketStream,
-    event: &PostSendHookEvent,
-) -> Result<(), AtmError> {
-    apply_graft_post_send_deadline(
-        stream.set_recv_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send receive timeout",
-    )?;
-    apply_graft_post_send_deadline(
-        stream.set_send_timeout(Some(GRAFT_POST_SEND_IO_DEADLINE)),
-        event,
-        "failed to apply graft post-send send timeout",
-    )
-}
-
-fn apply_graft_post_send_deadline(
-    result: std::io::Result<()>,
-    event: &PostSendHookEvent,
-    message: &'static str,
-) -> Result<(), AtmError> {
-    match result {
-        Ok(()) => Ok(()),
-        #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
-        Err(_source) => Err(graft_recipient_unavailable_error(event, message)),
     }
 }
 
@@ -229,7 +149,9 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -241,6 +163,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
             .finish()
     }
@@ -475,6 +398,7 @@ impl DaemonRequestDispatcher {
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let peer_config_store = runtime_assembly.peer_config_store();
+        let outbound_message_query = runtime_assembly.outbound_message_query();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -501,7 +425,9 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
+            outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -555,7 +481,8 @@ fn with_shutdown_finalizer_registry<R>(
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 struct MessageRecord {
-    response: ResponseEnvelope,
+    prepared: PreparedWrite,
+    outbound_request: WriteRequest,
 }
 
 trait MessageWriter: Send + Sync {
@@ -563,7 +490,7 @@ trait MessageWriter: Send + Sync {
 }
 
 trait PostWriteRouter: Send + Sync {
-    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -575,29 +502,14 @@ impl DaemonRequestDispatcher {
     }
 
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        if request
-            .to
-            .as_ref()
-            .is_some_and(|address| address.host.is_some())
-        {
-            return self.dispatch_remote_write(request);
+        let mut message = MessageWriter::write(self, request)?;
+        if message.prepared.requires_post_write_route() {
+            PostWriteRouter::dispatch(self, &mut message)?;
         }
-        let message = MessageWriter::write(self, request.clone())?;
-        PostWriteRouter::dispatch(self, &request, &message)?;
-        Ok(message.response)
-    }
-
-    fn persist_local_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-        let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-        write_mail_with_runtime_and_post_send_emitter(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            &post_send_emitter,
-        )
-        .map(|outcome| match outcome {
+        let outcome = message
+            .prepared
+            .finish(&self.service_runtime, self.observability.as_ref())?;
+        Ok(match outcome {
             WriteOutcome::Sent(outcome) => {
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
             }
@@ -605,6 +517,10 @@ impl DaemonRequestDispatcher {
                 ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
             }
         })
+    }
+
+    fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
+        prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
     }
 
     fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
@@ -633,16 +549,44 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
+            RequestEnvelope::PeerSync(request) => {
+                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
+            }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
+}
 
-    fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        let host = request
+impl MessageWriter for DaemonRequestDispatcher {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
+        let outbound_request = request.clone();
+        self.persist_local_write(request).map(|prepared| {
+            let message_id = prepared.persisted_message_id();
+            MessageRecord {
+                outbound_request: outbound_request.with_origin_message_id(message_id),
+                prepared,
+            }
+        })
+    }
+}
+
+impl PostWriteRouter for DaemonRequestDispatcher {
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
+        let Some(host) = message
+            .outbound_request
             .to
             .as_ref()
             .and_then(|address| address.host.as_ref())
-            .ok_or_else(|| AtmError::validation("peer write requires a destination host"))?;
+        else {
+            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+            let post_send_emitter =
+                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+            message
+                .prepared
+                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
+            return Ok(());
+        };
         let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
             AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
         })?;
@@ -654,27 +598,139 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        transport.deliver(request, &peer, HttpsRequestDeadline::default())
+        transport.deliver(
+            message.outbound_request.clone(),
+            &peer,
+            HttpsRequestDeadline::default(),
+        )?;
+        self.reconcile_after_success(host, &peer, transport.as_ref(), true)
+            .map(|_| ())
     }
 }
 
-impl MessageWriter for DaemonRequestDispatcher {
-    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
-        self.persist_local_write(request)
-            .map(|response| MessageRecord { response })
-    }
-}
-
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> {
-        debug_assert!(
-            request
-                .to
-                .as_ref()
-                .is_none_or(|address| address.host.is_none())
+impl DaemonRequestDispatcher {
+    fn reconcile_after_success(
+        &self,
+        peer_host: &atm_core::types::HostName,
+        peer: &atm_storage::TrustedPeer,
+        transport: &dyn HttpsMessageTransport,
+        apply_cooldown: bool,
+    ) -> Result<u16, AtmError> {
+        let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
+        policy.validate()?;
+        if policy.max_message_age.is_zero() {
+            return Ok(0);
+        }
+        if apply_cooldown {
+            let now = std::time::Instant::now();
+            let mut cooldown = self
+                .peer_sync_cooldown
+                .lock()
+                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
+            if cooldown
+                .get(peer_host)
+                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
+            {
+                return Ok(0);
+            }
+            // This is only a short-lived rate limiter, never delivery state.
+            // Evicting the oldest entry bounds memory without affecting message data.
+            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
+            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
+                && !cooldown.contains_key(peer_host)
+                && let Some(oldest) = cooldown
+                    .iter()
+                    .min_by_key(|(_, instant)| **instant)
+                    .map(|(host, _)| host.clone())
+            {
+                cooldown.remove(&oldest);
+            }
+            cooldown.insert(peer_host.clone(), now);
+        }
+        let not_before = atm_core::types::IsoTimestamp::from_datetime(
+            chrono::Utc::now()
+                - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
+                    AtmError::validation("peer sync maximum message age is out of range")
+                })?,
         );
-        let _ = message;
-        Ok(())
+        let writes = self.outbound_message_query.recent_outbound_for_peer(
+            peer_host,
+            not_before,
+            policy.max_batch_messages,
+        )?;
+        let delivered = u16::try_from(writes.len()).map_err(|_| {
+            AtmError::validation("peer sync selection exceeded its configured batch limit")
+        })?;
+        // The peer transport contract honors this deadline. Keeping the whole
+        // pass bounded means shutdown never waits on an unbounded reconciliation
+        // loop or creates an independent worker/state machine.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        for stored in writes {
+            if std::time::Instant::now() >= deadline {
+                return Err(AtmError::daemon_unavailable(
+                    "peer reconciliation exceeded its bounded request deadline",
+                ));
+            }
+            let request: WriteRequest =
+                serde_json::from_str(&stored.request_json).map_err(|_source| {
+                    AtmError::mailbox_read("stored immutable peer outbound write is invalid")
+                })?;
+            transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+        }
+        Ok(delivered)
+    }
+
+    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+        let peer = self
+            .peer_config_store
+            .trusted_peer(&request.peer)?
+            .ok_or_else(|| AtmError::peer_config_validation("unknown trusted peer"))?;
+        let transport = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
+            })?;
+        let delivered =
+            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        Ok(PeerSyncOutcome {
+            peer: request.peer,
+            delivered,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reconcile_after_success_for_test(
+        &self,
+        peer_host: &atm_core::types::HostName,
+        peer: &atm_storage::TrustedPeer,
+        transport: &dyn HttpsMessageTransport,
+    ) -> Result<(), AtmError> {
+        self.reconcile_after_success(peer_host, peer, transport, true)
+            .map(|_| ())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn seed_peer_sync_cooldown_for_test(
+        &self,
+        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
+    ) {
+        self.peer_sync_cooldown
+            .lock()
+            .expect("peer sync cooldown lock")
+            .extend(entries);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn peer_sync_cooldown_for_test(
+        &self,
+    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
+        self.peer_sync_cooldown
+            .lock()
+            .expect("peer sync cooldown lock")
+            .clone()
     }
 }
 
@@ -883,7 +939,21 @@ impl ApiRouter for DaemonRequestDispatcher {
             ));
         }
         let request = request.into_inner();
-        let _ = ingress;
+        if let RequestEnvelope::Write(write) = &request {
+            match ingress {
+                AuthenticatedIngress::Local if write.origin_message_id.is_some() => {
+                    return Err(AtmError::validation(
+                        "local write requests must not supply an origin message ID",
+                    ));
+                }
+                AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() => {
+                    return Err(AtmError::validation(
+                        "peer write requests require authenticated source provenance",
+                    ));
+                }
+                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+            }
+        }
         self.dispatch(request).map(ApiResponse::new)
     }
 }
@@ -1012,7 +1082,9 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
+            outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }

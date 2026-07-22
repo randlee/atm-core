@@ -34,17 +34,49 @@ pub fn resolve_cli_inspection_caller_context(
             "--as and --chat-id are mutually exclusive",
         ));
     }
-    let mut caller_identity =
+    let ambient_identity = resolve_identity_component(None)?;
+    let caller_identity =
         resolve_identity_component(overrides.identity_override.map(|value| value.0))?;
-    if let Some(chat_id) = overrides.chat_id_override {
-        caller_identity.chat_id = Some(chat_id.0.parse()?);
-    }
+    let caller_chat_id = resolve_caller_chat_id(
+        overrides.identity_override.map(|_| &caller_identity),
+        overrides
+            .chat_id_override
+            .map(|value| value.0.parse())
+            .transpose()?
+            .as_ref(),
+        read_env_raw("ATM_CHAT_ID")?.as_deref(),
+        &ambient_identity,
+    )?;
     let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
     Ok(CallerContext {
         caller_identity: caller_identity.agent,
-        caller_chat_id: caller_identity.chat_id,
+        caller_chat_id,
         caller_team,
     })
+}
+
+/// Resolve the one ambient chat identity with CLI overrides taking precedence.
+pub fn resolve_caller_chat_id(
+    explicit_as: Option<&AgentIdentity>,
+    explicit_chat_id: Option<&ChatId>,
+    ambient_chat_id: Option<&str>,
+    ambient_identity: &AgentIdentity,
+) -> Result<Option<ChatId>, AtmError> {
+    if let Some(identity) = explicit_as {
+        return Ok(identity.chat_id.clone());
+    }
+    if let Some(chat_id) = explicit_chat_id {
+        return Ok(Some(chat_id.clone()));
+    }
+    if let Some(value) = ambient_chat_id {
+        let trimmed = value.trim();
+        return if trimmed.is_empty() {
+            Ok(None)
+        } else {
+            trimmed.parse().map(Some)
+        };
+    }
+    Ok(ambient_identity.chat_id.clone())
 }
 
 pub fn resolve_cli_mutation_caller_context(
@@ -63,7 +95,7 @@ pub fn resolve_cli_mutation_caller_context_with_overrides(
 ) -> Result<CallerContext, AtmError> {
     let ambient = read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)?;
     let caller = resolve_cli_inspection_caller_context(overrides)?;
-    if overrides.identity_override.is_some() && caller.caller_identity != ambient {
+    if overrides.identity_override.is_some() && caller.caller_identity != ambient.agent {
         return Err(AtmError::validation(
             "--as must use the same base agent as ATM_IDENTITY for mutating commands",
         ));
@@ -77,11 +109,16 @@ pub fn resolve_cli_caller_context(
     resolve_cli_inspection_caller_context(overrides)
 }
 
-pub fn read_cli_identity_from_env() -> Result<Option<AgentName>, AtmError> {
+/// Reads the complete ambient identity so callers retain an optional chat id.
+pub fn read_cli_identity_from_env() -> Result<Option<AgentIdentity>, AtmError> {
     read_env_raw("ATM_IDENTITY")?
         .map(parse_identity)
-        .map(|result| result.map(|identity| identity.agent))
         .transpose()
+}
+
+/// Reads only the ambient base agent for legacy callers that cannot carry chat identity.
+pub fn read_cli_agent_name_from_env() -> Result<Option<AgentName>, AtmError> {
+    Ok(read_cli_identity_from_env()?.map(|identity| identity.agent))
 }
 
 pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
@@ -89,7 +126,7 @@ pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
 }
 
 pub fn read_cli_identity_from_env_or_warn(warning_site: &'static str) -> Option<AgentName> {
-    match read_cli_identity_from_env() {
+    match read_cli_agent_name_from_env() {
         Ok(identity) => identity,
         Err(error) => {
             tracing::warn!(
@@ -122,7 +159,7 @@ fn resolve_identity_component(explicit: Option<&str>) -> Result<AgentIdentity, A
     let raw = match explicit {
         Some(value) => value.to_string(),
         None => match read_cli_identity_from_env()? {
-            Some(value) => return Ok(AgentIdentity::new(value, None)),
+            Some(value) => return Ok(value),
             None => return Err(AtmError::identity_unavailable()),
         },
     };
@@ -150,6 +187,9 @@ fn read_env_raw(key: &str) -> Result<Option<String>, AtmError> {
             )),
             "ATM_TEAM" => {
                 AtmError::team_invalid(format!("{key} must be valid UTF-8 text, got {:?}", value))
+            }
+            "ATM_CHAT_ID" => {
+                AtmError::validation(format!("{key} must be valid UTF-8 text, got {:?}", value))
             }
             _ => unreachable!("caller context only reads ATM-owned keys"),
         }),
@@ -187,12 +227,13 @@ mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentIdentity, ChatId};
 
     use super::{
         CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
-        read_cli_identity_from_env, read_cli_identity_from_env_or_warn, read_cli_team_from_env,
-        read_cli_team_from_env_or_warn, resolve_cli_inspection_caller_context,
-        resolve_cli_mutation_caller_context,
+        read_cli_agent_name_from_env, read_cli_identity_from_env_or_warn, read_cli_team_from_env,
+        read_cli_team_from_env_or_warn, resolve_caller_chat_id,
+        resolve_cli_inspection_caller_context, resolve_cli_mutation_caller_context,
     };
 
     #[test]
@@ -264,7 +305,7 @@ mod tests {
     fn optional_env_reads_return_none_when_missing() {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", None)]);
 
-        assert_eq!(read_cli_identity_from_env().expect("identity"), None);
+        assert_eq!(read_cli_agent_name_from_env().expect("identity"), None);
         assert_eq!(read_cli_team_from_env().expect("team"), None);
     }
 
@@ -300,5 +341,117 @@ mod tests {
         let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", Some("   "))]);
 
         assert_eq!(read_cli_team_from_env_or_warn("caller_context test"), None);
+    }
+
+    #[test]
+    fn chat_id_precedence_is_explicit_as_then_flag_then_environment_then_identity() {
+        let explicit_as: AgentIdentity = "agent:as-chat".parse().expect("qualified --as");
+        let explicit_chat_id: ChatId = "flag-chat".parse().expect("--chat-id");
+        let ambient_identity: AgentIdentity = "agent:identity-chat".parse().expect("identity");
+
+        assert_eq!(
+            resolve_caller_chat_id(
+                Some(&explicit_as),
+                Some(&explicit_chat_id),
+                Some("environment-chat"),
+                &ambient_identity,
+            )
+            .expect("explicit --as"),
+            Some("as-chat".parse().expect("chat id"))
+        );
+        assert_eq!(
+            resolve_caller_chat_id(
+                None,
+                Some(&explicit_chat_id),
+                Some("environment-chat"),
+                &ambient_identity,
+            )
+            .expect("--chat-id"),
+            Some("flag-chat".parse().expect("chat id"))
+        );
+        assert_eq!(
+            resolve_caller_chat_id(None, None, Some("environment-chat"), &ambient_identity)
+                .expect("ATM_CHAT_ID"),
+            Some("environment-chat".parse().expect("chat id"))
+        );
+        assert_eq!(
+            resolve_caller_chat_id(None, None, None, &ambient_identity).expect("identity chat"),
+            Some("identity-chat".parse().expect("chat id"))
+        );
+    }
+
+    #[test]
+    fn unqualified_as_and_empty_ambient_chat_explicitly_select_no_chat() {
+        let unqualified_as: AgentIdentity = "agent".parse().expect("unqualified --as");
+        let ambient_identity: AgentIdentity = "agent:identity-chat".parse().expect("identity");
+
+        assert_eq!(
+            resolve_caller_chat_id(
+                Some(&unqualified_as),
+                None,
+                Some("environment-chat"),
+                &ambient_identity
+            )
+            .expect("unqualified --as"),
+            None
+        );
+        assert_eq!(
+            resolve_caller_chat_id(None, None, Some("  "), &ambient_identity)
+                .expect("empty ATM_CHAT_ID"),
+            None
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn qualified_identity_and_atm_chat_id_preserve_distinct_precedence_values() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a:identity-chat")),
+            ("ATM_CHAT_ID", Some("environment-chat")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(
+            context.caller_chat_id,
+            Some("environment-chat".parse().expect("chat id"))
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn qualified_ambient_identity_supplies_chat_id_when_environment_override_is_absent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some("sender-a:identity-chat")),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect("caller context");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(
+            context.caller_chat_id,
+            Some("identity-chat".parse().expect("chat id"))
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn invalid_atm_chat_id_fails_before_dispatch() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_CHAT_ID", Some("invalid:delimiter")),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let error = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect_err("invalid ATM_CHAT_ID");
+
+        assert_eq!(error.code(), AtmErrorCode::AddressParseFailed);
     }
 }

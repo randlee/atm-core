@@ -1,5 +1,21 @@
 {
   "paths": {
+    "/compatibility": {
+      "post": {
+        "operation_id": "compatibilityPreflight",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/CompatibilityVerdict"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/doctor": {
       "get": {
         "operation_id": "doctor",
@@ -16,28 +32,14 @@
         }
       }
     },
-    "/message/{messageId}": {
-      "delete": {
-        "operation_id": "clearMessage",
-        "request_required": false,
-        "responses": {
-          "204": {
-            "error": false,
-            "schema": null
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      },
-      "get": {
-        "operation_id": "getMessage",
-        "request_required": false,
+    "/heartbeat": {
+      "post": {
+        "operation_id": "teamMemberHeartbeat",
+        "request_required": true,
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/Message"
+            "schema": "#/components/schemas/HeartbeatResponse"
           },
           "default": {
             "error": true,
@@ -62,23 +64,21 @@
         }
       }
     },
-    "/message/{messageId}/read": {
-      "post": {
-        "operation_id": "markMessageRead",
-        "request_required": false,
+    "/messages": {
+      "delete": {
+        "operation_id": "clearMessages",
+        "request_required": true,
         "responses": {
-          "200": {
+          "204": {
             "error": false,
-            "schema": "#/components/schemas/Message"
+            "schema": null
           },
           "default": {
             "error": true,
             "schema": "#/components/responses/AtmError"
           }
         }
-      }
-    },
-    "/messages": {
+      },
       "get": {
         "operation_id": "listMessages",
         "request_required": false,
@@ -107,15 +107,41 @@
           }
         }
       }
+    },
+    "/messages/inspect": {
+      "post": {
+        "operation_id": "inspectMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/messages/read": {
+      "post": {
+        "operation_id": "readMessages",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
-    "AckRequest": {
-      "properties": [
-        "body"
-      ],
-      "required": []
-    },
     "AgentAddress": {
       "properties": [
         "agent",
@@ -137,6 +163,30 @@
         "code",
         "message"
       ]
+    },
+    "ClearQuery": {
+      "properties": [],
+      "required": []
+    },
+    "CompatibilityPreflight": {
+      "properties": [],
+      "required": []
+    },
+    "CompatibilityVerdict": {
+      "properties": [],
+      "required": []
+    },
+    "HeartbeatRequest": {
+      "properties": [],
+      "required": []
+    },
+    "HeartbeatResponse": {
+      "properties": [],
+      "required": []
+    },
+    "ListQuery": {
+      "properties": [],
+      "required": []
     },
     "Message": {
       "properties": [
@@ -162,6 +212,14 @@
       "required": [
         "messages"
       ]
+    },
+    "PeekQuery": {
+      "properties": [],
+      "required": []
+    },
+    "ReadQuery": {
+      "properties": [],
+      "required": []
     },
     "WriteRequest": {
       "properties": [

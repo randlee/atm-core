@@ -28,8 +28,10 @@ use atm_storage::contract::{
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
 use atm_storage::schema::{AtmMessageId, ThreadMode};
-use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
+use atm_storage::types::{AgentName, HostName, IsoTimestamp as StorageIsoTimestamp, TeamName};
+use atm_storage::{
+    AtmError, IsoTimestamp, OutboundMessageQuery, StorageFactory, StorageHandles, StoredPeerWrite,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
@@ -38,6 +40,62 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub(crate) struct SqliteWriterLockGuard {
     connection: Connection,
+}
+
+#[derive(Debug)]
+pub(crate) struct SqliteOutboundMessageQuery {
+    db: Arc<SharedDb>,
+}
+
+impl SqliteOutboundMessageQuery {
+    fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
+impl OutboundMessageQuery for SqliteOutboundMessageQuery {
+    fn recent_outbound_for_peer(
+        &self,
+        peer: &HostName,
+        not_before: StorageIsoTimestamp,
+        limit: std::num::NonZeroU16,
+    ) -> Result<Vec<StoredPeerWrite>, AtmError> {
+        self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT json_extract(envelope_json, '$.peerOutbound.request')
+                 FROM mail_messages
+                 WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
+                   AND message_at >= ?2
+                 ORDER BY message_at ASC, message_key ASC
+                 LIMIT ?3",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare outbound peer message query", error)
+                })?;
+            statement
+                .query_map(
+                    params![
+                        peer.as_str(),
+                        not_before.to_string(),
+                        i64::from(limit.get())
+                    ],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to query outbound peer messages", error)
+                })?
+                .map(|row| {
+                    row.map(|request_json| StoredPeerWrite { request_json })
+                        .map_err(|error| {
+                            self.db.error("failed to read outbound peer message", error)
+                        })
+                })
+                .collect()
+        })
+    }
 }
 
 impl Drop for SqliteWriterLockGuard {
@@ -364,6 +422,7 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
+    outbound_message_query: Arc<SqliteOutboundMessageQuery>,
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -400,6 +459,7 @@ impl StorageFactory for SqliteStorageFactory {
             backend.roster_store(),
             backend.nudge_template_override_store(),
             backend.peer_config_store(),
+            backend.outbound_message_query(),
         ))
     }
 }
@@ -421,6 +481,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -434,6 +495,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -468,6 +530,10 @@ impl SqliteStorageBackend {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         self.peer_config_store.clone()
+    }
+
+    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
+        self.outbound_message_query.clone()
     }
 
     #[cfg(test)]

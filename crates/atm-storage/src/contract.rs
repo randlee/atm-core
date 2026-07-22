@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
@@ -570,6 +572,42 @@ pub struct TrustedPeer {
     pub enabled: bool,
 }
 
+/// Per-peer, operator-controlled bound for one reconciliation scan.
+///
+/// A zero age disables reconciliation.  This is configuration only: it does
+/// not represent a cursor, retry budget, receipt, or delivery state.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerSyncPolicy {
+    #[serde(with = "duration_seconds")]
+    pub max_message_age: Duration,
+    pub max_batch_messages: NonZeroU16,
+}
+
+/// Reconciliation is deliberately bounded; a policy may never widen one pass
+/// beyond this value.
+pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
+
+impl PeerSyncPolicy {
+    pub fn validate(self) -> Result<Self, AtmError> {
+        if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
+            return Err(AtmError::peer_config_validation(
+                "peer sync max_batch_messages exceeds the hard limit of 100",
+            ));
+        }
+        Ok(self)
+    }
+}
+
+impl Default for PeerSyncPolicy {
+    fn default() -> Self {
+        Self {
+            max_message_age: Duration::ZERO,
+            max_batch_messages: NonZeroU16::new(MAX_PEER_SYNC_BATCH_MESSAGES)
+                .expect("hard limit is non-zero"),
+        }
+    }
+}
+
 /// Backend-neutral durable cross-host configuration.
 ///
 /// This boundary deliberately excludes transport state, retries, receipts,
@@ -585,6 +623,56 @@ pub trait PeerConfigStore: Send + Sync {
     fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
     fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
     fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+    fn peer_sync_policy(&self, _host: &HostName) -> Result<PeerSyncPolicy, AtmError> {
+        Ok(PeerSyncPolicy::default())
+    }
+    fn save_peer_sync_policy(
+        &self,
+        _host: &HostName,
+        _policy: PeerSyncPolicy,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::validation(
+            "selected storage backend does not support durable peer sync policy",
+        ))
+    }
+}
+
+/// Immutable canonical peer write selected for a bounded reconciliation pass.
+/// The JSON is the origin writer's serialized request, retained with the
+/// canonical message rather than in an outbox or delivery-state table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StoredPeerWrite {
+    pub request_json: String,
+}
+
+/// Read-only selection of local, immutable peer-directed messages.
+pub trait OutboundMessageQuery: Send + Sync {
+    fn recent_outbound_for_peer(
+        &self,
+        peer: &HostName,
+        not_before: IsoTimestamp,
+        limit: NonZeroU16,
+    ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+}
+
+mod duration_seconds {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u64(value.as_secs())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Duration::from_secs(u64::deserialize(deserializer)?))
+    }
 }
 
 pub trait StorageNotifier: sealed::Sealed + Send + Sync {

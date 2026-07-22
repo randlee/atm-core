@@ -76,3 +76,6 @@ Additional machine-readable examples live in
 For queue workflows, continue to [Mailbox Workflows](./mailbox-workflows.md).
 
 Return to the [ATM User Guide](./README.md).
+`ATM_CHAT_ID` optionally selects the ambient chat identity. Chat precedence is
+`--as agent:chat`, `--chat-id`, `ATM_CHAT_ID`, qualified `ATM_IDENTITY`, then
+no chat ID. An unqualified `--as agent` explicitly selects no chat ID.

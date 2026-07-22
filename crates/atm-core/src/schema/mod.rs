@@ -12,6 +12,7 @@ pub use agent_member::{
 pub use atm_storage::contract::AgentType;
 pub(crate) use inbox_message::{
     AckIntentFields, authenticated_source_host, set_authenticated_source_host,
+    set_peer_outbound_write,
 };
 pub use inbox_message::{AlertKind, AtmMessageId, InboxMessage, PendingAck, ThreadMode};
 pub use team_config::TeamConfig;

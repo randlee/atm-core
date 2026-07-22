@@ -263,6 +263,10 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    pub fn message_id_conflict(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::MessageIdConflict, message)
+    }
+
     pub fn self_addressed_send_invalid(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::SelfAddressedSendInvalid, message)
     }

@@ -1,6 +1,6 @@
 ---
 title: AI.13 reusable peer-pair smoke contract
-status: proposed
+status: complete
 branch: feature/pAI-s13-peer-smoke-contract
 worktree: ../atm-core-worktrees/feature/pAI-s13-peer-smoke-contract
 target: integrate/phase-AI
