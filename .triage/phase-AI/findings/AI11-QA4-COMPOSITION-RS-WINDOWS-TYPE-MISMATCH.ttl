@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH" ;
+  triage:title "crates/atm/src/composition.rs:144 return-type mismatch on Windows: interprocess::local_socket::Stream vs std::net::TcpStream" ;
+  triage:description "Discovered at AI.11 QA-4 (PR #607): probe_connection hardcodes return type as interprocess::local_socket::Stream but atm_daemon_client::try_connect resolves to std::net::TcpStream on Windows via cfg-gated type alias LocalSocketStream, creating a type mismatch. This is pre-AI.11 code that was previously unreached until AI.11 allowed compilation to progress. The same issue appears identically on all sprints AI.11 through AI.16 and must be fixed once on the earliest open branch and merge-forwarded." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI11-QA4-COMPOSITION-RS-WINDOWS-TYPE-MISMATCH/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 143 ;
+  triage:snippet "fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/ef0e5e2b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .

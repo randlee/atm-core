@@ -1,0 +1,140 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI12-QA1-BLOCKING-02>
+  a triage:Finding ;
+  triage:findingId "AI12-QA1-BLOCKING-02" ;
+  triage:title "PostWriteRouter::dispatch never emits the local nudge; nudge fires earlier inside the canonical writer" ;
+  triage:description "Confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa. For an empty destination host, PostWriteRouter::dispatch (crates/atm-daemon/src/runtime_health.rs:666-679) does nothing but return Ok(None). The actual nudge is emitted earlier via hook::emit_post_send_effects inside finalize_send_outcome (crates/atm-core/src/send/mod.rs:465-475), called from MessageWriter::write -- before route_write ever invokes the router. Directly contradicts deliverable 4 (router emits exactly one local post-write nudge) and boundary-enforcement item 4 (nudge calls occur only in the post-write router)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA1" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs and crates/atm-daemon/src/runtime_health.rs for any nudge/hook::emit_post_send_effects call sites outside PostWriteRouter::dispatch" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:highestOpenBranch "feature/pAI-s16-offline-reconciliation" ;
+  triage:highestFixedBranch "none" .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 441 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 214 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 214 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 214 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 214 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 214 ;
+  triage:snippet "hook::emit_post_send_effects(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/ef0e5e2b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .
