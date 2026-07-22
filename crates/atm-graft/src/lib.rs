@@ -707,6 +707,7 @@ mod tests {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.workspace_root.clone(),
             caller_identity: AgentName::from_validated(TEST_LEAD),
+            caller_chat_id: None,
             caller_team: TeamName::from_validated(TEST_TEAM),
             message_id: atm_core::schema::AtmMessageId::new(),
             reply_body: "ack".to_string(),

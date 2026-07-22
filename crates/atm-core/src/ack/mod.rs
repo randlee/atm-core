@@ -7,7 +7,7 @@ use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
-use crate::types::{AgentName, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Parameters for acknowledging one pending-ack mailbox message.
@@ -16,6 +16,8 @@ pub struct AckRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
     pub message_id: AtmMessageId,
     pub reply_body: String,
@@ -27,7 +29,7 @@ impl AckRequest {
             home_dir: self.home_dir,
             current_dir: self.current_dir,
             caller_identity: self.caller_identity,
-            caller_chat_id: None,
+            caller_chat_id: self.caller_chat_id,
             caller_team: self.caller_team,
             authenticated_source_host: None,
             origin_message_id: None,
@@ -57,6 +59,7 @@ impl AckRequest {
             home_dir: request.home_dir,
             current_dir: request.current_dir,
             caller_identity: request.caller_identity,
+            caller_chat_id: request.caller_chat_id,
             caller_team: request.caller_team,
             message_id,
             reply_body,
@@ -288,7 +291,7 @@ fn canonical_ack_write_request(
         home_dir: request.home_dir.clone(),
         current_dir: request.current_dir.clone(),
         caller_identity: actor.clone(),
-        caller_chat_id: None,
+        caller_chat_id: request.caller_chat_id.clone(),
         caller_team: team.clone(),
         authenticated_source_host: None,
         origin_message_id: None,
@@ -463,7 +466,7 @@ mod tests {
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
         set_authenticated_source_host,
     };
-    use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
+    use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
 
     #[test]
     fn remote_ack_is_the_canonical_host_qualified_write() {
@@ -504,6 +507,7 @@ mod tests {
             home_dir: PathBuf::from("/tmp/atm-test"),
             current_dir: PathBuf::from("/tmp/atm-test"),
             caller_identity: "local-agent".parse().expect("agent"),
+            caller_chat_id: Some("chat-42".parse::<ChatId>().expect("chat id")),
             caller_team: "local-team".parse().expect("team"),
             message_id,
             reply_body: "acknowledged".to_string(),
@@ -524,6 +528,10 @@ mod tests {
         .expect("canonical ack write");
         assert_eq!(write.to.expect("destination").host, Some(host));
         assert_eq!(write.acknowledges_message_id, Some(message_id));
+        assert_eq!(
+            write.caller_chat_id.as_ref().map(ChatId::as_str),
+            Some("chat-42")
+        );
         assert_eq!(
             target.to_string(),
             "remote-agent@remote-team.peer.example.test"

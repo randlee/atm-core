@@ -65,7 +65,7 @@ impl PyGraftSession {
     fn new(caller: PyAgentAddress) -> PyResult<Self>;
     fn send(&self, to: PyAgentAddress, body: String) -> PyResult<()>;
     fn read(&self) -> PyResult<Vec<PyMessage>>;
-    fn acknowledge(&self, message_id: String) -> PyResult<()>;
+    fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()>;
 }
 
 ```

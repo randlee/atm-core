@@ -1182,6 +1182,7 @@ impl Fixture {
             home_dir: self.tempdir.path().to_path_buf(),
             current_dir: self.tempdir.path().to_path_buf(),
             caller_identity: actor.parse().expect("caller"),
+            caller_chat_id: None,
             caller_team: PRIMARY_TEAM.parse().expect("team"),
             message_id,
             reply_body: reply_body.to_string(),

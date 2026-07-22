@@ -137,6 +137,10 @@ build:
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
 
+# Build the PyO3 extension with Maturin and prove Python can import it.
+test-graft-python:
+    {{python_cmd}} scripts/test_atm_graft_python.py
+
 # Remove workspace build artifacts.
 clean:
     cargo clean
