@@ -132,6 +132,24 @@ Notes:
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
 
+## PeerClientTransportAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
+
+Current implementation:
+- `PeerClientTransport` is a private `ClientTransport` implementation in
+  `atm_daemon::peer_transport`, constructed only by
+  `atm_daemon::composition::compose_runtime`.
+- It owns outbound remote protocol requests, peer request deadlines, and peer
+  response decoding for the current `AtmProtocol` request/response contract.
+- It must not access SQLite or spawn processes. No external crate may depend
+  on it or construct it directly.
+- The active implementation's bounded timeout/retry and durable replay-resume
+  behavior is legacy transport behavior. Phase AI's proposed HTTP peer adapter
+  is specified separately and does not change this active manifest until its
+  owning sprint lands.
+
 ## LifecycleControlSourceAdapter
 
 Canonical machine-readable boundary source:
