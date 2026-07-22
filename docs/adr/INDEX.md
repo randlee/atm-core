@@ -46,6 +46,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-035 — Canonical Write Ingress And Host Routing](./ADR-035-canonical-write-ingress-and-host-routing.md)
 - [ADR-036 — Storage Boundary And Composition Topology](./ADR-036-storage-boundary-and-composition-topology.md)
 - [ADR-037 — Chat Address Identity](./ADR-037-chat-address-identity.md)
+- [ADR-039 — Python Graft Host Binding](./ADR-039-python-graft-host-binding.md)
 
 ## Extracted Crate-Local ADRs
 

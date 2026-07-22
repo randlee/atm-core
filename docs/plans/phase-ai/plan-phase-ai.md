@@ -138,8 +138,8 @@ the local nudge, while every present host—including `localhost` and own IP—u
 HTTPS. A present chat-id
 is stored in nullable source/destination columns and rendered to agents as
 `agent:chat-id`; it is not a transport session or a second delivery path.
-Python bindings are Phase AH/future-client scope: they consume this published
-contract later and are not a Phase AI implementation deliverable.
+AI.17–AI.21 consume this published contract for the Hermes Python/graft
+integration; they do not alter it.
 
 ## Sprint sequence
 
@@ -161,6 +161,11 @@ contract later and are not a Phase AI implementation deliverable.
 | AI.14 | `feature/pAI-s14-mac-peer-smoke` | Physical Mac↔Mac peer-pair proof |
 | AI.15 | `feature/pAI-s15-windows-peer-smoke` | Physical Mac↔Windows peer-pair proof |
 | AI.16 | `feature/pAI-s16-offline-reconciliation` | Durable-age-bounded canonical-message reconciliation with no delivery-state subsystem |
+| AI.17 | `feature/pAI-s17-hermes-chat-identity` | Hermes maps its ambient key to the existing typed `chat_id`; no schema, CLI, or HTTP contract change |
+| AI.18 | `feature/pAI-s18-graft-python-bindings` | PyO3/Maturin binding exposes the existing graft client/nudge contract to Python |
+| AI.19 | `feature/pAI-s19-hermes-graft-integration` | One typed bridge maps canonical nudge source address to an isolated Hermes `atm:` chat after persistence |
+| AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
+| AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
 
 Each sprint merges forward to the next sprint branch before the next sprint
 starts. Findings are fixed on their owning sprint before forward merge.

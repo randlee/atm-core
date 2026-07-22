@@ -5,7 +5,7 @@
 | ID | ADR-037 |
 | Status | Proposed |
 | Scope | Repository-wide |
-| Relates to | ADR-033, ADR-035, Phase AH, Phase AI |
+| Relates to | ADR-033, ADR-035, Phase AI |
 
 ## Context
 
@@ -49,8 +49,8 @@ address delimiters. Chat IDs use the same safe segment alphabet so an address
 has one unambiguous grammar. AI.1's baseline already contains the completed
 Phase AG central validator, `atm_storage::validate_path_segment`; Phase AI
 extends that one validator and does not reimplement validation in the CLI,
-graft, or HTTP adapter. A future Phase AH Python binding consumes this same
-validator and address type rather than adding its own policy.
+graft, or HTTP adapter. The AI.18 Python binding consumes this same validator
+and address type rather than adding its own policy.
 
 The shared identity parser is `AgentIdentity::from_str` for
 `agent[:chat-id]`; `agent:XXX` therefore always parses as agent `agent` with
@@ -76,8 +76,8 @@ write accepts or displays it in `to`, and a nudge from
 targets `hendrix:12345@hermes`, never a collapsed `hendrix@hermes` identity.
 
 The REST API represents source and destination as structured addresses, not a
-synthetic session header. The local CLI and graft populate the same
-caller-address contract; a future Phase AH Python binding uses that contract.
+synthetic session header. The local CLI, graft, and AI.18 Python binding
+populate the same caller-address contract.
 The canonical write handler and post-write router do not branch on chat-id.
 HTTPS preserves the same request schema.
 
@@ -104,10 +104,10 @@ session-scoped mailbox contract is introduced.
 
 ## Consequences
 
-- A Python/Hermes binding can bind one live context to one chat-id without an
+- The AI.17–AI.21 Python/Hermes integration can bind one live context to one chat-id without an
   ambient `HERMES_SESSION_KEY` changing mailbox semantics.
-- The Phase AH plan must replace its `session_id` protocol and query design
-  with this address contract before implementation.
+- AI.17–AI.21 must consume this address contract and must not introduce a
+  `session_id` protocol or query design.
 - Chat-aware storage and address tests precede REST/UDS migration because the
   API cannot safely expose an identity it cannot persist and query exactly.
 - No separate chat delivery, reply, ack, nudge, or remote routing path is

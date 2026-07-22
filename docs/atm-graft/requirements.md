@@ -48,6 +48,8 @@ Initial allocation:
 - `REQ-GRAFT-CLIENT-*`
 - `REQ-GRAFT-NOTIFY-*`
 - `REQ-GRAFT-OBS-*`
+- `REQ-GRAFT-PYTHON-*`
+- `REQ-GRAFT-HERMES-*`
 
 Initial crate requirement IDs:
 
@@ -70,6 +72,15 @@ Initial crate requirement IDs:
   receiver-local buffering
   behavior. Satisfies:
   `REQ-P-OBS-001`, `REQ-P-GRAFT-001`.
+- `REQ-GRAFT-PYTHON-001` AI.18 may expose the existing typed graft API through
+  PyO3/Maturin. The binding is a translation layer over `DaemonApiClient`; it
+  must not open a socket, access storage, serialize a graft-private message,
+  or add another send/read/ack path.
+- `REQ-GRAFT-HERMES-001` AI.17–AI.21 may map a Hermes ambient key to ADR-037
+  `ChatId` and inject a canonical post-write nudge into Hermes. The adapter
+  must use structured `AgentAddress`, preserve the immutable message ID, and
+  must not create a session header, daemon session, or transport-specific
+  routing policy.
 
 ## 4. Required References
 

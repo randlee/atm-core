@@ -32,6 +32,11 @@ uses the same rendered address. `atm read --agent hendrix` spans chats and
 The authoritative plan is [plan-phase-ai.md](./plan-phase-ai.md). Sprint
 closure is recorded in [readiness.md](./readiness.md).
 
+AI.17–AI.21 extend this same contract to Hermes through a Python binding and
+graft nudge adapter; they are specified in
+[ai17-21-hermes-graft-overview.md](./ai17-21-hermes-graft-overview.md). They
+add no message schema, CLI grammar, HTTP resource, or alternate write path.
+
 The checked-in OpenAPI 3.1 description is a durable interface artifact. A
 browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
