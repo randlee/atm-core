@@ -12,8 +12,9 @@
   triage:severity "BLOCKING" ;
   triage:repeatable true ;
   triage:sweepScope "repo" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "scope-mismatch" ;
+  triage:dispatchReady false ;
+  triage:notes "team-lead re-triage 2026-07-22, following arch-ctm pushback on ATM message 01KY5PKBKV5HNYMQFFYRHJTC4D. The gap this finding names is real (AI.13 sprint doc deliverable 3: 'Raw socket success is never a passing case'; acceptance criteria: 'It exercises HTTP resource endpoints through CLI/graft-facing daemon clients, not private storage helpers.'). require_client_command() (added in 219897c0) does correctly close the literal binary-allowlist gap this finding describes -- ALLOWED_CLIENT_BINARIES restricts command[0] to atm/atm-graft. That narrow closure is legitimate and should stand. However, the same commit bundled require_assertions()/protocol_assertions(), an unrelated invented JSON-emission contract (see AI13-QA1-BLOCKING-02 notes for full analysis) with no real producer anywhere in the workspace and no basis in docs/peer-pair-smoke.md's published config schema or the AI.13/AI.16 sprint docs. Disposition: closed as scope-mismatch for the assertions portion only; the require_client_command() binary allowlist itself is sound and should be kept. arch-ctm should not extend or defend the protocol_assertions() JSON contract; AI.16's actual requirement is a real CLI-driven peer smoke extension (see sprint-ai-16-offline-reconciliation.md Required tests / Smoke row), not a producer-side metrics protocol." ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03/s13/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03/s14/1> ;
