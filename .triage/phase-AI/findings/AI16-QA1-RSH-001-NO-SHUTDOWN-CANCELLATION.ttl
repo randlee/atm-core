@@ -18,7 +18,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-001-NO-SHUTDOWN-CANCELLATION/s17/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s16/853abcfc> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s17/2a5a57c8> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/2a5a57c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s16/853abcfc> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and forbids daemon/canonical-router/storage changes. Finding description itself states 'Introduced in sprint s16, present in s17' — reconcile_after_success is AI.16's reconciliation-coordinator deliverable (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md). Original mis-target was applied via unverified highest-open-branch heuristic." ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/AI16-QA1-RSH-001-NO-SHUTDOWN-CANCELLATION/s16/1>

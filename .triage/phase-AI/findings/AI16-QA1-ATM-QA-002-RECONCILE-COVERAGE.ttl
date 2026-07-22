@@ -19,7 +19,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s17/1> ;
   triage:openOn <urn:atm:triage:worktree/s16/853abcfccad834ae36e441a995c3851333eb7a8e> ;
   triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> ;
-  triage:promoteTo <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+  triage:promoteTo <urn:atm:triage:worktree/s16/853abcfccad834ae36e441a995c3851333eb7a8e> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and forbids daemon/canonical-router/storage changes ('may run in parallel with AI.11-AI.16 because it does not modify atm-graft, daemon transport, HTTP, storage, or a shared Phase AI contract'). This finding is missing test coverage for reconcile_after_success/cooldown/batch-cap/age-filter, which is AI.16's reconciliation-coordinator deliverable (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md, Required tests table). Original mis-target was applied via unverified highest-open-branch heuristic." .
 
 <urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s16/1>
   a triage:Occurrence ;

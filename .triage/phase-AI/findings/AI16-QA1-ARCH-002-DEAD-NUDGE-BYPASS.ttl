@@ -29,7 +29,8 @@
   triage:openOn <urn:atm:triage:worktree/s15/b7d2f1c7> ;
   triage:openOn <urn:atm:triage:worktree/s16/853abcfc> ;
   triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8> ;
-  triage:promoteTo <urn:atm:triage:worktree/s17/2a5a57c8> .
+  triage:promoteTo <urn:atm:triage:worktree/s16/853abcfc> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and states 'may run in parallel with AI.11-AI.16 because it does not modify atm-graft, daemon transport, HTTP, storage, or a shared Phase AI contract' -- dispatching an unrelated crates/atm-core/src/send/mod.rs visibility fix there would break that parallel-safety contract. This finding is a workspace-wide repeatable pattern present on all branches s11-s17 and is not uniquely owned by AI.16 either, but s16 carries no equivalent narrow-scope restriction, so it is bundled onto the same corrected fix-assignment batch for dispatch efficiency rather than left on the out-of-scope s17 branch. Original mis-target was applied via unverified highest-open-branch heuristic." .
 
 <urn:atm:triage:occurrence/AI16-QA1-ARCH-002-DEAD-NUDGE-BYPASS/s11/1>
   a triage:Occurrence ;

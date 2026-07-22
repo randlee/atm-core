@@ -35,9 +35,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/9> ;
   triage:openOn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> ;
   triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> ;
-  triage:promoteTo <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> ;
-  triage:highestOpenBranch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:highestFixedBranch "" .
+  triage:promoteTo <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> ;
+  triage:highestOpenBranch "feature/pAI-s16-offline-reconciliation" ;
+  triage:highestFixedBranch "" ;
+  triage:correctionNote "2026-07-22: promote_to_branch and highestOpenBranch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and forbids daemon/canonical-router/storage changes. All occurrences (peer.rs peer_sync_policy/save_peer_sync_policy, runtime_health.rs peer_sync_cooldown/reconcile_after_success) are AI.16 deliverables (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md). Original mis-target was applied via unverified highest-open-branch heuristic." .
 
 <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/1>
   a triage:Occurrence ;
