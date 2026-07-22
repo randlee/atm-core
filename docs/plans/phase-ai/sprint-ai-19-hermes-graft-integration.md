@@ -30,11 +30,10 @@ not modify the post-write router, daemon transport, or `atm-graft` API.
 - `crates/atm-graft-python/python/atm_graft_hermes_bridge.py` — one Python
   bridge implementation using AI.18 that registers one graft receiver per
   Hermes profile. New Rust wrapper code is out of scope.
-- One typed adapter that maps `source.agent`, optional `source.chat_id`, and
-  `source.team` to a Hermes chat key by calling AI.18's Python binding of
-  AI.17 `hermes_chat_key`; this logic lives in
-  `python/atm_graft_hermes_bridge.py`. It consumes structured values, never
-  parses a rendered `agent:chat-id@team` string.
+- One typed adapter that uses `source.agent`, optional `source.chat_id`, and
+  `source.team` directly for the consumer's conversation identity. It lives in
+  `python/atm_graft_hermes_bridge.py` and never parses a rendered
+  `agent:chat-id@team` string.
 - Injection of the nudge body into Hermes’s existing inbound user-message
   path; no ATM write, retry, or alternate routing is performed by the bridge.
 - `crates/atm-graft-python/tests/test_hermes_bridge.py` — reference-adapter
@@ -69,7 +68,7 @@ atm-core deliverable or closure gate.
 
 ```python
 def deliver_atm_nudge(nudge: PyNudge) -> None:
-    chat_key = atm_graft.hermes_chat_key(nudge.source)
+    chat_id = nudge.source.chat_id
     # Submit nudge.body to Hermes's normal inbound-user-message path once.
 ```
 
@@ -95,7 +94,7 @@ unchanged.
   Deliverables.
 - A running daemon proof passes.
 - The proof records message ID, persisted-row observation, rendered source
-  address, selected Hermes chat key, and nudge receipt order.
+  address, selected source `chat_id`, and nudge receipt order.
 - `just lint`, `just test`, and `git diff --check` pass.
 - Before AI.20 drafting starts, AI.19 records `FROZEN` in
   `readiness-ai17-21-hermes-graft.md`, with the exact commit SHA and the

@@ -18,7 +18,7 @@ pub fn resolve_template(
 }
 
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
-    format!("{}@{}", event.sender, event.sender_team)
+    event.source_address().to_string()
 }
 
 pub fn render_resolved_built_in_nudge(
@@ -128,11 +128,12 @@ mod tests {
         TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::test_support::{TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     fn base_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: AgentName::from_validated(TEST_LEAD),
+            sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
             recipient: AgentName::from_validated(TEST_ARCH_CTM),
             recipient_team: TeamName::from_validated(TEST_TEAM),
@@ -169,6 +170,17 @@ mod tests {
         assert_eq!(
             qualified_sender_identity(&base_event()),
             format!("{TEST_LEAD}@{TEST_TEAM}")
+        );
+    }
+
+    #[test]
+    fn qualified_sender_identity_preserves_chat_id() {
+        let mut event = base_event();
+        event.sender_chat_id = Some("chat-42".parse::<ChatId>().expect("chat id"));
+
+        assert_eq!(
+            qualified_sender_identity(&event),
+            format!("{TEST_LEAD}:chat-42@{TEST_TEAM}")
         );
     }
 

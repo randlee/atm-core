@@ -56,8 +56,8 @@ atm send <to> --chat-id 1234 <message>
 atm send <to> --as omega-prime:1234 <message>
 ```
 
-On receipt, Hermes derives its isolated local chat key from the complete
-canonical source address, for example `atm:omega-prime:1234@atm-dev`. The
+On receipt, Hermes uses the complete canonical source address, including its
+single optional `chat_id`, to select its isolated local conversation. The
 mapping is deterministic and never changes the persisted message address.
 
 ### Nudge adapter
@@ -117,7 +117,7 @@ AI.18 proves typed Python binding parity. AI.19 proves a durable write produces
 one Hermes in-process nudge and maps distinct chat IDs to distinct Hermes
 chats. AI.20 proves supervised per-profile operation. AI.21 records the four
 end-to-end stories with command transcripts, message IDs, rendered addresses,
-Hermes chat keys, and explicit verdicts.
+chat IDs, and explicit verdicts.
 
 Each sprint must pass `just lint`, `just test`, its focused tests, and
 `git diff --check`; an AI.17–AI.21 sprint may not close by deferring an unmet
