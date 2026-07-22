@@ -2,14 +2,17 @@ use super::*;
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+};
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::TrustedPeer;
+use atm_storage::{PeerSyncPolicy, TrustedPeer};
+use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -133,6 +136,228 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
     assert!(
         delivered[0].origin_message_id.is_some(),
         "the canonical writer assigns the immutable origin ULID before peer delivery"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn explicit_peer_sync_resends_one_bounded_immutable_write() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let peer: atm_storage::HostName = "peer.example.test".parse().expect("peer host");
+    let peer_store = open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store();
+    peer_store
+        .save_trusted_peer(&TrustedPeer {
+            host: peer.clone(),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+        })
+        .expect("save trusted peer");
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let transport = Arc::new(RecordingHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(transport.clone())
+        .expect("install test HTTPS delivery");
+    for body in ["first", "second"] {
+        dispatcher
+            .dispatch(RequestEnvelope::Write(Box::new(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    "remote-agent@remote-team.peer.example.test",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline(body.to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("remote write request"),
+            )))
+            .expect("initial peer write");
+    }
+    let disabled = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: peer.clone(),
+        }))
+        .expect("disabled policy is a no-op");
+    assert!(matches!(
+        disabled,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome { delivered: 0, .. })
+    ));
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        2,
+        "disabled policy never scans or delivers stored writes"
+    );
+    peer_store
+        .save_peer_sync_policy(
+            &peer,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: NonZeroU16::new(1).expect("non-zero cap"),
+            },
+        )
+        .expect("enable one-message sync");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: peer.clone(),
+        }))
+        .expect("explicit peer sync");
+    match response {
+        ResponseEnvelope::PeerSync(PeerSyncOutcome {
+            peer: returned_peer,
+            delivered,
+        }) => {
+            assert_eq!(returned_peer, peer);
+            assert_eq!(
+                delivered, 1,
+                "the explicit path honors the durable batch cap"
+            );
+        }
+        other => panic!("expected peer-sync outcome, got {other:?}"),
+    }
+    let delivered = transport.delivered.lock().expect("deliveries");
+    assert_eq!(
+        delivered.len(),
+        3,
+        "two ordinary writes plus exactly one bounded replay are delivered"
+    );
+    assert_eq!(
+        delivered[0].origin_message_id, delivered[2].origin_message_id,
+        "reconciliation reuses the canonical immutable write and its original ULID"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let peer: atm_storage::HostName = "peer.example.test".parse().expect("peer host");
+    let peer_store = open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store();
+    let trusted_peer = TrustedPeer {
+        host: peer.clone(),
+        fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+        enabled: true,
+    };
+    peer_store
+        .save_trusted_peer(&trusted_peer)
+        .expect("save trusted peer");
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let transport = Arc::new(RecordingHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(transport.clone())
+        .expect("install test HTTPS delivery");
+    dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "remote-agent@remote-team.peer.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("stored once".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("remote write request"),
+        )))
+        .expect("initial peer write");
+    peer_store
+        .save_peer_sync_policy(
+            &peer,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: NonZeroU16::new(100).expect("non-zero cap"),
+            },
+        )
+        .expect("enable peer sync");
+
+    dispatcher.seed_peer_sync_cooldown_for_test((0_u64..256).map(|index| {
+        let host = format!("peer-{index}.example.test")
+            .parse()
+            .expect("bounded cooldown host");
+        (
+            host,
+            std::time::Instant::now() - Duration::from_secs(index + 1),
+        )
+    }));
+
+    dispatcher
+        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
+        .expect("first automatic reconciliation");
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        2,
+        "one original write plus one automatic reconciliation delivery"
+    );
+    {
+        let cooldown = dispatcher.peer_sync_cooldown_for_test();
+        assert_eq!(cooldown.len(), 256, "cooldown map remains hard-bounded");
+        assert!(cooldown.contains_key(&peer), "new peer is retained");
+        assert!(
+            !cooldown.contains_key(&"peer-255.example.test".parse().expect("oldest host")),
+            "oldest cooldown entry is evicted"
+        );
+    }
+    dispatcher
+        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
+        .expect("cooldown skips duplicate automatic scan");
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        2,
+        "60-second cooldown suppresses another automatic delivery"
+    );
+    dispatcher.seed_peer_sync_cooldown_for_test([(
+        peer.clone(),
+        std::time::Instant::now() - Duration::from_secs(61),
+    )]);
+    dispatcher
+        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
+        .expect("expired cooldown permits another scan");
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        3,
+        "expired cooldown permits exactly one new bounded delivery"
     );
 }
 

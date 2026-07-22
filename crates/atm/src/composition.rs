@@ -18,7 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    CompatibilityPreflight, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -164,7 +165,7 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_)
+        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_)
     )
 }
 
@@ -424,6 +425,13 @@ impl<'a> CliComposition<'a> {
                 Ok(*report)
             }
             other => Err(unexpected_response("doctor", other)),
+        }
+    }
+
+    pub(crate) fn peer_sync(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::PeerSync(request))? {
+            ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
+            other => Err(unexpected_response("peer sync", other)),
         }
     }
 

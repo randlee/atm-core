@@ -11,7 +11,8 @@ use crate::doctor::DoctorQuery;
 use crate::error::AtmError;
 use crate::list::ListQuery;
 use crate::protocol::{
-    CompatibilityPreflight, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
+    CompatibilityPreflight, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
+    TeamMemberHeartbeatRequest,
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
@@ -50,6 +51,9 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
         RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
         RequestEnvelope::Clear(_) => ("DELETE", "/v1/atm/messages".to_string()),
         RequestEnvelope::Doctor(_) => ("GET", "/v1/atm/doctor".to_string()),
+        RequestEnvelope::PeerSync(request) => {
+            ("POST", format!("/v1/atm/peers/{}/sync", request.peer))
+        }
         RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
         RequestEnvelope::Heartbeat(_) => ("POST", "/v1/atm/heartbeat".to_string()),
     }
@@ -254,6 +258,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Receive(value) => serde_json::to_vec(value),
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
+        RequestEnvelope::PeerSync(value) => serde_json::to_vec(value),
     }
     .map_err(AtmError::from)
 }
@@ -287,6 +292,16 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
         ("POST", "/v1/atm/heartbeat") => serde_json::from_slice(body)
             .map(ApiRequest::Heartbeat)
             .map_err(|source| invalid_route_body("heartbeat", source)),
+        ("POST", path) if peer_sync_path_host(path).is_some() => {
+            let request: PeerSyncRequest = serde_json::from_slice(body)
+                .map_err(|source| invalid_route_body("peer sync", source))?;
+            if peer_sync_path_host(path) != Some(request.peer.as_str()) {
+                return Err(AtmError::validation(
+                    "peer sync request body does not match its target peer path",
+                ));
+            }
+            Ok(ApiRequest::PeerSync(request))
+        }
         _ => Err(AtmError::validation(format!(
             "unsupported daemon HTTP route {method} {path}"
         ))),
@@ -335,6 +350,9 @@ fn decode_success_response(
         RequestEnvelope::Doctor(_) => serde_json::from_slice(body)
             .map(|value| ResponseEnvelope::Doctor(Box::new(value)))
             .map_err(AtmError::from),
+        RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
+            .map(ResponseEnvelope::PeerSync)
+            .map_err(AtmError::from),
     }
 }
 
@@ -361,6 +379,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Receive(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
         ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::PeerSync(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::Error(value) => {
             let status = if value.is_validation() { 400 } else { 503 };
             (
@@ -384,6 +403,14 @@ fn is_ack_path(path: &str) -> bool {
         suffix
             .strip_suffix("/ack")
             .is_some_and(|id| !id.is_empty() && !id.contains('/'))
+    })
+}
+
+fn peer_sync_path_host(path: &str) -> Option<&str> {
+    path.strip_prefix("/v1/atm/peers/").and_then(|suffix| {
+        suffix
+            .strip_suffix("/sync")
+            .filter(|peer| !peer.is_empty() && !peer.contains('/'))
     })
 }
 
@@ -470,6 +497,7 @@ pub enum ApiRequest {
     Doctor(DoctorQuery),
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
+    PeerSync(PeerSyncRequest),
 }
 
 #[derive(Debug, Clone)]
@@ -498,6 +526,7 @@ impl ApiRequest {
                 RequestEnvelope::CompatibilityPreflight(preflight)
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
+            Self::PeerSync(request) => RequestEnvelope::PeerSync(request),
         }
     }
 }
@@ -521,6 +550,7 @@ impl From<RequestEnvelope> for ApiRequest {
                 Self::CompatibilityPreflight(preflight)
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
+            RequestEnvelope::PeerSync(request) => Self::PeerSync(request),
         }
     }
 }
@@ -587,7 +617,7 @@ mod tests {
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
-    use crate::protocol::{RequestEnvelope, ResponseEnvelope};
+    use crate::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
@@ -704,6 +734,36 @@ mod tests {
             decoded,
             ApiRequest::Write(request) if request.acknowledges_message_id.is_none()
         ));
+    }
+
+    #[test]
+    fn peer_sync_uses_the_peer_scoped_http_route_and_rejects_path_body_mismatch() {
+        let request = RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: "peer.example.test".parse().expect("peer host"),
+        });
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write peer sync request");
+        let raw = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
+        assert!(raw.starts_with("POST /v1/atm/peers/peer.example.test/sync HTTP/1.1"));
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode peer sync request");
+        assert!(
+            matches!(decoded, ApiRequest::PeerSync(request) if request.peer.as_str() == "peer.example.test")
+        );
+
+        let mismatched = raw.replace("peer.example.test/sync", "other.example.test/sync");
+        let error = decode_request(
+            read_http_request(&mut mismatched.as_bytes())
+                .expect("read mismatch request")
+                .expect("request"),
+        )
+        .expect_err("path and body must name the same peer");
+        assert!(error.is_validation());
     }
 
     #[test]

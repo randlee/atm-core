@@ -37,11 +37,16 @@ pub(crate) mod file_policy;
 pub(crate) mod hook;
 pub mod input;
 #[doc(hidden)]
-pub mod nudge_template;
+pub(crate) mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+#[doc(hidden)]
+pub use nudge_template::{
+    default_template, qualified_sender_identity as qualified_nudge_sender_identity,
+    render_resolved_built_in_nudge,
+};
 pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);

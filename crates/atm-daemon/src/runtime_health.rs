@@ -20,8 +20,9 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
+        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
@@ -548,6 +549,9 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
+            RequestEnvelope::PeerSync(request) => {
+                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
+            }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
@@ -599,7 +603,8 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             &peer,
             HttpsRequestDeadline::default(),
         )?;
-        self.reconcile_after_success(host, &peer, transport.as_ref())
+        self.reconcile_after_success(host, &peer, transport.as_ref(), true)
+            .map(|_| ())
     }
 }
 
@@ -609,14 +614,15 @@ impl DaemonRequestDispatcher {
         peer_host: &atm_core::types::HostName,
         peer: &atm_storage::TrustedPeer,
         transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
+        apply_cooldown: bool,
+    ) -> Result<u16, AtmError> {
         let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
         policy.validate()?;
         if policy.max_message_age.is_zero() {
-            return Ok(());
+            return Ok(0);
         }
-        let now = std::time::Instant::now();
-        {
+        if apply_cooldown {
+            let now = std::time::Instant::now();
             let mut cooldown = self
                 .peer_sync_cooldown
                 .lock()
@@ -625,7 +631,7 @@ impl DaemonRequestDispatcher {
                 .get(peer_host)
                 .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
             {
-                return Ok(());
+                return Ok(0);
             }
             // This is only a short-lived rate limiter, never delivery state.
             // Evicting the oldest entry bounds memory without affecting message data.
@@ -647,18 +653,84 @@ impl DaemonRequestDispatcher {
                     AtmError::validation("peer sync maximum message age is out of range")
                 })?,
         );
-        for stored in self.outbound_message_query.recent_outbound_for_peer(
+        let writes = self.outbound_message_query.recent_outbound_for_peer(
             peer_host,
             not_before,
             policy.max_batch_messages,
-        )? {
+        )?;
+        let delivered = u16::try_from(writes.len()).map_err(|_| {
+            AtmError::validation("peer sync selection exceeded its configured batch limit")
+        })?;
+        // The peer transport contract honors this deadline. Keeping the whole
+        // pass bounded means shutdown never waits on an unbounded reconciliation
+        // loop or creates an independent worker/state machine.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        for stored in writes {
+            if std::time::Instant::now() >= deadline {
+                return Err(AtmError::daemon_unavailable(
+                    "peer reconciliation exceeded its bounded request deadline",
+                ));
+            }
             let request: WriteRequest =
                 serde_json::from_str(&stored.request_json).map_err(|_source| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })?;
             transport.deliver(request, peer, HttpsRequestDeadline::default())?;
         }
-        Ok(())
+        Ok(delivered)
+    }
+
+    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+        let peer = self
+            .peer_config_store
+            .trusted_peer(&request.peer)?
+            .ok_or_else(|| AtmError::peer_config_validation("unknown trusted peer"))?;
+        let transport = self
+            .https_transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
+            })?;
+        let delivered =
+            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        Ok(PeerSyncOutcome {
+            peer: request.peer,
+            delivered,
+        })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reconcile_after_success_for_test(
+        &self,
+        peer_host: &atm_core::types::HostName,
+        peer: &atm_storage::TrustedPeer,
+        transport: &dyn HttpsMessageTransport,
+    ) -> Result<(), AtmError> {
+        self.reconcile_after_success(peer_host, peer, transport, true)
+            .map(|_| ())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn seed_peer_sync_cooldown_for_test(
+        &self,
+        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
+    ) {
+        self.peer_sync_cooldown
+            .lock()
+            .expect("peer sync cooldown lock")
+            .extend(entries);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn peer_sync_cooldown_for_test(
+        &self,
+    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
+        self.peer_sync_cooldown
+            .lock()
+            .expect("peer sync cooldown lock")
+            .clone()
     }
 }
 

@@ -270,9 +270,10 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
         ApiRequest::Messages(_) | ApiRequest::Doctor(_) | ApiRequest::CompatibilityPreflight(_) => {
             RequestExecutionRisk::ReadOnly
         }
-        ApiRequest::Write(_) | ApiRequest::Heartbeat(_) | ApiRequest::Clear(_) => {
-            RequestExecutionRisk::SideEffecting
-        }
+        ApiRequest::Write(_)
+        | ApiRequest::Heartbeat(_)
+        | ApiRequest::Clear(_)
+        | ApiRequest::PeerSync(_) => RequestExecutionRisk::SideEffecting,
     }
 }
 
