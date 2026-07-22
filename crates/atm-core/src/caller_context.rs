@@ -34,17 +34,49 @@ pub fn resolve_cli_inspection_caller_context(
             "--as and --chat-id are mutually exclusive",
         ));
     }
-    let mut caller_identity =
+    let ambient_identity = resolve_identity_component(None)?;
+    let caller_identity =
         resolve_identity_component(overrides.identity_override.map(|value| value.0))?;
-    if let Some(chat_id) = overrides.chat_id_override {
-        caller_identity.chat_id = Some(chat_id.0.parse()?);
-    }
+    let caller_chat_id = resolve_caller_chat_id(
+        overrides.identity_override.map(|_| &caller_identity),
+        overrides
+            .chat_id_override
+            .map(|value| value.0.parse())
+            .transpose()?
+            .as_ref(),
+        read_env_raw("ATM_CHAT_ID")?.as_deref(),
+        &ambient_identity,
+    )?;
     let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
     Ok(CallerContext {
         caller_identity: caller_identity.agent,
-        caller_chat_id: caller_identity.chat_id,
+        caller_chat_id,
         caller_team,
     })
+}
+
+/// Resolve the one ambient chat identity with CLI overrides taking precedence.
+pub fn resolve_caller_chat_id(
+    explicit_as: Option<&AgentIdentity>,
+    explicit_chat_id: Option<&ChatId>,
+    ambient_chat_id: Option<&str>,
+    ambient_identity: &AgentIdentity,
+) -> Result<Option<ChatId>, AtmError> {
+    if let Some(identity) = explicit_as {
+        return Ok(identity.chat_id.clone());
+    }
+    if let Some(chat_id) = explicit_chat_id {
+        return Ok(Some(chat_id.clone()));
+    }
+    if let Some(value) = ambient_chat_id {
+        let trimmed = value.trim();
+        return if trimmed.is_empty() {
+            Ok(None)
+        } else {
+            trimmed.parse().map(Some)
+        };
+    }
+    Ok(ambient_identity.chat_id.clone())
 }
 
 pub fn resolve_cli_mutation_caller_context(
@@ -150,6 +182,9 @@ fn read_env_raw(key: &str) -> Result<Option<String>, AtmError> {
             )),
             "ATM_TEAM" => {
                 AtmError::team_invalid(format!("{key} must be valid UTF-8 text, got {:?}", value))
+            }
+            "ATM_CHAT_ID" => {
+                AtmError::validation(format!("{key} must be valid UTF-8 text, got {:?}", value))
             }
             _ => unreachable!("caller context only reads ATM-owned keys"),
         }),
