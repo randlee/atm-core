@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
-use atm_core::protocol;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
@@ -130,15 +129,33 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn reject_socket_override() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+        return Err(AtmError::socket_override_forbidden(
+            "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
+        ));
+    }
+    Ok(())
+}
+
 /// # Errors
 ///
 /// Returns [`AtmError`] when the canonical same-host daemon HTTP record cannot
 /// be resolved into a local IPC endpoint.
 pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    // Preserve the host-singleton override rejection even though the active
-    // endpoint is now the daemon-published HTTP record rather than the retired
-    // framed-socket path.
-    protocol::daemon_socket_path()?;
+    #[cfg(windows)]
+    {
+        reject_socket_override()?;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        DaemonLocalIpcEndpoint::new(
+            runtime_scope
+                .runtime_root
+                .as_ref()
+                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+        )
+    }
+    #[cfg(not(windows))]
     DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
         &atm_core::home::atm_home()?,
     ))
@@ -151,6 +168,19 @@ pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, Atm
 pub fn resolve_daemon_local_ipc_endpoint_from_home(
     home_dir: &Path,
 ) -> Result<DaemonLocalIpcEndpoint, AtmError> {
+    #[cfg(windows)]
+    {
+        let _home_dir = home_dir;
+        reject_socket_override()?;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        DaemonLocalIpcEndpoint::new(
+            runtime_scope
+                .runtime_root
+                .as_ref()
+                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+        )
+    }
+    #[cfg(not(windows))]
     DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(home_dir))
 }
 
