@@ -10,14 +10,15 @@ Phase AI replaces ATM's custom local frame protocol and abandoned cross-host
 subsystem with one HTTP application contract:
 
 ```text
-CLI / graft ─HTTP over UDS─┐
+Unix CLI / graft ─HTTP over UDS or loopback TCP─┐
+Windows CLI / graft ─HTTP over loopback TCP─────┤
 remote daemon ─HTTPS/TCP───┼─> one REST router -> handlers -> SQLite -> post-write event
 test adapter ──────────────┘
 ```
 
 `/v1/atm/messages`, `/v1/atm/message/{message-id}`,
-`/v1/atm/message/{message-id}/read`, `/v1/atm/doctor`, `/v1/atm/teams`, and
-`/v1/atm/team/{team-name}` are the durable resource roots.
+`/v1/atm/message/{message-id}/read`, and `/v1/atm/doctor` are the durable
+initial resource roots.
 An acknowledgement endpoint builds a write with `acknowledges_message_id`; no
 separate acknowledgment pipeline exists. The post-write router is the sole
 owner of local-versus-remote nudge routing.

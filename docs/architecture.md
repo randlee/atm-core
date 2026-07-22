@@ -1,10 +1,10 @@
 # ATM CLI Architecture
 
-> **Phase AI supersession notice:** the planned daemon API is REST over HTTP:
-> local UDS on Unix and Windows AF_UNIX, and HTTPS/TCP for remote peers. Older
-> references to named pipes, custom ATM frames, remote replay/retry state, or
-> a separate peer runtime are historical only. ADR-032 through ADR-036 and
-> `REQ-CORE-TRANSPORT-*` govern new work.
+> **Phase AI target — not yet implemented:** the daemon API becomes REST over
+> HTTP: Unix HTTP/UDS or loopback TCP, Windows loopback TCP, and HTTPS/TCP for
+> remote peers. ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern that
+> migration. The current implementation remains the custom transport contract
+> documented by the current boundary manifests.
 
 ## 1. Overview
 
@@ -255,6 +255,11 @@ Current Phase R boundary direction:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+- Phase AI target boundaries (not yet implemented):
+  - `ApiRequest` / `ApiResponse` application contract
+  - `DaemonApiClient` for CLI, graft, and tests
+  - `ApiRouter` reached by every HTTP transport adapter
+  - `PostWriteRouter` invoked after canonical persistence
 - Phase AA target ownership:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root
@@ -1795,9 +1800,10 @@ Logging architecture:
 
 ## 15. Error Model
 
-**Historical through AI.2.** AI.3 replaces this shape with ADR-032's
-serializable `{ code, message }` `AtmError`; `AtmErrorKind`, recovery, and
-captured source fields are not accepted protocol contract after AI.3.
+**Current implementation.** `AtmError` is defined in `atm-storage`. Its
+structured internal form remains distinct from the Phase AI target HTTP error
+body, which ADR-032 proposes as serializable `{ code, message }` and does not
+redefine the internal error type.
 
 Root public error:
 
@@ -1806,14 +1812,15 @@ pub struct AtmError {
     pub code: AtmErrorCode,
     pub kind: AtmErrorKind,
     pub message: String,
-    pub recovery: Option<String>,
+    pub recovery: Vec<String>,
     pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    pub backtrace: Backtrace,
 }
 ```
 
 ```rust
 pub enum AtmErrorCode {
-    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+    // single central registry re-exported from atm-storage
 }
 ```
 
@@ -2723,7 +2730,7 @@ Architectural rules:
 
 ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform HTTP-over-AF_UNIX IPC contract on Unix and Windows
+- same-host target: HTTP over Unix UDS or loopback TCP; Windows loopback TCP
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.

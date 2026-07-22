@@ -107,9 +107,9 @@ Required follow-on ownership in `atm-core`:
   - post-send hook event payloads sufficient for host handoff
   - activation rejection / shutdown notices if surfaced to the client
 - typed config models for `[atm.graft]`
-- protocol/interface documentation updates in
-  `docs/atm-daemon/protocol-icd.md` for every graft-facing request, response,
-  and daemon-originated event boundary added by `U.8` / `U.10`
+- HTTP/OpenAPI interface documentation updates in
+  `docs/atm-daemon/http-api.md` for every graft-facing request, response, and
+  daemon-originated event boundary added by `U.8` / `U.10`
 
 Boundary correction note:
 - any graft-specific protocol or runtime naming from the abandoned earlier line
@@ -126,8 +126,8 @@ Rust boundary rules:
   `serde_json::Value` payloads for the published `atm-graft` boundary
 - transport correlation ids and ATM mail ids must remain distinct semantic
   types
-- do not add a dedicated graft-specific public trait family if the existing
-  shared `ClientTransport` and protocol DTOs are sufficient
+- do not add a dedicated graft-specific public trait family when the shared
+  HTTP client contract and application DTOs are sufficient
 - stream-oriented traits intended for dynamic dispatch must remain object-safe
 
 ## 2.4 Activation And Config Boundary
