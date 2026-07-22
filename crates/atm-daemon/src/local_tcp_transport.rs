@@ -460,7 +460,7 @@ fn restrict_record_to_current_owner(record_path: &Path) -> Result<(), AtmError> 
             descriptor,
         )
     };
-    unsafe { LocalFree(descriptor as isize) };
+    unsafe { LocalFree(descriptor) };
     if applied == 0 {
         return Err(AtmError::daemon_unavailable(format!(
             "failed to restrict local HTTP record {} to its Windows owner",
