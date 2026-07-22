@@ -25,7 +25,7 @@ use atm_core::{
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
-    send::{WriteOutcome, WriteRequest, write_mail_with_runtime_and_post_send_emitter},
+    send::{PreparedWrite, WriteOutcome, WriteRequest, prepare_write_with_runtime},
 };
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
@@ -555,7 +555,7 @@ fn with_shutdown_finalizer_registry<R>(
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 struct MessageRecord {
-    response: ResponseEnvelope,
+    prepared: PreparedWrite,
     outbound_request: WriteRequest,
 }
 
@@ -564,7 +564,7 @@ trait MessageWriter: Send + Sync {
 }
 
 trait PostWriteRouter: Send + Sync {
-    fn dispatch(&self, message: &MessageRecord) -> Result<Option<ResponseEnvelope>, AtmError>;
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -576,20 +576,25 @@ impl DaemonRequestDispatcher {
     }
 
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        let message = MessageWriter::write(self, request)?;
-        Ok(PostWriteRouter::dispatch(self, &message)?.unwrap_or(message.response))
+        let mut message = MessageWriter::write(self, request)?;
+        if message.prepared.requires_post_write_route() {
+            PostWriteRouter::dispatch(self, &mut message)?;
+        }
+        let outcome = message
+            .prepared
+            .finish(&self.service_runtime, self.observability.as_ref())?;
+        Ok(match outcome {
+            WriteOutcome::Sent(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+            }
+            WriteOutcome::Acknowledged(outcome) => {
+                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+            }
+        })
     }
 
-    fn persist_local_write(&self, request: WriteRequest) -> Result<WriteOutcome, AtmError> {
-        let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-        let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-        write_mail_with_runtime_and_post_send_emitter(
-            request,
-            self.observability.as_ref(),
-            &self.service_runtime,
-            &post_send_emitter,
-        )
+    fn persist_local_write(&self, request: WriteRequest) -> Result<PreparedWrite, AtmError> {
+        prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
     }
 
     fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
@@ -621,12 +626,38 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
+}
 
-    fn deliver_to_peer(
-        &self,
-        request: WriteRequest,
-        host: &atm_core::types::HostName,
-    ) -> Result<ResponseEnvelope, AtmError> {
+impl MessageWriter for DaemonRequestDispatcher {
+    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
+        let outbound_request = request.clone();
+        self.persist_local_write(request).map(|prepared| {
+            let message_id = prepared.persisted_message_id();
+            MessageRecord {
+                outbound_request: outbound_request.with_origin_message_id(message_id),
+                prepared,
+            }
+        })
+    }
+}
+
+impl PostWriteRouter for DaemonRequestDispatcher {
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
+        let Some(host) = message
+            .outbound_request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+        else {
+            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+            let post_send_emitter =
+                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+            message
+                .prepared
+                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
+            return Ok(());
+        };
         let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
             AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
         })?;
@@ -638,43 +669,13 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        transport.deliver(request, &peer, HttpsRequestDeadline::default())
-    }
-}
-
-impl MessageWriter for DaemonRequestDispatcher {
-    fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
-        let outbound_request = request.clone();
-        self.persist_local_write(request).map(|outcome| {
-            let message_id = outcome.persisted_message_id();
-            let response = match outcome {
-                WriteOutcome::Sent(outcome) => {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-                }
-                WriteOutcome::Acknowledged(outcome) => {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-                }
-            };
-            MessageRecord {
-                response,
-                outbound_request: outbound_request.with_origin_message_id(message_id),
-            }
-        })
-    }
-}
-
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &MessageRecord) -> Result<Option<ResponseEnvelope>, AtmError> {
-        let Some(host) = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host.as_ref())
-        else {
-            return Ok(None);
-        };
-        self.deliver_to_peer(message.outbound_request.clone(), host)
-            .map(Some)
+        transport
+            .deliver(
+                message.outbound_request.clone(),
+                &peer,
+                HttpsRequestDeadline::default(),
+            )
+            .map(|_| ())
     }
 }
 

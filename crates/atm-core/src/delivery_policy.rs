@@ -1,3 +1,4 @@
+use crate::address::AgentAddress;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
@@ -338,6 +339,29 @@ impl DeliveryPolicyCoordinator {
                 // Two steps joined as one string; callers must split on '\n' to present individually
                 AtmError::agent_not_found(agent, team)
             })
+    }
+
+    /// Resolves storage ownership before the canonical write. This is not a
+    /// transport-routing decision: the daemon's `PostWriteRouter` alone
+    /// chooses local notification versus peer HTTPS after persistence.
+    ///
+    /// A locally-originated host-qualified write retains an immutable sender
+    /// record without querying the remote host's roster. Authenticated peer
+    /// ingress uses the receiving host's roster normally.
+    pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
+        &self,
+        runtime: &R,
+        address: &AgentAddress,
+        recipient: &crate::send::ResolvedRecipient,
+        authenticated_source_host: bool,
+    ) -> Result<DeliveryRecipientSnapshot, AtmError> {
+        if address.host.is_some() && !authenticated_source_host {
+            return Ok(DeliveryRecipientSnapshot::remote(
+                recipient.agent.clone(),
+                recipient.team.clone(),
+            ));
+        }
+        self.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)
     }
 
     #[allow(

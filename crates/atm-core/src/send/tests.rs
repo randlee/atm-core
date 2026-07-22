@@ -8,7 +8,6 @@ use tempfile::tempdir;
 use super::{
     DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
     build_send_delivery_plan, persist_message, prepare_threaded_message,
-    send_mail_with_runtime_impl,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
@@ -33,7 +32,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
-fn message(
+pub(super) fn message(
     from: &str,
     message_id: AtmMessageId,
     parent_message_id: Option<AtmMessageId>,
@@ -124,10 +123,12 @@ pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
-    roster_member_missing: bool,
+    pub(super) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     pub(super) persisted_records: Mutex<Vec<Message>>,
+    pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
 pub(super) struct RecordingPostSendEmitter {
@@ -168,6 +169,8 @@ impl TestRuntime {
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
             persisted_records: Mutex::new(Vec::new()),
+            mailbox_rows: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         }
     }
 }
@@ -298,17 +301,25 @@ impl RetainedMailboxRuntime for TestRuntime {
         _agent: &AgentName,
         _limit: Option<usize>,
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
-        Ok(Vec::new())
+        Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())
     }
 
     fn load_message_record(
         &self,
         _home_dir: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _message_key: &MessageKey,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &MessageKey,
     ) -> Result<Option<Message>, AtmError> {
-        Ok(None)
+        Ok(self
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .iter()
+            .find(|record| {
+                &record.team == team && &record.agent == agent && &record.message_key == message_key
+            })
+            .cloned())
     }
 
     fn persist_message_record(&self, record: Message) -> Result<(), AtmError> {
@@ -322,7 +333,11 @@ impl RetainedMailboxRuntime for TestRuntime {
         Ok(())
     }
 
-    fn persist_message_state(&self, _state: MailMessageState) -> Result<(), AtmError> {
+    fn persist_message_state(&self, state: MailMessageState) -> Result<(), AtmError> {
+        self.persisted_states
+            .lock()
+            .expect("persisted states lock")
+            .push(state);
         Ok(())
     }
 }
@@ -385,32 +400,6 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
     }
 }
 
-#[test]
-fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {
-    let tempdir = tempdir().expect("tempdir");
-    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
-    runtime.roster_member_missing = true;
-    let origin_id = AtmMessageId::new();
-    let request = send_request(tempdir.path()).with_origin_message_id(origin_id);
-    let mut request = request;
-    request.to = Some(
-        "recipient@test-team.localhost"
-            .parse()
-            .expect("remote address"),
-    );
-
-    let outcome =
-        send_mail_with_runtime_impl(request, &RecordingObservability::default(), &runtime, None)
-            .expect("host-qualified origin write must not query the remote roster");
-    assert_eq!(outcome.message_id, origin_id);
-    let records = runtime
-        .persisted_records
-        .lock()
-        .expect("persisted records lock");
-    assert_eq!(records.len(), 1);
-    assert_eq!(records[0].message_key, MessageKey::from(origin_id));
-}
-
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     let mut request = send_request(home_dir);
     request.to = Some(
@@ -434,7 +423,7 @@ fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
 }
 
 #[derive(Default)]
-struct RecordingObservability {
+pub(super) struct RecordingObservability {
     // Mutex required: tests may emit delivery-policy events from multiple
     // runtime calls before assertions snapshot the collected sequence.
     events: Mutex<Vec<CommandEvent>>,
@@ -524,6 +513,82 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         &result.original_message,
         result.companion_message.as_ref().expect("companion"),
         &outbound.text,
+    );
+}
+
+#[test]
+fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("original write");
+
+    let mut conflicting = original.clone();
+    conflicting.text = "different immutable payload".to_string();
+    let error = persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &conflicting,
+        false,
+    )
+    .expect_err("mismatched duplicate ULID must fail");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].envelope.text, original.text);
+}
+
+#[test]
+fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("original write");
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("same immutable replay");
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .len(),
+        1
     );
 }
 
@@ -1035,8 +1100,6 @@ fn prepare_threaded_message_rejects_non_originating_sender() {
         Some(root_id),
         Some(ThreadMode::Supersede),
     );
-
     let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
-
     assert!(error.message().contains("original sender"));
 }

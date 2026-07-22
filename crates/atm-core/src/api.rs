@@ -136,9 +136,16 @@ pub fn write_http_response(
     writer: &mut impl Write,
     response: &ResponseEnvelope,
 ) -> Result<(), AtmError> {
-    if let ResponseEnvelope::Clear(outcome) = response {
-        return write_no_content_response(writer, outcome);
+    match response {
+        ResponseEnvelope::Clear(outcome) => write_no_content_response(writer, outcome),
+        _ => write_http_response_body(writer, response),
     }
+}
+
+fn write_http_response_body(
+    writer: &mut impl Write,
+    response: &ResponseEnvelope,
+) -> Result<(), AtmError> {
     let (status, reason, body, location) = encode_response(response)?;
     let location = location
         .as_deref()
