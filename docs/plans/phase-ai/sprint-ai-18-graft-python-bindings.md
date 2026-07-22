@@ -19,6 +19,8 @@ Maturin. The binding is a translation layer: it invokes the same sealed
 
 - AI.17 is `PASS`.
 - Phase AI’s HTTP client contract is available on the execution baseline.
+- ADR-039 Python graft host binding is present and accepted on the execution
+  baseline.
 
 ## Parallel Execution
 

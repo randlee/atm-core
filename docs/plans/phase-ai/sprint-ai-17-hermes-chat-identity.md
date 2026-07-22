@@ -24,6 +24,8 @@ same meaning as `--chat-id <id>` and `--as <agent>:<id>` under ADR-037.
 - AI.5's accepted chat-address contract is present on `integrate/phase-AI`;
   entry evidence names that commit and green `just lint` / `just test` results.
 - ADR-037 and the Phase AI CLI/API tests are present on that baseline.
+- ADR-039 Python graft host binding governs the Hermes-side use of this
+  mapping; AI.17 may not create a second host boundary.
 
 ## Deliverables
 

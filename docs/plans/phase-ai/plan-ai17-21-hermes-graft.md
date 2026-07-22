@@ -29,6 +29,8 @@ The following Phase AI contracts are hard dependencies:
   post-write effects.
 - ADR-037 chat address identity: separate optional `chat_id` fields with
   agent-facing `agent:chat-id@team` rendering.
+- ADR-039 Python graft host binding: the sealed graft client is exposed to
+  Python without a second daemon, storage, or routing boundary.
 - `docs/requirements.md` caller-context contract for `--as` and `--chat-id`.
 
 ## Design
