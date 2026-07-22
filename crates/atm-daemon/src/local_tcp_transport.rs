@@ -278,11 +278,11 @@ impl PreparedRuntimeServer {
                     }
                     let router = Arc::clone(&router);
                     let capability = capability.clone();
-                    let registry = Arc::clone(&registry);
+                    let dispatch_registry = Arc::clone(&registry);
                     let force_shutdown = Arc::clone(&force_shutdown);
                     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
                     let join_handle = thread::spawn(move || {
-                        let _active = registry.register();
+                        let _active = dispatch_registry.register();
                         let _ =
                             handle_connection(stream, router, &capability, force_shutdown.as_ref());
                         let _ = completion_tx.send(());
@@ -418,13 +418,17 @@ fn publish_record(
 }
 
 #[cfg(windows)]
+#[allow(
+    unsafe_code,
+    reason = "Windows owner-only ACL FFI is confined to this function"
+)]
 fn restrict_record_to_current_owner(record_path: &Path) -> Result<(), AtmError> {
+    use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
     use windows_sys::Win32::Security::{
         DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        SetFileSecurityW,
     };
-    use windows_sys::Win32::Storage::FileSystem::SetFileSecurityW;
-    use windows_sys::Win32::System::Memory::LocalFree;
 
     let path = record_path
         .as_os_str()
