@@ -16,6 +16,11 @@ Source-of-truth rules:
 just validate
 ```
 
+For any release changing daemon, HTTP, TLS, storage write, acknowledgement, or
+peer transport, execute the two-host [peer-pair smoke](./peer-pair-smoke.md)
+after the normal preflight. Attach its sanitized evidence from both roles to
+the release record.
+
 For a concrete release candidate, the workflow-equivalent local invocation is:
 
 ```bash
