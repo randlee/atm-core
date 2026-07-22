@@ -10,7 +10,6 @@ use atm_core::protocol;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
-use serde_json;
 use std::net::TcpStream;
 use std::sync::Mutex;
 
@@ -139,7 +138,7 @@ pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, Atm
     // Preserve the host-singleton override rejection even though the active
     // endpoint is now the daemon-published HTTP record rather than the retired
     // framed-socket path.
-    let _ = protocol::daemon_socket_path()?;
+    protocol::daemon_socket_path()?;
     DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
         &atm_core::home::atm_home()?,
     ))
