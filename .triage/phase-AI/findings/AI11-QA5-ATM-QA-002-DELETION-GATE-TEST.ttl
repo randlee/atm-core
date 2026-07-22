@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA5-ATM-QA-002-DELETION-GATE-TEST>
+  a triage:Finding ;
+  triage:findingId "AI11-QA5-ATM-QA-002-DELETION-GATE-TEST" ;
+  triage:title "Missing deletion-gate AST/dependency scan test" ;
+  triage:description "AI.11 sprint doc requires a deletion-gate AST/dependency scan test verifying deleted UDS-transport code paths cannot be silently reintroduced. This test was never implemented. Should follow the same style as existing AST-based tests in crates/atm-architecture/tests/boundary_enforcement.rs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:openOn <urn:atm:triage:worktree/s11/8a7ea589> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/8a7ea589> ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/s11/8a7ea589>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "8a7ea589" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/0bf86031>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "0bf86031" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/436493ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "436493ab" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 16 .
