@@ -33,8 +33,8 @@ authorization to add unplanned code.
    Phase AI’s existing `--chat-id` / `--as` semantics.
 
 For every story retain: exact commands, release/commit, message IDs, rendered
-source and destination addresses, persisted-before-nudge observation, Hermes
-chat keys, bridge logs, and `PASS`/`FAIL` verdict. Measure the PR-review
+source and destination addresses, persisted-before-nudge observation, source
+chat IDs, bridge logs, and `PASS`/`FAIL` verdict. Measure the PR-review
 latency; do not invent an unverified target.
 
 ## Evidence Matrix

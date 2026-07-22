@@ -637,6 +637,7 @@ mod tests {
     fn request_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: AgentName::from_validated(TEST_LEAD),
+            sender_chat_id: None,
             sender_team: TeamName::from_validated(TEST_TEAM),
             recipient: AgentName::from_validated(TEST_QA),
             recipient_team: TeamName::from_validated(TEST_TEAM),

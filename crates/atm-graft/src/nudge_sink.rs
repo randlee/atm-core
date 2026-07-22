@@ -94,6 +94,7 @@ mod tests {
     fn request_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: TEST_LEAD.parse().expect("sender"),
+            sender_chat_id: None,
             sender_team: TEST_TEAM.parse().expect("team"),
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),

@@ -636,6 +636,7 @@ fn post_send_event_from_message(
 ) -> PostSendHookEvent {
     PostSendHookEvent {
         sender: message.envelope.from.clone(),
+        sender_chat_id: message.envelope.source_chat_id.clone(),
         sender_team: message
             .envelope
             .source_team
@@ -899,7 +900,7 @@ mod tests {
         HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
         emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, sender_config_root,
+        parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
@@ -924,7 +925,7 @@ mod tests {
     use crate::send::ResolvedRecipient;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
-    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     struct ConfigLookupRuntime {
         roster_entry: Option<RosterEntry>,
@@ -1250,6 +1251,25 @@ mod tests {
             false,
         )
         .expect("logical message")
+    }
+
+    #[test]
+    fn post_send_event_preserves_the_canonical_source_chat_id() {
+        let mut message = logical_message("chat-scoped nudge");
+        let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
+        message.envelope.source_chat_id = Some(chat_id.clone());
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event = post_send_event_from_message(&recipient, &message, None);
+
+        assert_eq!(event.sender_chat_id, Some(chat_id));
+        assert_eq!(
+            event.source_address().to_string(),
+            "sender-a:chat-42@test-team"
+        );
     }
 
     fn install_test_home(home_dir: &Path) -> EnvGuard {
