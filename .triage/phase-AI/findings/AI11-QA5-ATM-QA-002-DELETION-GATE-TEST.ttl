@@ -20,6 +20,11 @@
   triage:promoteTo <urn:atm:triage:worktree/s11/8a7ea589> ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
 
+<urn:atm:triage:finding/AI11-QA5-ATM-QA-002-DELETION-GATE-TEST>
+  triage:assignedTo "cwin" ;
+  triage:dispatchChannel "direct-paste-non-atm" ;
+  triage:notes "OWNERSHIP BACKFILL (team-lead, 2026-07-22): this record was closed as 'fixed' citing commit bb20fd9a (see triage:resolution above) before the assignedTo/dispatchChannel ownership-tracking convention existed, so those fields were absent until this backfill. cwin (dev) closed this finding via commit bb20fd9a on feature/pAI-s11-post-merge-remediation (PR #607): a syn-AST + Cargo-dependency-graph deletion-gate test replacing the earlier lexical/grep-based test. cwin has no ATM identity, so this work was dispatched and reported by direct-paste outside the ATM channel and left no ATM message trail on his side. This backfill is retroactive-only -- triage:status, triage:resolution, and the existing triage:notes narrative above are unchanged; only the ownership/dispatch-channel audit fields are being added, consistent with the same convention already applied to the AI11-QA7 fast-follow batch (AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE, AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST, AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK)." .
+
 <urn:atm:triage:worktree/s11/8a7ea589>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;

@@ -5,79 +5,48 @@
   a triage:Finding ;
   triage:findingId "AI12-QA1-BLOCKING-04" ;
   triage:title "No idempotency-conflict detection on duplicate ULID writes; replay with mismatched payload silently overwrites" ;
-  triage:description "mirror_message_to_store (crates/atm-core/src/send/persistence.rs) calls persist_message_record unconditionally with no prior lookup/comparison against existing record for same ULID. Contradicts sprint invariant: mismatched payload for existing ULID is typed conflict -- retain original row, emit structured error log, return error, no nudge/ack/peer-delivery; never panic or overwrite. S12 added idempotency-conflict check with immutable-payload comparison and test coverage." ;
+  triage:description "mirror_message_to_store (crates/atm-core/src/send/persistence.rs) calls persist_message_record unconditionally with no prior lookup/comparison against existing record for same ULID. Contradicts sprint invariant: mismatched payload for existing ULID is typed conflict -- retain original row, emit structured error log, return error, no nudge/ack/peer-delivery; never panic or overwrite. S12 added idempotency-conflict check with immutable-payload comparison and test coverage. Currently present in s20 (lines 156-170): if existing record found, verifies immutable_envelopes_match, and returns error if mismatch." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "blocking" ;
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-04/s11/1> ;
-  triage:openOn <urn:atm:triage:worktree/s11/3642430d> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-04/s12/1> ;
   triage:fixedOn <urn:atm:triage:worktree/s12/a8ea0017> ;
+  triage:fixedOn <urn:atm:triage:worktree/s20/34392e5c> ;
   triage:promoteTo <urn:atm:triage:worktree/s12/a8ea0017> ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
-  triage:highestOpenBranch "feature/pAI-s11-post-merge-remediation" ;
-  triage:highestFixedBranch "feature/pAI-s12-post-write-router" .
+  triage:triagedAt "2026-07-22T16:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
+  triage:propagated true .
 
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-04/s11/1>
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-04/s12/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/send/persistence.rs" ;
-  triage:line 148 ;
-  triage:snippet "runtime.persist_message_record(boundary::Message { ... })" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:headSha "3642430d" ;
-  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> ;
-  triage:description "Unconditional persist without prior load_message_record check for idempotency conflict" .
-
-<urn:atm:triage:worktree/s11/3642430d>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
-  triage:headSha "3642430d" ;
-  triage:orderIndex 1 ;
-  triage:status "open" .
+  triage:line 156 ;
+  triage:snippet "if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:description "Idempotency-conflict check introduced: loads existing record, verifies immutable_envelopes_match, returns error on mismatch" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
 
 <urn:atm:triage:worktree/s12/a8ea0017>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
-  triage:orderIndex 2 ;
+  triage:orderIndex 12 ;
   triage:status "fixed" .
 
-<urn:atm:triage:worktree/s13/2adc5fa1>
+<urn:atm:triage:worktree/s20/34392e5c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
-  triage:headSha "2adc5fa1" ;
-  triage:orderIndex 3 ;
-  triage:status "fixed" .
-
-<urn:atm:triage:worktree/s14/ef0e5e2b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
-  triage:headSha "ef0e5e2b" ;
-  triage:orderIndex 4 ;
-  triage:status "fixed" .
-
-<urn:atm:triage:worktree/s15/5a7a762f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
-  triage:headSha "5a7a762f" ;
-  triage:orderIndex 5 ;
-  triage:status "fixed" .
-
-<urn:atm:triage:worktree/s16/1c23ac04>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
-  triage:headSha "1c23ac04" ;
-  triage:orderIndex 6 ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:orderIndex 20 ;
   triage:status "fixed" .
