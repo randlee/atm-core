@@ -22,6 +22,7 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
+    ("atm-graft", "interprocess"),
     ("atm-runtime", "atm-daemon"),
 ];
 

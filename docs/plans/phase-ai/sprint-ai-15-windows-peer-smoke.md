@@ -52,12 +52,16 @@ The current run validates the macOS build and local HTTPS/mTLS contract only.
 The peer-pair runner's configuration and evidence mechanics are exercised with
 mock commands only; that result is not ATM peer-pair evidence.
 
-A source audit also found that the graft post-send notification receiver still
-uses `interprocess::local_socket` on Windows. Graft's `send`, `read`, and
-`ack` client transport already uses the daemon's local HTTP record, but this
-remaining notification listener prevents a complete Windows named-pipe
-retirement claim. It is an AI.11 transport-remediation gap, not evidence that
-AI.15's physical peer-pair work ran.
+A source audit previously found that the graft post-send notification receiver
+still used `interprocess::local_socket` on Windows. That residual has now been
+closed: the graft post-send notification channel was migrated to the same
+loopback-TCP plus per-bind capability control plane used by the rest of graft's
+`send`/`read`/`ack` client transport, removing `interprocess::local_socket`
+from `atm-graft` and the CLI on all platforms (not just Windows-gated). A
+`atm-graft -> interprocess` `forbidden_edge` in
+`boundaries/atm-graft/shared-client-consumer.toml` now blocks any
+reintroduction. This closes the last named-pipe surface inside graft; it is
+still not evidence that AI.15's physical peer-pair work ran.
 
 Physical execution remains open and is tracked by `AI10-WINDOWS-001` and the
 equivalent Mac evidence gap `AI14-QA1-EVIDENCE-GAP`. Closure requires a real
