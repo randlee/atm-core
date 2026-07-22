@@ -339,7 +339,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         .expect("send request"),
     ));
     atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
-    let response = atm_core::api::read_http_response(&mut stream).expect("read send response");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");

@@ -66,6 +66,10 @@ pub struct WriteRequest {
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authenticated_source_host: Option<HostName>,
+    /// The immutable identity assigned by the origin canonical writer.
+    /// Authenticated peer ingress preserves it so both hosts store one ULID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_message_id: Option<AtmMessageId>,
     /// Destination is omitted only by an `atm ack` command.  The daemon
     /// resolves that destination from the acknowledged source before calling
     /// the canonical writer.
@@ -105,6 +109,7 @@ impl WriteRequest {
             caller_chat_id: None,
             caller_team,
             authenticated_source_host: None,
+            origin_message_id: None,
             to: Some(to.parse()?),
             message_source,
             summary_override,
@@ -123,6 +128,12 @@ impl WriteRequest {
         self.caller_chat_id = caller_chat_id;
         self
     }
+
+    #[must_use]
+    pub fn with_origin_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.origin_message_id = Some(message_id);
+        self
+    }
 }
 
 /// Compatibility name for existing callers.  There is one write payload;
@@ -138,6 +149,21 @@ pub type SendRequest = WriteRequest;
 pub enum WriteOutcome {
     Sent(SendOutcome),
     Acknowledged(AckOutcome),
+}
+
+impl WriteOutcome {
+    /// Returns the immutable identity persisted by this canonical write.
+    #[must_use]
+    pub fn persisted_message_id(&self) -> AtmMessageId {
+        match self {
+            Self::Sent(outcome) => outcome.message_id,
+            Self::Acknowledged(outcome) => match outcome.reply_disposition {
+                crate::ack::AckReplyDisposition::Sent {
+                    reply_message_id, ..
+                } => reply_message_id,
+            },
+        }
+    }
 }
 
 /// Result of sending one ATM mailbox message.
@@ -360,7 +386,7 @@ pub(crate) fn write_mail_persisted_with_runtime<
         &context.recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = AtmMessageId::new();
+    let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = IsoTimestamp::now();
 
     let persistence = persist_send_message(
@@ -587,8 +613,15 @@ fn prepare_send_context<
     validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
-    let delivery_snapshot =
-        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
+    let delivery_snapshot = if target.host.is_some() && request.authenticated_source_host.is_none()
+    {
+        // The sender retains an immutable outbound record.  The remote
+        // recipient roster is owned and checked only by authenticated peer
+        // ingress on that recipient host.
+        DeliveryRecipientSnapshot::remote(recipient.agent.clone(), recipient.team.clone())
+    } else {
+        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?
+    };
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,
         request.thread_mode,

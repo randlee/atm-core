@@ -128,8 +128,10 @@ Observed result on the first Windows machine for this branch:
    $env:ATM_CONFIG_HOME = $SmokeRoot
    $env:ATM_TEAM = "smoke-team"
    $env:ATM_IDENTITY = "smoke-user"
-   $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
    ```
+   Windows local clients discover the daemon-owned `local-http.json` record
+   under the runtime directory. Do not set a local socket or fixed-port
+   environment variable.
    Then initialize the roster with ATM itself:
    ```powershell
    .\target\debug\atm.exe teams add-member smoke-team smoke-user worker gpt-5 --home-dir $SmokeRoot

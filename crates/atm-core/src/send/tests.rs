@@ -8,6 +8,7 @@ use tempfile::tempdir;
 use super::{
     DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
     build_send_delivery_plan, persist_message, prepare_threaded_message,
+    send_mail_with_runtime_impl,
 };
 use crate::boundary::{
     BuiltInPostSendDispatch, GraftNudgeTarget, MailMessageState, MailStoreMailboxMetadataRow,
@@ -126,6 +127,7 @@ pub(super) struct TestRuntime {
     roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+    pub(super) persisted_records: Mutex<Vec<Message>>,
 }
 
 pub(super) struct RecordingPostSendEmitter {
@@ -165,6 +167,7 @@ impl TestRuntime {
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
+            persisted_records: Mutex::new(Vec::new()),
         }
     }
 }
@@ -308,10 +311,14 @@ impl RetainedMailboxRuntime for TestRuntime {
         Ok(None)
     }
 
-    fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
+    fn persist_message_record(&self, record: Message) -> Result<(), AtmError> {
         if let Some(message) = self.commit_error_message {
             return Err(AtmError::mailbox_write(message));
         }
+        self.persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .push(record);
         Ok(())
     }
 
@@ -364,6 +371,7 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
         authenticated_source_host: None,
+        origin_message_id: None,
         to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
         message_source: SendMessageSource::Inline("hello".to_string()),
         summary_override: Some("hello".to_string()),
@@ -375,6 +383,32 @@ pub(super) fn send_request(home_dir: &Path) -> SendRequest {
         acknowledges_message_id: None,
         dry_run: false,
     }
+}
+
+#[test]
+fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {
+    let tempdir = tempdir().expect("tempdir");
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    runtime.roster_member_missing = true;
+    let origin_id = AtmMessageId::new();
+    let request = send_request(tempdir.path()).with_origin_message_id(origin_id);
+    let mut request = request;
+    request.to = Some(
+        "recipient@test-team.localhost"
+            .parse()
+            .expect("remote address"),
+    );
+
+    let outcome =
+        send_mail_with_runtime_impl(request, &RecordingObservability::default(), &runtime, None)
+            .expect("host-qualified origin write must not query the remote roster");
+    assert_eq!(outcome.message_id, origin_id);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].message_key, MessageKey::from(origin_id));
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {

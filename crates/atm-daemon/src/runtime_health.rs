@@ -556,6 +556,7 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 struct MessageRecord {
     response: ResponseEnvelope,
+    outbound_request: WriteRequest,
 }
 
 trait MessageWriter: Send + Sync {
@@ -563,7 +564,7 @@ trait MessageWriter: Send + Sync {
 }
 
 trait PostWriteRouter: Send + Sync {
-    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError>;
+    fn dispatch(&self, message: &MessageRecord) -> Result<Option<ResponseEnvelope>, AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -575,19 +576,11 @@ impl DaemonRequestDispatcher {
     }
 
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        if request
-            .to
-            .as_ref()
-            .is_some_and(|address| address.host.is_some())
-        {
-            return self.dispatch_remote_write(request);
-        }
-        let message = MessageWriter::write(self, request.clone())?;
-        PostWriteRouter::dispatch(self, &request, &message)?;
-        Ok(message.response)
+        let message = MessageWriter::write(self, request)?;
+        Ok(PostWriteRouter::dispatch(self, &message)?.unwrap_or(message.response))
     }
 
-    fn persist_local_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+    fn persist_local_write(&self, request: WriteRequest) -> Result<WriteOutcome, AtmError> {
         let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
             Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
         let post_send_emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
@@ -597,14 +590,6 @@ impl DaemonRequestDispatcher {
             &self.service_runtime,
             &post_send_emitter,
         )
-        .map(|outcome| match outcome {
-            WriteOutcome::Sent(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
-            }
-            WriteOutcome::Acknowledged(outcome) => {
-                ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
-            }
-        })
     }
 
     fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
@@ -637,12 +622,11 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
-        let host = request
-            .to
-            .as_ref()
-            .and_then(|address| address.host.as_ref())
-            .ok_or_else(|| AtmError::validation("peer write requires a destination host"))?;
+    fn deliver_to_peer(
+        &self,
+        request: WriteRequest,
+        host: &atm_core::types::HostName,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
             AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
         })?;
@@ -660,21 +644,37 @@ impl DaemonRequestDispatcher {
 
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
-        self.persist_local_write(request)
-            .map(|response| MessageRecord { response })
+        let outbound_request = request.clone();
+        self.persist_local_write(request).map(|outcome| {
+            let message_id = outcome.persisted_message_id();
+            let response = match outcome {
+                WriteOutcome::Sent(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                }
+                WriteOutcome::Acknowledged(outcome) => {
+                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                }
+            };
+            MessageRecord {
+                response,
+                outbound_request: outbound_request.with_origin_message_id(message_id),
+            }
+        })
     }
 }
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> {
-        debug_assert!(
-            request
-                .to
-                .as_ref()
-                .is_none_or(|address| address.host.is_none())
-        );
-        let _ = message;
-        Ok(())
+    fn dispatch(&self, message: &MessageRecord) -> Result<Option<ResponseEnvelope>, AtmError> {
+        let Some(host) = message
+            .outbound_request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+        else {
+            return Ok(None);
+        };
+        self.deliver_to_peer(message.outbound_request.clone(), host)
+            .map(Some)
     }
 }
 
@@ -883,7 +883,21 @@ impl ApiRouter for DaemonRequestDispatcher {
             ));
         }
         let request = request.into_inner();
-        let _ = ingress;
+        if let RequestEnvelope::Write(write) = &request {
+            match ingress {
+                AuthenticatedIngress::Local if write.origin_message_id.is_some() => {
+                    return Err(AtmError::validation(
+                        "local write requests must not supply an origin message ID",
+                    ));
+                }
+                AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() => {
+                    return Err(AtmError::validation(
+                        "peer write requests require authenticated source provenance",
+                    ));
+                }
+                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+            }
+        }
         self.dispatch(request).map(ApiResponse::new)
     }
 }
