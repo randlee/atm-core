@@ -15,6 +15,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(windows)]
+use std::time::Instant;
+
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt as _;
+
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
@@ -34,8 +40,12 @@ use crate::SubsystemObservability;
 #[cfg(windows)]
 use crate::active_connection_registry::ActiveConnectionRegistry;
 #[cfg(windows)]
+use crate::active_connection_registry::TrackedDispatchHandle;
+#[cfg(windows)]
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+#[cfg(windows)]
+use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -245,9 +255,14 @@ impl PreparedRuntimeServer {
         loop {
             if lifecycle.terminate_requested() {
                 (hooks.begin_shutdown)()?;
-                force_shutdown.store(true, Ordering::SeqCst);
-                let _ = hooks.graceful_drain_deadline;
-                let _ = hooks.force_cancel_deadline;
+                drain_active_connections_for_shutdown(
+                    registry.as_ref(),
+                    force_shutdown.as_ref(),
+                    hooks.graceful_drain_deadline,
+                    hooks.force_cancel_deadline,
+                    Instant::now(),
+                    REQUEST_DEADLINE,
+                )?;
                 drop(hooks.endpoint_guard);
                 return Ok(());
             }
@@ -265,13 +280,23 @@ impl PreparedRuntimeServer {
                     let capability = capability.clone();
                     let registry = Arc::clone(&registry);
                     let force_shutdown = Arc::clone(&force_shutdown);
-                    thread::spawn(move || {
+                    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+                    let join_handle = thread::spawn(move || {
                         let _active = registry.register();
                         let _ =
                             handle_connection(stream, router, &capability, force_shutdown.as_ref());
+                        let _ = completion_tx.send(());
                     });
+                    registry.push_dispatch_handle(
+                        TrackedDispatchHandle {
+                            completion_rx,
+                            join_handle,
+                        },
+                        MAX_CONCURRENT_CONNECTIONS,
+                    )?;
                 }
                 Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                    registry.reap_finished_dispatches()?;
                     thread::sleep(ACCEPT_POLL_INTERVAL);
                 }
                 Err(source) => {
@@ -387,6 +412,57 @@ fn publish_record(
             record_path.display()
         ))
     })?;
+    #[cfg(windows)]
+    restrict_record_to_current_owner(record_path)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn restrict_record_to_current_owner(record_path: &Path) -> Result<(), AtmError> {
+    use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+    use windows_sys::Win32::Security::{
+        DACL_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    };
+    use windows_sys::Win32::Storage::FileSystem::SetFileSecurityW;
+    use windows_sys::Win32::System::Memory::LocalFree;
+
+    let path = record_path
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    // `OW` is the current file owner's SID. A protected DACL containing only
+    // this ACE prevents inherited user/group read access to the bearer secret.
+    let descriptor_text = "D:P(A;;FA;;;OW)\0".encode_utf16().collect::<Vec<_>>();
+    let mut descriptor: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+    let mut descriptor_size = 0_u32;
+    let converted = unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            descriptor_text.as_ptr(),
+            1,
+            &mut descriptor,
+            &mut descriptor_size,
+        )
+    };
+    if converted == 0 {
+        return Err(AtmError::daemon_unavailable(
+            "failed to create Windows owner-only ACL",
+        ));
+    }
+    let applied = unsafe {
+        SetFileSecurityW(
+            path.as_ptr(),
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            descriptor,
+        )
+    };
+    unsafe { LocalFree(descriptor as isize) };
+    if applied == 0 {
+        return Err(AtmError::daemon_unavailable(format!(
+            "failed to restrict local HTTP record {} to its Windows owner",
+            record_path.display()
+        )));
+    }
     Ok(())
 }
 
@@ -587,5 +663,53 @@ mod tests {
                 & 0o777,
             0o600
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn tcp_listener_drain_honors_the_force_cancel_deadline() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::mpsc;
+        use std::time::Instant;
+
+        use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+        use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+        let worker_registry = Arc::clone(&registry);
+        let join_handle = thread::spawn(move || {
+            let _connection = worker_registry.register();
+            let _dispatch = worker_registry.register_dispatch_work();
+            let _ = release_rx.recv();
+            let _ = completion_tx.send(());
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                super::MAX_CONCURRENT_CONNECTIONS,
+            )
+            .expect("track TCP listener worker");
+
+        let force_shutdown = AtomicBool::new(false);
+        let started = Instant::now();
+        let error = drain_active_connections_for_shutdown(
+            registry.as_ref(),
+            &force_shutdown,
+            Duration::from_millis(10),
+            Duration::from_millis(20),
+            started,
+            Duration::from_millis(25),
+        )
+        .expect_err("TCP listener shutdown must not wait indefinitely");
+
+        assert!(force_shutdown.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(error.message().contains("shutdown join deadline"));
+        let _ = release_tx.send(());
     }
 }
