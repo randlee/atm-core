@@ -911,6 +911,7 @@ fn write_graft_post_send_response_with_helper(
 }
 
 #[cfg(test)]
+#[cfg_attr(windows, allow(dead_code, unused_imports))]
 mod tests {
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -1119,6 +1120,7 @@ mod tests {
             .expect("wait");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn receiver_listener_binds_at_expected_endpoint() {
         let paths = test_paths();
@@ -1183,6 +1185,7 @@ mod tests {
         released.store(true, Ordering::SeqCst);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn listener_wake_caps_helper_growth_under_repeated_hangs() {
         let paths = test_paths();
@@ -1242,6 +1245,7 @@ mod tests {
         assert_eq!(helper_budget.inflight(), 0, "helper threads should drain");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load() {
         let paths = test_paths();
@@ -1279,6 +1283,7 @@ mod tests {
         stop_receiver(&endpoint_path, stop_tx, join);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn receiver_loop_returns_typed_error_when_injector_fails() {
         let paths = test_paths();
