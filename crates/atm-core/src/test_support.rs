@@ -6,7 +6,7 @@ use std::ffi::{OsStr, OsString};
 use std::sync::OnceLock;
 
 #[cfg(any(test, feature = "test-utils"))]
-use parking_lot::{RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard};
 
 pub const TEST_TEAM: &str = "test-team";
 pub const TEST_SENDER: &str = "sender-a";
@@ -29,15 +29,11 @@ fn env_lock() -> &'static RwLock<()> {
 }
 
 #[cfg(any(test, feature = "test-utils"))]
-/// Exclusive process-environment lock for tests which mutate environment variables directly.
-///
-/// Environment mutation is process-global. A shared/read guard permits two direct-mutator
-/// tests to run together and can erase an `EnvGuard` override before its assertion executes.
-pub type EnvLockGuard = RwLockWriteGuard<'static, ()>;
+pub type EnvLockGuard = RwLockReadGuard<'static, ()>;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub fn lock_env() -> EnvLockGuard {
-    env_lock().write()
+    env_lock().read()
 }
 
 #[cfg(any(test, feature = "test-utils"))]
