@@ -31,12 +31,13 @@ rebase and renewed review.
 
 - A versioned Python package built with PyO3/Maturin, without changing the
   public Rust `atm-graft` API.
-- `AtmGraftSession` lifecycle methods that wrap the existing graft session.
+- `PyGraftSession` lifecycle methods that wrap the existing graft session.
 - Typed Python representations for a canonical nudge and address, including
   optional `chat_id`; no string-only substitute for `AgentAddress`.
-- `send(to_agent, message, team=None, chat_id=None)` maps the optional
-  **caller** `chat_id` to the existing caller address; callers may alternatively supply the equivalent
-  qualified caller form supported by Phase AI.
+- A session is created with one typed caller address. `send(to, body)` uses
+  that caller unchanged; `PyAgentAddress.chat_id` is the sole chat-id field.
+- A Python wrapper for AI.17's `hermes_chat_key` consumes a typed source
+  address; no Hermes code reimplements its formatting.
 - Tests for Python-to-Rust address round trip, nudge callback delivery, error
   propagation, absent/present chat ID, and no direct daemon socket or storage
   access from the binding.
@@ -58,15 +59,22 @@ struct PyNudge { message_id: String, source: PyAgentAddress, body: String }
 
 #[pymethods]
 impl PyGraftSession {
-    fn send(&self, to: PyAgentAddress, body: String, chat_id: Option<String>) -> PyResult<()>;
+    #[new]
+    fn new(caller: PyAgentAddress) -> PyResult<Self>;
+    fn send(&self, to: PyAgentAddress, body: String) -> PyResult<()>;
     fn read(&self) -> PyResult<Vec<PyMessage>>;
     fn acknowledge(&self, message_id: String) -> PyResult<()>;
 }
+
+#[pyfunction]
+fn hermes_chat_key(source: PyAgentAddress) -> PyResult<String>;
 ```
 
 Python receives typed address fields; it does not receive a raw daemon request
-or construct a transport envelope. A callback registration method may be added
-only if it forwards `PyNudge` from the existing graft callback.
+or construct a transport envelope. The `caller` supplied to `new` is the
+single source of caller `chat_id`; `to` is the destination address. A callback
+registration method may be added only if it forwards `PyNudge` from the
+existing graft callback.
 
 ## Boundary and Non-Goals
 

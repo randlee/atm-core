@@ -30,31 +30,33 @@ not modify the post-write router, daemon transport, or `atm-graft` API.
 - One Python bridge implementation using AI.18 that registers one graft
   receiver per Hermes profile. A Rust wrapper is out of scope.
 - One typed adapter that maps `source.agent`, optional `source.chat_id`, and
-  `source.team` to a Hermes chat key. It consumes structured values, never
-  parses a rendered `agent:chat-id@team` string.
+  `source.team` to a Hermes chat key by calling AI.18's Python binding of
+  AI.17 `hermes_chat_key`. It consumes structured values, never parses a
+  rendered `agent:chat-id@team` string.
 - Injection of the nudge body into Hermes’s existing inbound user-message
   path; no ATM write, retry, or alternate routing is performed by the bridge.
-- Hermes tests proving: a write is durable before the event is visible; three
-  nudges from one qualified source use one chat; two chat IDs remain isolated;
-  ATM chats cannot collide with Telegram/Discord; malformed source addresses
-  fail closed; duplicate notification delivery does not create a second
-  Hermes turn for the same message ID.
+- Reference-adapter tests proving: a write is durable before the event is
+  visible; three nudges from one qualified source use one chat; two chat IDs
+  remain isolated; ATM chats cannot collide with Telegram/Discord; malformed
+  source addresses fail closed; duplicate notification delivery does not
+  create a second Hermes turn for the same message ID.
 
 ## Exact Targets and Contract
 
 - `crates/atm-graft-python/src/hermes.rs` — typed Python-facing Hermes bridge
-  adapter over AI.18; no socket or storage dependency.
+  reference adapter over AI.18; no socket or storage dependency.
 - `docs/plans/phase-ai/hermes-graft-adapter-contract.md` — checked-in contract
-  for the external Hermes implementation.
-- `~/.hermes/hermes-agent/gateway/platforms/atm_graft.py` — Hermes adapter
-  target. AI.19’s entry record pins the Hermes checkout commit before editing.
+  for Hermes maintainers, including the downstream test/merge handoff.
+
+AI.19 does not modify an external Hermes checkout. Hermes maintainers consume
+the checked-in reference adapter and contract through their own repository,
+branch, test, review, and merge process; that downstream work is not an
+atm-core deliverable or closure gate.
 
 ```python
 def deliver_atm_nudge(nudge: PyNudge) -> None:
-    """Map nudge.source to an `atm:` chat and submit nudge.body once."""
-
-def hermes_chat_key(source: PyAgentAddress) -> str:
-    return f"atm:{source.agent}{':' + source.chat_id if source.chat_id else ''}@{source.team}"
+    chat_key = atm_graft.hermes_chat_key(nudge.source)
+    # Submit nudge.body to Hermes's normal inbound-user-message path once.
 ```
 
 The bridge keeps a bounded in-memory set of recently injected **message IDs**
@@ -71,7 +73,12 @@ unchanged.
 
 ## Closure
 
-- Focused bridge/Hermes tests and a running daemon proof pass.
+- Focused reference-adapter tests and a running daemon proof pass.
 - The proof records message ID, persisted-row observation, rendered source
   address, selected Hermes chat key, and nudge receipt order.
 - `just lint`, `just test`, and `git diff --check` pass.
+- Before AI.20 drafting starts, AI.19 records `FROZEN` in
+  `readiness-ai17-21-hermes-graft.md`, with the exact commit SHA and the
+  bridge module, configuration keys, and readiness probe names. If any of
+  those artifacts changes before AI.19 `PASS`, AI.19 replaces the frozen
+  record and AI.20 rebases its draft before it resumes.

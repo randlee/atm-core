@@ -50,29 +50,11 @@ grammar, message schema, CLI semantics, HTTP resources, daemon routing, or
 the Rust `atm-graft` API. Hermes ATM chats remain in an `atm:` namespace and
 never share Telegram or Discord conversation state.
 
-## Sprint Sequence
+## Execution
 
-| Sprint | Purpose | Depends on |
-|---|---|---|
-| AI.17 | Verify and specify Hermes-to-Phase-AI chat identity mapping | AI.5 chat-address contract |
-| AI.18 | PyO3/Maturin binding over the existing graft client boundary | AI.17 |
-| AI.19 | Hermes gateway nudge adapter and canonical chat routing | AI.18 |
-| AI.20 | Per-profile launchd deployment and runbook | AI.19 |
-| AI.21 | Four-story end-to-end closure evidence | AI.20 |
-
-## Parallelism
-
-| Work | Parallel with AI.11–AI.16 | Constraint |
-| --- | --- | --- |
-| AI.17 | Yes | Uses only AI.5's accepted chat-address contract; no `atm-graft` change. |
-| AI.18 | Yes, after AI.17 | New binding crate only; it consumes, but does not modify, `atm-graft`. |
-| AI.19 | Yes only after AI.12 | Requires AI.12's accepted post-write nudge contract; may overlap AI.13–AI.16. |
-| AI.20 | Draft only after AI.19 contract freeze | Runtime validation waits for AI.19 `PASS`. |
-| AI.21 | No | Final evidence waits for AI.16, AI.19, and AI.20 `PASS`. |
-
-AI.17, AI.18, and AI.19 are strictly sequential within this track. A parallel
-branch must rebase if an upstream Phase AI contract it consumes changes.
-
-See [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md) for the
-implementation contract and [readiness-ai17-21-hermes-graft.md](readiness-ai17-21-hermes-graft.md)
-for closure gates.
+AI.17–AI.21 provide the Hermes mapping, Python binding, reference bridge,
+parameterized deployment material, and closure evidence. Their authoritative
+sequence, dependencies, and parallel-execution rules are in
+[plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md); readiness and
+closure records are in
+[readiness-ai17-21-hermes-graft.md](readiness-ai17-21-hermes-graft.md).

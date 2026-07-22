@@ -11,40 +11,44 @@ target: integrate/phase-AI
 
 ## Goal
 
-Deploy one AI.19 bridge per Hermes profile under launchd and publish a concrete
-operator runbook. Launchd supervises a process; it never participates in
-message identity or routing.
+Publish a parameterized launchd template and concrete operator runbook for one
+AI.19 bridge per Hermes profile. A Hermes profile is an operator-registered
+name plus its `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
+configuration, and log path. Launchd supervises a process; it never
+participates in message identity or routing.
 
 ## Hard Dependencies
 
 - AI.19 is `PASS`.
-- The required Hermes profiles and their configuration are available to the
-  operator.
+- The operator-provided profile registry in `hermes-graft-runbook.md` is
+  available to the operator.
 
 ## Parallel Execution
 
-After AI.19 commits its bridge module, configuration fields, and readiness
-probe, a separate agent may draft this sprint's runbook and plist templates in
-parallel. Deployment validation and `PASS` remain blocked on AI.19 `PASS`.
+AI.20 drafting may start only after the AI.19 `FROZEN` readiness record names
+its exact commit and stabilized bridge module, configuration keys, and
+readiness probe. If AI.19 changes that surface before `PASS`, AI.20 rebases
+the draft to the replacement frozen record. Deployment validation and `PASS`
+remain blocked on AI.19 `PASS`.
 
 ## Deliverables
 
-- Per-profile launchd plists for `default`, `grecon`, `alpha-prime`, and
-  `skillrx`, each with its `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`,
-  bridge configuration, and log path.
+- One parameterized `ai.hermes.atm-graft-<profile>.plist` template, rendered
+  once for each profile listed in the operator-provided registry.
 - A runbook covering install, status, restart, log collection, failure
   diagnosis, and adding a profile.
 - Tests/probes proving independent supervision, restart after controlled
   termination, registered receiver availability, and correct qualified chat
-  mapping for each profile.
+  mapping for every registry entry.
 
 ## Exact Targets
 
 - `docs/plans/phase-ai/hermes-graft-runbook.md` — install and recovery
-  commands, expected logs, and proof commands.
-- `~/Library/LaunchAgents/ai.hermes.atm-graft-{default,grecon,alpha-prime,skillrx}.plist`
-  — operator-installed launchd plists retained as release evidence; templates
-  live beside the runbook.
+  commands, expected logs, proof commands, and the authoritative
+  operator-provided profile registry.
+- `docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist` —
+  checked-in parameterized template. Operator-rendered plist files and their
+  local paths are evidence, not repository targets.
 
 Every plist sets `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, the bridge
 module path, and an explicit profile log path. `KeepAlive` is allowed only for
@@ -58,7 +62,7 @@ address parser, no transport protocol, and no cross-host feature.
 
 ## Closure
 
-- Each profile starts and stops independently through launchd.
+- Each registry profile starts and stops independently through launchd.
 - The runbook reproduces the validation without hidden configuration.
 - `just lint`, `just test`, and `git diff --check` pass for repository work;
   retained launchd evidence accompanies the operator-owned artifacts.

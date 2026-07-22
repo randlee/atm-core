@@ -28,6 +28,12 @@ Hermes-local `atm:` chat and injects the nudge body through Hermes's ordinary
 inbound-user-message mechanism. No `session_id`, custom session header,
 webhook-specific address grammar, or alternate send/ack path exists.
 
+The atm-core deliverable is an in-repository reference adapter and contract.
+It does not edit or validate an external Hermes checkout; Hermes maintainers
+adopt that contract through their own repository and review process. AI.20
+ships a parameterized launchd template and operator runbook, not named
+personal-machine profiles.
+
 ## Consequences
 
 - `agent:chat-id@team` remains the sole agent-facing identity across CLI,

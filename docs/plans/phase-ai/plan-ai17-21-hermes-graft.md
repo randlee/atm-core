@@ -81,6 +81,15 @@ or implement a second send/ack/read path.
 
 ## Scope
 
+### Expanded scope acknowledgement
+
+This track is not only PyO3/Maturin bindings. It also includes an in-repository
+Hermes reference bridge and downstream handoff contract, parameterized
+per-profile deployment templates and runbook, and retained production evidence.
+It does not authorize edits to an external Hermes checkout. The owner must
+record approval of this expanded scope in the readiness record before AI.19
+starts.
+
 ### In scope
 
 - Hermes mapping of an ambient session key to Phase AI `chat_id`.
@@ -117,7 +126,7 @@ deliverable to the next sprint.
 | AI.17 | Yes | AI.5 chat-address contract is accepted. It adds only a Hermes mapping adapter; it does not modify `atm-graft`, the daemon, HTTP, or storage. |
 | AI.18 | Yes, after AI.17 | AI.17 is `PASS` and the sealed `DaemonApiClient` signature used by the binding is unchanged. It adds `atm-graft-python`; it does not modify `atm-graft`. |
 | AI.19 | Yes, after AI.12 and AI.18 | AI.12 is `PASS` because the bridge consumes the canonical post-write nudge. It may run alongside AI.13–AI.16, but not before AI.12. |
-| AI.20 | Draft only | A second agent may draft the runbook/plist templates after AI.19 freezes bridge module, configuration, and readiness names. Deployment validation waits for AI.19 `PASS`. |
+| AI.20 | Draft only | AI.19 records a `FROZEN` readiness entry containing its exact SHA and stabilized bridge module, configuration keys, and readiness probe. AI.20 rebases on a replacement frozen SHA; deployment validation waits for AI.19 `PASS`. |
 | AI.21 | No | It is final evidence and starts only after AI.16, AI.19, and AI.20 are `PASS`. |
 
 AI.17→AI.18→AI.19 remains a strict merge-forward chain. A parallel branch

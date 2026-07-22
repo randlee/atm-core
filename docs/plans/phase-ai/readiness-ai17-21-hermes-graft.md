@@ -1,12 +1,9 @@
 # Phase AI.17–AI.21 Readiness Record
 
-## Entry Gate
-
-Each sprint records the exact `integrate/phase-AI` dependency baseline and
-release/version with `just lint` / `just test` green. AI.17–AI.21 consume, but
-do not redefine, ADR-033, ADR-035, and ADR-037. AI.17 may run with AI.11–AI.16
-after AI.5's chat-address contract; AI.19 waits specifically for AI.12's
-post-write contract; AI.21 waits for AI.16 as final evidence.
+The authoritative AI.17–AI.21 sequence, dependencies, and parallel-execution
+rules are in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
+This file records only entry baselines, readiness states, approvals, and
+closure evidence.
 
 ## Per-Sprint Closure
 
@@ -18,17 +15,19 @@ post-write contract; AI.21 waits for AI.16 as final evidence.
 | AI.20 | `PENDING` | each bridge is launchd-supervised with a reproducible runbook |
 | AI.21 | `PENDING` | four production stories have complete evidence and explicit verdicts |
 
-Allowed values are `PENDING`, `PASS`, `FAIL`, `BLOCKED`, and `PARTIAL`.
-`PARTIAL` is not closure.
+Allowed values are `PENDING`, `FROZEN`, `PASS`, `FAIL`, `BLOCKED`, and
+`PARTIAL`. `FROZEN` is an AI.19-only pre-`PASS` record that must list its
+commit SHA plus bridge module, configuration keys, and readiness probe names;
+it authorizes AI.20 drafting only. `PARTIAL` and `FROZEN` are not closure.
 
-## Ordering
+## Required records
 
-- AI.17 may run alongside AI.11–AI.16 after AI.5, and closes before AI.18.
-- AI.18 closes before AI.19.
-- AI.19 waits for AI.12, may run alongside AI.13–AI.16, and closes before AI.20 and AI.21.
-- AI.20 closes before AI.21.
-- AI.20 template/runbook drafting may run after AI.19's bridge contract is
-  frozen, but AI.20 deployment validation and `PASS` require AI.19 `PASS`.
+- Every sprint records its exact `integrate/phase-AI` dependency baseline,
+  release/version, and green `just lint` / `just test` output.
+- Before AI.19 starts, the owner records approval of the expanded scope named
+  in the authoritative plan.
+- If an AI.19 frozen surface changes before `PASS`, replace the `FROZEN`
+  record and record AI.20's rebase to the replacement SHA.
 - A nudge test must prove persistence precedes the Hermes-visible event.
 - Every message used as evidence renders the expected `agent:chat-id@team`
   address when a chat ID is present.

@@ -167,17 +167,9 @@ integration; they do not alter it.
 | AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
 | AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
 
-Each dependent sprint merges forward to its successor before that successor
-starts. Findings are fixed on their owning sprint before forward merge.
-
-### AI.17–AI.21 concurrency
-
-AI.17 may run alongside AI.11–AI.16 after AI.5 because it changes neither
-`atm-graft` nor a shared daemon contract. AI.18 may follow it in parallel with
-AI.11–AI.16 when `DaemonApiClient` is unchanged; it adds a binding crate only.
-AI.19 waits for AI.12's post-write router and may then overlap AI.13–AI.16.
-AI.20 allows only runbook/plist drafting after AI.19 freezes its bridge
-contract. AI.21 is final evidence and waits for AI.16, AI.19, and AI.20.
+AI.17–AI.21 scope, dependencies, and parallel-execution rules are
+authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
+Findings are fixed on their owning sprint before forward merge.
 
 ## Verification matrix
 
