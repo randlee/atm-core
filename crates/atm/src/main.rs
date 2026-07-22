@@ -14,7 +14,8 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::error_codes::AtmErrorCode::{
-    BindPreflightFailed, CertificateOperationFailed, PeerConfigValidationFailed,
+    BindPreflightFailed, CertificateOperationFailed, MessageIdConflict, MessageValidationFailed,
+    PeerConfigValidationFailed, SelfAddressedSendInvalid,
 };
 use atm_core::home;
 #[cfg(any(test, feature = "fault-injection"))]
@@ -84,6 +85,9 @@ fn exit_code_for_error(error: &anyhow::Error) -> i32 {
     reason = "centralized stable CLI error-code mapping"
 )]
 fn exit_code_for_atm_error(error: &AtmError) -> i32 {
+    if is_warning_or_internal_error(error.code()) {
+        return 1;
+    }
     match error.code() {
         PeerConfigValidationFailed | CertificateOperationFailed | BindPreflightFailed => 3,
         AtmErrorCode::ConfigHomeUnavailable
@@ -103,8 +107,9 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::TeamInvalid
         | AtmErrorCode::TeamNotFound
         | AtmErrorCode::AgentNotFound
-        | AtmErrorCode::MessageValidationFailed
-        | AtmErrorCode::SelfAddressedSendInvalid
+        | MessageValidationFailed
+        | MessageIdConflict
+        | SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
         | AtmErrorCode::AckInvalidState
@@ -141,26 +146,33 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::ObservabilityHealthOk => 7,
         AtmErrorCode::SerializationFailed => 8,
         AtmErrorCode::WaitTimeout => 9,
-        AtmErrorCode::WarningInvalidTeamMemberSkipped
-        | AtmErrorCode::WarningMailboxRecordSkipped
-        | AtmErrorCode::WarningMalformedAtmFieldIgnored
-        | AtmErrorCode::WarningObservabilityHealthDegraded
-        | AtmErrorCode::WarningOriginInboxEntrySkipped
-        | AtmErrorCode::WarningMissingTeamConfigFallback
-        | AtmErrorCode::WarningSendAlertStateDegraded
-        | AtmErrorCode::WarningIdentityDrift
-        | AtmErrorCode::WarningRosterDrift
-        | AtmErrorCode::WarningBaselineMemberMissing
-        | AtmErrorCode::WarningRestoreInProgress
-        | AtmErrorCode::WarningStaleMailboxLock
-        | AtmErrorCode::WarningHookSkipped
-        | AtmErrorCode::WarningHookExecutionFailed
-        | AtmErrorCode::PostSendPaneMissing
-        | AtmErrorCode::PostSendTmuxSendFailed
-        | AtmErrorCode::PostSendGraftUnavailable
-        | AtmErrorCode::PostSendAdvisoryDeliveryFailed
-        | AtmErrorCode::InternalError => 1,
+        _ => 1,
     }
+}
+
+fn is_warning_or_internal_error(code: AtmErrorCode) -> bool {
+    matches!(
+        code,
+        AtmErrorCode::WarningInvalidTeamMemberSkipped
+            | AtmErrorCode::WarningMailboxRecordSkipped
+            | AtmErrorCode::WarningMalformedAtmFieldIgnored
+            | AtmErrorCode::WarningObservabilityHealthDegraded
+            | AtmErrorCode::WarningOriginInboxEntrySkipped
+            | AtmErrorCode::WarningMissingTeamConfigFallback
+            | AtmErrorCode::WarningSendAlertStateDegraded
+            | AtmErrorCode::WarningIdentityDrift
+            | AtmErrorCode::WarningRosterDrift
+            | AtmErrorCode::WarningBaselineMemberMissing
+            | AtmErrorCode::WarningRestoreInProgress
+            | AtmErrorCode::WarningStaleMailboxLock
+            | AtmErrorCode::WarningHookSkipped
+            | AtmErrorCode::WarningHookExecutionFailed
+            | AtmErrorCode::PostSendPaneMissing
+            | AtmErrorCode::PostSendTmuxSendFailed
+            | AtmErrorCode::PostSendGraftUnavailable
+            | AtmErrorCode::PostSendAdvisoryDeliveryFailed
+            | AtmErrorCode::InternalError
+    )
 }
 
 fn run() -> Result<(), AtmError> {

@@ -131,6 +131,7 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::MessageIdConflict
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
         | AtmErrorCode::CallerContextRequestInvalid
