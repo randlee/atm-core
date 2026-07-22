@@ -126,13 +126,38 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         ..DoctorQuery::default()
     });
     atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
-    let response = atm_core::api::read_http_response(&mut stream).expect("read doctor response");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(report.summary.status, DoctorStatus::Healthy);
         }
         other => panic!("unexpected response: {other:?}"),
     }
+
+    let record_path = tempdir
+        .path()
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
+        &std::fs::read(&record_path).expect("read local loopback TCP endpoint record"),
+    )
+    .expect("parse local loopback TCP endpoint record");
+    let capability = record.capability().expect("active local capability");
+    let capability_header = capability.to_base64url();
+    let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
+    let mut tcp_stream = std::net::TcpStream::connect(endpoint).expect("connect loopback TCP");
+    atm_core::api::write_http_request_with_headers(
+        &mut tcp_stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability_header.as_str(),
+        )],
+    )
+    .expect("write loopback TCP doctor request");
+    let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
+        .expect("read loopback TCP doctor response");
+    assert!(matches!(tcp_response, ResponseEnvelope::Doctor(_)));
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -195,7 +220,8 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         ..DoctorQuery::default()
     });
     atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
-    let response = atm_core::api::read_http_response(&mut stream).expect("read doctor response");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(

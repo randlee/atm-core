@@ -4,19 +4,43 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::ReadQuery;
-use atm_core::send::{SendMessageSource, SendRequest};
+use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
 use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
+use atm_storage::TrustedPeer;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
+
+#[derive(Default)]
+struct RecordingHttpsDelivery {
+    delivered: std::sync::Mutex<Vec<WriteRequest>>,
+}
+
+impl HttpsMessageTransport for RecordingHttpsDelivery {
+    fn deliver(
+        &self,
+        request: WriteRequest,
+        _peer: &TrustedPeer,
+        _deadline: HttpsRequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        self.delivered
+            .lock()
+            .expect("peer transport recording lock")
+            .push(request);
+        Ok(ResponseEnvelope::Error(AtmError::daemon_unavailable(
+            "test peer response is ignored by the post-write router",
+        )))
+    }
+}
 
 fn add_member_via_retained_admin(
     db_path: &std::path::Path,
@@ -41,6 +65,74 @@ fn add_member_via_retained_admin(
         .expect("add-member request"),
     )
     .expect("add member");
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let peer_store = open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store();
+    peer_store
+        .save_trusted_peer(&TrustedPeer {
+            host: "peer.example.test".parse().expect("peer host"),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+        })
+        .expect("save trusted peer");
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let transport = Arc::new(RecordingHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(transport.clone())
+        .expect("install test HTTPS delivery");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "remote-agent@remote-team.peer.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("peer write".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("remote write request"),
+        )))
+        .expect("post-write peer route succeeds");
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+    ));
+    let delivered = transport
+        .delivered
+        .lock()
+        .expect("HTTPS delivery recording lock");
+    assert_eq!(delivered.len(), 1, "the router makes one peer delivery");
+    assert!(
+        delivered[0].origin_message_id.is_some(),
+        "the canonical writer assigns the immutable origin ULID before peer delivery"
+    );
 }
 
 #[test]
@@ -339,7 +431,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         .expect("send request"),
     ));
     atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
-    let response = atm_core::api::read_http_response(&mut stream).expect("read send response");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
     match response {
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
             assert_eq!(outcome.outcome.as_str(), "sent");

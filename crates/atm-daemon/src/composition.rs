@@ -1,7 +1,10 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
+#[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+#[cfg(windows)]
+use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};

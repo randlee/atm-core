@@ -72,7 +72,7 @@ fn send_doctor_request(
         ..DoctorQuery::default()
     });
     atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
-    atm_core::api::read_http_response(&mut stream).expect("read doctor response")
+    atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response")
 }
 
 #[test]
