@@ -10,7 +10,7 @@ closure evidence.
 | Sprint | Result | Required closure |
 |---|---|---|
 | AI.17 | `PENDING` | Ambient `ATM_CHAT_ID` resolution feeds existing Phase AI `chat_id`; Hermes is the first client; no new schema or CLI grammar |
-| AI.18 | `PENDING` | Python binding preserves typed canonical address and graft behavior |
+| AI.18 | `PENDING` | Python binding preserves the full supported graft host surface: typed canonical address, client operations, session lifecycle/snapshot, and canonical nudge callback |
 | AI.19 | `PENDING` | persisted write produces one Hermes nudge and canonical address maps to isolated chat |
 | AI.20 | `PENDING` | each bridge is launchd-supervised with a reproducible runbook |
 | AI.21 | `PENDING` | four production stories have complete evidence and explicit verdicts |

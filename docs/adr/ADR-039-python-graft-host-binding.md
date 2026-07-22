@@ -16,9 +16,13 @@ boundary.
 
 ## Decision
 
-AI.18 exposes the existing typed graft contract with PyO3/Maturin. The Python
-surface receives and returns canonical projections containing structured
-addresses and immutable message IDs. It calls the existing sealed
+AI.18 exposes the full supported `atm-graft` host contract with PyO3/Maturin:
+client operations, session activation and close lifecycle, session snapshots,
+and the existing `HostNudgeInjector` callback. The Python surface receives and
+returns canonical projections containing structured addresses and immutable
+message IDs. A registered Python nudge callback is only a typed translation of
+the existing graft callback; it does not create a Python transport, callback
+retry queue, or second delivery path. The binding calls the existing sealed
 `DaemonApiClient` boundary through graft; it never opens a daemon socket or
 accesses storage directly.
 
@@ -43,3 +47,5 @@ personal-machine profiles.
   a nudge for a message unavailable to a normal read.
 - Hermes remains an external host integration. Its process supervision and
   chat namespace are not daemon responsibilities.
+- AI.19 consumes the complete AI.18 Python host surface and remains a
+  Python-only adapter; it does not add Rust wrapper code.
