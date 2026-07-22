@@ -7,8 +7,10 @@
 )]
 //! Daemon runtime composition and portability adapters.
 
+#[cfg_attr(windows, allow(dead_code))]
 mod active_connection_registry;
 pub(crate) mod composition;
+#[cfg_attr(windows, allow(dead_code))]
 mod daemon_runtime_observability;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
@@ -16,10 +18,12 @@ mod daemon_runtime_observability;
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
 mod https_transport;
+#[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
 mod local_ipc_connection;
 #[cfg(not(windows))]
 mod local_ipc_transport;
+#[cfg(not(windows))]
 mod local_ipc_wake;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
@@ -27,6 +31,7 @@ mod non_claude_outbound_runtime;
 mod post_send_emitter;
 mod runtime_health;
 mod runtime_status_cache;
+#[cfg_attr(windows, allow(dead_code))]
 mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
