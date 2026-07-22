@@ -33,6 +33,7 @@ REQUIRED_CASES = (
     "failed_remote_ack",
 )
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability)=?[^\s,]+)")
+ALLOWED_CLIENT_BINARIES = {"atm", "atm.exe", "atm-graft", "atm-graft.exe"}
 
 
 def sanitize(value: str) -> str:
@@ -65,6 +66,34 @@ def require_command(value: Any, name: str) -> list[str]:
     return value
 
 
+def require_client_command(value: Any, name: str) -> list[str]:
+    command = require_command(value, name)
+    binary = Path(command[0]).name.lower()
+    if binary not in ALLOWED_CLIENT_BINARIES:
+        fail(f"config field `{name}` must invoke an ATM client binary, not `{command[0]}`")
+    return command
+
+
+def require_assertions(case: dict[str, Any]) -> dict[str, Any]:
+    assertions = case.get("assertions")
+    if not isinstance(assertions, dict):
+        fail(f"cases.{case['id']}.assertions must be an object")
+    required = {
+        "duplicate_ulid": {
+            "receiver_record_count": 1,
+            "nudge_delta": 0,
+            "ack_mutation_count": 0,
+            "peer_send_count": 0,
+        },
+        "failed_remote_ack": {"ack_state_mutated": False},
+        "untrusted_or_allowlist_rejection": {"routing_attempts": 0},
+    }.get(case["id"], {})
+    for key, expected in required.items():
+        if assertions.get(key) != expected:
+            fail(f"cases.{case['id']}.assertions.{key} must be {expected!r}")
+    return assertions
+
+
 def validate(config: dict[str, Any]) -> None:
     if config.get("schema_version") != 1:
         fail("config field `schema_version` must be 1")
@@ -84,6 +113,7 @@ def validate(config: dict[str, Any]) -> None:
     require_string(security.get("certificate_fingerprint"), "peer_security.certificate_fingerprint")
     if daemon.get("launch_command") is not None:
         require_command(daemon["launch_command"], "daemon.launch_command")
+        require_string(daemon.get("runtime_dir"), "daemon.runtime_dir")
     if daemon.get("log_file") is not None:
         require_string(daemon["log_file"], "daemon.log_file")
     identities = config.get("identities")
@@ -97,12 +127,13 @@ def validate(config: dict[str, Any]) -> None:
     for case in cases:
         if not isinstance(case, dict):
             fail("each case must be an object")
-        require_command(case.get("command"), f"cases.{case.get('id', '<unknown>')}.command")
+        require_client_command(case.get("command"), f"cases.{case.get('id', '<unknown>')}.command")
         if case.get("expect") not in {"success", "typed_error"}:
             fail("each case expect must be `success` or `typed_error`")
         if case["expect"] == "typed_error":
             require_string(case.get("typed_error_code"), f"cases.{case.get('id', '<unknown>')}.typed_error_code")
         require_string(case.get("message_ulid"), f"cases.{case.get('id', '<unknown>')}.message_ulid")
+        require_assertions(case)
     paths = daemon.get("owned_runtime_paths", [])
     if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
         fail("daemon.owned_runtime_paths must be an array of paths")
@@ -110,6 +141,8 @@ def validate(config: dict[str, Any]) -> None:
         require_string(daemon.get("runtime_dir"), "daemon.runtime_dir")
         if daemon.get("launch_command") is None:
             fail("daemon.owned_runtime_paths requires daemon.launch_command")
+    if daemon.get("launch_command") is not None and not paths:
+        fail("daemon.launch_command requires daemon.owned_runtime_paths")
 
 
 def run_command(command: list[str], timeout: float) -> dict[str, Any]:
@@ -145,7 +178,7 @@ def endpoint_closed(endpoint: str) -> bool:
         return True
 
 
-def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:
+def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any], marker_created: bool) -> dict[str, Any]:
     result: dict[str, Any] = {"launched_pid": process.pid if process else None, "status": "not_owned"}
     if process is None:
         return result
@@ -163,7 +196,7 @@ def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) ->
         return result
     runtime_dir = Path(daemon.get("runtime_dir", ".")).resolve()
     marker = runtime_dir / ".peer-smoke-owned"
-    if daemon.get("owned_runtime_paths") and not marker.is_file():
+    if marker_created and not marker.is_file():
         result.update({"status": "ownership_marker_missing", "listener_closed": listener_closed})
         return result
     try:
@@ -174,7 +207,7 @@ def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) ->
                 return result
             if path.is_file() or path.is_socket():
                 path.unlink()
-        if marker.is_file():
+        if marker_created and marker.is_file():
             marker.unlink()
         if daemon.get("owned_runtime_paths"):
             runtime_dir.rmdir()
@@ -188,10 +221,20 @@ def git_commit() -> str:
     return completed.stdout.strip() if completed.returncode == 0 else "unknown"
 
 
+def protocol_assertions(case: dict[str, Any], result: dict[str, Any]) -> bool:
+    """Require machine-readable semantic proof emitted by the public client case."""
+    try:
+        observed = json.loads(result["stdout"].strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        return False
+    return all(observed.get(key) == value for key, value in case["assertions"].items())
+
+
 def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
     evidence_dir.mkdir(parents=True, exist_ok=True)
     daemon = config["daemon"]
     process: subprocess.Popen[str] | None = None
+    marker_created = False
     records: list[dict[str, Any]] = []
     status = "passed"
     try:
@@ -201,6 +244,7 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
                 fail(f"runner-owned runtime_dir already exists: {runtime_dir}")
             runtime_dir.mkdir(parents=True)
             (runtime_dir / ".peer-smoke-owned").touch()
+            marker_created = True
         if daemon.get("launch_command"):
             process = subprocess.Popen(
                 daemon["launch_command"], text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -210,9 +254,13 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
         for case in config["cases"]:
             result = run_command(case["command"], timeout)
             if case["expect"] == "success":
-                passed = result["exit_code"] == 0
+                passed = result["exit_code"] == 0 and protocol_assertions(case, result)
             else:
-                passed = result["exit_code"] != 0 and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+                passed = (
+                    result["exit_code"] != 0
+                    and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+                    and protocol_assertions(case, result)
+                )
             record = {
                 "schema_version": 1,
                 "commit": config["commit"],
@@ -241,7 +289,7 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
         status = "failed"
         records.append({"schema_version": 1, "status": "fail", "error": sanitize(str(error))})
     finally:
-        teardown = stop_owned(process, config)
+        teardown = stop_owned(process, config, marker_created)
         if teardown["status"] == "listener_remaining":
             status = "failed"
         for record in records:

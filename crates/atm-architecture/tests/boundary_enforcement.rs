@@ -104,6 +104,10 @@ fn canonical_write_router_has_one_host_routing_decision() {
         visitor.peer_delivery_calls, 1,
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
+    assert_eq!(
+        visitor.reconciliation_delivery_calls, 1,
+        "AI.16 permits exactly one bounded reconciliation delivery helper"
+    );
     assert!(
         visitor.violations.is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
@@ -143,9 +147,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
 }
 
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
-    let mut files = Vec::new();
-    collect_rust_files(&root.join("crates"), &mut files);
-    files
+    [
+        "crates/atm-daemon/src/runtime_health.rs",
+        "crates/atm-core/src/send/mod.rs",
+        "crates/atm-core/src/ack/mod.rs",
+    ]
+    .into_iter()
+    .map(|relative| root.join(relative))
+    .collect()
 }
 
 fn routing_violations_in_fixture(source: &str) -> Vec<String> {
@@ -160,6 +169,7 @@ struct HostRoutingVisitor {
     route_write_host_accesses: usize,
     post_router_host_accesses: usize,
     peer_delivery_calls: usize,
+    reconciliation_delivery_calls: usize,
     violations: Vec<String>,
     source_path: Option<PathBuf>,
     current_method: Option<String>,
@@ -220,19 +230,24 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             node.method.to_string().as_str(),
             "deliver_to_peer" | "deliver"
         ) {
-            if !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-                && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
-            {
+            let is_router_delivery =
+                self.in_post_write_router && self.current_method.as_deref() == Some("dispatch");
+            let is_bounded_reconciliation = self.is_runtime_dispatcher_source()
+                && self.current_method.as_deref() == Some("reconcile_after_success");
+            if !is_router_delivery && !is_bounded_reconciliation {
                 self.violations
                     .push("peer delivery outside PostWriteRouter::dispatch".to_string());
             }
             if self.is_runtime_dispatcher_source() {
-                self.peer_delivery_calls += 1;
+                if is_bounded_reconciliation {
+                    self.reconciliation_delivery_calls += 1;
+                } else {
+                    self.peer_delivery_calls += 1;
+                }
             }
         }
         if node.method == "emit_local_post_write"
             && !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-            && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
         {
             self.violations
                 .push("local nudge outside PostWriteRouter::dispatch".to_string());

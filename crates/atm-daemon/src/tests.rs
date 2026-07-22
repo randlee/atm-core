@@ -200,8 +200,12 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         .expect("test observability"),
     );
     let socket_path = tempdir.path().join("daemon.sock");
-    let runtime =
-        crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
+    let runtime = crate::composition::RuntimeComposition::new_with_runtime_db_path(
+        crate::AtmHomeDir::from_path_for_test(atm_home.clone()),
+        db_path.clone(),
+        observability.clone(),
+    )
+    .expect("compose test runtime");
     let (result_tx, result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let runtime_socket_path = socket_path.clone();

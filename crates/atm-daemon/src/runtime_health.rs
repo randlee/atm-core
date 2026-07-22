@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Write as _;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -41,8 +42,8 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
+use atm_storage::{OutboundMessageQuery, PeerConfigStore};
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -229,7 +230,9 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -241,6 +244,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
+            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
             .finish()
     }
@@ -475,6 +479,7 @@ impl DaemonRequestDispatcher {
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
         let roster_store = runtime_assembly.shared_roster_store_arc();
         let peer_config_store = runtime_assembly.peer_config_store();
+        let outbound_message_query = runtime_assembly.outbound_message_query();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -501,7 +506,9 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
+            outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -669,13 +676,71 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        transport
-            .deliver(
-                message.outbound_request.clone(),
-                &peer,
-                HttpsRequestDeadline::default(),
-            )
-            .map(|_| ())
+        transport.deliver(
+            message.outbound_request.clone(),
+            &peer,
+            HttpsRequestDeadline::default(),
+        )?;
+        self.reconcile_after_success(host, &peer, transport.as_ref())
+    }
+}
+
+impl DaemonRequestDispatcher {
+    fn reconcile_after_success(
+        &self,
+        peer_host: &atm_core::types::HostName,
+        peer: &atm_storage::TrustedPeer,
+        transport: &dyn HttpsMessageTransport,
+    ) -> Result<(), AtmError> {
+        let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
+        policy.validate()?;
+        if policy.max_message_age.is_zero() {
+            return Ok(());
+        }
+        let now = std::time::Instant::now();
+        {
+            let mut cooldown = self
+                .peer_sync_cooldown
+                .lock()
+                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
+            if cooldown
+                .get(peer_host)
+                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
+            {
+                return Ok(());
+            }
+            // This is only a short-lived rate limiter, never delivery state.
+            // Evicting the oldest entry bounds memory without affecting message data.
+            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
+            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
+                && !cooldown.contains_key(peer_host)
+                && let Some(oldest) = cooldown
+                    .iter()
+                    .min_by_key(|(_, instant)| **instant)
+                    .map(|(host, _)| host.clone())
+            {
+                cooldown.remove(&oldest);
+            }
+            cooldown.insert(peer_host.clone(), now);
+        }
+        let not_before = atm_core::types::IsoTimestamp::from_datetime(
+            chrono::Utc::now()
+                - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
+                    AtmError::validation("peer sync maximum message age is out of range")
+                })?,
+        );
+        for stored in self.outbound_message_query.recent_outbound_for_peer(
+            peer_host,
+            not_before,
+            policy.max_batch_messages,
+        )? {
+            let request: WriteRequest =
+                serde_json::from_str(&stored.request_json).map_err(|_source| {
+                    AtmError::mailbox_read("stored immutable peer outbound write is invalid")
+                })?;
+            transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+        }
+        Ok(())
     }
 }
 
@@ -1027,7 +1092,9 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
+            outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }

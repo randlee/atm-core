@@ -151,7 +151,7 @@ impl std::fmt::Debug for RuntimeComposition {
 impl RuntimeComposition {
     #[cfg(test)]
     #[cfg_attr(windows, allow(dead_code))]
-    fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
+    pub(crate) fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_runtime_db_path(
             AtmHomeDir::from_path_for_test(home_dir.clone()),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
@@ -162,7 +162,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
-    fn new_with_runtime_db_path(
+    pub(crate) fn new_with_runtime_db_path(
         home_dir: AtmHomeDir,
         runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,

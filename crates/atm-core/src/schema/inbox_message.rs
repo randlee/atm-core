@@ -10,6 +10,7 @@ use crate::error::AtmError;
 use crate::types::{HostName, IsoTimestamp};
 
 const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
+const PEER_OUTBOUND_KEY: &str = "peerOutbound";
 
 /// Returns the source host that the HTTPS adapter authenticated for this
 /// immutable inbound message. Local messages intentionally have no value.
@@ -42,6 +43,21 @@ pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Op
             message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
         }
     }
+}
+
+/// Retains the immutable origin write alongside its canonical local message.
+/// This is metadata on the message itself, not a separate outbox/replay row.
+pub(crate) fn set_peer_outbound_write(
+    message: &mut InboxMessage,
+    host: &HostName,
+    request_json: String,
+) {
+    let mut value = Map::new();
+    value.insert("host".to_string(), Value::String(host.to_string()));
+    value.insert("request".to_string(), Value::String(request_json));
+    message
+        .extra
+        .insert(PEER_OUTBOUND_KEY.to_string(), Value::Object(value));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
