@@ -140,7 +140,7 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
+    fn probe_connection(&self) -> Result<std::net::TcpStream, AtmError> {
         daemon_try_connect(&self.endpoint)
     }
 

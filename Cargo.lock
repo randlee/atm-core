@@ -180,7 +180,6 @@ dependencies = [
  "agent-team-mail-core",
  "atm-storage",
  "fs2",
- "interprocess",
  "serde",
  "serde_json",
  "tempfile",
