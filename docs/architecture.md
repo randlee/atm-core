@@ -239,14 +239,14 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current Phase R boundary direction:
+Historical Phase R boundary direction (retired by Phase AI):
 - shared protocol contract: `AtmProtocol` in `atm-core`
 - outbound transport boundary: `ClientTransport`
 - inbound transport boundary: `ServerTransport`
 - request routing boundary: `RequestDispatcher`
 - outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
-- current production composition ownership:
+- historical production composition ownership:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
@@ -1795,21 +1795,18 @@ Logging architecture:
 
 ## 15. Error Model
 
-**Current implementation.** `AtmError` is defined in `atm-storage`. Its
-structured internal form remains distinct from the Phase AI target HTTP error
-body, which ADR-032 proposes as serializable `{ code, message }` and does not
-redefine the internal error type.
+**Current implementation.** `AtmError` is defined in `atm-storage` as ATM's
+sole serializable error contract. The Phase AI HTTP response body uses this
+same stable `{ code, message, cause? }` shape; it does not introduce a second
+public error model.
 
 Root public error:
 
 ```rust
 pub struct AtmError {
-    pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
-    pub message: String,
-    pub recovery: Vec<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    pub backtrace: Backtrace,
+    code: AtmErrorCode,
+    message: String,
+    cause: Option<String>,
 }
 ```
 

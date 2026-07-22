@@ -38,9 +38,10 @@ Phase-S planning note:
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
-- the canonical daemon wire contract, current daemon packet surface, and shared
-  local-IPC/host-host frame rules are tracked in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- the canonical daemon API contract is
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md) and its checked-in
+  OpenAPI specification; the legacy frame `protocol-icd.md` was intentionally
+  removed
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
