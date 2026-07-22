@@ -1,7 +1,7 @@
 ---
 id: AI.20
 title: Hermes Bridge Deployment and Runbook
-status: planned
+status: complete
 branch: feature/pAI-s20-hermes-bridge-deployment
 worktree: ../atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment
 target: integrate/phase-AI
@@ -76,3 +76,10 @@ address parser, no transport protocol, and no cross-host feature.
   launchd probes.
 - `just lint`, `just test`, and `git diff --check` pass for repository work;
   retained launchd evidence accompanies the operator-owned artifacts.
+
+## Draft Validation Limit
+
+The operator profile registry is not yet available and AI.19 is `FROZEN`, not
+`PASS`. This sprint closes the checked-in deployment material only; it cannot
+run active launchd probes or claim AI.20 `PASS` until both prerequisites are
+met.

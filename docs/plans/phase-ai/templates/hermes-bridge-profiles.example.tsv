@@ -1,0 +1,2 @@
+profile	atm_team	atm_identity	atm_chat_id	bridge_config	log_path	plist_path	receiver_path
+example	atm-dev	omega-prime	1234	/path/from/operator/profile.toml	/path/from/operator/omega-prime.log	~/Library/LaunchAgents/ai.hermes.atm-graft-example.plist	/path/from/operator/graft-receiver.sock
