@@ -141,6 +141,10 @@ test mode='default':
 test-graft-python:
     {{python_cmd}} scripts/test_atm_graft_python.py
 
+# Build the PyO3 extension and run the Hermes graft reference-adapter tests.
+test-hermes-graft-bridge:
+    {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
+
 # Remove workspace build artifacts.
 clean:
     cargo clean
