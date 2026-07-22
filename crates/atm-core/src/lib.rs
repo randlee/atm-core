@@ -38,6 +38,8 @@ pub mod home;
 pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.
 pub mod list;
+/// Runtime-local endpoint metadata and capability validation for local HTTP.
+pub mod local_http;
 /// Log query and filtering types for the CLI log surface.
 pub mod log;
 /// Internal mailbox persistence and parsing helpers.

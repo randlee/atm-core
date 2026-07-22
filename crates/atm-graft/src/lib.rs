@@ -33,7 +33,7 @@ mod transport;
 use runtime::{
     GraftReceiverLoopContext, RECEIVE_LOOP_READY_DEADLINE, ReceiverReadyLatch,
     join_receive_loop_with_deadline, load_graft_config, read_snapshot, run_graft_receiver_loop,
-    set_session_state, wake_graft_receiver_listener,
+    set_session_state,
 };
 use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
@@ -257,7 +257,6 @@ pub struct GraftSession {
     client: Arc<dyn AtmGraftClient>,
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
-    endpoint_path: Option<PathBuf>,
     stop_tx: Option<Sender<()>>,
     join_handle: Option<JoinHandle<Result<(), AtmError>>>,
 }
@@ -337,13 +336,13 @@ impl GraftSession {
             return inactive_session(client, snapshot, observability);
         }
 
-        let endpoint_path = atm_core::graft::graft_receiver_socket_path_from_home(
+        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_home(
             options.workspace_root(),
             options.team(),
             options.agent(),
         );
         let (stop_tx, join_handle) = Self::start_graft_receive_loop(
-            endpoint_path.clone(),
+            endpoint_path,
             options,
             Arc::clone(&snapshot),
             injector,
@@ -359,7 +358,6 @@ impl GraftSession {
             client,
             snapshot,
             observability,
-            endpoint_path: Some(endpoint_path),
             stop_tx: Some(stop_tx),
             join_handle: Some(join_handle),
         })
@@ -412,11 +410,10 @@ impl GraftSession {
     }
 
     fn close_internal(&mut self) -> Result<(), AtmError> {
+        // The non-blocking accept loop notices the stop signal within one poll
+        // interval, so stopping needs no wake-by-connect side channel.
         if let Some(stop_tx) = self.stop_tx.take() {
             let _ = stop_tx.send(());
-        }
-        if let Some(endpoint_path) = self.endpoint_path.as_ref() {
-            let _ = wake_graft_receiver_listener(endpoint_path);
         }
         if let Some(join_handle) = self.join_handle.take()
             && let Err(error) = join_receive_loop_with_deadline(join_handle)
@@ -447,7 +444,6 @@ fn inactive_session(
         client,
         snapshot,
         observability,
-        endpoint_path: None,
         stop_tx: None,
         join_handle: None,
     })

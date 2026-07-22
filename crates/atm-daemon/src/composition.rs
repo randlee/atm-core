@@ -1,7 +1,10 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
+#[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+#[cfg(windows)]
+use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
@@ -148,7 +151,7 @@ impl std::fmt::Debug for RuntimeComposition {
 impl RuntimeComposition {
     #[cfg(test)]
     #[cfg_attr(windows, allow(dead_code))]
-    fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
+    pub(crate) fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_runtime_db_path(
             AtmHomeDir::from_path_for_test(home_dir.clone()),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
@@ -159,7 +162,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
-    fn new_with_runtime_db_path(
+    pub(crate) fn new_with_runtime_db_path(
         home_dir: AtmHomeDir,
         runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
@@ -661,7 +664,9 @@ mod tests {
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
+    #[cfg(not(windows))]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    #[cfg(not(windows))]
     use crate::test_support::LifecycleFlagResetGuard;
 
     use super::RuntimeComposition;
@@ -764,6 +769,7 @@ mod tests {
         assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(not(windows))]
     #[test]
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {

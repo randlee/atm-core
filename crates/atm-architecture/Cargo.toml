@@ -13,3 +13,4 @@ publish = false
 cargo_metadata.workspace = true
 serde.workspace = true
 toml = "0.8"
+syn.workspace = true

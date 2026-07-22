@@ -1,11 +1,13 @@
 use anyhow::Result;
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
-    AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
-    TrustedPeer,
+    AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
+    MAX_PEER_SYNC_BATCH_MESSAGES, PeerConfigStore, PeerSyncPolicy, TrustedPeer,
 };
 use clap::{Args, Subcommand};
 use serde::Serialize;
+use std::num::NonZeroU16;
+use std::time::Duration;
 
 use crate::observability::CliObservability;
 
@@ -21,6 +23,25 @@ enum PeerSubcommand {
     Interface(InterfaceCommand),
     Certificate(CertificateCommand),
     Trust(TrustCommand),
+    SyncPolicy(SyncPolicyCommand),
+}
+
+#[derive(Debug, Args)]
+struct SyncPolicyCommand {
+    #[command(subcommand)]
+    command: SyncPolicySubcommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum SyncPolicySubcommand {
+    Show {
+        peer: String,
+    },
+    Set {
+        peer: String,
+        #[arg(long)]
+        max_message_age: String,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -118,8 +139,58 @@ impl PeerCommand {
             PeerSubcommand::Interface(command) => command.run_with_store(store),
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store),
+            PeerSubcommand::SyncPolicy(command) => command.run_with_store(store),
         }
     }
+}
+
+impl SyncPolicyCommand {
+    fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<(), AtmError> {
+        match self.command {
+            SyncPolicySubcommand::Show { peer } => {
+                let peer = parse_peer_host(peer)?;
+                print_output(&store.peer_sync_policy(&peer)?, false)
+            }
+            SyncPolicySubcommand::Set {
+                peer,
+                max_message_age,
+            } => {
+                let peer = parse_peer_host(peer)?;
+                if store.trusted_peer(&peer)?.is_none() {
+                    return Err(AtmError::peer_config_validation("unknown trusted peer"));
+                }
+                let seconds = parse_whole_seconds(&max_message_age)?;
+                let policy = PeerSyncPolicy {
+                    max_message_age: Duration::from_secs(seconds),
+                    max_batch_messages: NonZeroU16::new(MAX_PEER_SYNC_BATCH_MESSAGES)
+                        .expect("hard limit is non-zero"),
+                }
+                .validate()?;
+                store.save_peer_sync_policy(&peer, policy)?;
+                println!("saved peer sync policy for {peer}");
+                Ok(())
+            }
+        }
+    }
+}
+
+fn parse_peer_host(value: String) -> Result<HostName, AtmError> {
+    value
+        .parse()
+        .map_err(|_source| AtmError::peer_config_validation("invalid peer host"))
+}
+
+fn parse_whole_seconds(value: &str) -> Result<u64, AtmError> {
+    let seconds = value.strip_suffix('s').ok_or_else(|| {
+        AtmError::peer_config_validation(
+            "--max-message-age must be a whole-second duration such as 60s",
+        )
+    })?;
+    seconds.parse().map_err(|_source| {
+        AtmError::peer_config_validation(
+            "--max-message-age must be a whole-second duration such as 60s",
+        )
+    })
 }
 
 impl InterfaceCommand {
