@@ -1,0 +1,220 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI13-QA1-BLOCKING-01>
+  a triage:Finding ;
+  triage:findingId "AI13-QA1-BLOCKING-01" ;
+  triage:title "Teardown can delete a `.peer-smoke-owned` marker file this invocation did not create, when launch_command is set without owned_runtime_paths" ;
+  triage:description "In scripts/smoke/run_peer_pair.py, validate() only requires daemon.runtime_dir when owned_runtime_paths is non-empty, allowing launch_command to be set without owned_runtime_paths. In that configuration, execute() never creates the ownership marker because the marker-touch block is gated on owned_runtime_paths. Then in stop_owned(), the ownership-marker gate at line 166 is skipped when owned_runtime_paths is falsy, and the unconditional marker.unlink() at line 177 deletes ANY `.peer-smoke-owned` file in CWD, regardless of whether this invocation created it. Violates sprint AI.13 deliverable 5 (teardown must never touch unrelated live singleton resources)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI13-QA1" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "BLOCKING" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/3> ;
+  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 68 ;
+  triage:snippet "def validate(config: dict[str, Any]) -> None:" ;
+  triage:functionName "validate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 191 ;
+  triage:snippet "def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:" ;
+  triage:functionName "execute" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s13/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 148 ;
+  triage:snippet "def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:" ;
+  triage:functionName "stop_owned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 68 ;
+  triage:snippet "def validate(config: dict[str, Any]) -> None:" ;
+  triage:functionName "validate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 191 ;
+  triage:snippet "def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:" ;
+  triage:functionName "execute" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s14/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 148 ;
+  triage:snippet "def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:" ;
+  triage:functionName "stop_owned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 68 ;
+  triage:snippet "def validate(config: dict[str, Any]) -> None:" ;
+  triage:functionName "validate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 191 ;
+  triage:snippet "def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:" ;
+  triage:functionName "execute" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s15/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 148 ;
+  triage:snippet "def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:" ;
+  triage:functionName "stop_owned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 68 ;
+  triage:snippet "def validate(config: dict[str, Any]) -> None:" ;
+  triage:functionName "validate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 191 ;
+  triage:snippet "def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:" ;
+  triage:functionName "execute" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01/s16/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 148 ;
+  triage:snippet "def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:" ;
+  triage:functionName "stop_owned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/ef0e5e2b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 16 .
