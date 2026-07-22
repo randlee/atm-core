@@ -1,5 +1,11 @@
 # ATM CLI Architecture
 
+> **Phase AI supersession notice:** the planned daemon API is REST over HTTP:
+> local UDS on Unix and Windows AF_UNIX, and HTTPS/TCP for remote peers. Older
+> references to named pipes, custom ATM frames, remote replay/retry state, or
+> a separate peer runtime are historical only. ADR-032 through ADR-036 and
+> `REQ-CORE-TRANSPORT-*` govern new work.
+
 ## 1. Overview
 
 The current target architecture keeps the ATM CLI surface, but moves durable
@@ -1296,12 +1302,15 @@ Phase AF compatibility rule:
   cannot select an alternate daemon endpoint, state root, or transport path
 
 Roster output rules:
-- show the current canonical ATM roster in doctor output
+- show all current `config.json` members in doctor output
 - show baseline `[atm].team_members` first
 - show `team-lead` first among the baseline members when present
 - show extra runtime members after the baseline set
-- stale mailbox-lock scanning is historical-only and must not be part of the
-  current SQLite/runtime correctness contract for doctor
+- snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
+  path present in both snapshots is stale and should surface as
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with recovery guidance that explicitly marks
+  the lock as a transitional compatibility diagnostic rather than a current-runtime
+  mail-correctness dependency
 
 ### 6.8 Team Recovery Services
 
@@ -1452,11 +1461,10 @@ The doctor pipeline stages are:
 1. resolve config and environment overrides
 2. resolve optional diagnostic team scope and inspect caller-context visibility
 3. inspect ATM config for obsolete fields such as `[atm].identity`
-4. verify local runtime/config visibility without requiring compatibility team
-   directories or `config.json`
+4. verify local team/mailbox/config paths
 5. verify caller-context visibility and invalid override situations without
    making caller identity/team mandatory
-6. order canonical ATM roster output against baseline `[atm].team_members`
+6. compare baseline `[atm].team_members` against `config.json.members`
 7. verify observability initialization and health
 8. verify observability query readiness for `atm log`
 9. assemble findings, recommendations, and ordered roster output
@@ -1786,6 +1794,10 @@ Logging architecture:
   not log every ordinary send/read/ack success at default operator verbosity
 
 ## 15. Error Model
+
+**Historical through AI.2.** AI.3 replaces this shape with ADR-032's
+serializable `{ code, message }` `AtmError`; `AtmErrorKind`, recovery, and
+captured source fields are not accepted protocol contract after AI.3.
 
 Root public error:
 
@@ -2237,7 +2249,7 @@ Governing ADR:
   lives on a read-only filesystem, so ATM cannot create, update, or remove the
   required mailbox-lock artifact
 - `MailboxLockTimeout` / `ATM_MAILBOX_LOCK_TIMEOUT` — lock not acquired within timeout
-- New `AtmErrorKind::MailboxLock` variant in `error.rs`
+- New `AtmErrorCode::MailboxLock` code in the central registry
 
 ### 18.6 Shared Mutable File Atomicity
 
@@ -2295,7 +2307,9 @@ Current owner-layer boundaries:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
   apply_projected_state(...), remove_message_state(...)}`,
-  `read::seen_state::save_seen_watermark(...)`, and
+  `read::seen_state::save_seen_watermark(...)`,
+  `send::alert_state::{register_missing_team_config_alert(...),
+  clear_missing_team_config_alert(...), save(...)}`, and
   `team_admin::write_team_config(...)`
 - ATM-owned restore/task state:
   `team_admin::restore::restore_task_state_from_backup(...)`,
@@ -2353,14 +2367,12 @@ CI remains bounded and repeatable across macOS, Linux, and Windows.
 1. Copy inbox files to the live inbox directory
 2. Restore task bucket
 3. Recompute highwatermark
-4. Preserve any pre-existing compatibility shell state without treating it as
-   roster truth
+4. Write `config.json`
 
-If the process crashes between steps 1 and 4, canonical ATM roster truth is
-still unchanged because restore does not rebuild team membership from
-`config.json`.
+If the process crashes between steps 1 and 4, inbox files for members not in config
+exist with no detection mechanism.
 
-### 19.2 Revised Restore Ordering (Compatibility Artifacts Only)
+### 19.2 Revised Restore Ordering (Config-Last with Staging)
 
 ```
 1. Validate backup and compute restore plan (no mutations)
@@ -2369,28 +2381,28 @@ still unchanged because restore does not rebuild team membership from
 4. Move staged files to live inboxes/ (fs::rename — atomic same-filesystem)
 5. Restore task bucket
 6. Recompute highwatermark
-7. Remove .restore-in-progress marker
+7. Write config.json + fsync (atomic temp+rename via write_team_config)
+8. Remove .restore-in-progress marker
 ```
 
 Key properties:
-- crash at steps 2-6: canonical roster truth is unchanged, extra compatibility
-  inbox files are bounded to the restore lane, marker signals re-run
+- crash at steps 2-6: config.json unchanged, extra inbox files harmless, marker signals re-run
 - read-only failure during the pre-copy stale-sentinel sweep aborts before live
   inbox replacement begins, preserving the pre-restore team state
-- crash at step 7: restore content is already in place; stale marker is cleaned
-  up by next restore run
+- crash at step 7: config write is itself atomic via the existing `write_team_config(...)`
+  temp-file + rename path, so no partial config write is possible
+- crash at step 8: config is written, stale marker cleaned up by next doctor/restore run
 
 ### 19.3 Staging Directory
 
 - location: `{team_dir}/.restore-staging/inboxes/`
-- lifecycle: created at step 3, contents moved at step 4, directory removed
-  after restore completion
-- failure path: staging directory cleaned up, no roster rewrite occurs
+- lifecycle: created at step 3, contents moved at step 4, directory removed after config write
+- failure path: staging directory cleaned up, no config written
 
 ### 19.4 Doctor Integration
 
-No required doctor dependency remains on `.restore-in-progress` scanning for
-runtime correctness. Any future marker reporting is advisory-only.
+New check: scan for `.restore-in-progress` in team directories.
+- Severity: warning
 - Recovery guidance: "A previous `atm teams restore` was interrupted. Re-run the restore
   command to complete it, or remove the marker file manually if the restore is no longer needed."
 
@@ -2581,26 +2593,10 @@ Required invariants:
 - no normal command path relies on implicit autocommit as its correctness
   model
 
-### 21.1.3 Crash Recovery And Replay
+### 21.1.3 Crash Recovery
 
-Crash recovery must preserve durable truth before any historical compatibility
-export or remote handoff.
-
-Required architectural rules:
-- the ordering rule is `SQLite commit -> historical export / remote handoff`
-- re-export/replay is keyed by durable `message_key`
-- if daemon-managed retry/re-export state must survive crash, it is stored in
-  SQLite with a bounded expiry/deadline rather than remaining RAM-only
-- remote replay rows live in the host-scoped SQLite root and are keyed by
-  mailbox identity plus durable `message_key` so startup resume can replay
-  pending remote handoff without duplicating committed local state
-- daemon startup is fail-closed when the persisted replay store cannot be
-  opened, because the bounded replay-resume sweep is part of the serving
-  startup contract rather than an optional degraded-mode feature
-- WAL checkpoint is part of graceful shutdown, but recovery correctness must
-  not depend on graceful shutdown having succeeded
-- persisted retry state must not become a long-lived remote outbox; expired
-  retry rows fail closed during replay
+Crash recovery preserves the committed local mailbox. The daemon owns no
+remote replay store, deferred outbox, or retry state.
 
 ### 21.2 Compatibility Surfaces
 
@@ -2680,32 +2676,6 @@ There are three distinct paths:
    - native agents talk to the local daemon API
    - the daemon commits through the SQLite store boundary
 
-3. Remote host path
-   - cross-host delivery is daemon-to-daemon only
-   - agent/member names and team names do not contain `.`
-   - the supported remote-send CLI forms are exactly:
-     - `atm send <agent>@<team>.<host> ...`
-     - `atm send <agent>@<team> --host <host> ...`
-   - those two forms normalize into the same internal request shape with a
-     typed remote-host field
-   - the inline form splits on the final `.` after `@`
-   - mixed inline-host plus `--host` input is rejected instead of silently
-     preferring one source
-   - send makes one routing decision at the boundary:
-     - empty remote-host field -> local mailbox path
-     - non-empty remote-host field -> cross-host queue / remote-delivery path
-   - sender-side daemons do not write remote host mailbox JSON directly
-   - successful remote delivery requires remote daemon acceptance
-   - Phase AG adds a durable cross-host control plane in front of this path:
-     - SQLite-backed interface/bind configuration
-     - SQLite-backed exact-host allowlist enforcement
-     - CLI management for both
-     - doctor-visible state for both
-   - same-host proof through `localhost` or the host's own advertised/bound IP
-     remains an ordinary use of the daemon listener/send path, not a separate
-     transport mode
-   - same-host proof is not equivalent to remote host-pair proof
-
 ### 21.3.1 New-Message Failure Contract
 
 The accepted daemon + SQLite runtime keeps one direct post-persist rule for new
@@ -2749,15 +2719,11 @@ Architectural rules:
   `DeliveryPlan`/`NotificationSink` or a daemon-owned notification
   worker/runtime
 
-### 21.4 One Interface, Two Transport Implementations
+### 21.4 One Same-Host Interface
 
-ATM uses one daemon API with two production transport adapters plus one
-test transport:
+ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform local IPC contract
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
-- cross-host: TCP/TLS
+- same-host: one cross-platform HTTP-over-AF_UNIX IPC contract on Unix and Windows
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
@@ -2778,15 +2744,6 @@ Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real
   socket I/O so subsystem and daemon-boundary tests can exercise the transport
   boundary in process
-
-Remote-delivery semantics:
-- this section is only the high-level summary
-- the authoritative remote-target contract is ADR-031
-- the authoritative remote delivery state machine and timeout/retry/receipt
-  rules are defined in §21.6 and REQ-CORE-TRANSPORT-004/005
-- transport-security closure is still sequenced separately under ADR-030;
-  functional cross-host readiness must not implicitly claim TLS/security
-  closure before that phase work lands
 
 ### 21.5 Singleton Daemon
 
@@ -2928,17 +2885,16 @@ Minimum method set:
 #### Transport
 
 Dispatch model:
-- request/response for same-host and remote daemon traffic
+- request/response for same-host daemon traffic
 - the same dispatch contract must also support the in-process `test-socket`
   transport used by tests
 
 Object-safety rule:
-- callers depend on an object-safe transport trait or façade so local and
-  remote adapters remain swappable
+- callers depend on an object-safe transport trait or façade so the local
+  adapter remains replaceable by the test transport
 
 Minimum method set:
 - serve local daemon API
-- send remote daemon request
 - query daemon health
 - shut down listener/connection set gracefully
 - construct or bind an in-process `test-socket` endpoint for transport-boundary
@@ -2949,7 +2905,7 @@ Dispatcher rule:
 - the dispatcher owns request-kind routing only
 - request-family behavior lives in injectable handlers behind that dispatcher
 - adding a new request type must not require embedding business logic into
-  Unix-socket or TCP/TLS adapter code
+  local-IPC adapter code
 
 Socket receive loop rule:
 - the receive loop must stay intentionally small
@@ -3105,10 +3061,6 @@ Phase R operational defaults:
 - daemon auto-start publish deadline: `10s`
   (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
-- remote synchronous wait deadline: `10s`
-- deferred background retry window: `60s..120s`
 - SQLite `busy_timeout`: `5000ms`
   - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
@@ -3118,7 +3070,6 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
-- retry queue depth: `256`
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
@@ -3130,38 +3081,6 @@ Required runtime-control behavior:
   sequence on every platform
 - the reload control path triggers bounded rescan/reload without dropping
   singleton ownership
-
-Remote peer transport rules:
-- retryable remote peer failures are limited to transient socket/network
-  failures before remote acceptance:
-  - timeout
-  - connection refused
-  - connection reset / aborted
-  - broken pipe
-  - host unreachable / network unreachable
-- non-retryable failures include:
-  - protocol/frame decode failures
-  - TLS/certificate/authentication mismatch
-  - explicit remote daemon rejection
-- if a connection drops after the request write completes but before the remote
-  daemon confirms acceptance, the send result is one typed
-  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
-- if the cross-host path is currently healthy, the CLI may wait up to `10s`
-  for remote acceptance before returning
-- if the cross-host path is currently unhealthy, the CLI returns immediately
-  with a deferred-delivery result and the daemon continues bounded retry in the
-  background
-- the deferred retry window is short-lived (`60s..120s`) and must conclude by
-  emitting a final delivery/failure receipt into the sender inbox
-- outbound peer delivery must resolve and open a fresh connection per attempt;
-  ordinary local interface changes must not require daemon restart for new
-  outbound attempts
-- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
-  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
-  restart in the normal case
-- if an operator binds the listener to one explicit local address and that
-  address disappears or changes, the daemon must surface degraded status and
-  require bounded reload/rebind rather than silently claiming readiness
 
 Phase R daemon implementation notes:
 - per-connection inflight cap `32` is documented now, but the current daemon

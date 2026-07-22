@@ -1,5 +1,9 @@
 # ATM-Daemon Boundary Inventory
 
+> **Phase AI supersession notice:** the daemon consumes storage traits and may
+> not acquire a SQLite/replay boundary through `atm-runtime` or another
+> indirection. ADR-036 is the governing crate-topology decision.
+
 This document captures runtime-owned concrete adapters established in Phase R
 and tightened for the Phase S cross-platform daemon host line.
 
@@ -44,7 +48,7 @@ even though they are not public cross-crate traits:
   - owns live daemon-memory member state and cache-cap semantics
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
-  - must remain separate from socket serving and peer transport code
+  - must remain separate from socket serving code
   - immutable snapshot publication is the accepted design for readers; no
     daemon-shared mutable cache lock is used
 
@@ -61,7 +65,6 @@ daemon-private ownership map is:
 - `runtime_status`
   - `RuntimeStatusCache`, roster hydration, reload assembly, and
     `atm doctor` runtime-health projection
-- `peer_transport`
 
 Historical pre-AD planning names that no longer describe the accepted current
 daemon-private ownership map:
@@ -100,30 +103,23 @@ Notes:
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
-## LocalIpcServerTransportAdapter
+## LocalIpcServerTransportAdapter (historical through AI.5)
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Owns the same-host runtime listener implementation for the ServerTransport
-  contract.
+- Historically owned the same-host listener for the custom-frame contract.
+  AI.6 replaces it with an HTTP-over-UDS adapter that calls `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The historical machine-readable boundary id remains
-  `BOUNDARY-ServerTransport-Socket` for continuity, but the target boundary
-  surface is one cross-platform local IPC contract:
-  - Unix implementation: Unix domain socket
-  - Windows implementation: named-pipe-backed local IPC
-- release closeout requires both Unix and Windows implementations to exist
-  behind this boundary; non-Unix unsupported-path stubs are an intermediate
-  implementation state only
-- the local IPC adapter must use the same ATM frame header and request/response
-  packet family as the remote peer transport
-- the adapter must not treat EOF or half-close as the stable request boundary;
-  framed read/write helpers own packet delimiting
+- The target boundary is one cross-platform HTTP-over-AF_UNIX contract on Unix
+  and Windows. Named pipes, custom frame headers, and frame decoders are
+  retired and must not be retained as fallback.
+- The adapter owns HTTP decode/response translation and same-user endpoint
+  ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
   Windows pipe names, or platform-specific ACL details directly
@@ -200,28 +196,6 @@ Phase S adds these review rules for the three daemon portability boundaries:
 - module-level platform test gates such as `#[cfg(all(test, unix))]` are not
   allowed in daemon-owned test modules; use `#[cfg(unix)]` on individual test
   functions when one assertion is OS-specific
-
-## PeerClientTransportAdapter
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
-
-
-Purpose:
-- Owns the daemon-side outbound client transport used for remote peer delivery.
-
-Notes:
-- The concrete `PeerClientTransport` implementation stays runtime-private inside
-  `atm_daemon::peer_transport`.
-- Runtime composition owns replay resume and exposes the transport only through
-  the shared `ClientTransport` contract.
-- Runtime composition also owns peer-transport config resolution through the
-  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
-  workspace config loader directly or silently fall back to defaults after a
-  config-load failure.
-- The peer transport must reuse the shared ATM frame header and packet DTOs
-  used by the same-host local IPC boundary; host-host traffic is not a second
-  daemon message system.
 
 ## FileWatchEventSourceAdapter
 
@@ -317,11 +291,20 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-ingress.toml](../../boundaries/atm-daemon/daemon-inbox-ingress.toml)
 
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the daemon runtime adapter behind the SourceIngress contract.
+- Historically owned the daemon runtime adapter behind the SourceIngress
+  contract.
 
 Notes:
-- This adapter owns compatibility inbox import, fingerprint, and diagnostic behavior at the daemon boundary.
+- The deleted adapter previously owned compatibility inbox import, fingerprint,
+  and diagnostic behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## DaemonInboxExportAdapter
 
@@ -329,54 +312,44 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-inbox-export.toml](../../boundaries/atm-daemon/daemon-inbox-export.toml)
 
 
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
 Purpose:
-- Owns the daemon runtime adapter behind the ProjectionExport contract.
+- Historically owned the daemon runtime adapter behind the ProjectionExport
+  contract.
 
 Notes:
-- This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
-- Phase `Yb` tightens this adapter further:
-  - runtime compatibility export and repair/rebuild export must be reviewed as
-    separate caller classes
-  - only approved delivery executors may invoke normal runtime export
-  - repair/rebuild re-export must remain outside the normal send/ack path
-  - see:
-    - [../phase-Yb/plan-phase-Yb.md](../phase-Yb/plan-phase-Yb.md)
-    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
-- `Phase Yc` adds one final recovered-Claude seam requirement:
-  - `Y.12` must document the daemon-side adapter behavior for the recovered
-    logical-message-set seam through
-    `ProjectionExport::append_message_set(...)` rather than treating
-    `DaemonInboxExportAdapter` as append-only by implication
-  - the daemon adapter must expose the recovered Claude message-set export as
-    one owned `ProjectionExport` operation, not as repeated single-message appends
+- The deleted adapter previously owned compatibility export and write-bound
+  projection behavior at the daemon boundary.
+- Any surviving references should be treated as historical documentation, not
+  live implementation guidance.
 
 ## Policy Placement
 
-Compatibility and recovery policy placement for daemon-owned config/inbox adapters:
 
-- `ConfigIngress` may own document loading, syntax validation, and translation into typed ATM config models.
-- `ConfigIngress` must not own daemon auto-start policy, retained command fallback policy, or mailbox/task workflow mutation.
-- `ConfigIngress` must not be used by retained command/runtime flows as a
-  second roster-truth lookup path; canonical runtime roster truth belongs to
-  the ATM roster store and its immutable projections.
-- repository-local lint / later `sc-lint` extraction should gate generic
-  `load_claude_team_config_document(...)` use outside the explicit allowlist.
-- `SourceIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
-- `SourceIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
-- `ProjectionExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
-- `ProjectionExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
-- one delivery-policy coordinator above `ProjectionExport` must decide:
-  - whether a given event may use compatibility export
-  - which harness path applies
-  - which event-family state machine owns the transition
-- Phase `Yb` adds:
-  - the coordinator and state machines must emit one uniform delivery plan
-  - the daemon must not branch on harness outside that plan-to-executor seam
-  - notification fallback remains a side effect after the plan, not a second
-    delivery policy surface
-  - plan-to-target translation and transition emission must remain in the
-    shared `atm_core` plan/execution seam rather than reappearing in daemon
-    adapters
+Historical status:
+- retired by `DAEMON-PREAG-RESET-1`
+- retained only as a historical boundary record while deleted code paths age
+  out of planning/review references
+
+Purpose:
+- Historically documented compatibility and recovery policy placement across
+  the `ConfigIngress`, `SourceIngress`, and `ProjectionExport` contracts,
+  including a forward-looking delivery-policy-coordinator design.
+
+Notes:
+- The `SourceIngress` and `ProjectionExport` contracts and their governing
+  adapters were deleted by `DAEMON-PREAG-RESET-1`; the daemon runs as a
+  local-IPC-only singleton with no compatibility export/ingress boundary to
+  place policy against.
+- `ConfigIngress` remains live; its retained placement rules are documented
+  under `DaemonConfigIngressAdapter` above, not here.
+- Any surviving references to the deleted delivery-policy-coordinator design
+  should be treated as historical documentation, not live implementation
+  guidance.
 
 ## DaemonNotificationSinkAdapter
 
