@@ -1,7 +1,7 @@
 ---
 id: AI.19
 title: Hermes Gateway Graft Integration
-status: planned
+status: complete
 branch: feature/pAI-s19-hermes-graft-integration
 worktree: ../atm-core-worktrees/feature/pAI-s19-hermes-graft-integration
 target: integrate/phase-AI
