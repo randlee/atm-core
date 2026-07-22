@@ -12,6 +12,7 @@ use std::{
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
 use serde::Deserialize;
+use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
@@ -83,31 +84,76 @@ fn canonical_write_router_has_one_host_routing_decision() {
     let source =
         fs::read_to_string(workspace_root().join("crates/atm-daemon/src/runtime_health.rs"))
             .expect("daemon request dispatcher source must be readable");
+    let file = syn::parse_file(&source).expect("daemon dispatcher must remain valid Rust");
+    let mut visitor = HostRoutingVisitor::default();
+    visitor.visit_file(&file);
 
-    for required in [
-        "struct MessageRecord",
-        "trait MessageWriter",
-        "trait PostWriteRouter",
-        "fn route_write(",
-        "fn persist_local_write(",
-        "fn dispatch_remote_write(",
-    ] {
-        assert!(source.contains(required), "AI.7 requires `{required}`");
-    }
     assert_eq!(
-        source.matches("address.host.is_some()").count(),
-        1,
-        "only route_write may select local or remote write dispatch"
+        visitor.route_write_host_accesses, 0,
+        "AI.12 forbids destination-host routing before canonical persistence"
     );
-    for retired in [
-        "dispatch_peer_write",
-        "dispatch_peer_ingress",
-        "dispatch_local",
-    ] {
-        assert!(
-            !source.contains(retired),
-            "AI.7 forbids the retired duplicate write dispatch `{retired}`"
-        );
+    assert_eq!(
+        visitor.post_router_host_accesses, 1,
+        "AI.12 requires PostWriteRouter::dispatch to make the sole host decision"
+    );
+    assert_eq!(
+        visitor.peer_delivery_calls, 1,
+        "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
+    );
+    assert!(
+        !source.contains("dispatch_remote_write"),
+        "AI.12 forbids the pre-persistence remote write branch"
+    );
+}
+
+#[derive(Default)]
+struct HostRoutingVisitor {
+    route_write_host_accesses: usize,
+    post_router_host_accesses: usize,
+    peer_delivery_calls: usize,
+    current_method: Option<String>,
+    in_post_write_router: bool,
+}
+
+impl<'ast> Visit<'ast> for HostRoutingVisitor {
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let previous = self.in_post_write_router;
+        self.in_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "PostWriteRouter")
+        });
+        syn::visit::visit_item_impl(self, node);
+        self.in_post_write_router = previous;
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+        let previous = self.current_method.replace(node.sig.ident.to_string());
+        syn::visit::visit_impl_item_fn(self, node);
+        self.current_method = previous;
+    }
+
+    fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
+        if matches!(&node.member, syn::Member::Named(name) if name == "host") {
+            if self.current_method.as_deref() == Some("route_write") {
+                self.route_write_host_accesses += 1;
+            }
+            if self.in_post_write_router && self.current_method.as_deref() == Some("dispatch") {
+                self.post_router_host_accesses += 1;
+            }
+        }
+        syn::visit::visit_expr_field(self, node);
+    }
+
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "deliver_to_peer" {
+            assert!(
+                self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"),
+                "AI.12 forbids peer delivery outside PostWriteRouter::dispatch"
+            );
+            self.peer_delivery_calls += 1;
+        }
+        syn::visit::visit_expr_method_call(self, node);
     }
 }
 

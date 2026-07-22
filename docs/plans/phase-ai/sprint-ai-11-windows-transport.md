@@ -1,7 +1,8 @@
 ---
 title: AI.11 HTTP contract and Windows local TCP
-status: proposed
+status: complete
 branch: feature/pAI-s11-post-merge-remediation
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation
 target: integrate/phase-AI
 ---
 
@@ -53,15 +54,7 @@ for parity testing.
 ## Boundary contract
 
 ```rust
-pub enum AuthenticatedIngress {
-    Local(LocalCapability),
-    Peer(AuthenticatedPeer),
-}
-
-pub struct LocalCapability {
-    pub bytes: [u8; 32],
-    pub daemon_instance_id: Ulid,
-}
+pub enum AuthenticatedIngress { Local, Peer }
 
 pub struct LocalHttpEndpointRecord {
     pub schema_version: u8, // 1
@@ -73,11 +66,8 @@ pub struct LocalHttpEndpointRecord {
     pub revoked_at: Option<IsoTimestamp>,
 }
 
-pub struct HttpResponse {
-    pub status: HttpStatus,
-    pub headers: HttpHeaders,
-    pub body: Vec<u8>,
-}
+// The private HTTP adapter maps `ApiResponse` to status, headers, and a
+// route-specific body. It does not expose a generic HTTP response domain type.
 ```
 
 Adapters authenticate then call `ApiRouter`. They do not decide message

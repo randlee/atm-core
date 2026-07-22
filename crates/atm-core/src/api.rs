@@ -15,17 +15,28 @@ use crate::protocol::{
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
+use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: u16 = 1;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
+const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+
+type EncodedHttpResponse = (u16, &'static str, Vec<u8>, Option<String>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
     pub method: String,
     pub path: String,
+    pub headers: Vec<String>,
     pub body: Vec<u8>,
+}
+
+impl HttpRequest {
+    pub fn header(&self, name: &str) -> Option<&str> {
+        http_header(&self.headers, name)
+    }
 }
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
@@ -34,9 +45,9 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
             Some(message_id) => ("POST", format!("/v1/atm/message/{message_id}/ack")),
             None => ("POST", "/v1/atm/messages".to_string()),
         },
-        RequestEnvelope::List(_) | RequestEnvelope::Peek(_) | RequestEnvelope::Receive(_) => {
-            ("GET", "/v1/atm/messages".to_string())
-        }
+        RequestEnvelope::List(_) => ("GET", "/v1/atm/messages".to_string()),
+        RequestEnvelope::Peek(_) => ("POST", "/v1/atm/messages/inspect".to_string()),
+        RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
         RequestEnvelope::Clear(_) => ("DELETE", "/v1/atm/messages".to_string()),
         RequestEnvelope::Doctor(_) => ("GET", "/v1/atm/doctor".to_string()),
         RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
@@ -48,11 +59,26 @@ pub fn write_http_request(
     writer: &mut impl Write,
     request: &RequestEnvelope,
 ) -> Result<(), AtmError> {
-    let body = serde_json::to_vec(request).map_err(AtmError::from)?;
+    write_http_request_with_headers(writer, request, &[])
+}
+
+/// Serializes one route-specific HTTP request with adapter-owned headers.
+pub fn write_http_request_with_headers(
+    writer: &mut impl Write,
+    request: &RequestEnvelope,
+    headers: &[(&str, &str)],
+) -> Result<(), AtmError> {
+    // The protocol envelope is an in-process dispatch type, never an HTTP
+    // representation. Each route serializes its own OpenAPI request body.
+    let body = encode_request_body(request)?;
     let (method, path) = endpoint_for(request);
+    let headers = headers
+        .iter()
+        .map(|(name, value)| format!("{name}: {value}\r\n"))
+        .collect::<String>();
     write!(
         writer,
-        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "{method} {path} HTTP/1.1\r\nContent-Type: application/json\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .map_err(|source| {
@@ -88,6 +114,7 @@ pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, 
     Ok(Some(HttpRequest {
         method: method.to_string(),
         path: path.to_string(),
+        headers,
         body,
     }))
 }
@@ -98,21 +125,29 @@ pub fn decode_request(request: HttpRequest) -> Result<ApiRequest, AtmError> {
             "daemon HTTP request body exceeds 1048576 bytes",
         ));
     }
-    let method = request.method.to_ascii_uppercase();
-    let envelope: RequestEnvelope =
-        serde_json::from_slice(&request.body).map_err(AtmError::from)?;
-    ApiRequest::from_http_parts(method.as_str(), request.path.as_str(), envelope)
+    decode_route_request(
+        &request.method.to_ascii_uppercase(),
+        &request.path,
+        &request.body,
+    )
 }
 
 pub fn write_http_response(
     writer: &mut impl Write,
     response: &ResponseEnvelope,
 ) -> Result<(), AtmError> {
-    let body = serde_json::to_vec(response).map_err(AtmError::from)?;
+    if let ResponseEnvelope::Clear(outcome) = response {
+        return write_no_content_response(writer, outcome);
+    }
+    let (status, reason, body, location) = encode_response(response)?;
+    let location = location
+        .as_deref()
+        .map(|value| format!("Location: {value}\r\n"))
+        .unwrap_or_default();
     write!(
         writer,
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n{location}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len(),
     )
     .map_err(|source| {
         AtmError::daemon_unavailable(format!("failed to write daemon HTTP response headers: {source}"))
@@ -127,19 +162,231 @@ pub fn write_http_response(
     })
 }
 
-pub fn read_http_response(reader: &mut impl Read) -> Result<ResponseEnvelope, AtmError> {
+pub fn read_http_response(
+    reader: &mut impl Read,
+    request: &RequestEnvelope,
+) -> Result<ResponseEnvelope, AtmError> {
     let Some((status_line, headers)) = read_http_headers(reader)? else {
         return Err(AtmError::daemon_unavailable(
             "daemon closed HTTP connection before a response",
         ));
     };
-    if !status_line.starts_with("HTTP/1.1 2") {
-        return Err(AtmError::daemon_unavailable(format!(
-            "daemon returned HTTP status `{status_line}`"
-        )));
-    }
     let body = read_http_body(reader, &headers)?;
-    serde_json::from_slice(&body).map_err(AtmError::from)
+    let status = status_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or_else(|| AtmError::validation("daemon HTTP response status is malformed"))?
+        .parse::<u16>()
+        .map_err(|_source| AtmError::validation("daemon HTTP response status is malformed"))?;
+    if status == 204 {
+        return decode_no_content_response(request, &headers, &body);
+    }
+    if !(200..300).contains(&status) {
+        return serde_json::from_slice(&body)
+            .map(ResponseEnvelope::Error)
+            .map_err(AtmError::from);
+    }
+    decode_success_response(request, &body)
+}
+
+fn write_no_content_response(
+    writer: &mut impl Write,
+    outcome: &crate::clear::ClearOutcome,
+) -> Result<(), AtmError> {
+    let outcome = serde_json::to_vec(outcome).map_err(AtmError::from)?;
+    let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(outcome);
+    write!(
+        writer,
+        "HTTP/1.1 204 No Content\r\n{CLEAR_OUTCOME_HEADER}: {encoded}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to write daemon HTTP no-content response: {source}"
+        ))
+    })?;
+    writer.flush().map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to flush daemon HTTP no-content response: {source}"
+        ))
+    })
+}
+
+fn decode_no_content_response(
+    request: &RequestEnvelope,
+    headers: &[String],
+    body: &[u8],
+) -> Result<ResponseEnvelope, AtmError> {
+    if !body.is_empty() {
+        return Err(AtmError::validation(
+            "daemon returned a body with an HTTP 204 response",
+        ));
+    }
+    let RequestEnvelope::Clear(_) = request else {
+        return Err(AtmError::validation(
+            "daemon returned HTTP 204 for a request that does not clear messages",
+        ));
+    };
+    let encoded = http_header(headers, CLEAR_OUTCOME_HEADER).ok_or_else(|| {
+        AtmError::validation("daemon HTTP 204 response is missing clear outcome metadata")
+    })?;
+    let outcome = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .map_err(|_source| AtmError::validation("daemon HTTP clear outcome metadata is invalid"))?;
+    serde_json::from_slice(&outcome)
+        .map(ResponseEnvelope::Clear)
+        .map_err(AtmError::from)
+}
+
+fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
+    match request {
+        RequestEnvelope::Write(value) => serde_json::to_vec(value),
+        RequestEnvelope::CompatibilityPreflight(value) => serde_json::to_vec(value),
+        RequestEnvelope::Heartbeat(value) => serde_json::to_vec(value),
+        RequestEnvelope::List(value) => serde_json::to_vec(value),
+        RequestEnvelope::Peek(value) => serde_json::to_vec(value),
+        RequestEnvelope::Receive(value) => serde_json::to_vec(value),
+        RequestEnvelope::Clear(value) => serde_json::to_vec(value),
+        RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
+    }
+    .map_err(AtmError::from)
+}
+
+fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequest, AtmError> {
+    match (method, path) {
+        ("POST", "/v1/atm/messages") => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid_route_body("write", source)),
+        ("POST", path) if is_ack_path(path) => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid_route_body("ack", source)),
+        ("GET", "/v1/atm/messages") => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
+            .map_err(|source| invalid_route_body("messages list", source)),
+        ("POST", "/v1/atm/messages/inspect") => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
+            .map_err(|source| invalid_route_body("message inspect", source)),
+        ("POST", "/v1/atm/messages/read") => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
+            .map_err(|source| invalid_route_body("message read", source)),
+        ("DELETE", "/v1/atm/messages") => serde_json::from_slice(body)
+            .map(ApiRequest::Clear)
+            .map_err(|source| invalid_route_body("messages clear", source)),
+        ("GET", "/v1/atm/doctor") => serde_json::from_slice(body)
+            .map(ApiRequest::Doctor)
+            .map_err(|source| invalid_route_body("doctor", source)),
+        ("POST", "/v1/atm/compatibility") => serde_json::from_slice(body)
+            .map(ApiRequest::CompatibilityPreflight)
+            .map_err(|source| invalid_route_body("compatibility", source)),
+        ("POST", "/v1/atm/heartbeat") => serde_json::from_slice(body)
+            .map(ApiRequest::Heartbeat)
+            .map_err(|source| invalid_route_body("heartbeat", source)),
+        _ => Err(AtmError::validation(format!(
+            "unsupported daemon HTTP route {method} {path}"
+        ))),
+    }
+}
+
+fn invalid_route_body(what: &str, source: serde_json::Error) -> AtmError {
+    AtmError::validation(format!("invalid {what} HTTP request body: {source}"))
+}
+
+fn decode_success_response(
+    request: &RequestEnvelope,
+    body: &[u8],
+) -> Result<ResponseEnvelope, AtmError> {
+    match request {
+        RequestEnvelope::Write(request) if request.acknowledges_message_id.is_some() => {
+            serde_json::from_slice(body)
+                .map(|value| {
+                    ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(
+                        value,
+                    ))
+                })
+                .map_err(AtmError::from)
+        }
+        RequestEnvelope::Write(_) => serde_json::from_slice(body)
+            .map(|value| ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value)))
+            .map_err(AtmError::from),
+        RequestEnvelope::CompatibilityPreflight(_) => serde_json::from_slice(body)
+            .map(ResponseEnvelope::CompatibilityVerdict)
+            .map_err(AtmError::from),
+        RequestEnvelope::Heartbeat(_) => serde_json::from_slice(body)
+            .map(ResponseEnvelope::Heartbeat)
+            .map_err(AtmError::from),
+        RequestEnvelope::List(_) => serde_json::from_slice(body)
+            .map(ResponseEnvelope::List)
+            .map_err(AtmError::from),
+        RequestEnvelope::Peek(_) => serde_json::from_slice(body)
+            .map(|value| ResponseEnvelope::Peek(Box::new(value)))
+            .map_err(AtmError::from),
+        RequestEnvelope::Receive(_) => serde_json::from_slice(body)
+            .map(|value| ResponseEnvelope::Receive(Box::new(value)))
+            .map_err(AtmError::from),
+        RequestEnvelope::Clear(_) => serde_json::from_slice(body)
+            .map(ResponseEnvelope::Clear)
+            .map_err(AtmError::from),
+        RequestEnvelope::Doctor(_) => serde_json::from_slice(body)
+            .map(|value| ResponseEnvelope::Doctor(Box::new(value)))
+            .map_err(AtmError::from),
+    }
+}
+
+fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, AtmError> {
+    let (status, reason, location, body) = match response {
+        ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Sent(value)) => (
+            201,
+            "Created",
+            Some(format!("/v1/atm/message/{}", value.message_id)),
+            serde_json::to_vec(value),
+        ),
+        ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value)) => (
+            201,
+            "Created",
+            Some(format!("/v1/atm/message/{}/ack", value.message_id)),
+            serde_json::to_vec(value),
+        ),
+        ResponseEnvelope::CompatibilityVerdict(value) => {
+            (200, "OK", None, serde_json::to_vec(value))
+        }
+        ResponseEnvelope::Heartbeat(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::List(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::Peek(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::Receive(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
+        ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::Error(value) => {
+            let status = if value.is_validation() { 400 } else { 503 };
+            (
+                status,
+                if status == 400 {
+                    "Bad Request"
+                } else {
+                    "Service Unavailable"
+                },
+                None,
+                serde_json::to_vec(value),
+            )
+        }
+    };
+    body.map(|body| (status, reason, body, location))
+        .map_err(AtmError::from)
+}
+
+fn is_ack_path(path: &str) -> bool {
+    path.strip_prefix("/v1/atm/message/").is_some_and(|suffix| {
+        suffix
+            .strip_suffix("/ack")
+            .is_some_and(|id| !id.is_empty() && !id.contains('/'))
+    })
+}
+
+fn http_header<'a>(headers: &'a [String], name: &str) -> Option<&'a str> {
+    headers.iter().find_map(|header| {
+        header
+            .split_once(':')
+            .filter(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.trim())
+    })
 }
 
 fn read_http_headers(reader: &mut impl Read) -> Result<Option<(String, Vec<String>)>, AtmError> {
@@ -246,42 +493,6 @@ impl ApiRequest {
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
         }
     }
-
-    fn from_http_parts(
-        method: &str,
-        path: &str,
-        envelope: RequestEnvelope,
-    ) -> Result<Self, AtmError> {
-        let request = Self::from(envelope);
-        if request.matches_route(method, path) {
-            return Ok(request);
-        }
-        Err(AtmError::validation(format!(
-            "daemon HTTP route {method} {path} does not match request body kind"
-        )))
-    }
-
-    fn matches_route(&self, method: &str, path: &str) -> bool {
-        match self {
-            Self::Messages(_) => method == "GET" && path == "/v1/atm/messages",
-            Self::Write(request) => {
-                if request.acknowledges_message_id.is_some() {
-                    method == "POST"
-                        && path
-                            .strip_prefix("/v1/atm/message/")
-                            .is_some_and(|suffix| suffix.ends_with("/ack"))
-                } else {
-                    method == "POST" && path == "/v1/atm/messages"
-                }
-            }
-            Self::Clear(_) => {
-                method == "DELETE" && (path == "/v1/atm/messages" || is_message_detail_path(path))
-            }
-            Self::Doctor(_) => method == "GET" && path == "/v1/atm/doctor",
-            Self::CompatibilityPreflight(_) => method == "POST" && path == "/v1/atm/compatibility",
-            Self::Heartbeat(_) => method == "POST" && path == "/v1/atm/heartbeat",
-        }
-    }
 }
 
 impl From<RequestEnvelope> for ApiRequest {
@@ -305,11 +516,6 @@ impl From<RequestEnvelope> for ApiRequest {
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
         }
     }
-}
-
-fn is_message_detail_path(path: &str) -> bool {
-    path.strip_prefix("/v1/atm/message/")
-        .is_some_and(|suffix| !suffix.is_empty() && !suffix.contains('/'))
 }
 
 #[derive(Debug, Clone)]
@@ -369,12 +575,15 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 mod tests {
     use super::{
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
-        write_http_request,
+        read_http_response, write_http_request, write_http_response,
     };
+    use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
-    use crate::protocol::RequestEnvelope;
+    use crate::error::AtmError;
+    use crate::protocol::{RequestEnvelope, ResponseEnvelope};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::types::CommandAction;
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -390,6 +599,71 @@ mod tests {
         .expect("decode HTTP request");
 
         assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn http_wire_body_is_route_schema_not_request_envelope() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write HTTP request");
+
+        let text = String::from_utf8(bytes).expect("HTTP UTF-8");
+        assert!(text.starts_with("GET /v1/atm/doctor HTTP/1.1"));
+        assert!(!text.contains("Doctor"));
+        assert!(!text.contains("RequestEnvelope"));
+    }
+
+    #[test]
+    fn http_error_is_direct_error_body_with_non_success_status() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut bytes = Vec::new();
+
+        write_http_response(
+            &mut bytes,
+            &ResponseEnvelope::Error(AtmError::validation("bad")),
+        )
+        .expect("write HTTP error");
+
+        let text = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
+        assert!(text.starts_with("HTTP/1.1 400 Bad Request"));
+        assert!(!text.contains("Error\":{") && !text.contains("Error\""));
+        let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
+        assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_clear_uses_no_content_with_outcome_metadata() {
+        let request = RequestEnvelope::Clear(ClearQuery {
+            home_dir: std::env::temp_dir(),
+            current_dir: std::env::temp_dir(),
+            caller_identity: TEST_SENDER.parse().expect("caller"),
+            caller_team: TEST_TEAM.parse().expect("team"),
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+        });
+        let response = ResponseEnvelope::Clear(ClearOutcome {
+            action: CommandAction::Clear,
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_SENDER.parse().expect("agent"),
+            removed_total: 1,
+            remaining_total: 2,
+            removed_by_class: RemovedByClass {
+                acknowledged: 1,
+                read: 0,
+            },
+        });
+        let mut bytes = Vec::new();
+
+        write_http_response(&mut bytes, &response).expect("write clear response");
+
+        let text = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
+        assert!(text.starts_with("HTTP/1.1 204 No Content"));
+        assert!(text.contains("X-ATM-Clear-Outcome:"));
+        assert!(text.ends_with("\r\n\r\n"));
+        let decoded = read_http_response(&mut bytes.as_slice(), &request).expect("read clear");
+        assert!(matches!(decoded, ResponseEnvelope::Clear(outcome) if outcome.removed_total == 1));
     }
 
     #[test]

@@ -3,6 +3,9 @@
   "removals": [
     "openapi/paths//team/{teamName}",
     "openapi/paths//teams",
+    "openapi/paths//message/{messageId}",
+    "openapi/paths//message/{messageId}/read",
+    "openapi/schemas/AckRequest",
     "openapi/schemas/Team"
   ]
 }

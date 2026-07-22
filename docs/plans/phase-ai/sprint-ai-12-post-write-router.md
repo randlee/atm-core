@@ -1,6 +1,6 @@
 ---
 title: AI.12 canonical post-write router
-status: proposed
+status: complete
 branch: feature/pAI-s12-post-write-router
 worktree: ../atm-core-worktrees/feature/pAI-s12-post-write-router
 target: integrate/phase-AI
@@ -137,8 +137,24 @@ host check outside the router.
 - All write ingress paths satisfy the ordered shared pipeline.
 - `just lint`, `just test`, AST boundary tests, and ordering/idempotency tests
   pass.
-- The implementation contains fewer routing/persistence branches than the
-  baseline; report the deleted symbols and net LOC with the closure evidence.
+- The implementation removes the pre-persistence `route_write` remote branch
+  and no-op router; report the deleted symbols and net LOC with closure
+  evidence.
+
+## Implementation record
+
+- `route_write` no longer branches on `destination.host` before the canonical
+  writer. `PostWriteRouter::dispatch` is the sole daemon host-routing point
+  and invokes peer delivery only after a successful durable write.
+- A host-qualified origin writes a non-roster-backed immutable outbound record
+  into the existing message storage contract. This is not an outbox, queue,
+  replay store, or receipt state: it is the same canonical message record,
+  retained before its one peer-delivery attempt.
+- `WriteRequest.origin_message_id` is assigned once by the origin canonical
+  writer, carried by the peer HTTP payload, and accepted only from authenticated
+  peer ingress. Local clients cannot provide it. The receiver therefore stores
+  the same ULID while the peer adapter removes only the destination routing
+  selector.
 
 ## Required validation
 

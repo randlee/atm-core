@@ -255,17 +255,14 @@ mod tests {
         let client = std::thread::spawn(move || {
             let mut stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
                 .expect("connect");
-            write_http_request(
-                &mut stream,
-                &RequestEnvelope::Doctor(DoctorQuery {
-                    home_dir: client_tempdir.join("home"),
-                    current_dir: client_tempdir.join("cwd"),
-                    team_override: None,
-                    ..DoctorQuery::default()
-                }),
-            )
-            .expect("write request");
-            read_http_response(&mut stream).expect("read response")
+            let request = RequestEnvelope::Doctor(DoctorQuery {
+                home_dir: client_tempdir.join("home"),
+                current_dir: client_tempdir.join("cwd"),
+                team_override: None,
+                ..DoctorQuery::default()
+            });
+            write_http_request(&mut stream, &request).expect("write request");
+            read_http_response(&mut stream, &request).expect("read response")
         });
 
         let mut server_stream = listener.accept().expect("accept");

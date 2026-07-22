@@ -30,6 +30,7 @@ impl AckRequest {
             caller_chat_id: None,
             caller_team: self.caller_team,
             authenticated_source_host: None,
+            origin_message_id: None,
             to: None,
             message_source: SendMessageSource::Inline(self.reply_body),
             summary_override: None,
@@ -290,6 +291,7 @@ fn canonical_ack_write_request(
         caller_chat_id: None,
         caller_team: team.clone(),
         authenticated_source_host: None,
+        origin_message_id: None,
         to: Some(crate::address::AgentAddress {
             agent: target.agent.clone(),
             chat_id: source.envelope.source_chat_id.clone(),
