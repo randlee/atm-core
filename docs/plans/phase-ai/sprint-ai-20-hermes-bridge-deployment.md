@@ -21,6 +21,12 @@ message identity or routing.
 - The required Hermes profiles and their configuration are available to the
   operator.
 
+## Parallel Execution
+
+After AI.19 commits its bridge module, configuration fields, and readiness
+probe, a separate agent may draft this sprint's runbook and plist templates in
+parallel. Deployment validation and `PASS` remain blocked on AI.19 `PASS`.
+
 ## Deliverables
 
 - Per-profile launchd plists for `default`, `grecon`, `alpha-prime`, and

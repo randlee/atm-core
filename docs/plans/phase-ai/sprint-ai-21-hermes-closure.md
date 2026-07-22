@@ -17,7 +17,7 @@ authorization to add unplanned code.
 
 ## Hard Dependencies
 
-- AI.17 through AI.20 are `PASS`.
+- AI.16 and AI.17 through AI.20 are `PASS`.
 - The running daemon and CLI are the recorded Phase AI-derived release.
 
 ## Stories and Required Evidence
@@ -50,6 +50,11 @@ latency; do not invent an unverified target.
 
 AI.21 does not create query flags, schema fields, custom headers, new transport
 logic, or launchd configuration. It only records evidence against AI.17–AI.20.
+
+## Parallel Execution
+
+AI.21 is not parallelizable: it is final evidence and begins only after its
+AI.16 and AI.17–AI.20 dependencies are `PASS`.
 
 ## Closure
 

@@ -2,15 +2,15 @@
 title: Phase AI.17–AI.21 — Hermes + atm-graft Integration
 status: planned
 branch: plan/phase-ah-hermes-graft-integration
-execution_base: integrate/phase-AI after AI.16 closure
+execution_base: integrate/phase-AI at the documented dependency baseline
 ---
 
 # Phase AI.17–AI.21 — Hermes + atm-graft Integration
 
-AI.17–AI.21 begin after AI.16 is accepted on `integrate/phase-AI`. They
-integrate the established ATM application contract into Python host agents,
-specifically the Hermes gateway. These sprints do not create a second message,
-identity, storage, CLI, or HTTP contract.
+AI.17–AI.21 integrate the established ATM application contract into Python
+host agents, specifically the Hermes gateway. They do not create a second
+message, identity, storage, CLI, or HTTP contract. Their concurrency with
+AI.11–AI.16 is explicitly constrained below.
 
 ## Phase AI Contract Consumed by AI.17–AI.21
 
@@ -54,7 +54,7 @@ never share Telegram or Discord conversation state.
 
 | Sprint | Purpose | Depends on |
 |---|---|---|
-| AI.17 | Verify and specify Hermes-to-Phase-AI chat identity mapping | AI.16 |
+| AI.17 | Verify and specify Hermes-to-Phase-AI chat identity mapping | AI.5 chat-address contract |
 | AI.18 | PyO3/Maturin binding over the existing graft client boundary | AI.17 |
 | AI.19 | Hermes gateway nudge adapter and canonical chat routing | AI.18 |
 | AI.20 | Per-profile launchd deployment and runbook | AI.19 |
@@ -62,12 +62,16 @@ never share Telegram or Discord conversation state.
 
 ## Parallelism
 
-AI.17, AI.18, and AI.19 are strictly sequential because each establishes the
-typed contract consumed by the next. Once AI.19 freezes its bridge module name,
-configuration fields, and readiness probe, a second agent may draft AI.20's
-runbook and launchd templates in parallel. AI.20 remains `PENDING` until AI.19
-passes and the draft is validated against the running bridge. AI.21 starts only
-after AI.19 and AI.20 are both `PASS`.
+| Work | Parallel with AI.11–AI.16 | Constraint |
+| --- | --- | --- |
+| AI.17 | Yes | Uses only AI.5's accepted chat-address contract; no `atm-graft` change. |
+| AI.18 | Yes, after AI.17 | New binding crate only; it consumes, but does not modify, `atm-graft`. |
+| AI.19 | Yes only after AI.12 | Requires AI.12's accepted post-write nudge contract; may overlap AI.13–AI.16. |
+| AI.20 | Draft only after AI.19 contract freeze | Runtime validation waits for AI.19 `PASS`. |
+| AI.21 | No | Final evidence waits for AI.16, AI.19, and AI.20 `PASS`. |
+
+AI.17, AI.18, and AI.19 are strictly sequential within this track. A parallel
+branch must rebase if an upstream Phase AI contract it consumes changes.
 
 See [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md) for the
 implementation contract and [readiness-ai17-21-hermes-graft.md](readiness-ai17-21-hermes-graft.md)

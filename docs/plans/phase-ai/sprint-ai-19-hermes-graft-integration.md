@@ -18,7 +18,12 @@ source address to select an isolated `atm:` chat and injects the message body.
 ## Hard Dependencies
 
 - AI.17 and AI.18 are `PASS`.
-- A Phase AI test proves persistence precedes every nudge.
+- AI.12 is `PASS` and its Phase AI test proves persistence precedes every nudge.
+
+## Parallel Execution
+
+AI.19 may run in parallel with AI.13–AI.16 after AI.12 and AI.18 pass. It must
+not modify the post-write router, daemon transport, or `atm-graft` API.
 
 ## Deliverables
 

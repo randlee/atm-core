@@ -20,6 +20,13 @@ Maturin. The binding is a translation layer: it invokes the same sealed
 - AI.17 is `PASS`.
 - Phase AI’s HTTP client contract is available on the execution baseline.
 
+## Parallel Execution
+
+AI.18 may run in parallel with AI.11–AI.16 after AI.17 `PASS`, provided the
+sealed `DaemonApiClient` signature it consumes is unchanged. It adds a new
+binding crate and must not modify `atm-graft`; a shared-contract change requires
+rebase and renewed review.
+
 ## Deliverables
 
 - A versioned Python package built with PyO3/Maturin, without changing the

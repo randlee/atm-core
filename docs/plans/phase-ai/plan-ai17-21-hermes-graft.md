@@ -2,7 +2,7 @@
 title: Phase AI.17–AI.21 — Hermes + atm-graft Integration
 status: planned
 branch: plan/phase-ah-hermes-graft-integration
-execution_base: integrate/phase-AI after AI.16 closure
+execution_base: integrate/phase-AI at the documented dependency baseline
 ---
 
 # Phase AI.17–AI.21 Plan — Hermes + atm-graft Integration
@@ -16,11 +16,11 @@ message. This phase supplies host integration, not a new daemon protocol.
 
 ## Entry Gate and Execution Base
 
-AI.17 may start only when AI.16 is accepted on `integrate/phase-AI` and the
-resulting integration baseline passes `just lint` and `just test`. Every
-AI.17–AI.21 implementation branch is created from that exact integration
-commit and merges forward strictly into its successor. The entry record must
-name the commit and release/version used for the run.
+Each sprint starts from the exact `integrate/phase-AI` commit that satisfies
+its stated dependencies and passes `just lint` and `just test`. The entry
+record names that commit and release/version. AI.17–AI.21 merge forward
+strictly within their own chain; merging an AI.11–AI.16 change forward is
+required only when that change alters a consumed contract.
 
 The following Phase AI contracts are hard dependencies:
 
@@ -112,8 +112,14 @@ deliverable to the next sprint.
 
 ## Parallel Execution Rule
 
-AI.17→AI.18→AI.19 is a strict merge-forward chain. AI.20 documentation and
-plist-template drafting may begin after AI.19's bridge invocation/configuration
-contract is committed, on its own branch based on that commit; its deployment
-and closure work waits for AI.19 `PASS`. AI.21 is never parallel with a live
-AI.19 or AI.20 implementation because it is phase evidence, not a fix sprint.
+| Sprint | May run alongside AI.11–AI.16? | Preconditions and isolation |
+| --- | --- | --- |
+| AI.17 | Yes | AI.5 chat-address contract is accepted. It adds only a Hermes mapping adapter; it does not modify `atm-graft`, the daemon, HTTP, or storage. |
+| AI.18 | Yes, after AI.17 | AI.17 is `PASS` and the sealed `DaemonApiClient` signature used by the binding is unchanged. It adds `atm-graft-python`; it does not modify `atm-graft`. |
+| AI.19 | Yes, after AI.12 and AI.18 | AI.12 is `PASS` because the bridge consumes the canonical post-write nudge. It may run alongside AI.13–AI.16, but not before AI.12. |
+| AI.20 | Draft only | A second agent may draft the runbook/plist templates after AI.19 freezes bridge module, configuration, and readiness names. Deployment validation waits for AI.19 `PASS`. |
+| AI.21 | No | It is final evidence and starts only after AI.16, AI.19, and AI.20 are `PASS`. |
+
+AI.17→AI.18→AI.19 remains a strict merge-forward chain. A parallel branch
+must touch only its named sprint targets; a changed Phase AI shared contract
+invalidates its entry baseline and requires rebase and review before merge.

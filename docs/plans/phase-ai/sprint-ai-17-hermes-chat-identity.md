@@ -21,8 +21,8 @@ same meaning as `--chat-id <id>` and `--as <agent>:<id>` under ADR-037.
 
 ## Hard Dependencies
 
-- AI.16 is accepted on `integrate/phase-AI`; entry evidence names its exact
-  commit and green `just lint` / `just test` results.
+- AI.5's accepted chat-address contract is present on `integrate/phase-AI`;
+  entry evidence names that commit and green `just lint` / `just test` results.
 - ADR-037 and the Phase AI CLI/API tests are present on that baseline.
 
 ## Deliverables
@@ -59,6 +59,12 @@ The adapter consumes `AgentAddress`; it does not parse display strings,
 construct SQL, create a `session_id`, or add `--session` / `--session-id`.
 It cannot change the Phase AI parser, HTTP API, canonical write path, or
 post-write router.
+
+## Parallel Execution
+
+AI.17 may run in parallel with AI.11–AI.16 because it does not modify
+`atm-graft`, daemon transport, HTTP, storage, or a shared Phase AI contract.
+It must rebase and be re-reviewed if the consumed chat-address contract changes.
 
 ## Closure
 

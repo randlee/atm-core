@@ -2,10 +2,11 @@
 
 ## Entry Gate
 
-AI.17 is blocked until AI.16 is accepted on `integrate/phase-AI`. The execution
-record must identify that integration commit and show `just lint` and `just
-test` green. AI.17–AI.21 consume, but do not redefine, ADR-033, ADR-035, and
-ADR-037.
+Each sprint records the exact `integrate/phase-AI` dependency baseline and
+release/version with `just lint` / `just test` green. AI.17–AI.21 consume, but
+do not redefine, ADR-033, ADR-035, and ADR-037. AI.17 may run with AI.11–AI.16
+after AI.5's chat-address contract; AI.19 waits specifically for AI.12's
+post-write contract; AI.21 waits for AI.16 as final evidence.
 
 ## Per-Sprint Closure
 
@@ -22,9 +23,9 @@ Allowed values are `PENDING`, `PASS`, `FAIL`, `BLOCKED`, and `PARTIAL`.
 
 ## Ordering
 
-- AI.17 closes before AI.18.
+- AI.17 may run alongside AI.11–AI.16 after AI.5, and closes before AI.18.
 - AI.18 closes before AI.19.
-- AI.19 closes before AI.20 and AI.21.
+- AI.19 waits for AI.12, may run alongside AI.13–AI.16, and closes before AI.20 and AI.21.
 - AI.20 closes before AI.21.
 - AI.20 template/runbook drafting may run after AI.19's bridge contract is
   frozen, but AI.20 deployment validation and `PASS` require AI.19 `PASS`.
