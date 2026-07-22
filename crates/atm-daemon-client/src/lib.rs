@@ -18,9 +18,12 @@ mod compatibility;
 
 pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
 
-pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for waiting on a daemon just spawned by the CLI to publish its
+/// local HTTP record and accept its first connection.
+pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(30);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -773,6 +776,7 @@ impl DaemonSupervisor {
     {
         let halfway_deadline = Instant::now() + (publish_timeout / 2);
         let mut halfway_reported = false;
+        let mut current_poll_interval = poll_interval;
         while Instant::now() < deadline {
             if self.try_connect_with_traceability(try_connect, traceability, "pending") {
                 return Ok(());
@@ -791,7 +795,12 @@ impl DaemonSupervisor {
                 "publish_wait_continuing",
                 None,
             );
-            thread::sleep(poll_interval);
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            thread::sleep(current_poll_interval.min(remaining));
+            current_poll_interval = next_auto_start_poll_interval(current_poll_interval);
         }
         let error = AtmError::daemon_auto_start_failed(format!(
             "failed to connect to daemon local IPC endpoint at {} after auto-start",
@@ -839,6 +848,10 @@ impl DaemonSupervisor {
         })?;
         Ok(())
     }
+}
+
+fn next_auto_start_poll_interval(current: Duration) -> Duration {
+    current.saturating_mul(2).min(AUTO_START_MAX_POLL_INTERVAL)
 }
 
 pub struct LaunchGateGuard {
@@ -931,16 +944,17 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
     use super::{
-        BootstrapAutoStartOutcome, BootstrapCommandEvent, BootstrapConnectOutcome,
-        BootstrapLaunchGateOutcome, BootstrapTraceReport, BootstrapTraceability, DaemonBinaryPath,
-        DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
-        apply_local_ipc_deadline,
+        AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
+        BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
+        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
+        next_auto_start_poll_interval,
     };
 
     #[derive(Debug, Default)]
@@ -1141,5 +1155,51 @@ mod tests {
                 .message()
                 .contains("failed to configure daemon local IPC write timeout")
         );
+    }
+
+    #[test]
+    fn auto_start_publish_budget_covers_cold_daemon_bootstrap() {
+        assert_eq!(AUTO_START_PUBLISH_TIMEOUT, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn auto_start_poll_backoff_is_bounded() {
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(25)),
+            Duration::from_millis(50)
+        );
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(200)),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(250)),
+            Duration::from_millis(250)
+        );
+    }
+
+    #[test]
+    fn publish_wait_retries_until_the_daemon_record_is_connectable() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let supervisor = supervisor(&tempdir);
+        let attempts = AtomicUsize::new(0);
+
+        supervisor
+            .wait_for_published_daemon(
+                &mut || {
+                    if attempts.fetch_add(1, Ordering::SeqCst) < 2 {
+                        Err(AtmError::daemon_unavailable("record not ready"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                Instant::now() + Duration::from_millis(50),
+                Duration::from_millis(1),
+                Duration::from_millis(1),
+                None,
+            )
+            .expect("daemon record becomes connectable before the bounded deadline");
+
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 }
