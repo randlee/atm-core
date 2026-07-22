@@ -11,21 +11,17 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
-- after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
-  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
-  boundary violation guarded by both the boundary TOMLs and
-  `cargo test --package atm-architecture`
+- `atm-daemon` receives backend-neutral storage traits from composition. A
+  direct `atm-daemon -> atm-storage-rusqlite` dependency, concrete SQLite
+  type, or daemon-owned persistence trait is a boundary violation guarded by
+  the boundary TOMLs and `cargo test --package atm-architecture`
 - Phase AD retired the watch/reconcile runtime lanes; any retained
   watch/reconcile/notifier references in older planning material are
   historical only and must not be treated as accepted production subsystem
   contracts or live test-double seams.
-- Phase `Y.3` tightened the retained runtime shape so normal compatibility
-  rewrites now hang off one post-durability runtime refresh owner; `ack` and
-  `clear` state transitions must not reintroduce daemon-bypassing source-inbox
-  rewrite paths.
-- Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
-  above that owner boundary; harness-specific compatibility-export policy must
-  now stay centralized there rather than leaking back into command callers.
+- Compatibility-export and delivery-policy coordinator state machines are
+  historical only. They are not accepted daemon runtime boundaries and must
+  not be reintroduced for HTTP, peer, acknowledgement, or notification work.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:
@@ -117,14 +113,13 @@ Purpose:
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
 - The target boundary is Unix HTTP-over-UDS plus loopback TCP, and Windows
-  loopback TCP only. Named pipes, Windows AF_UNIX, custom frame headers, and
-  frame decoders are retired and must not be retained as fallback.
+  loopback TCP only. Custom frame headers and frame decoders are retired and
+  must not be retained as fallback.
 - The adapter owns HTTP decode/response translation and same-user endpoint
   ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
   semantics; callers above the adapter must not construct Unix socket paths,
-  loopback ports/capabilities, Windows pipe names, or platform-specific ACL
-  details directly
+  loopback ports/capabilities, or platform-specific ACL details directly
 - local-IPC adapter code should live under a dedicated transport module tree
   rather than remaining mixed into crate-root runtime code
 - the current integrate/phase-S branch still keeps `handle_connection(...)`
@@ -252,22 +247,16 @@ Canonical machine-readable boundary source:
 
 
 Purpose:
-- Owns the runtime dispatcher implementation that routes protocol requests into core services.
+- Owns the runtime adapter that passes typed HTTP `ApiRequest` values to the
+  application handlers and returns `ApiResponse` values.
 
 Notes:
 - This adapter exists to keep transport loops and service logic separate.
-- The active dispatcher now owns:
-  - typed heartbeat request routing
-  - durable pid continuity checks through the SQLite boundary assembly
-  - daemon-backed doctor health projection over runtime status
-  - direct post-send emission that may surface typed sender warnings when a
-    receiver-owned graft path is unavailable
-- The dispatcher must not own graft session registration, pending nudge
-  queues, fetch/drain inspection, or any client-specific receive loop.
-- `R.20` planning treats this as an overgrown adapter surface. The follow-on
-  cleanup sprint must split dispatcher shell concerns from runtime-status,
-  heartbeat-continuity, and doctor-projection helpers without changing the
-  external boundary contract.
+- The adapter owns no persistence implementation, socket-specific decision,
+  delivery state, or client-specific receive loop.
+- Handlers use only backend-neutral storage traits. Persistence completes
+  before the single `PostWriteRouter` event; nudge and peer publication are
+  consumers of that event, never dispatcher branches.
 
 ## DaemonConfigIngressAdapter
 

@@ -28,7 +28,7 @@ after peer testing.
 
 ## Acceptance criteria
 
-- Windows has no named-pipe or AF_UNIX local listener/path in use.
+- Windows has no alternate local listener/path in use.
 - Mac→Windows and Windows→Mac send/read/nudge/ack pass with the same original
   ULID on both hosts.
 - All duplicate, unavailable, failed-ack, mTLS, and allowlist-negative cases

@@ -2,9 +2,8 @@
 
 This document is the crate-local boundary inventory for `atm-graft`.
 
-`atm-graft` consumes shared protocol and transport boundaries owned by
-`atm-core` and must remain a thin embedded client crate rather than a second
-runtime or business-logic layer.
+`atm-graft` consumes the shared HTTP application contract and must remain a
+thin embedded client crate rather than a second runtime or business-logic layer.
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-graft/shared-client-consumer.toml](../../boundaries/atm-graft/shared-client-consumer.toml)
@@ -20,10 +19,10 @@ Purpose:
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
 - `atm-graft` must not take a Rust dependency on `atm-daemon-bootstrap`
-- `atm-graft` must use the shared `atm-core` request/response DTO family rather
+- `atm-graft` must use the shared route-specific request/response DTOs rather
   than inventing a graft-private daemon API
-- `atm-graft` must not add a graft-specific public trait family if the shared
-  `ClientTransport` boundary is sufficient
+- `atm-graft` must not add a graft-specific public trait family when the shared
+  HTTP client contract is sufficient
 
 ## Session Runtime Consumer
 

@@ -1,10 +1,10 @@
 # ATM CLI Architecture
 
 > **Phase AI supersession notice:** the planned daemon API is REST over HTTP:
-> local UDS on Unix and Windows AF_UNIX, and HTTPS/TCP for remote peers. Older
-> references to named pipes, custom ATM frames, remote replay/retry state, or
-> a separate peer runtime are historical only. ADR-032 through ADR-036 and
-> `REQ-CORE-TRANSPORT-*` govern new work.
+> Unix uses UDS and may use loopback TCP; Windows uses loopback TCP only; peers
+> use HTTPS/TCP. Custom ATM frames, remote replay/retry state, and a separate
+> peer runtime are historical only.
+> ADR-032 through ADR-038 and `REQ-CORE-TRANSPORT-*` govern new work.
 
 ## 1. Overview
 
@@ -102,27 +102,17 @@ Phase-R redesign note:
   pre-Phase-R architecture statements in this document that conflict with the
   crate-local boundary inventories, ADRs, or `docs/plans/phase-R/plan-phase-R.md`
 
-Phase-S portability note:
-- the Phase R integrated daemon proved the runtime split, but it still hard-
-  coded Unix-only assumptions into the same-host host/runtime shell
-- Phase S is the active planning line for making the daemon feature-complete on
-  Windows as well as Unix-like hosts
+Phase AI transport note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
-- the canonical daemon wire contract is documented in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact wire-header constants, packet-kind assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD
-- the current daemon packet family is intentionally smaller than the retained
-  CLI surface:
-  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
-  - non-packet retained surfaces: `log`, `teams`, `members`
-- S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
-  implementation line that refines the queue-query packet mapping instead of
-  preserving the old multi-message `read` response shape as the final
-  contract
-- Phase S planning is tracked in [`docs/plans/phase-S/plan-phase-S.md`](./plan-phase-S.md)
+- the canonical daemon wire contract is the versioned HTTP/OpenAPI contract in
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md) and ADR-033
+- Unix local clients use HTTP/UDS or loopback TCP; Windows local clients use
+  loopback TCP; peers use HTTPS/TCP; all call the same router and handlers
+- the retained initial resource roots are `/v1/atm/messages`,
+  `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
+  `/v1/atm/doctor`
 
 Phase-AA simplification note:
 - the current daemon composition root and daemon-routed doctor model are not
@@ -244,11 +234,14 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current Phase R boundary direction:
-- shared protocol contract: `AtmProtocol` in `atm-core`
-- outbound transport boundary: `ClientTransport`
-- inbound transport boundary: `ServerTransport`
-- request routing boundary: `RequestDispatcher`
+Current Phase AI boundary direction:
+- shared application contract: `ApiRequest`, `ApiResponse`, and `AtmError`
+  in `atm-core`
+- local client boundary: `DaemonApiClient`, used by CLI, graft, and tests
+- ingress routing boundary: `ApiRouter`, reached by UDS, loopback TCP, and
+  peer HTTPS adapters
+- write routing boundary: `PostWriteRouter`, invoked only after canonical
+  persistence and optional receiver-side acknowledgement mutation
 - outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
 - current production composition ownership:
@@ -260,7 +253,7 @@ Current Phase R boundary direction:
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
-  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
+  - relocked boundary records forbid a direct `atm-daemon -> atm-storage-rusqlite`
     edge; any reintroduction must fail the Rust
     `crates/atm-architecture/` dependency guard (`cargo test --package
     atm-architecture`), which is the sole code-driven boundary enforcement
@@ -1804,16 +1797,13 @@ Root public error:
 ```rust
 pub struct AtmError {
     pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
     pub message: String,
-    pub recovery: Option<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
 }
 ```
 
 ```rust
 pub enum AtmErrorCode {
-    // single central registry re-exported from crates/atm-core/src/error_codes.rs
+    // single central registry defined in crates/atm-storage/src/error_codes.rs
 }
 ```
 
@@ -2723,7 +2713,8 @@ Architectural rules:
 
 ATM uses one same-host daemon API plus one test transport:
 
-- same-host: one cross-platform HTTP-over-AF_UNIX IPC contract on Unix and Windows
+- Unix same-host: HTTP over UDS or loopback TCP
+- Windows same-host: HTTP over loopback TCP
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
@@ -2910,9 +2901,9 @@ Dispatcher rule:
 Socket receive loop rule:
 - the receive loop must stay intentionally small
 - allowed responsibilities:
-  - read one framed request
-  - parse it into a qualified request enum/value
-  - validate/authenticate the transport envelope
+  - decode one HTTP request
+  - map it to a typed application request
+  - authenticate the ingress
   - dispatch immediately to the owning handler boundary
   - serialize one typed response
 - forbidden responsibilities inside the receive loop:
@@ -3105,8 +3096,8 @@ The target daemon-runtime test architecture must keep:
   - auto-start side effects
 
 Required test tiers:
-- `FakeClientTransport` for deterministic CLI/composition tests
-- in-process loopback transport for request/handler integration
+- a fake HTTP application client for deterministic CLI/composition tests
+- an in-process HTTP adapter for router/handler integration
 - a narrow daemon-runtime suite for true singleton/startup/shutdown/recovery
   requirements only
 

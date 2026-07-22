@@ -1,5 +1,10 @@
 # ATM Daemon Protocol ICD
 
+> **Historical through AI.5:** this custom-frame record is retained only for
+> migration and compatibility review. ADR-033 and
+> [`http-api.md`](./http-api.md) define the accepted HTTP interface; new work
+> must not extend this document or its protocol.
+
 ## 1. Purpose
 
 This document is the canonical interface control document for ATM daemon

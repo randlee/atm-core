@@ -9,7 +9,7 @@ target: integrate/phase-AI
 # AI.6 — REST router and local UDS (historical)
 
 > **Superseded local-platform target:** AI.11 replaces this sprint's Windows
-> AF_UNIX/UDS assumptions with loopback-TCP-only local HTTP. AI.6 records the
+> UDS-only assumptions with loopback-TCP-only local HTTP. AI.6 records the
 > initial router landing; it is not authority for the accepted local transport
 > contract, resource inventory, or validation matrix.
 
@@ -22,9 +22,9 @@ target: integrate/phase-AI
 2. Implement one REST router from that contract. It calls application handlers
    and never SQLite or nudge code directly.
 3. **Historical original target:** replace the custom local framing/client
-   codec with HTTP over UDS. AI.11 supersedes the Windows AF_UNIX portion with
+   codec with HTTP over UDS. AI.11 supersedes the Windows local-transport portion with
    Windows loopback-TCP local HTTP.
-4. Delete Windows named-pipe mapping/fallback and the custom ATM frame codec
+4. Delete retired Windows local-transport mapping/fallback and the custom ATM frame codec
    after all retained operations are represented by the REST contract. The
    deletion inventory includes the `AtmProtocol`, `ClientTransport`,
    `ServerTransport`, and `RequestDispatcher` frame-boundary records, their
@@ -87,9 +87,9 @@ still dispatches one application handler.
 
 - `atm` and graft local daemon calls use HTTP/UDS; no production local client
   uses the retired frame codec.
-- **Historical original proof:** Windows AF_UNIX HTTP behavior. AI.11 replaces
+- **Historical original proof:** Windows local HTTP behavior. AI.11 replaces
   this acceptance item with Windows loopback-TCP HTTP proof.
-- No source/dependency reference to named pipes or the retired custom frame
+- No source/dependency reference to the retired Windows local transport or custom frame
   protocol remains.
 - Router tests prove adapters cannot reach storage or post-send boundaries.
 - UDS startup/shutdown tests prove a bounded body is rejected before decode and

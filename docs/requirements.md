@@ -142,17 +142,15 @@ Phase-R redesign note:
   dependency; `sc-lint` is not part of the ATM product surface even when its
   verification model constrains Phase R gates
 
-Phase-S portability note:
-- Phase S closes the missed requirement that ATM daemon functionality must be
-  first-class on Windows as well as Unix-like hosts
-- the current authoritative target for same-host daemon access is one
-  cross-platform local IPC contract rather than a Unix-only local transport
-- the canonical daemon wire contract is documented in
-  [`./atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact frame constants, packet-kind numeric assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD rather
-  than restated piecemeal across product docs
-- the current daemon request/response packet family covers:
+Phase-AI portability note:
+- ATM daemon functionality is first-class on Windows as well as Unix-like hosts
+- the authoritative local access contract is Unix HTTP/UDS or loopback TCP and
+  Windows loopback TCP; peer access is HTTPS/TCP
+- the canonical daemon interface is documented in
+  [`./atm-daemon/http-api.md`](./atm-daemon/http-api.md) and ADR-033
+- route-specific schemas, HTTP status codes, and the OpenAPI artifact are
+  owned by that contract rather than restated piecemeal across product docs
+- the current daemon HTTP resource surface covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
   - `read`
@@ -2751,10 +2749,9 @@ Required testing architecture:
 - there is no approved "test daemon launch" path for ordinary ATM correctness
   tests
 - the primary test tiers are:
-  - CLI/composition tests using injected transport doubles such as
-    `FakeClientTransport`
-  - in-process integration tests using `LoopbackClientTransport` over the
-    shared request/response contracts
+  - CLI/composition tests using a fake HTTP application client
+  - in-process integration tests using the HTTP adapter over the shared
+    request/response contracts
   - a narrow daemon-runtime suite for singleton/startup/shutdown/recovery
     requirements only
 - real daemon process tests, if any, must be isolated to the daemon-runtime

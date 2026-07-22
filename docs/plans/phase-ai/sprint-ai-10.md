@@ -58,7 +58,7 @@ success is never a message-delivery proof.
 - A displayed `from` address and every reply/ack `to` address preserve a
   present chat-id exactly; no operator training or separate session command is
   needed to reply.
-- No prior custom frame, named-pipe, peer/replay, duplicate write-path, or
+- No prior custom frame, retired local transport, peer/replay, duplicate write-path, or
   runtime SQLite escape-hatch source remains.
 - The CLI compatibility gate proves the pre-Phase-AI public CLI surface is
   additions-only; the OpenAPI compatibility gate proves the published HTTP API

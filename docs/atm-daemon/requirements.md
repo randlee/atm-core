@@ -3,8 +3,8 @@
 > **Phase AI supersession notice:** `REQ-DAEMON-TRANSPORT-001` through `008`
 > are the proposed target contract for Unix UDS/loopback-TCP HTTP, Windows
 > loopback-TCP HTTP, and remote HTTPS. Any
-> older text in this document that permits named pipes, a custom ATM frame,
-> replay/retry state, or a peer-transport runtime is historical and will be
+> older text in this document that permits a custom ATM frame, replay/retry
+> state, or a peer-transport runtime is historical and will be
 > removed by the owning Phase AI sprint; it is not authority for new work.
 
 ## 1. Purpose
@@ -22,7 +22,7 @@ The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
 The canonical daemon transport wire contract lives in:
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 
 The canonical daemon observability boundary contract lives in:
 - [`./observability.md`](./observability.md)
@@ -143,8 +143,7 @@ Initial crate requirement IDs:
   peer, and test adapters:
   - Unix: HTTP over UDS and supported HTTP over loopback TCP for same-host
     access
-  - Windows: HTTP over loopback TCP only for same-host access; named pipes and
-    Windows AF_UNIX are unsupported
+  - Windows: HTTP over loopback TCP only for same-host access
   - HTTPS over TCP for cross-host daemon-to-daemon traffic
   - an in-process HTTP adapter; see ADR-003 §Tier 2 — for transport-boundary
     tests
@@ -201,8 +200,8 @@ Initial crate requirement IDs:
   TCP binds only loopback and requires a daemon-created owner-readable endpoint
   record plus local capability; Unix UDS uses owner-only endpoint permissions.
   Callers above adapters must not construct endpoint paths, ports, capabilities,
-  or ACL semantics directly. Named-pipe mapping, Windows AF_UNIX, and fallback
-  are forbidden.
+  or ACL semantics directly. Alternate local transports and fallback paths are
+  forbidden.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-PLATFORM-002`.
 - `REQ-DAEMON-STATUS-001` `atm-daemon` owns the live agent-status cache and
@@ -340,7 +339,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./observability.md`](./observability.md)
-- [`./protocol-icd.md`](./protocol-icd.md)
+- [`./http-api.md`](./http-api.md)
 - [`./logging.md`](./logging.md)
 - [`./recovery-text-rules.md`](./recovery-text-rules.md)
 
@@ -433,9 +432,9 @@ Required runtime rules:
 - graceful shutdown must stop accepts, drain or cancel inflight work within one
   bounded deadline, checkpoint WAL, and release singleton ownership
 - **Historical local-frame contract:** the retired ATM frame ICD, its header
-  fields, frame decoder, named-pipe mapping, and Windows AF_UNIX mapping are
-  not accepted runtime behavior. Phase AI replaces them with Unix UDS/loopback
-  TCP and Windows loopback-TCP HTTP in
+  fields, frame decoder, and platform-specific fallback mappings are not
+  accepted runtime behavior. Phase AI replaces them with Unix UDS/loopback TCP
+  and Windows loopback-TCP HTTP in
   `REQ-DAEMON-TRANSPORT-001`, `005`, `006`, and `008`.
 - daemon-private runtime control must be partitioned into explicit ownership
   modules for these accepted runtime partitions:
@@ -548,9 +547,9 @@ Required runtime rules:
   inbox-file access
 - tests and tools are not exempt from the singleton rule; any attempt to start
   a second daemon process must fail through the same runtime ownership checks
-- the socket receive loop must remain a thin dispatcher only:
-  - read framed request
-  - parse qualified request type
+- the HTTP receive loop must remain a thin dispatcher only:
+  - decode an HTTP request
+  - map it to a typed request
   - dispatch through the owning dispatcher/handler boundary
   - return typed response
 - request-kind routing must stay in the dispatcher boundary, not in concrete

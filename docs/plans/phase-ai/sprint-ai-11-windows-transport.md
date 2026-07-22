@@ -36,6 +36,12 @@ for parity testing.
    capability with owner-only filesystem/Windows ACL permissions. Local
    loopback clients send it in `X-ATM-Local-Capability`. No environment
    variable, globally fixed port, or public/LAN local bind is permitted.
+
+   This capability is a transport-swap corequisite, not a new application
+   feature: Windows loses UDS owner permissions when it moves to TCP, and a
+   loopback address alone does not identify the local owner. The record and
+   capability restore the same local-only admission boundary without adding a
+   route, handler, storage access, or routing path.
 6. Update ADR-033, `docs/requirements.md`, daemon requirements, daemon
    architecture/boundaries, Phase AI plan/readiness, and HTTP API docs so they
    consistently state Unix UDS plus loopback TCP, Windows loopback TCP only,

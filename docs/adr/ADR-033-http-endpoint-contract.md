@@ -71,6 +71,6 @@ mTLS verification; socket family and address never classify an ingress. The
 adapter cannot perform recipient routing, storage mutation, acknowledgement
 mutation, or nudging.
 
-Named pipes and Windows AF_UNIX are not supported. Windows CI proves local
-loopback-TCP HTTP; Unix CI proves both UDS and loopback-TCP HTTP. There is no
-named-pipe, AF_UNIX, or address-based fallback on Windows.
+Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and
+loopback-TCP HTTP. Windows has no alternate local transport or address-derived
+fallback.

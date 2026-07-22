@@ -19,7 +19,7 @@ the same read/write handlers. Cross-host code is transport-only.
 
 | Concern | Decision |
 | --- | --- |
-| Local client transport | Unix HTTP/UDS plus supported loopback HTTP/TCP; Windows loopback HTTP/TCP only; no named pipes |
+| Local client transport | Unix HTTP/UDS plus supported loopback HTTP/TCP; Windows loopback HTTP/TCP only |
 | Remote transport | HTTPS/TCP to the same daemon router |
 | Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/message/{id}/ack`, and `/doctor` endpoints; teams routes are an accepted Phase AI waiver |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
@@ -61,7 +61,7 @@ Each sprint extends and runs the following checks against its own merge base:
 4. **Storage boundary:** HTTP/HTTPS/UDS/loopback-TCP adapters may not use rusqlite or schema
    types; only the sealed storage trait reaches SQLite.
 5. **No retired parallel protocol:** source and dependency checks reject the
-   custom ATM frame codec, Windows named-pipe support, and Windows AF_UNIX
+   custom ATM frame codec and retired Windows local-IPC support
    support after AI.11. Structural
    tests verify the retained router/handler graph, so identifier renaming cannot
    satisfy the gate.
@@ -155,7 +155,7 @@ contract later and are not a Phase AI implementation deliverable.
 | AI.8 | `feature/pAI-s8-crosshost-control-plane` | Storage/CLI interface, certificate, exact peer-trust control plane, and fail-closed listener startup validation |
 | AI.9 | `feature/pAI-s9-https-peer-transport` | mTLS HTTPS peer transport reaches the same router with bounded per-leg timeouts, body limits, and graceful HTTPS draining; no cross-host state subsystem |
 | AI.10 | `feature/pAI-s10-crosshost-proof-closeout` | Local, self-IP, two-Mac, and Windows proof matrix plus release readiness |
-| AI.11 | `feature/pAI-s11-post-merge-remediation` | Real resource HTTP contract plus Windows loopback-TCP local transport; named pipe and Windows AF_UNIX removed |
+| AI.11 | `feature/pAI-s11-post-merge-remediation` | Real resource HTTP contract plus Windows loopback-TCP local transport; retired Windows local IPC removed |
 | AI.12 | `feature/pAI-s12-post-write-router` | Every write persists before one post-write router selects exactly one nudge or peer delivery action |
 | AI.13 | `feature/pAI-s13-peer-smoke-contract` | Reusable peer-pair release smoke runner and evidence contract |
 | AI.14 | `feature/pAI-s14-mac-peer-smoke` | Physical Mac↔Mac peer-pair proof |
@@ -172,13 +172,13 @@ starts. Findings are fixed on their owning sprint before forward merge.
 | Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
 | Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
 | Smoke | Unix UDS and loopback TCP; Windows loopback TCP; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows peer participation |
-| Regression | `just lint`, `just test`, architecture checks, no named-pipe/custom-frame/peer-replay source remains |
+| Regression | `just lint`, `just test`, architecture checks, no retired local transport/custom-frame/peer-replay source remains |
 
 ## Explicit non-goals
 
 - remote replay, background retry, deferred delivery receipts, or a durable
   cross-host outbox;
-- named-pipe support or fallback;
+- retired Windows local transport support or fallback;
 - a separate remote daemon, separate ack protocol, or cross-host mailbox
   handler;
 - inventing a third public verb before a concrete adapter need exists.
@@ -197,7 +197,7 @@ item and its concrete consumer; an unnamed or renamed survivor blocks closure:
 2. Historical ADR-028 through ADR-031, after their sole remaining value has
    been captured by ADR-034/ADR-035 and the project ADR retention policy
    permits archival or deletion.
-3. Historical frame/named-pipe sections in core, daemon, and CLI architecture
+3. Historical frame/local-transport sections in core, daemon, and CLI architecture
    documents, after the accepted tip has no source or documentation consumer.
 
 The inventory is not permission to retain any item during implementation: the

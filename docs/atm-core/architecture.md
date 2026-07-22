@@ -1,5 +1,10 @@
 # ATM-Core Crate Architecture
 
+> **Phase AI supersession notice:** custom `AtmProtocol`, client/server
+> transport, dispatcher, and frame-contract records below are historical
+> through AI.5. The accepted daemon application contract is ADR-033's HTTP
+> `ApiRequest`/`ApiResponse` surface and the canonical write path in ADR-035.
+
 ## 1. Purpose
 
 This document defines the `atm-core` crate architectural boundary.
@@ -13,12 +18,12 @@ The crate-local machine-readable boundary inventory lives in:
 
 ## 1.1 ADRs
 
-## Shared ATM protocol lives in atm-core
+## Historical Through AI.5: Shared Custom Transport Protocol
 
 ```yaml
 adr_id: ADR-ATM-CORE-001
 crate: atm-core
-title: Shared ATM protocol lives in atm-core
+title: Historical shared custom transport protocol
 status: accepted
 date: 2026-05-03
 deciders:
@@ -38,16 +43,16 @@ code_references:
   - docs/atm/boundaries.md
 ```
 
-Context:
+Historical context:
 - The protocol is shared by CLI clients, daemon server/runtime, in-process
   transport tests, and thin extension crates.
 
-Decision:
+Historical decision:
 - `AtmProtocol` is owned by `atm-core`, not by `atm-daemon`.
 - `atm-core` also owns the public transport and dispatcher contracts that
   operate over that protocol.
 
-Consequences:
+Historical consequences:
 - Thin callers do not need daemon-shaped API types.
 - Client and server transports share one contract family.
 - The `atm-graft` crate is allowed only as a thin consumer of that shared
@@ -60,15 +65,17 @@ Alternatives considered:
 - Keep the protocol modeled as daemon API types.
 - Move the protocol into a dedicated transport crate first.
 
-Follow-up work:
-- Keep crate-local boundary records aligned with this ownership rule.
-- Enforce daemon-shaped protocol naming as a lint failure.
+Current replacement:
+- ADR-033 defines the shared HTTP `ApiRequest`/`ApiResponse` application
+  contract.
+- `ApiRouter` owns application dispatch; the transport adapters own only HTTP
+  I/O and authenticated peer admission.
 
 Convention note:
 - crate-local `atm-core` ADRs may remain embedded in this architecture document
   until they are extracted into standalone `docs/adr/` files
 
-## Ack is folded into send-shaped thin-client requests
+## Ack Is Folded into Send-Shaped Requests
 
 ```yaml
 adr_id: ADR-ATM-CORE-002
@@ -159,12 +166,13 @@ Observability release boundary rules:
 - CLI JSON output remains wire-compatible with the current retained-log output
   shape after the boundary cleanup
 
-## 2.1 Phase R Boundary Model
+## 2.1 Historical Through AI.5: Phase R Boundary Model
 
-Phase R makes `atm-core` the owner of the service-layer boundaries while the
-daemon remains a runtime wrapper only.
+Phase R made `atm-core` the owner of the service-layer boundaries while the
+daemon remained a runtime wrapper only. This record is superseded for
+transport/application dispatch by ADR-033 and ADR-035.
 
-Required subsystem boundaries:
+Historical subsystem boundaries:
 - `AtmProtocol` boundary
 - `ClientTransport` boundary
 - `ServerTransport` boundary
@@ -313,15 +321,14 @@ Config-ingress ownership rules:
   explicit TOML allowlist with owner and sunset-sprint metadata; new matches
   are lint failures rather than review-time warnings
 
-Required frame direction:
-- transport framing must not depend on EOF or socket half-close semantics
-- receivers must validate the ATM frame header before payload decode
-- transport implementations may vary, but they must share one ATM packet
-  family and one framed helper layer
-- the canonical ATM daemon wire contract is documented in
-  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
-- the same protocol ICD governs same-host local IPC and cross-host
-  daemon-to-daemon transport
+Required HTTP direction:
+- HTTP framing is owned by the HTTP implementation and not by ATM helpers
+- adapters map route-specific HTTP requests to `ApiRequest` and return
+  `ApiResponse` or ADR-032's `{code,message}` error body
+- UDS, loopback TCP, and HTTPS adapters call the same router and canonical
+  write handler
+- the canonical daemon interface is documented in
+  [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 
 ## 2.2 Phase R Semantic Wrapper Policy
 

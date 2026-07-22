@@ -33,19 +33,18 @@ Phase-R redesign note:
   before new implementation work
 - the active integration branch for this redesign line is `integrate/phase-R`
 
-Phase-S planning note:
+Historical Phase-S planning note:
 - Phase R is the merged daemon baseline, but it missed the requirement that the
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
-- the canonical daemon wire contract, current daemon packet surface, and shared
-  local-IPC/host-host frame rules are tracked in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- its retired custom-frame contract is retained only for historical reference
+  in [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
 - Phase S implementation details must come either from `docs/plans/phase-S/plan-phase-S.md`
-  or from the governing requirements, architecture, ADR, and ICD documents it
+  or from the governing requirements, architecture, ADR, and historical ICD documents it
   names; the project plan does not override those lower-level sources of truth
 - the planning baseline is `integrate/phase-R` at `6a072c1`
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
@@ -959,7 +958,7 @@ baseline. It retains only the local-IPC singleton while deleting peer transport,
 replay/store support, and retired boundary adapters. It supersedes the abandoned
 PR #590 line. AI.2 onward rebuild from that baseline: HTTP over UDS replaces the
 custom local frame protocol, and the same router later serves authenticated
-HTTPS/TCP peers. The final line has no named pipes, peer/replay state, parallel
+HTTPS/TCP peers. The final line has no alternate local transport, peer/replay state, parallel
 send/ack paths, or cross-host-specific mailbox logic.
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).

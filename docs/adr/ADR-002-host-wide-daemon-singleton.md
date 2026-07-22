@@ -151,8 +151,8 @@ Required singleton error inventory:
 - daemon serving-state rejection after ownership is already held
 - stale-owner recovery failure
 - daemon auto-start failure after the documented retry budget
-- `FakeClientTransport` injection failure when a test requests an invalid
-  runtime seam
+- fake HTTP application-client injection failure when a test requests an
+  invalid runtime seam
 
 Error-model note:
 - these failure modes require stable ATM-owned error codes with structured
@@ -166,7 +166,7 @@ Error-model note:
 | `ATM_DAEMON_SERVING_STATE_REJECTED` | the daemon-side serving gate determined ownership was already held before the process could enter serving state | stop launching duplicate daemons; inspect the existing daemon process and its runtime health before retrying |
 | `ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED` | startup could not safely recover a stale owner record while preserving singleton guarantees | inspect the recorded owner, confirm no live daemon remains, repair ownership metadata, then retry startup |
 | `ATM_DAEMON_AUTO_START_FAILED` | the CLI exhausted the documented auto-start retry budget without reaching a healthy daemon serving state | inspect daemon stderr/logs, fix the startup fault, and retry only after the daemon runtime can pass the documented readiness checks |
-| `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED` | a test requested an invalid or incomplete in-process transport seam instead of an approved Tier 1 or Tier 2 transport double | fix the test seam configuration so it uses a valid `FakeClientTransport` or `LoopbackClientTransport` instance before rerunning the test |
+| `ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED` | a test requested an invalid or incomplete in-process HTTP application seam instead of an approved Tier 1 or Tier 2 double | configure a valid fake HTTP application client or in-process HTTP adapter before rerunning the test |
 
 ## Consequences
 

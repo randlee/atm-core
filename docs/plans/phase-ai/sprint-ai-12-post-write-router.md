@@ -9,6 +9,9 @@ depends_on: AI.11
 
 # AI.12 — canonical post-write router
 
+AI.12 changes write ordering and routing ownership only; AI.11 remains the
+owner of HTTP resource schemas and local transport admission.
+
 ## Purpose
 
 Make one canonical write pipeline enforce the required order for every ingress:

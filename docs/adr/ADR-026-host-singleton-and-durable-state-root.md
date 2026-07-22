@@ -29,8 +29,8 @@ symlink traversal, or ambiguity; it never creates a parallel serving database.
 
 - Unix platforms use the current OS-user home/runtime location and a
   same-user local IPC endpoint.
-- Windows uses the corresponding current-user runtime location and a
-  named-pipe representation of the same canonical endpoint.
+- Windows uses the corresponding current-user runtime location and the
+  loopback-TCP endpoint record/capability defined by ADR-033.
 - The common path API returns semantic `HostRuntimeRoot` and
   `DurableStateRoot` wrappers with `AsRef<Path>` only; neither exposes `Deref`.
 
