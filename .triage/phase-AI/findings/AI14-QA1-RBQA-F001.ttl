@@ -137,3 +137,6 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 6 .
+
+<urn:atm:triage:finding/AI14-QA1-RBQA-F001>
+  triage:resolutionGuidance "Fix direction is: remove the UDS (LocalSocketListener) bind/serve path; keep the TCP loopback (local_http_record_path) as the sole Unix local-IPC transport -- NOT the reverse. Client (atm-daemon-client/src/lib.rs, resolve_daemon_local_ipc_endpoint) already resolves via local_http_record_path on Unix; that migration was deliberate (dbd112e2 'use local HTTP endpoint on Unix', c5665204 'remove retired local socket client dependency'), so UDS is the dead code, not TCP. Platform note: Mac/Linux currently bind both UDS and TCP; Windows is TCP-only (no UDS type exists there at all), which is additional evidence TCP loopback is the intended cross-platform canonical transport. This guidance corrects an earlier misreading during dispatch that had the fix direction backwards." .
