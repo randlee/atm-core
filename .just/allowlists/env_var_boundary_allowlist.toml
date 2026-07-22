@@ -38,6 +38,14 @@ sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-g
 
 [[allow]]
 rule = "ATM-ENV-BOUNDARY-001"
+path = "crates/atm-core/src/caller_context.rs"
+symbol = "read_cli_chat_id_from_env"
+line = 'read_env_raw("ATM_CHAT_ID")'
+why = "canonical CLI chat-id env reader; the caller-context resolver remains known boundary debt until CLI and atm-graft pass resolved caller context explicitly."
+sunset_sprint = "follow-up: push caller_context env reads to the atm CLI / atm-graft entry points"
+
+[[allow]]
+rule = "ATM-ENV-BOUNDARY-001"
 path = "crates/atm-core/src/config/mod.rs"
 symbol = "resolve_team"
 line = ".or_else(|| read_cli_team_from_env().ok().flatten())"

@@ -30,11 +30,10 @@ pub fn resolve_cli_inspection_caller_context(
     overrides: CallerContextOverrides<'_>,
 ) -> Result<CallerContext, AtmError> {
     if overrides.identity_override.is_some() && overrides.chat_id_override.is_some() {
-        return Err(AtmError::validation(
+        return Err(AtmError::caller_context_request_invalid(
             "--as and --chat-id are mutually exclusive",
         ));
     }
-    let ambient_identity = resolve_identity_component(None)?;
     let caller_identity =
         resolve_identity_component(overrides.identity_override.map(|value| value.0))?;
     let caller_chat_id = resolve_caller_chat_id(
@@ -44,8 +43,8 @@ pub fn resolve_cli_inspection_caller_context(
             .map(|value| value.0.parse())
             .transpose()?
             .as_ref(),
-        read_env_raw("ATM_CHAT_ID")?.as_deref(),
-        &ambient_identity,
+        read_cli_chat_id_from_env()?.as_deref(),
+        &caller_identity,
     )?;
     let caller_team = resolve_team_component(overrides.team_override.map(|value| value.0))?;
     Ok(CallerContext {
@@ -96,7 +95,7 @@ pub fn resolve_cli_mutation_caller_context_with_overrides(
     let ambient = read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)?;
     let caller = resolve_cli_inspection_caller_context(overrides)?;
     if overrides.identity_override.is_some() && caller.caller_identity != ambient.agent {
-        return Err(AtmError::validation(
+        return Err(AtmError::caller_context_request_invalid(
             "--as must use the same base agent as ATM_IDENTITY for mutating commands",
         ));
     }
@@ -123,6 +122,10 @@ pub fn read_cli_agent_name_from_env() -> Result<Option<AgentName>, AtmError> {
 
 pub fn read_cli_team_from_env() -> Result<Option<TeamName>, AtmError> {
     read_env_raw("ATM_TEAM")?.map(parse_team).transpose()
+}
+
+fn read_cli_chat_id_from_env() -> Result<Option<String>, AtmError> {
+    read_env_raw("ATM_CHAT_ID")
 }
 
 pub fn read_cli_identity_from_env_or_warn(warning_site: &'static str) -> Option<AgentName> {
@@ -188,9 +191,10 @@ fn read_env_raw(key: &str) -> Result<Option<String>, AtmError> {
             "ATM_TEAM" => {
                 AtmError::team_invalid(format!("{key} must be valid UTF-8 text, got {:?}", value))
             }
-            "ATM_CHAT_ID" => {
-                AtmError::validation(format!("{key} must be valid UTF-8 text, got {:?}", value))
-            }
+            "ATM_CHAT_ID" => AtmError::caller_context_request_invalid(format!(
+                "{key} must be valid UTF-8 text, got {:?}",
+                value
+            )),
             _ => unreachable!("caller context only reads ATM-owned keys"),
         }),
     }
@@ -230,7 +234,7 @@ mod tests {
     use crate::types::{AgentIdentity, ChatId};
 
     use super::{
-        CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
+        CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
         read_cli_agent_name_from_env, read_cli_identity_from_env_or_warn, read_cli_team_from_env,
         read_cli_team_from_env_or_warn, resolve_caller_chat_id,
         resolve_cli_inspection_caller_context, resolve_cli_mutation_caller_context,
@@ -269,6 +273,42 @@ mod tests {
 
         assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
         assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn inspection_as_override_does_not_require_ambient_identity() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", None),
+        ]);
+
+        let context = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
+            chat_id_override: None,
+            team_override: Some(CallerTeamOverride(TEST_TEAM)),
+        })
+        .expect("--as inspection context without ATM_IDENTITY");
+
+        assert_eq!(context.caller_identity.as_str(), TEST_SENDER);
+        assert_eq!(context.caller_team.as_str(), TEST_TEAM);
+        assert_eq!(context.caller_chat_id, None);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn inspection_context_with_all_identity_inputs_absent_is_unavailable() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let error = resolve_cli_inspection_caller_context(CallerContextOverrides::default())
+            .expect_err("missing inspection identity");
+
+        assert_eq!(error.code(), AtmErrorCode::IdentityUnavailable);
     }
 
     #[test]
@@ -438,6 +478,51 @@ mod tests {
             context.caller_chat_id,
             Some("identity-chat".parse().expect("chat id"))
         );
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn chat_id_flag_with_ambient_identity_matches_qualified_as() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let from_flag = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: None,
+            chat_id_override: Some(CallerChatIdOverride("chat-17")),
+            team_override: None,
+        })
+        .expect("--chat-id context");
+        let qualified_as = format!("{TEST_SENDER}:chat-17");
+        let from_qualified_as = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: Some(CallerIdentityOverride(qualified_as.as_str())),
+            chat_id_override: None,
+            team_override: None,
+        })
+        .expect("qualified --as context");
+
+        assert_eq!(from_flag.caller_identity, from_qualified_as.caller_identity);
+        assert_eq!(from_flag.caller_chat_id, from_qualified_as.caller_chat_id);
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn mutually_exclusive_chat_overrides_use_caller_context_error() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+
+        let error = resolve_cli_inspection_caller_context(CallerContextOverrides {
+            identity_override: Some(CallerIdentityOverride(TEST_SENDER)),
+            chat_id_override: Some(CallerChatIdOverride("chat-17")),
+            team_override: None,
+        })
+        .expect_err("mutually exclusive overrides");
+
+        assert_eq!(error.code(), AtmErrorCode::CallerContextRequestInvalid);
     }
 
     #[test]
