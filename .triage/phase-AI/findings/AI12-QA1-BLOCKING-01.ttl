@@ -8,118 +8,33 @@
   triage:description "Global host inspection in resolve_write_recipient_snapshot (delivery_policy.rs:358) that gates remote vs. local delivery. This decision should be exclusive to PostWriteRouter::dispatch per AI.12 sprint requirements. Currently: if address.host.is_some() && !authenticated_source_host { return remote delivery } else { resolve local }." ;
   triage:category "QA" ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s12/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s13/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s14/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s15/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s16/1> ;
-  triage:openOn <urn:atm:triage:worktree/s12/a8ea0017> ;
-  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
-  triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
-  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
-  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
-  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> .
+  triage:triagedAt "2026-07-22T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:highestFixedBranch "none" .
 
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s12/1>
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s20/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/delivery_policy.rs" ;
   triage:line 358 ;
   triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:headSha "a8ea0017" ;
-  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/34392e5c> .
 
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s13/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/delivery_policy.rs" ;
-  triage:line 358 ;
-  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:headSha "2adc5fa1" ;
-  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
-
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s14/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/delivery_policy.rs" ;
-  triage:line 358 ;
-  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:headSha "ef0e5e2b" ;
-  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
-
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s15/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/delivery_policy.rs" ;
-  triage:line 358 ;
-  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:headSha "5a7a762f" ;
-  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
-
-<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s16/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/delivery_policy.rs" ;
-  triage:line 358 ;
-  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:headSha "1c23ac04" ;
-  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
-
-<urn:atm:triage:worktree/s11/3642430d>
+<urn:atm:triage:worktree/s20/34392e5c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
-  triage:headSha "3642430d" ;
-  triage:orderIndex 1 .
-
-<urn:atm:triage:worktree/s12/a8ea0017>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
-  triage:headSha "a8ea0017" ;
-  triage:orderIndex 2 .
-
-<urn:atm:triage:worktree/s13/2adc5fa1>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
-  triage:headSha "2adc5fa1" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/s14/ef0e5e2b>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
-  triage:headSha "ef0e5e2b" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/s15/5a7a762f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
-  triage:headSha "5a7a762f" ;
-  triage:orderIndex 5 .
-
-<urn:atm:triage:worktree/s16/1c23ac04>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
-  triage:headSha "1c23ac04" ;
-  triage:orderIndex 6 .
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:orderIndex 20 .
