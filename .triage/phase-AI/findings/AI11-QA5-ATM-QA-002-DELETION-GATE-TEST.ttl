@@ -12,8 +12,9 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:resolution "Fixed on feature/pAI-s11-post-merge-remediation, commit 472a9225 (test(ai11): add Windows transport deletion gate, crates/atm-architecture/tests/boundary_enforcement.rs)." ;
   triage:openOn <urn:atm:triage:worktree/s11/8a7ea589> ;
   triage:promoteTo <urn:atm:triage:worktree/s11/8a7ea589> ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
