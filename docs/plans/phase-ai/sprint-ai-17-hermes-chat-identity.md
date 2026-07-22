@@ -15,9 +15,10 @@ Prove and implement the narrow Hermes mapping onto Phase AI’s existing chat
 identity contract. This sprint adds no ATM schema migration, no CLI option,
 and no new daemon protocol.
 
-`HERMES_SESSION_KEY=<id>` becomes the optional `chat_id` of the ambient
-`ATM_IDENTITY`; it is rendered to agents as `agent:<id>@team`. It has the
-same meaning as `--chat-id <id>` and `--as <agent>:<id>` under ADR-037.
+`ATM_CHAT_ID=<id>` is a client-neutral optional `chat_id` for the ambient
+`ATM_IDENTITY`; it is rendered to agents as `agent:<id>@team`. Hermes is the
+first adapter to consume it. It has the same meaning as `--chat-id <id>` and
+`--as <agent>:<id>` under ADR-037.
 
 ## Hard Dependencies
 
@@ -29,8 +30,9 @@ same meaning as `--chat-id <id>` and `--as <agent>:<id>` under ADR-037.
 
 ## Deliverables
 
-- A single Hermes adapter function that validates and maps
-  `HERMES_SESSION_KEY` into `Option<ChatId>` for the existing typed caller
+- A single client-neutral helper, first consumed by the Hermes adapter, that
+  validates and maps `ATM_CHAT_ID` into `Option<ChatId>` for the existing
+  typed caller
   address.
 - A documented deterministic Hermes chat key derived from the complete
   canonical source address: `atm:<agent>[:<chat-id>]@<team>`.
@@ -44,14 +46,14 @@ same meaning as `--chat-id <id>` and `--as <agent>:<id>` under ADR-037.
 ## Contract
 
 ```rust
-pub fn hermes_chat_id(session_key: Option<&str>) -> Result<Option<ChatId>, AtmError>;
+pub fn ambient_chat_id(raw: Option<&str>) -> Result<Option<ChatId>, AtmError>;
 pub fn hermes_chat_key(source: &AgentAddress) -> String;
 // "atm:<agent>[:<chat-id>]@<team>"
 ```
 
-`hermes_chat_id` is the only AI.17–AI.21 code allowed to interpret
-`HERMES_SESSION_KEY`. It delegates segment validation to the Phase AI address
-type; an empty key maps to `None`, while an invalid non-empty key is a typed
+`ambient_chat_id` is the only AI.17–AI.21 code allowed to interpret
+`ATM_CHAT_ID`. It delegates segment validation to the Phase AI address type;
+an empty key maps to `None`, while an invalid non-empty key is a typed
 configuration error. `hermes_chat_key` consumes the typed address and never
 parses rendered display text.
 

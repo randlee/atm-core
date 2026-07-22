@@ -34,7 +34,7 @@ AI.17–AI.21 consume these Phase AI decisions unchanged:
 
 1. Provide a supported PyO3/Maturin binding for `atm-graft` without changing
    its Rust public API.
-2. Map the Hermes ambient `HERMES_SESSION_KEY` to a Phase AI `chat_id` when a
+2. Map ambient `ATM_CHAT_ID` to a Phase AI `chat_id` when a
    Hermes process sends. A receiver sees the source as `agent:chat-id@team`
    and routes it to the corresponding isolated Hermes chat.
 3. Deliver graft nudges to Hermes as in-process events, using the canonical

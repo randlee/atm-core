@@ -22,11 +22,12 @@ addresses and immutable message IDs. It calls the existing sealed
 `DaemonApiClient` boundary through graft; it never opens a daemon socket or
 accesses storage directly.
 
-AI.17 maps a validated `HERMES_SESSION_KEY` to ADR-037 `ChatId` before caller
-address construction. AI.19 maps a received canonical source address to a
-Hermes-local `atm:` chat and injects the nudge body through Hermes's ordinary
-inbound-user-message mechanism. No `session_id`, custom session header,
-webhook-specific address grammar, or alternate send/ack path exists.
+Any session/chat-based host may map a validated `ATM_CHAT_ID` to ADR-037
+`ChatId` before caller address construction. Hermes is the first host adapter;
+AI.19 maps a received canonical source address to a Hermes-local `atm:` chat
+and injects the nudge body through Hermes's ordinary inbound-user-message
+mechanism. No `session_id`, custom session header, webhook-specific address
+grammar, or alternate send/ack path exists.
 
 The atm-core deliverable is an in-repository reference adapter and contract.
 It does not edit or validate an external Hermes checkout; Hermes maintainers

@@ -13,14 +13,14 @@ target: integrate/phase-AI
 
 Publish a parameterized launchd template and concrete operator runbook for one
 AI.19 bridge per Hermes profile. A Hermes profile is an operator-registered
-name plus its `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
+name plus its `ATM_TEAM`, `ATM_IDENTITY`, `ATM_CHAT_ID`, bridge
 configuration, and log path. Launchd supervises a process; it never
 participates in message identity or routing.
 
 ## Hard Dependencies
 
 - Before AI.20 starts, the operator supplies the raw profile inputs out of
-  band: profile name, `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
+  band: profile name, `ATM_TEAM`, `ATM_IDENTITY`, `ATM_CHAT_ID`, bridge
   configuration, and log path for each intended bridge instance.
 - AI.19 must be `PASS` before AI.20 deployment validation or closure; the
   narrower `FROZEN` record governs drafting only.
@@ -57,7 +57,7 @@ remain blocked on AI.19 `PASS`.
   after controlled termination, receiver availability, and qualified chat
   mapping.
 
-Every plist sets `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, the bridge
+Every plist sets `ATM_TEAM`, `ATM_IDENTITY`, `ATM_CHAT_ID`, the bridge
 module path, and an explicit profile log path. `KeepAlive` is allowed only for
 the bridge process; it cannot restart or own the daemon. A readiness probe
 must confirm the Hermes gateway is ready before the bridge activates.

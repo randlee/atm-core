@@ -37,13 +37,14 @@ The following Phase AI contracts are hard dependencies:
 
 ### Identity mapping
 
-`HERMES_SESSION_KEY` is a Hermes-local source for a non-empty, validated
-`chat_id`; it is not a transport session, mailbox key, or new durable ATM
-field. The Python binding builds the normal Phase AI caller address:
+`ATM_CHAT_ID` is a client-neutral ambient non-empty, validated `chat_id`; it
+is not a transport session, mailbox key, or new durable ATM field. Hermes is
+the first client to consume it, but any session/chat-based agent may build the
+same normal Phase AI caller address:
 
 ```text
 ATM_IDENTITY=omega-prime
-HERMES_SESSION_KEY=1234
+ATM_CHAT_ID=1234
 → caller omega-prime:1234@<ATM_TEAM>
 ```
 
