@@ -45,3 +45,22 @@ AI.13 runner output, doctor reports, listener inspection, sanitized logs, and
 
 AI.15 is release evidence only. It does not add a Windows-only protocol or
 fallback transport.
+
+### Current non-physical validation boundary
+
+The current run validates the macOS build and local HTTPS/mTLS contract only.
+The peer-pair runner's configuration and evidence mechanics are exercised with
+mock commands only; that result is not ATM peer-pair evidence.
+
+Physical execution remains open and is tracked by `AI10-WINDOWS-001` and the
+equivalent Mac evidence gap `AI14-QA1-EVIDENCE-GAP`. Closure requires a real
+Windows host and a real macOS host running the same release candidate to:
+
+1. build and start their daemons with their normal local transports;
+2. configure reciprocal certificate fingerprints and exact trusted-peer
+   records;
+3. run every AI.13 case in both directions; and
+4. capture runner-owned teardown evidence on both hosts.
+
+Do not change this sprint's `status: proposed` until that physical evidence is
+attached.
