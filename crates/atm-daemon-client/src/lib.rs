@@ -6,21 +6,12 @@ use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
-#[cfg(not(windows))]
 use atm_core::protocol;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
-#[cfg(not(windows))]
-use interprocess::local_socket::Stream as LocalSocketStream;
-#[cfg(not(windows))]
-use interprocess::local_socket::traits::Stream as _;
-#[cfg(windows)]
 use serde_json;
-#[cfg(windows)]
 use std::net::TcpStream;
-#[cfg(windows)]
-use std::net::TcpStream as LocalSocketStream;
 use std::sync::Mutex;
 
 pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
@@ -82,7 +73,6 @@ pub struct BootstrapCommandEvent {
     pub error_message: Option<String>,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIpcDeadlineSupport {
     Applied,
@@ -143,32 +133,26 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
 
 /// # Errors
 ///
-/// Returns [`AtmError`] when the canonical same-host daemon socket path cannot
+/// Returns [`AtmError`] when the canonical same-host daemon HTTP record cannot
 /// be resolved into a local IPC endpoint.
 pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    #[cfg(windows)]
-    {
-        return DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
-            &atm_core::home::atm_home()?,
-        ));
-    }
-    #[cfg(not(windows))]
-    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path()?)
+    // Preserve the host-singleton override rejection even though the active
+    // endpoint is now the daemon-published HTTP record rather than the retired
+    // framed-socket path.
+    let _ = protocol::daemon_socket_path()?;
+    DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
+        &atm_core::home::atm_home()?,
+    ))
 }
 
 /// # Errors
 ///
-/// Returns [`AtmError`] when the canonical same-host daemon socket path for
+/// Returns [`AtmError`] when the canonical same-host daemon HTTP record for
 /// `home_dir` cannot be resolved into a local IPC endpoint.
 pub fn resolve_daemon_local_ipc_endpoint_from_home(
     home_dir: &Path,
 ) -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    #[cfg(windows)]
-    {
-        return DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(home_dir));
-    }
-    #[cfg(not(windows))]
-    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path_from_home(home_dir))
+    DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(home_dir))
 }
 
 /// # Errors
@@ -369,55 +353,11 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
     error.message().to_owned()
 }
 
-pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    #[cfg(windows)]
-    {
-        return try_connect_local_http_record(endpoint.as_ref());
-    }
-    #[cfg(not(windows))]
-    {
-        let ipc_name = protocol::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
-        thread::Builder::new()
-        .name("daemon-local-ipc-connect".to_string())
-        .spawn(move || {
-            if result_tx.send(LocalSocketStream::connect(ipc_name)).is_err() {
-                tracing::debug!(
-                    "daemon local IPC connect worker dropped its result because the caller timed out first"
-                );
-            }
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to spawn bounded daemon local IPC connect worker",
-                source,
-            )
-        })?;
-        match result_rx.recv_timeout(LOCAL_IPC_CONNECT_DEADLINE) {
-            Ok(Ok(stream)) => Ok(stream),
-            Ok(Err(source)) => Err(AtmError::daemon_unavailable_with_cause(
-                format!(
-                    "failed to connect to daemon local IPC endpoint at {}",
-                    endpoint.display()
-                ),
-                source,
-            )),
-            Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(format!(
-                "timed out connecting to daemon local IPC endpoint at {}",
-                endpoint.display()
-            ))),
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err(AtmError::daemon_unavailable(format!(
-                    "daemon local IPC connect worker disconnected unexpectedly for {}",
-                    endpoint.display()
-                )))
-            }
-        }
-    }
+pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<TcpStream, AtmError> {
+    try_connect_local_http_record(endpoint.as_ref())
 }
 
-#[cfg(windows)]
-fn try_connect_local_http_record(record_path: &Path) -> Result<LocalSocketStream, AtmError> {
+fn try_connect_local_http_record(record_path: &Path) -> Result<TcpStream, AtmError> {
     let record = load_local_http_record(record_path)?;
     record.capability()?;
     let endpoint = record
@@ -433,7 +373,7 @@ fn try_connect_local_http_record(record_path: &Path) -> Result<LocalSocketStream
     })
 }
 
-/// Exchange one canonical request through HTTP over the daemon's UDS endpoint.
+/// Exchange one canonical request through HTTP over the daemon-owned loopback endpoint.
 ///
 /// This is the retained production local-client path. The request is encoded
 /// once as JSON HTTP and is decoded by the daemon before it reaches
@@ -452,14 +392,10 @@ pub fn exchange_request(
         set_stream_read_timeout(&stream, Some(request_deadline)),
         "failed to configure daemon local IPC read timeout",
     )?;
-    #[cfg(windows)]
     write_local_http_request(&mut stream, request, endpoint.as_ref())?;
-    #[cfg(not(windows))]
-    atm_core::api::write_http_request(&mut stream, request)?;
     read_http_response_with_deadline(stream, request, request_deadline, recv_deadline_support)
 }
 
-#[cfg(windows)]
 fn write_local_http_request(
     writer: &mut TcpStream,
     request: &RequestEnvelope,
@@ -477,7 +413,6 @@ fn write_local_http_request(
     )
 }
 
-#[cfg(windows)]
 fn load_local_http_record(
     record_path: &Path,
 ) -> Result<atm_core::local_http::LocalHttpEndpointRecord, AtmError> {
@@ -505,54 +440,28 @@ fn load_local_http_record(
     Ok(record)
 }
 
-#[cfg(not(windows))]
-fn set_stream_write_timeout(
-    stream: &LocalSocketStream,
-    timeout: Option<Duration>,
-) -> std::io::Result<()> {
-    stream.set_send_timeout(timeout)
-}
-
-#[cfg(windows)]
-fn set_stream_write_timeout(
-    stream: &LocalSocketStream,
-    timeout: Option<Duration>,
-) -> std::io::Result<()> {
+fn set_stream_write_timeout(stream: &TcpStream, timeout: Option<Duration>) -> std::io::Result<()> {
     stream.set_write_timeout(timeout)
 }
 
-#[cfg(not(windows))]
-fn set_stream_read_timeout(
-    stream: &LocalSocketStream,
-    timeout: Option<Duration>,
-) -> std::io::Result<()> {
-    stream.set_recv_timeout(timeout)
-}
-
-#[cfg(windows)]
-fn set_stream_read_timeout(
-    stream: &LocalSocketStream,
-    timeout: Option<Duration>,
-) -> std::io::Result<()> {
+fn set_stream_read_timeout(stream: &TcpStream, timeout: Option<Duration>) -> std::io::Result<()> {
     stream.set_read_timeout(timeout)
 }
 
 fn read_http_response_with_deadline(
-    mut stream: LocalSocketStream,
+    mut stream: TcpStream,
     request: &RequestEnvelope,
     _request_deadline: Duration,
     _recv_deadline_support: LocalIpcDeadlineSupport,
 ) -> Result<ResponseEnvelope, AtmError> {
-    #[cfg(windows)]
     if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
         return read_http_response_with_helper(stream, request.clone(), _request_deadline);
     }
     atm_core::api::read_http_response(&mut stream, request)
 }
 
-#[cfg(windows)]
 fn read_http_response_with_helper(
-    mut stream: LocalSocketStream,
+    mut stream: TcpStream,
     request: RequestEnvelope,
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
@@ -589,7 +498,6 @@ fn apply_local_ipc_deadline(
 ) -> Result<LocalIpcDeadlineSupport, AtmError> {
     match result {
         Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
-        #[cfg(windows)]
         Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
             Ok(LocalIpcDeadlineSupport::Unsupported)
         }
@@ -1181,21 +1089,10 @@ mod tests {
             "failed to configure daemon local IPC write timeout",
         );
 
-        #[cfg(windows)]
-        assert!(result.is_ok());
-
-        #[cfg(not(windows))]
-        {
-            let error = result.expect_err(
-                "non-Windows local IPC transports should keep unsupported deadline setup as an error",
-            );
-            assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-            assert!(
-                error
-                    .message()
-                    .contains("failed to configure daemon local IPC write timeout")
-            );
-        }
+        assert!(
+            result.is_ok(),
+            "HTTP loopback transports tolerate unsupported I/O timeout setup"
+        );
     }
 
     #[test]
