@@ -121,6 +121,18 @@ Boundary correction note:
   surface; `atm-graft` must not rely on lockstep crate-version equality as an
   architectural requirement
 
+## 2.4 Python Host Binding (AI.18–AI.21)
+
+AI.18 may package the existing graft surface with PyO3/Maturin. It owns only
+typed Rust-to-Python translation: `AgentAddress`, canonical nudge projection,
+graft lifecycle, and daemon API results. It does not own a Python transport,
+storage adapter, address parser, or post-write behavior.
+
+AI.17 maps client-neutral `ATM_CHAT_ID` to ADR-037 `ChatId` before the shared caller
+address is built. AI.19 maps the canonical nudge source address to a Hermes
+`atm:` chat and injects the body after the daemon's post-write event. Neither
+step re-renders and reparses an address or changes the persisted message.
+
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
   `serde_json::Value` payloads for the published `atm-graft` boundary

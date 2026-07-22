@@ -21,8 +21,8 @@ nudges.
 Every message projection uses structured `from` and `to` addresses. Each has
 `agent`, optional `chat_id`, `team`, and optional `host`. Storage keeps the
 optional chat IDs in separate nullable source/destination columns; CLI, graft,
-nudge, and read rendering show a present value as `agent:chat-id`. A future
-Phase AH Python binding consumes this same projection.
+nudge, and read rendering show a present value as `agent:chat-id`. AI.18's
+Python binding consumes this same projection.
 Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
 and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
