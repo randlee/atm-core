@@ -1,4 +1,6 @@
-#![forbid(unsafe_code)]
+// Windows owner-only ACL setup is the sole reviewed FFI exception; every
+// other unsafe use remains a compile error.
+#![deny(unsafe_code)]
 #![allow(
     deprecated,
     reason = "Phase AC daemon composition still consumes the transitional shared storage traits while backend cleanup lands"
