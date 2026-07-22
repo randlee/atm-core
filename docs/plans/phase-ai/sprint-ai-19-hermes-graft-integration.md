@@ -27,24 +27,29 @@ not modify the post-write router, daemon transport, or `atm-graft` API.
 
 ## Deliverables
 
-- One Python bridge implementation using AI.18 that registers one graft
-  receiver per Hermes profile. A Rust wrapper is out of scope.
+- `crates/atm-graft-python/python/atm_graft_hermes_bridge.py` — one Python
+  bridge implementation using AI.18 that registers one graft receiver per
+  Hermes profile. New Rust wrapper code is out of scope.
 - One typed adapter that maps `source.agent`, optional `source.chat_id`, and
   `source.team` to a Hermes chat key by calling AI.18's Python binding of
-  AI.17 `hermes_chat_key`. It consumes structured values, never parses a
-  rendered `agent:chat-id@team` string.
+  AI.17 `hermes_chat_key`; this logic lives in
+  `python/atm_graft_hermes_bridge.py`. It consumes structured values, never
+  parses a rendered `agent:chat-id@team` string.
 - Injection of the nudge body into Hermes’s existing inbound user-message
   path; no ATM write, retry, or alternate routing is performed by the bridge.
-- Reference-adapter tests proving: a write is durable before the event is
-  visible; three nudges from one qualified source use one chat; two chat IDs
-  remain isolated; ATM chats cannot collide with Telegram/Discord; malformed
-  source addresses fail closed; duplicate notification delivery does not
-  create a second Hermes turn for the same message ID.
+- `crates/atm-graft-python/tests/test_hermes_bridge.py` — reference-adapter
+  tests proving: a write is durable before the event is visible; three nudges
+  from one qualified source use one chat; two chat IDs remain isolated; ATM
+  chats cannot collide with Telegram/Discord; malformed source addresses fail
+  closed; duplicate notification delivery does not create a second Hermes turn
+  for the same message ID.
 
 ## Exact Targets and Contract
 
-- `crates/atm-graft-python/src/hermes.rs` — typed Python-facing Hermes bridge
+- `crates/atm-graft-python/python/atm_graft_hermes_bridge.py` — typed Python
   reference adapter over AI.18; no socket or storage dependency.
+- `crates/atm-graft-python/tests/test_hermes_bridge.py` — tests for every
+  reference-adapter assertion listed in Deliverables.
 - `docs/plans/phase-ai/hermes-graft-adapter-contract.md` — checked-in contract
   for Hermes maintainers, including the downstream test/merge handoff.
 

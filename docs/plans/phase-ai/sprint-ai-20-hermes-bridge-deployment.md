@@ -17,11 +17,13 @@ name plus its `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
 configuration, and log path. Launchd supervises a process; it never
 participates in message identity or routing.
 
-## Hard Dependencies
+## Inputs and Closure Prerequisites
 
-- AI.19 is `PASS`.
-- The operator-provided profile registry in `hermes-graft-runbook.md` is
-  available to the operator.
+- Before AI.20 starts, the operator supplies the raw profile inputs out of
+  band: profile name, `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
+  configuration, and log path for each intended bridge instance.
+- AI.19 must be `PASS` before AI.20 deployment validation or closure; the
+  narrower `FROZEN` record governs drafting only.
 
 ## Parallel Execution
 
@@ -45,7 +47,7 @@ remain blocked on AI.19 `PASS`.
 
 - `docs/plans/phase-ai/hermes-graft-runbook.md` — install and recovery
   commands, expected logs, proof commands, and the authoritative
-  operator-provided profile registry.
+  profile registry rendered from the operator-supplied inputs.
 - `docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist` —
   checked-in parameterized template. Operator-rendered plist files and their
   local paths are evidence, not repository targets.

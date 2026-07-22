@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-039 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | `atm-graft` Python hosts, including Hermes |
 | Relates to | ADR-033, ADR-035, ADR-037, AI.17–AI.21 |
 
