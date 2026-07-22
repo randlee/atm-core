@@ -81,12 +81,16 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
 
 #[test]
 fn canonical_write_router_has_one_host_routing_decision() {
-    let source =
-        fs::read_to_string(workspace_root().join("crates/atm-daemon/src/runtime_health.rs"))
-            .expect("daemon request dispatcher source must be readable");
-    let file = syn::parse_file(&source).expect("daemon dispatcher must remain valid Rust");
+    let root = workspace_root();
     let mut visitor = HostRoutingVisitor::default();
-    visitor.visit_file(&file);
+    for path in canonical_write_modules(&root) {
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{} must be readable: {error}", path.display()));
+        let file = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
+        visitor.source_path = Some(path);
+        visitor.visit_file(&file);
+    }
 
     assert_eq!(
         visitor.route_write_host_accesses, 0,
@@ -101,9 +105,54 @@ fn canonical_write_router_has_one_host_routing_decision() {
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
     assert!(
-        !source.contains("dispatch_remote_write"),
+        visitor.violations.is_empty(),
+        "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
+        visitor.violations
+    );
+    let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
+        .expect("daemon request dispatcher source must be readable");
+    assert!(
+        !daemon.contains("dispatch_remote_write"),
         "AI.12 forbids the pre-persistence remote write branch"
     );
+}
+
+#[test]
+fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
+    for (name, source) in [
+        (
+            "second writer",
+            "impl MessageWriter for Second { fn write(&self) { } }",
+        ),
+        (
+            "pre-write nudge",
+            "fn write() { self.emit_local_post_write(); }",
+        ),
+        ("pre-write peer send", "fn write() { transport.deliver(); }"),
+        (
+            "host check outside router",
+            "fn route_write() { request.host; }",
+        ),
+    ] {
+        let violations = routing_violations_in_fixture(source);
+        assert!(
+            !violations.is_empty(),
+            "AI.12 guard must reject the mandated {name} fixture"
+        );
+    }
+}
+
+fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    files
+}
+
+fn routing_violations_in_fixture(source: &str) -> Vec<String> {
+    let file = syn::parse_file(source).expect("negative fixture must parse");
+    let mut visitor = HostRoutingVisitor::default();
+    visitor.visit_file(&file);
+    visitor.violations
 }
 
 #[derive(Default)]
@@ -111,12 +160,23 @@ struct HostRoutingVisitor {
     route_write_host_accesses: usize,
     post_router_host_accesses: usize,
     peer_delivery_calls: usize,
+    violations: Vec<String>,
+    source_path: Option<PathBuf>,
     current_method: Option<String>,
     in_post_write_router: bool,
 }
 
 impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "MessageWriter")
+        }) && !self.is_runtime_dispatcher_source()
+        {
+            self.violations
+                .push("second MessageWriter implementation".to_string());
+        }
         let previous = self.in_post_write_router;
         self.in_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
             path.segments
@@ -133,6 +193,12 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         self.current_method = previous;
     }
 
+    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+        let previous = self.current_method.replace(node.sig.ident.to_string());
+        syn::visit::visit_item_fn(self, node);
+        self.current_method = previous;
+    }
+
     fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
         if matches!(&node.member, syn::Member::Named(name) if name == "host") {
             if self.current_method.as_deref() == Some("route_write") {
@@ -141,19 +207,45 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             if self.in_post_write_router && self.current_method.as_deref() == Some("dispatch") {
                 self.post_router_host_accesses += 1;
             }
+            if self.current_method.as_deref() == Some("route_write") {
+                self.violations
+                    .push("destination host inspected before canonical writer".to_string());
+            }
         }
         syn::visit::visit_expr_field(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "deliver_to_peer" {
-            assert!(
-                self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"),
-                "AI.12 forbids peer delivery outside PostWriteRouter::dispatch"
-            );
-            self.peer_delivery_calls += 1;
+        if matches!(
+            node.method.to_string().as_str(),
+            "deliver_to_peer" | "deliver"
+        ) {
+            if !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
+                && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
+            {
+                self.violations
+                    .push("peer delivery outside PostWriteRouter::dispatch".to_string());
+            }
+            if self.is_runtime_dispatcher_source() {
+                self.peer_delivery_calls += 1;
+            }
+        }
+        if node.method == "emit_local_post_write"
+            && !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
+            && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
+        {
+            self.violations
+                .push("local nudge outside PostWriteRouter::dispatch".to_string());
         }
         syn::visit::visit_expr_method_call(self, node);
+    }
+}
+
+impl HostRoutingVisitor {
+    fn is_runtime_dispatcher_source(&self) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+        })
     }
 }
 
