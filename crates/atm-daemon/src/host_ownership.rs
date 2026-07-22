@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use atm_core::error::AtmError;
 use fs2::FileExt;
+use ulid::Ulid;
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
@@ -61,6 +62,7 @@ pub(crate) struct HostOwnershipAdapter {
 pub(crate) struct HostOwnershipGuard {
     lock_file: File,
     lock_path: PathBuf,
+    instance_id: Ulid,
 }
 
 #[cfg_attr(windows, allow(dead_code))]
@@ -149,7 +151,7 @@ impl HostOwnershipAdapter {
                 )));
             }
         }
-        write_owner_record(&mut lock_file, &lock_path)?;
+        let instance_id = write_owner_record(&mut lock_file, &lock_path)?;
         self.observability.emit_or_warn(
             "acquire_owner_lock",
             "ok",
@@ -158,6 +160,7 @@ impl HostOwnershipAdapter {
         Ok(HostOwnershipGuard {
             lock_file,
             lock_path,
+            instance_id,
         })
     }
 }
@@ -186,6 +189,13 @@ impl Drop for HostOwnershipGuard {
     fn drop(&mut self) {
         let _ = clear_owner_record(&mut self.lock_file, &self.lock_path);
         let _ = self.lock_file.unlock();
+    }
+}
+
+#[cfg_attr(windows, allow(dead_code))]
+impl HostOwnershipGuard {
+    pub(crate) fn instance_id(&self) -> Ulid {
+        self.instance_id
     }
 }
 
@@ -303,7 +313,9 @@ fn parse_owner_record(record: &str) -> Option<(u32, OwnerToken)> {
     if trimmed.is_empty() {
         return None;
     }
-    let (pid, token) = trimmed.split_once(':').unwrap_or((trimmed, ""));
+    let mut fields = trimmed.splitn(3, ':');
+    let pid = fields.next().unwrap_or_default();
+    let token = fields.next().unwrap_or_default();
     let pid = pid.parse::<u32>().ok()?;
     Some((pid, OwnerToken::from_record(token)))
 }
@@ -390,7 +402,7 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
 }
 
 #[cfg_attr(windows, allow(dead_code))]
-fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmError> {
+fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<Ulid, AtmError> {
     let token = OwnerToken::from_record(format!(
         "{:x}",
         SystemTime::now()
@@ -400,7 +412,8 @@ fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmE
             })?
             .as_nanos()
     ));
-    let record = format!("{}:{token}\n", std::process::id());
+    let instance_id = Ulid::new();
+    let record = format!("{}:{token}:{instance_id}\n", std::process::id());
     lock_file.set_len(0).map_err(|_source| {
         AtmError::daemon_unavailable("failed to reset daemon ownership metadata")
     })?;
@@ -411,7 +424,7 @@ fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmE
         AtmError::daemon_unavailable("failed to sync daemon ownership metadata")
     })?;
     sync_owner_record_shadow(lock_path, &record)?;
-    Ok(())
+    Ok(instance_id)
 }
 
 #[cfg_attr(windows, allow(dead_code))]

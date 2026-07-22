@@ -1,4 +1,6 @@
-#![forbid(unsafe_code)]
+// Windows owner-only ACL setup is the sole reviewed FFI exception; every
+// other unsafe use remains a compile error.
+#![deny(unsafe_code)]
 #![allow(
     deprecated,
     reason = "Phase AC daemon composition still consumes the transitional shared storage traits while backend cleanup lands"
@@ -16,8 +18,11 @@ mod host_ownership;
 mod https_transport;
 mod lifecycle_control;
 mod local_ipc_connection;
+#[cfg(not(windows))]
 mod local_ipc_transport;
 mod local_ipc_wake;
+#[cfg(any(unix, windows, test))]
+mod local_tcp_transport;
 mod non_claude_outbound_runtime;
 mod post_send_emitter;
 mod runtime_health;
@@ -46,7 +51,10 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
+#[cfg(not(windows))]
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
+#[cfg(windows)]
+pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);

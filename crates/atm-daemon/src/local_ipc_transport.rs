@@ -20,6 +20,8 @@ use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener, wake_listener_until};
+#[cfg(unix)]
+use crate::local_tcp_transport::LocalTcpLoopbackServer;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod accept_loop;
@@ -52,6 +54,11 @@ const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+#[cfg(unix)]
+type TcpLoopbackWorker<'scope> = (
+    Arc<AtomicBool>,
+    std::thread::ScopedJoinHandle<'scope, Result<(), AtmError>>,
+);
 pub(crate) const CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC connection worker panicked; transport thread recovered";
 pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
@@ -152,6 +159,8 @@ pub(crate) struct PreparedRuntimeServer {
     host_ownership_guard: HostOwnershipGuard,
     endpoint_path: PathBuf,
     listener: LocalSocketListener,
+    #[cfg(unix)]
+    tcp_loopback: LocalTcpLoopbackServer,
     #[cfg(test)]
     accept_error_inject: Option<std::sync::mpsc::SyncSender<()>>,
     lifecycle_control: LifecycleControlSourceAdapter,
@@ -223,6 +232,8 @@ struct ServeRuntimeScopeContext<'a, BeginShutdown, ReloadRuntimeView, PublishRea
     force_shutdown: Arc<AtomicBool>,
     observability: SubsystemObservability,
     endpoint_guard: SocketEndpointGuard,
+    #[cfg(unix)]
+    tcp_loopback: LocalTcpLoopbackServer,
     graceful_drain_deadline: Duration,
     force_cancel_deadline: Duration,
     begin_shutdown: BeginShutdown,
@@ -278,6 +289,13 @@ impl PreparedRuntimeServer {
         ownership: HostOwnershipGuard,
     ) -> Result<Self, AtmError> {
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
+        #[cfg(unix)]
+        let tcp_loopback = LocalTcpLoopbackServer::bind_in_runtime_dir(
+            endpoint_path.parent().ok_or_else(|| {
+                AtmError::daemon_unavailable("daemon local IPC endpoint has no runtime directory")
+            })?,
+            ownership.instance_id(),
+        )?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
                 &endpoint_path,
@@ -309,6 +327,8 @@ impl PreparedRuntimeServer {
                 endpoint_path,
                 endpoint_preparation,
             )),
+            #[cfg(unix)]
+            tcp_loopback,
             listener,
             #[cfg(test)]
             accept_error_inject: None,
@@ -361,6 +381,8 @@ impl PreparedRuntimeServer {
             registry,
             force_shutdown,
             observability,
+            #[cfg(unix)]
+            tcp_loopback,
         } = self;
         let serve_context = ServeRuntimeScopeContext {
             listener: &listener,
@@ -373,6 +395,8 @@ impl PreparedRuntimeServer {
             force_shutdown,
             observability,
             endpoint_guard,
+            #[cfg(unix)]
+            tcp_loopback,
             graceful_drain_deadline,
             force_cancel_deadline,
             begin_shutdown,
@@ -411,6 +435,8 @@ where
         force_shutdown,
         observability,
         endpoint_guard,
+        #[cfg(unix)]
+        tcp_loopback,
         graceful_drain_deadline,
         force_cancel_deadline,
         begin_shutdown,
@@ -421,41 +447,156 @@ where
         Arc::new(ShutdownBeacon::default()),
         Arc::new(ServeLoopSignals::default()),
     );
-    let lifecycle_waiter = spawn_lifecycle_waiter(
+    let lifecycle_waiter = spawn_runtime_lifecycle_waiter(
         scope,
-        Arc::clone(&signals),
-        Arc::clone(&shutdown_beacon),
+        &signals,
+        &shutdown_beacon,
+        &lifecycle_control,
+        endpoint_path,
+    )?;
+    #[cfg(unix)]
+    let (tcp_stop, tcp_server) = start_tcp_loopback_server(
+        scope,
+        tcp_loopback,
+        Arc::clone(&dispatcher),
         lifecycle_control.clone(),
-        endpoint_path.to_path_buf(),
     )?;
     publish_ready()?;
-    let mut accept_context = AcceptLoopContext {
+    let mut accept_context = build_accept_context(
         listener,
-        lifecycle_control: &lifecycle_control,
-        registry: &registry,
-        force_shutdown: &force_shutdown,
-        observability: &observability,
-        dispatcher: &dispatcher,
-        signals: signals.as_ref(),
-        shutdown_beacon: shutdown_beacon.as_ref(),
+        &lifecycle_control,
+        &registry,
+        &force_shutdown,
+        &observability,
+        &dispatcher,
+        signals.as_ref(),
+        shutdown_beacon.as_ref(),
         endpoint_path,
         #[cfg(test)]
         accept_error_inject,
-    };
+    );
     let serve_error = capture_serve_error(scope, &mut accept_context, &reload_runtime_view);
-    let shutdown_error = finalize_serve_loop(
+    #[cfg(unix)]
+    tcp_stop.store(true, Ordering::SeqCst);
+    let shutdown_error = finalize_runtime_scope(
         &begin_shutdown,
+        endpoint_guard,
+        graceful_drain_deadline,
+        force_cancel_deadline,
+        &registry,
+        force_shutdown.as_ref(),
+        &lifecycle_control,
+        lifecycle_waiter,
+    );
+    #[cfg(unix)]
+    let tcp_error = finish_tcp_loopback_server(tcp_server)?;
+    #[cfg(unix)]
+    let shutdown_error = shutdown_error.or(tcp_error);
+    finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finalize_runtime_scope<BeginShutdown>(
+    begin_shutdown: &BeginShutdown,
+    endpoint_guard: SocketEndpointGuard,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &AtomicBool,
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    lifecycle_waiter: std::thread::ScopedJoinHandle<'_, ()>,
+) -> Option<AtmError>
+where
+    BeginShutdown: Fn() -> Result<(), AtmError>,
+{
+    finalize_serve_loop(
+        begin_shutdown,
         ServeShutdownContext {
             endpoint_guard,
             graceful_drain_deadline,
             force_cancel_deadline,
-            registry: &registry,
-            force_shutdown: force_shutdown.as_ref(),
-            lifecycle_control: &lifecycle_control,
+            registry,
+            force_shutdown,
+            lifecycle_control,
         },
         lifecycle_waiter,
-    );
-    finish_serve_shutdown(serve_error, shutdown_error)
+    )
+}
+
+fn spawn_runtime_lifecycle_waiter<'scope>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    signals: &Arc<ServeLoopSignals>,
+    shutdown_beacon: &Arc<ShutdownBeacon>,
+    lifecycle: &LifecycleControlSourceAdapter,
+    endpoint_path: &Path,
+) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError> {
+    spawn_lifecycle_waiter(
+        scope,
+        Arc::clone(signals),
+        Arc::clone(shutdown_beacon),
+        lifecycle.clone(),
+        endpoint_path.to_path_buf(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_accept_context<'a>(
+    listener: &'a LocalSocketListener,
+    lifecycle_control: &'a LifecycleControlSourceAdapter,
+    registry: &'a Arc<ActiveConnectionRegistry>,
+    force_shutdown: &'a Arc<AtomicBool>,
+    observability: &'a SubsystemObservability,
+    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
+    signals: &'a ServeLoopSignals,
+    shutdown_beacon: &'a ShutdownBeacon,
+    endpoint_path: &'a Path,
+    #[cfg(test)] accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
+) -> AcceptLoopContext<'a> {
+    AcceptLoopContext {
+        listener,
+        lifecycle_control,
+        registry,
+        force_shutdown,
+        observability,
+        dispatcher,
+        signals,
+        shutdown_beacon,
+        endpoint_path,
+        #[cfg(test)]
+        accept_error_inject,
+    }
+}
+
+#[cfg(unix)]
+fn start_tcp_loopback_server<'scope>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    server: LocalTcpLoopbackServer,
+    router: Arc<dyn ApiRouter + Send + Sync>,
+    lifecycle: LifecycleControlSourceAdapter,
+) -> Result<TcpLoopbackWorker<'scope>, AtmError> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker_stop = Arc::clone(&stop);
+    let worker = thread::Builder::new()
+        .name("local-loopback-tcp-http".to_string())
+        .spawn_scoped(scope, move || {
+            server.serve_until_terminated(router, &lifecycle, &worker_stop)
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to start local loopback TCP HTTP listener: {source}"
+            ))
+        })?;
+    Ok((stop, worker))
+}
+
+#[cfg(unix)]
+fn finish_tcp_loopback_server(
+    server: std::thread::ScopedJoinHandle<'_, Result<(), AtmError>>,
+) -> Result<Option<AtmError>, AtmError> {
+    server
+        .join()
+        .map_err(|_| AtmError::daemon_unavailable("local loopback TCP HTTP listener panicked"))
+        .map(Result::err)
 }
 
 fn capture_serve_error<'scope, ReloadRuntimeView>(

@@ -106,22 +106,22 @@ Notes:
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
-## LocalIpcServerTransportAdapter (historical through AI.5)
+## Local transport adapters
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Historically owned the same-host listener for the custom-frame contract.
-  AI.11 is planned to replace it with Unix HTTP-over-UDS and loopback TCP, plus Windows
-  loopback-TCP, adapters that call `ApiRouter`.
+- Own Unix HTTP-over-UDS and loopback-TCP listeners, plus the Windows
+  loopback-TCP listener. Every listener authenticates its ingress then calls
+  `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The target boundary is Unix HTTP-over-UDS plus loopback TCP, and Windows
-  loopback TCP only. Legacy Windows local transports, custom frame headers, and
-  frame decoders are retired and must not be retained as fallback.
+- Unix provides HTTP-over-UDS plus loopback TCP; Windows provides loopback TCP
+  only. Legacy Windows local transports, custom frame headers, and frame
+  decoders are retired and must not be retained as fallback.
 - The adapter owns HTTP decode/response translation and same-user endpoint
   ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
