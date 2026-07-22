@@ -128,7 +128,7 @@ typed Rust-to-Python translation: `AgentAddress`, canonical nudge projection,
 graft lifecycle, and daemon API results. It does not own a Python transport,
 storage adapter, address parser, or post-write behavior.
 
-AI.17 maps `HERMES_SESSION_KEY` to ADR-037 `ChatId` before the shared caller
+AI.17 maps client-neutral `ATM_CHAT_ID` to ADR-037 `ChatId` before the shared caller
 address is built. AI.19 maps the canonical nudge source address to a Hermes
 `atm:` chat and injects the body after the daemon's post-write event. Neither
 step re-renders and reparses an address or changes the persisted message.

@@ -1,19 +1,19 @@
 ---
 id: AI.17
-title: Hermes Chat Identity Mapping
+title: Ambient Chat Context (Hermes First Client)
 status: planned
 branch: feature/pAI-s17-hermes-chat-identity
 worktree: ../atm-core-worktrees/feature/pAI-s17-hermes-chat-identity
 target: integrate/phase-AI
 ---
 
-# Sprint AI.17 — Hermes Chat Identity Mapping
+# Sprint AI.17 — Ambient Chat Context (Hermes First Client)
 
 ## Goal
 
-Prove and implement the narrow Hermes mapping onto Phase AI’s existing chat
-identity contract. This sprint adds no ATM schema migration, no CLI option,
-and no new daemon protocol.
+Implement the missing environment caller-context forms on Phase AI’s existing
+chat identity contract. Hermes is the first client to use them. This sprint
+adds no schema migration, no new CLI flag, and no daemon protocol.
 
 `ATM_CHAT_ID=<id>` is a client-neutral optional `chat_id` for the ambient
 `ATM_IDENTITY`; it is rendered to agents as `agent:<id>@team`. Hermes is the
@@ -30,36 +30,38 @@ first adapter to consume it. It has the same meaning as `--chat-id <id>` and
 
 ## Deliverables
 
-- A single client-neutral helper, first consumed by the Hermes adapter, that
-  validates and maps `ATM_CHAT_ID` into `Option<ChatId>` for the existing
-  typed caller
-  address.
-- A documented deterministic Hermes chat key derived from the complete
-  canonical source address: `atm:<agent>[:<chat-id>]@<team>`.
+- One caller-context resolver applying: `--as`, then `--chat-id`, then
+  `ATM_CHAT_ID`, then qualified `ATM_IDENTITY`, then no chat-id. An
+  unqualified `--as` explicitly selects no chat-id.
+- Updated `atm help identity` and identity documentation describing
+  `ATM_CHAT_ID`, qualified `ATM_IDENTITY`, and that precedence.
 - Focused tests proving:
-  - `omega-prime` with key `1234` is `omega-prime:1234`;
-  - missing key produces no chat ID;
-  - malformed or delimiter-containing keys fail before a daemon request;
-  - two chat IDs for one agent map to distinct Hermes chats;
+  - each precedence level wins over every lower level;
+  - missing values produce no chat ID;
+  - malformed or delimiter-containing environment values fail before a daemon
+    request;
+  - qualified `ATM_IDENTITY` and `ATM_CHAT_ID` preserve distinct chat IDs;
   - the mapping agrees with Phase AI’s `--chat-id` and `--as` equivalence.
 
 ## Contract
 
 ```rust
-pub fn ambient_chat_id(raw: Option<&str>) -> Result<Option<ChatId>, AtmError>;
-pub fn hermes_chat_key(source: &AgentAddress) -> String;
-// "atm:<agent>[:<chat-id>]@<team>"
+pub fn resolve_caller_chat_id(
+    explicit_as: Option<&AgentIdentity>,
+    explicit_chat_id: Option<&ChatId>,
+    ambient_chat_id: Option<&str>,
+    ambient_identity: &AgentIdentity,
+) -> Result<Option<ChatId>, AtmError>;
 ```
 
-`ambient_chat_id` is the only AI.17–AI.21 code allowed to interpret
+`resolve_caller_chat_id` is the only AI.17–AI.21 code allowed to interpret
 `ATM_CHAT_ID`. It delegates segment validation to the Phase AI address type;
 an empty key maps to `None`, while an invalid non-empty key is a typed
-configuration error. `hermes_chat_key` consumes the typed address and never
-parses rendered display text.
+configuration error.
 
 ## Boundary and Non-Goals
 
-The adapter consumes `AgentAddress`; it does not parse display strings,
+The resolver consumes typed caller context; it does not parse display strings,
 construct SQL, create a `session_id`, or add `--session` / `--session-id`.
 It cannot change the Phase AI parser, HTTP API, canonical write path, or
 post-write router.
@@ -73,6 +75,9 @@ It must rebase and be re-reviewed if the consumed chat-address contract changes.
 ## Closure
 
 - All deliverables and focused tests pass.
+- `crates/atm/src/commands/help.rs` and
+  `docs/user-documents/identity-and-team.md` describe the implemented
+  precedence and use `ATM_CHAT_ID`; their source/help tests pass.
 - `just lint`, `just test`, and `git diff --check` pass.
 - The completion report identifies the mapping function and tests by file and
   symbol, plus the exact Phase AI baseline commit.

@@ -40,7 +40,8 @@ The following Phase AI contracts are hard dependencies:
 `ATM_CHAT_ID` is a client-neutral ambient non-empty, validated `chat_id`; it
 is not a transport session, mailbox key, or new durable ATM field. Hermes is
 the first client to consume it, but any session/chat-based agent may build the
-same normal Phase AI caller address:
+same normal Phase AI caller address. Precedence is `--as`, then `--chat-id`,
+then `ATM_CHAT_ID`, then qualified `ATM_IDENTITY`, then no chat-id:
 
 ```text
 ATM_IDENTITY=omega-prime
@@ -95,7 +96,7 @@ starts.
 
 ### In scope
 
-- Hermes mapping of an ambient session key to Phase AI `chat_id`.
+- Client-neutral ambient `ATM_CHAT_ID` resolution, first consumed by Hermes.
 - PyO3/Maturin bindings for the existing graft API.
 - Graft-to-Hermes nudge injection, per-profile launchd deployment, runbook,
   and end-to-end validation.

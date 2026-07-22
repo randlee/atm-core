@@ -62,7 +62,10 @@ these types rather than independently interpreting `:`.
 CLI composition follows that grammar: base agent plus `--team <team>` is the
 logical `agent@team`; adding `--chat-id XXX` is the logical
 `agent:XXX@team`. The adapter normalizes those parts to the same
-`AgentAddress` as the textual address before dispatch.
+`AgentAddress` as the textual address before dispatch. Caller chat-id
+precedence is: `--as` (including explicit absence), then `--chat-id`, then
+`ATM_CHAT_ID`, then an embedded `agent:chat-id` in `ATM_IDENTITY`, then no
+chat-id. `ATM_CHAT_ID` never supplies an agent; it requires `ATM_IDENTITY`.
 
 Every persisted message has nullable `source_chat_id` and
 `destination_chat_id` columns beside its existing source/destination agent,
@@ -92,7 +95,9 @@ variant creates a second parsing, wire, storage, or routing path.
 
 The same caller-context shorthand applies to owner-only reads: with
 `ATM_IDENTITY=omega-prime`, `atm read --chat-id <chat-id>` and `atm read --as
-omega-prime:<chat-id>` select the same context mailbox. This changes only the
+omega-prime:<chat-id>` select the same context mailbox. `ATM_CHAT_ID` and an
+embedded chat-id in `ATM_IDENTITY` provide the same caller context at lower
+precedence. This changes only the
 resolved `AgentAddress`; it does not create a chat-specific read path.
 
 Message search is explicitly broader than the caller's chat identity:
@@ -104,8 +109,8 @@ session-scoped mailbox contract is introduced.
 
 ## Consequences
 
-- The AI.17–AI.21 Python/Hermes integration can bind one live context to one chat-id without an
-  ambient `HERMES_SESSION_KEY` changing mailbox semantics.
+- The AI.17–AI.21 Python/Hermes integration can bind one live context to one
+  chat-id through ambient `ATM_CHAT_ID` without changing mailbox semantics.
 - AI.17–AI.21 must consume this address contract and must not introduce a
   `session_id` protocol or query design.
 - Chat-aware storage and address tests precede REST/UDS migration because the

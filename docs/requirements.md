@@ -501,6 +501,10 @@ Required behavior:
   `--team <team>` yields logical `agent@team`; adding `--chat-id XXX` yields
   logical `agent:XXX@team`, before a single normalization to the structured
   address
+- caller chat-id resolution is ordered: qualified `--as <agent>:<chat-id>`,
+  then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
+  `ATM_IDENTITY=<agent>:<chat-id>`, then no chat-id. An explicit unqualified
+  `--as <agent>` is a complete caller override and selects no chat-id.
 - `agent`, `team`, and `chat-id` use the safe segment alphabet already
   required above; only the address parser interprets `:` and `.` delimiters
 - storage keeps nullable source and destination chat-id columns rather than
@@ -670,6 +674,9 @@ Runtime caller-context rules:
 - runtime identity must come from:
   - explicit command override when supported
   - `ATM_IDENTITY`
+- runtime caller chat-id must come from the caller-context precedence in
+  `docs/requirements.md` §4.1; `ATM_CHAT_ID` is the environment-level source
+  and a qualified `ATM_IDENTITY` is its lower-precedence fallback
 - runtime caller team for commands that require it must come from:
   - explicit command override when supported
   - `ATM_TEAM`
@@ -826,10 +833,10 @@ Global caller-context rules:
 
 | Command | Caller identity required | Caller identity may come from | Caller team required | Caller team may come from | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `atm send` | Yes | `--as`, else `--chat-id` plus `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select the ambient caller's chat context; target recipient/team are not caller context |
+| `atm send` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--as`/`--chat-id` select caller context; target recipient/team are not caller context |
 | `atm peek` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | inspection-only; `--from` remains a sender filter |
-| `atm read` | Yes | `--as`, else `--chat-id` plus `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
-| `atm ack` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target metadata is not caller context |
+| `atm read` | Yes | `--as`, else `--chat-id`, else `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating read path |
+| `atm ack` | Yes | `ATM_CHAT_ID`, else qualified `ATM_IDENTITY`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | reply target preserves the received full source address |
 | `atm list` | Yes | `--as`, else `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | `--from` is a sender filter, not caller identity |
 | `atm clear` | Yes | `ATM_IDENTITY` | Yes | `--team`, else `ATM_TEAM` | owner-only mutating clear path |
 | `atm log` | Yes | `ATM_IDENTITY` | Yes | `ATM_TEAM` | no explicit caller override surface |
@@ -853,6 +860,11 @@ Global caller-context rules:
   equivalent to `atm read --as <agent>:<chat-id>`; it resolves the owner
   mailbox before the existing owner-only read path, and the two flags are
   mutually exclusive
+- caller chat-id precedence is exactly: `--as` (including its explicit absence
+  of chat-id), then `--chat-id`, then `ATM_CHAT_ID`, then a chat-id embedded in
+  `ATM_IDENTITY`, then no chat-id. `ATM_CHAT_ID` must be a valid `ChatId` and
+  requires `ATM_IDENTITY` to supply the base agent; an invalid value fails
+  locally before daemon dispatch.
 - on mutating `send` and owner-only `read`, `--as` must use the same base
   agent as `ATM_IDENTITY`; a different base agent is an impersonation attempt
   and fails before daemon dispatch
@@ -1251,8 +1263,9 @@ Shared rules:
   defined precedence
 - `atm list` and `atm peek` may resolve caller identity from `--as`, else the
   invoking-shell `ATM_IDENTITY`
-- `atm read` resolves caller identity from `--as`, else `--chat-id` plus
-  invoking-shell `ATM_IDENTITY`, else invoking-shell `ATM_IDENTITY`; its
+- `atm read` resolves caller identity from `--as`, else `--chat-id`, else
+  `ATM_CHAT_ID`, else qualified invoking-shell `ATM_IDENTITY`, else invoking-
+  shell `ATM_IDENTITY`; its
   existing owner-only mutation rule applies to the resolved full identity
 - if required caller identity cannot be resolved from the documented source
   for that command, fail before daemon dispatch

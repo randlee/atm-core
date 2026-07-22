@@ -161,7 +161,7 @@ integration; they do not alter it.
 | AI.14 | `feature/pAI-s14-mac-peer-smoke` | Physical Mac↔Mac peer-pair proof |
 | AI.15 | `feature/pAI-s15-windows-peer-smoke` | Physical Mac↔Windows peer-pair proof |
 | AI.16 | `feature/pAI-s16-offline-reconciliation` | Durable-age-bounded canonical-message reconciliation with no delivery-state subsystem |
-| AI.17 | `feature/pAI-s17-hermes-chat-identity` | Hermes maps its ambient key to the existing typed `chat_id`; no schema, CLI, or HTTP contract change |
+| AI.17 | `feature/pAI-s17-hermes-chat-identity` | Client-neutral ambient `ATM_CHAT_ID` resolution, first consumed by Hermes; no schema, CLI flag, or HTTP contract change |
 | AI.18 | `feature/pAI-s18-graft-python-bindings` | PyO3/Maturin binding exposes the existing graft client/nudge contract to Python |
 | AI.19 | `feature/pAI-s19-hermes-graft-integration` | One typed bridge maps canonical nudge source address to an isolated Hermes `atm:` chat after persistence |
 | AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
