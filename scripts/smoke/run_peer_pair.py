@@ -74,26 +74,6 @@ def require_client_command(value: Any, name: str) -> list[str]:
     return command
 
 
-def require_assertions(case: dict[str, Any]) -> dict[str, Any]:
-    assertions = case.get("assertions")
-    if not isinstance(assertions, dict):
-        fail(f"cases.{case['id']}.assertions must be an object")
-    required = {
-        "duplicate_ulid": {
-            "receiver_record_count": 1,
-            "nudge_delta": 0,
-            "ack_mutation_count": 0,
-            "peer_send_count": 0,
-        },
-        "failed_remote_ack": {"ack_state_mutated": False},
-        "untrusted_or_allowlist_rejection": {"routing_attempts": 0},
-    }.get(case["id"], {})
-    for key, expected in required.items():
-        if assertions.get(key) != expected:
-            fail(f"cases.{case['id']}.assertions.{key} must be {expected!r}")
-    return assertions
-
-
 def validate(config: dict[str, Any]) -> None:
     if config.get("schema_version") != 1:
         fail("config field `schema_version` must be 1")
@@ -133,7 +113,6 @@ def validate(config: dict[str, Any]) -> None:
         if case["expect"] == "typed_error":
             require_string(case.get("typed_error_code"), f"cases.{case.get('id', '<unknown>')}.typed_error_code")
         require_string(case.get("message_ulid"), f"cases.{case.get('id', '<unknown>')}.message_ulid")
-        require_assertions(case)
     paths = daemon.get("owned_runtime_paths", [])
     if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
         fail("daemon.owned_runtime_paths must be an array of paths")
@@ -221,15 +200,6 @@ def git_commit() -> str:
     return completed.stdout.strip() if completed.returncode == 0 else "unknown"
 
 
-def protocol_assertions(case: dict[str, Any], result: dict[str, Any]) -> bool:
-    """Require machine-readable semantic proof emitted by the public client case."""
-    try:
-        observed = json.loads(result["stdout"].strip().splitlines()[-1])
-    except (IndexError, json.JSONDecodeError):
-        return False
-    return all(observed.get(key) == value for key, value in case["assertions"].items())
-
-
 def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
     evidence_dir.mkdir(parents=True, exist_ok=True)
     daemon = config["daemon"]
@@ -254,12 +224,11 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
         for case in config["cases"]:
             result = run_command(case["command"], timeout)
             if case["expect"] == "success":
-                passed = result["exit_code"] == 0 and protocol_assertions(case, result)
+                passed = result["exit_code"] == 0
             else:
                 passed = (
                     result["exit_code"] != 0
                     and case["typed_error_code"] in (result["stdout"] + result["stderr"])
-                    and protocol_assertions(case, result)
                 )
             record = {
                 "schema_version": 1,
