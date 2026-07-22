@@ -140,33 +140,45 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         other => panic!("unexpected response: {other:?}"),
     }
 
+    // The loopback TCP record is published by whichever transport bound the
+    // runtime. On Windows the local_tcp_transport ignores the caller's socket
+    // path and writes the record under the host runtime root, so we resolve it
+    // through the same production lookup a client would use. On Unix the
+    // local_ipc_transport writes the record next to the endpoint socket
+    // (`endpoint_path.parent()`), so we read it from `socket_path`'s parent.
+    // Resolving the record from its real write location keeps this full
+    // round-trip assertion running on every platform.
     #[cfg(windows)]
-    {
-        let record_path = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
-            .expect("resolve local loopback TCP endpoint record")
-            .as_ref()
-            .to_path_buf();
-        let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
-            &std::fs::read(&record_path).expect("read local loopback TCP endpoint record"),
-        )
-        .expect("parse local loopback TCP endpoint record");
-        let capability = record.capability().expect("active local capability");
-        let capability_header = capability.to_base64url();
-        let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
-        let mut tcp_stream = std::net::TcpStream::connect(endpoint).expect("connect loopback TCP");
-        atm_core::api::write_http_request_with_headers(
-            &mut tcp_stream,
-            &request,
-            &[(
-                atm_core::local_http::LOCAL_CAPABILITY_HEADER,
-                capability_header.as_str(),
-            )],
-        )
-        .expect("write loopback TCP doctor request");
-        let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
-            .expect("read loopback TCP doctor response");
-        assert!(matches!(tcp_response, ResponseEnvelope::Doctor(_)));
-    }
+    let record_path = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+        .expect("resolve local loopback TCP endpoint record")
+        .as_ref()
+        .to_path_buf();
+    #[cfg(not(windows))]
+    let record_path = socket_path
+        .parent()
+        .expect("socket path has a runtime directory")
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+
+    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
+        &std::fs::read(&record_path).expect("read local loopback TCP endpoint record"),
+    )
+    .expect("parse local loopback TCP endpoint record");
+    let capability = record.capability().expect("active local capability");
+    let capability_header = capability.to_base64url();
+    let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
+    let mut tcp_stream = std::net::TcpStream::connect(endpoint).expect("connect loopback TCP");
+    atm_core::api::write_http_request_with_headers(
+        &mut tcp_stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability_header.as_str(),
+        )],
+    )
+    .expect("write loopback TCP doctor request");
+    let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
+        .expect("read loopback TCP doctor response");
+    assert!(matches!(tcp_response, ResponseEnvelope::Doctor(_)));
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
