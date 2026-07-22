@@ -234,6 +234,31 @@ Manage durable cross-host HTTPS control-plane configuration
 | `--enabled` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
 
+#### `atm peer sync`
+
+Immediately re-send one bounded batch of recent immutable outbound records to
+one configured trusted peer. The durable sync policy must be enabled; this
+command creates no background job, queue, or retry state.
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--json` |  | no | Emit the peer and delivered-record count as JSON |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
+#### `atm peer sync-policy`
+
+View or configure the maximum age of canonical outbound records eligible for
+bounded peer reconciliation. `0s` disables automatic and explicit sync.
+
+##### `atm peer sync-policy show <peer>`
+
+##### `atm peer sync-policy set <peer> --max-message-age <whole-seconds>s`
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--max-message-age` |  | yes | Positive whole-second age, or `0s` to disable sync |
+| `--stderr-logs` |  | no | Route retained observability console logs to stderr |
+
 #### `atm peer trust`
 
 | Flag | Short | Required | Description |
@@ -404,5 +429,4 @@ List teams or run one team-administration subcommand
 | `--pane-id` |  | no | tmux pane id in '%<number>' form or a bare numeric pane id |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use atm_core::protocol::PeerSyncRequest;
 use atm_daemon_bootstrap::with_default_peer_config_store;
 use atm_storage::{
     AtmError, CertificateFingerprint, HostName, HttpsInterface, LocalCertificate,
@@ -9,6 +10,9 @@ use serde::Serialize;
 use std::num::NonZeroU16;
 use std::time::Duration;
 
+use crate::composition::{
+    AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
+};
 use crate::observability::CliObservability;
 
 /// Manage durable cross-host HTTPS control-plane configuration.
@@ -24,6 +28,11 @@ enum PeerSubcommand {
     Certificate(CertificateCommand),
     Trust(TrustCommand),
     SyncPolicy(SyncPolicyCommand),
+    Sync {
+        peer: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Args)]
@@ -130,8 +139,13 @@ enum TrustSubcommand {
 
 impl PeerCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
-        with_default_peer_config_store(|store| self.run_with_store(store))?;
-        Ok(())
+        match self.command {
+            PeerSubcommand::Sync { peer, json } => Self::run_sync(peer, json, _observability),
+            command => {
+                with_default_peer_config_store(|store| Self { command }.run_with_store(store))?;
+                Ok(())
+            }
+        }
     }
 
     fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<(), AtmError> {
@@ -140,7 +154,25 @@ impl PeerCommand {
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
             PeerSubcommand::Trust(command) => command.run_with_store(store),
             PeerSubcommand::SyncPolicy(command) => command.run_with_store(store),
+            PeerSubcommand::Sync { .. } => Err(AtmError::validation(
+                "peer sync must be routed through the running daemon",
+            )),
         }
+    }
+
+    fn run_sync(peer: String, json: bool, observability: &CliObservability) -> Result<()> {
+        let peer = parse_peer_host(peer)?;
+        let (home_dir, current_dir) = resolve_command_runtime_context("peer sync")?;
+        let composition = CliComposition::bootstrap(
+            "peer sync",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
+        Ok(print_output(
+            &composition.peer_sync(PeerSyncRequest { peer })?,
+            json,
+        )?)
     }
 }
 
@@ -541,6 +573,7 @@ mod tests {
                 "--yes",
             ],
             vec!["atm", "trust", "revoke", "--host", "peer.example", "--yes"],
+            vec!["atm", "sync", "peer.example", "--json"],
         ];
 
         for command in commands {

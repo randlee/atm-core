@@ -21,7 +21,7 @@ use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{PeekQuery, ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, WriteRequest};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
 
@@ -43,6 +43,7 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    PeerSync(PeerSyncRequest),
 }
 
 /// Shared protocol response envelope.
@@ -56,7 +57,21 @@ pub enum ResponseEnvelope {
     Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
+    PeerSync(PeerSyncOutcome),
     Error(AtmError),
+}
+
+/// One explicit, bounded reconciliation trigger for a configured peer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerSyncRequest {
+    pub peer: HostName,
+}
+
+/// Observable result of one bounded reconciliation pass.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerSyncOutcome {
+    pub peer: HostName,
+    pub delivered: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

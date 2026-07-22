@@ -17,13 +17,6 @@ pub fn resolve_template(
     ResolvedBuiltInNudgeTemplate { kind, body }
 }
 
-pub fn resolve_template_body(
-    override_row: Option<TeamNudgeTemplateOverrideRow>,
-    kind: BuiltInNudgeTemplateKind,
-) -> Option<String> {
-    resolve_template(override_row, kind).body
-}
-
 pub fn qualified_sender_identity(event: &PostSendHookEvent) -> String {
     format!("{}@{}", event.sender, event.sender_team)
 }
@@ -129,7 +122,6 @@ fn render_template(
 mod tests {
     use super::{
         default_template, qualified_sender_identity, render_built_in_nudge, resolve_template,
-        resolve_template_body,
     };
     use crate::boundary::{
         BuiltInNudgeTemplateKind, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
@@ -151,28 +143,6 @@ mod tests {
             task_id: None,
             recipient_pane_id: Some(PaneId::from_cli("%9").expect("pane")),
         }
-    }
-
-    #[test]
-    fn resolve_template_body_uses_default_when_no_override_exists() {
-        assert_eq!(
-            resolve_template_body(None, BuiltInNudgeTemplateKind::Delivery),
-            Some(default_template(BuiltInNudgeTemplateKind::Delivery).to_string())
-        );
-    }
-
-    #[test]
-    fn resolve_template_body_treats_disabled_override_as_disabled() {
-        let row = TeamNudgeTemplateOverrideRow {
-            team_name: TeamName::from_validated(TEST_TEAM),
-            kind: BuiltInNudgeTemplateKind::Delivery,
-            mode: TeamNudgeTemplateOverrideMode::Disabled,
-            updated_at: IsoTimestamp::now(),
-        };
-        assert_eq!(
-            resolve_template_body(Some(row), BuiltInNudgeTemplateKind::Delivery),
-            None
-        );
     }
 
     #[test]
