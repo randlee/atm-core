@@ -189,9 +189,8 @@ Initial crate requirement IDs:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
 - historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
   Any earlier graft-specific contract intent is superseded by
-  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
-  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
-  requirement.
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared HTTP
+  application contract rather than by a graft-private core requirement.
   No graft-private lifecycle, session, queue, or stream identifier is reserved
   in shared `atm-core`; receiver-private runtime state belongs in the receiver
   implementation unless it is proven to be shared ATM semantics.
@@ -276,7 +275,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
-- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
