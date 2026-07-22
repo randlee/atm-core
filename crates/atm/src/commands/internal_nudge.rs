@@ -1,4 +1,3 @@
-use std::io::Write as _;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -9,16 +8,19 @@ use atm_core::boundary::{
 };
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
-    GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-    read_graft_post_send_message, write_graft_post_send_message,
+    GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
+    graft_receiver_record_path_from_home,
 };
 use atm_core::home;
 use atm_core::send::nudge_template;
 use clap::Args;
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
+
+/// Loopback connect budget for delivering a post-send nudge to a graft receiver.
+const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+/// Bounded request/response budget once connected to a graft receiver.
+const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
 
 #[cfg(test)]
 use std::collections::BTreeMap;
@@ -168,31 +170,27 @@ struct GraftNudgeSink;
 impl GraftNudgeSink {
     fn deliver(&self, event: &PostSendHookEvent) -> Result<()> {
         let home_dir = home::atm_home()?;
-        let endpoint_path = graft_receiver_socket_path_from_home(
+        let record_path = graft_receiver_record_path_from_home(
             &home_dir,
             &event.recipient_team,
             &event.recipient,
         );
-        let endpoint_name = atm_core::protocol::daemon_local_ipc_name_from_path(&endpoint_path)?;
-        let mut stream = LocalSocketStream::connect(endpoint_name)
-            .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable))?;
         let request = GraftPostSendRequest {
             event: event.clone(),
         };
-        write_graft_post_send_message(
-            &mut stream,
+        let response = deliver_graft_post_send(
+            &record_path,
             &request,
-            "failed to write graft post-send request",
-            "graft post-send request exceeded the bounded payload cap",
-        )?;
-        let response: GraftPostSendResponse = read_graft_post_send_message(
-            &mut stream,
-            "failed to read graft post-send response",
-            "graft post-send response exceeded the bounded payload cap",
-        )?;
-        stream
-            .flush()
-            .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable))?;
+            GRAFT_POST_SEND_CONNECT_DEADLINE,
+            GRAFT_POST_SEND_IO_DEADLINE,
+        )
+        .map_err(|error| {
+            if error.code() == AtmErrorCode::PostSendGraftUnavailable {
+                error
+            } else {
+                AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable)
+            }
+        })?;
         match response {
             GraftPostSendResponse::Delivered => Ok(()),
             GraftPostSendResponse::Error(error) => Err(error.into()),

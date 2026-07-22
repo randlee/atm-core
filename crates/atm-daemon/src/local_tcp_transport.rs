@@ -28,13 +28,9 @@ use atm_core::api::{
     ApiRouter, AuthenticatedIngress, RequestDeadline, read_http_request, write_http_response,
 };
 use atm_core::error::AtmError;
-#[cfg(windows)]
-use atm_core::local_http::local_http_record_path;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use ulid::Ulid;
 
-#[cfg(windows)]
-use crate::DaemonSubsystem;
 #[cfg(windows)]
 use crate::SubsystemObservability;
 #[cfg(windows)]
@@ -172,7 +168,6 @@ pub(crate) struct PreparedRuntimeServer {
     listener: TcpListener,
     capability: LocalCapability,
     lifecycle: LifecycleControlSourceAdapter,
-    observability: SubsystemObservability,
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
@@ -199,7 +194,12 @@ impl PreparedRuntimeServer {
             ))
         })?;
         let capability = LocalCapability::generate()?;
-        let record_path = local_http_record_path(home_dir);
+        let _ = home_dir;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        let record_path = runtime_scope
+            .runtime_root
+            .as_ref()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
         publish_record(
             &record_path,
             ownership.instance_id(),
@@ -220,7 +220,6 @@ impl PreparedRuntimeServer {
             listener,
             capability,
             lifecycle,
-            observability,
             endpoint_guard: Some(SocketEndpointGuard::new(record_path)),
         })
     }
@@ -242,11 +241,10 @@ impl PreparedRuntimeServer {
         PublishReady: Fn() -> Result<(), AtmError>,
     {
         let Self {
-            _ownership: _,
+            _ownership,
             listener,
             capability,
             lifecycle,
-            observability: _,
             endpoint_guard: _,
         } = self;
         (hooks.publish_ready)()?;
@@ -527,9 +525,9 @@ impl LocalIpcServerTransportAdapter {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(
-            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
-            SubsystemObservability::disabled(DaemonSubsystem::HostOwnership),
-            SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
+            SubsystemObservability::disabled(crate::DaemonSubsystem::LocalIpcTransport),
+            SubsystemObservability::disabled(crate::DaemonSubsystem::HostOwnership),
+            SubsystemObservability::disabled(crate::DaemonSubsystem::LifecycleControl),
         )
     }
     pub(crate) fn new_with_observability(
@@ -575,6 +573,7 @@ mod tests {
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
     use std::thread;
+    use std::time::Duration;
 
     use atm_core::api::{read_http_response, write_http_request_with_headers};
     use atm_core::doctor::DoctorQuery;
@@ -681,11 +680,13 @@ mod tests {
 
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let (registered_tx, registered_rx) = mpsc::sync_channel(1);
         let (completion_tx, completion_rx) = mpsc::sync_channel(1);
         let worker_registry = Arc::clone(&registry);
         let join_handle = thread::spawn(move || {
             let _connection = worker_registry.register();
             let _dispatch = worker_registry.register_dispatch_work();
+            registered_tx.send(()).expect("signal registered worker");
             let _ = release_rx.recv();
             let _ = completion_tx.send(());
         });
@@ -698,6 +699,9 @@ mod tests {
                 super::MAX_CONCURRENT_CONNECTIONS,
             )
             .expect("track TCP listener worker");
+        registered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker registered before shutdown drain");
 
         let force_shutdown = AtomicBool::new(false);
         let started = Instant::now();

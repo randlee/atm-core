@@ -664,7 +664,9 @@ mod tests {
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
+    #[cfg(not(windows))]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    #[cfg(not(windows))]
     use crate::test_support::LifecycleFlagResetGuard;
 
     use super::RuntimeComposition;
@@ -767,6 +769,7 @@ mod tests {
         assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(not(windows))]
     #[test]
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {

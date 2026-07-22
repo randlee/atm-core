@@ -3,9 +3,10 @@ use tempfile::tempdir;
 use super::tests::{
     RecordingObservability, RecordingPostSendEmitter, TestRuntime, message, send_request,
 };
-use super::{WriteOutcome, write_mail_with_runtime_impl};
+use super::{SendMessageSource, WriteOutcome, write_mail_with_runtime_impl};
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
+use crate::error_codes::AtmErrorCode;
 use crate::schema::{AtmMessageId, set_authenticated_source_host};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -75,6 +76,58 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
             .expect("local route finish"),
         WriteOutcome::Sent(_)
     ));
+}
+
+#[test]
+fn conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::succeed();
+    let origin_id = AtmMessageId::new();
+
+    super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()).with_origin_message_id(origin_id),
+        &observability,
+        &runtime,
+        Some(&emitter),
+    )
+    .expect("initial origin write");
+    let post_write_count = emitter.emitted().len();
+    let outbound_delivery_count = runtime
+        .non_claude_deliveries
+        .lock()
+        .expect("non-claude deliveries lock")
+        .len();
+
+    let mut conflicting = send_request(tempdir.path()).with_origin_message_id(origin_id);
+    conflicting.message_source =
+        SendMessageSource::Inline("different immutable payload".to_string());
+    let error =
+        super::send_mail_with_runtime_impl(conflicting, &observability, &runtime, Some(&emitter))
+            .expect_err("conflicting origin ULID must fail before routing");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")[0]
+            .envelope
+            .text,
+        "hello",
+        "the conflicting replay must retain the original row"
+    );
+    assert_eq!(emitter.emitted().len(), post_write_count);
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        outbound_delivery_count,
+        "the conflict must not start another outbound delivery"
+    );
 }
 
 #[test]

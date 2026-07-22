@@ -18,6 +18,7 @@ use tempfile::TempDir;
 use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+    write_test_local_ipc_request,
 };
 
 #[derive(Default)]
@@ -430,7 +431,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         )
         .expect("send request"),
     ));
-    atm_core::api::write_http_request(&mut stream, &request).expect("write send request");
+    write_test_local_ipc_request(&mut stream, &request).expect("write send request");
     let response =
         atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
     match response {
@@ -482,7 +483,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
-    let socket_path = tempdir.path().join("daemon.sock");
+    let socket_path = atm_core::home::host_runtime_dir_from_home(&atm_home).join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
         .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
@@ -525,8 +526,14 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
     });
 
     drop(connect_daemon_local_ipc_until_ready(&socket_path, ready_rx));
-    let endpoint =
-        atm_daemon_client::DaemonLocalIpcEndpoint::new(socket_path.clone()).expect("endpoint");
+    #[cfg(windows)]
+    let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+        .expect("windows local HTTP endpoint");
+    #[cfg(not(windows))]
+    let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new(
+        atm_core::local_http::local_http_record_path(&atm_home),
+    )
+    .expect("local HTTP endpoint record");
     let request = SendRequest::new(
         atm_home.clone(),
         workspace_dir.clone(),
