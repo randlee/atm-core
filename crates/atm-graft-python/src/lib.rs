@@ -4,13 +4,16 @@
 //! operation delegates to the existing graft client and its canonical API
 //! request types.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use ::atm_graft::GraftClient;
+use ::atm_graft::{
+    GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
+    SessionSnapshot,
+};
 use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
 use atm_core::boundary::PostSendHookEvent;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::AtmGraftClient;
 use atm_core::home::{atm_home, command_invocation_dir};
 use atm_core::read::{ReadOutcome, ReadQuery};
@@ -21,6 +24,13 @@ use pyo3::prelude::*;
 
 fn atm_error(error: AtmError) -> PyErr {
     PyRuntimeError::new_err(format!("{}: {}", error.code(), error.message()))
+}
+
+fn python_callback_error(error: PyErr) -> AtmError {
+    AtmError::new(
+        AtmErrorCode::InternalError,
+        format!("Python graft nudge callback failed: {error}"),
+    )
 }
 
 #[pyclass(from_py_object)]
@@ -58,6 +68,44 @@ impl PyAgentAddress {
             chat_id: address.chat_id.map(|chat_id| chat_id.to_string()),
             team: team.to_string(),
         })
+    }
+}
+
+#[pyclass(from_py_object)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PyGraftSessionOptions {
+    #[pyo3(get)]
+    workspace_root: String,
+    #[pyo3(get)]
+    agent: String,
+    #[pyo3(get)]
+    team: String,
+}
+
+impl PyGraftSessionOptions {
+    fn to_typed(&self) -> PyResult<GraftSessionOptions> {
+        if self.workspace_root.trim().is_empty() {
+            return Err(PyValueError::new_err("workspace_root must not be blank"));
+        }
+        Ok(GraftSessionOptions::for_current_process(
+            &self.workspace_root,
+            self.team.parse::<TeamName>().map_err(atm_error)?,
+            self.agent.parse::<AgentName>().map_err(atm_error)?,
+        ))
+    }
+}
+
+#[pymethods]
+impl PyGraftSessionOptions {
+    #[new]
+    fn new(workspace_root: String, agent: String, team: String) -> PyResult<Self> {
+        let options = Self {
+            workspace_root,
+            agent,
+            team,
+        };
+        options.to_typed()?;
+        Ok(options)
     }
 }
 
@@ -152,9 +200,58 @@ impl PyNudge {
 }
 
 #[pyclass(skip_from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyGraftSessionSnapshot {
+    #[pyo3(get)]
+    agent: String,
+    #[pyo3(get)]
+    team: String,
+    #[pyo3(get)]
+    state: String,
+}
+
+impl From<SessionSnapshot> for PyGraftSessionSnapshot {
+    fn from(snapshot: SessionSnapshot) -> Self {
+        let state = match snapshot.state {
+            GraftSessionState::Inactive => "inactive",
+            GraftSessionState::Listening => "listening",
+            GraftSessionState::Degraded => "degraded",
+            GraftSessionState::Closed => "closed",
+            GraftSessionState::CloseFailed => "close_failed",
+        };
+        Self {
+            agent: snapshot.agent.to_string(),
+            team: snapshot.team.to_string(),
+            state: state.to_string(),
+        }
+    }
+}
+
+struct PythonNudgeInjector {
+    callback: Py<PyAny>,
+}
+
+impl HostNudgeInjector for PythonNudgeInjector {
+    fn inject_nudge(&self, event: &PostSendHookEvent) -> Result<(), AtmError> {
+        Python::attach(|py| {
+            let nudge = Py::new(
+                py,
+                PyNudge::from_post_send(event).map_err(python_callback_error)?,
+            )
+            .map_err(python_callback_error)?;
+            self.callback
+                .call1(py, (nudge,))
+                .map(|_| ())
+                .map_err(python_callback_error)
+        })
+    }
+}
+
+#[pyclass(skip_from_py_object)]
 pub struct PyGraftSession {
     caller: AgentAddress,
     client: Mutex<Option<GraftClient>>,
+    receiver: Mutex<Option<GraftSession>>,
 }
 
 impl PyGraftSession {
@@ -181,6 +278,7 @@ impl PyGraftSession {
         Ok(Self {
             caller: caller.to_typed()?,
             client: Mutex::new(Some(GraftClient::connect().map_err(atm_error)?)),
+            receiver: Mutex::new(None),
         })
     }
 
@@ -246,7 +344,53 @@ impl PyGraftSession {
         Ok(())
     }
 
+    fn activate_receiver(
+        &self,
+        options: PyGraftSessionOptions,
+        on_nudge: Py<PyAny>,
+    ) -> PyResult<()> {
+        let client = self.client()?;
+        let mut receiver = self
+            .receiver
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM graft receiver lock poisoned"))?;
+        if receiver.is_some() {
+            return Err(PyRuntimeError::new_err(
+                "ATM graft receiver is already active",
+            ));
+        }
+        let session = client
+            .activate_session(
+                options.to_typed()?,
+                Arc::new(PythonNudgeInjector { callback: on_nudge }),
+            )
+            .map_err(atm_error)?;
+        *receiver = Some(session);
+        Ok(())
+    }
+
+    fn snapshot(&self) -> PyResult<PyGraftSessionSnapshot> {
+        let receiver = self
+            .receiver
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM graft receiver lock poisoned"))?;
+        receiver
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("ATM graft receiver is not active"))?
+            .snapshot()
+            .map(PyGraftSessionSnapshot::from)
+            .map_err(atm_error)
+    }
+
     fn close(&self) -> PyResult<()> {
+        let receiver = self
+            .receiver
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("ATM graft receiver lock poisoned"))?
+            .take();
+        if let Some(receiver) = receiver {
+            receiver.close().map_err(atm_error)?;
+        }
         self.client
             .lock()
             .map_err(|_| PyRuntimeError::new_err("ATM graft session lock poisoned"))?
@@ -258,18 +402,26 @@ impl PyGraftSession {
 #[pymodule]
 fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAgentAddress>()?;
+    m.add_class::<PyGraftSessionOptions>()?;
     m.add_class::<PyMessage>()?;
     m.add_class::<PyNudge>()?;
+    m.add_class::<PyGraftSessionSnapshot>()?;
     m.add_class::<PyGraftSession>()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PyAgentAddress, PyNudge};
+    use super::{PyAgentAddress, PyNudge, PythonNudgeInjector};
     use atm_core::boundary::PostSendHookEvent;
-    use atm_core::test_support::{TEST_ARCH_CTM, TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, ChatId, TeamName};
+    use atm_graft::HostNudgeInjector;
+    use pyo3::prelude::Python;
+    use pyo3::types::{PyAnyMethods, PyModule};
+
+    const TEST_RECIPIENT: &str = "test-recipient";
+    const TEST_SENDER: &str = "test-sender";
+    const TEST_TEAM: &str = "test-team";
 
     #[test]
     fn typed_address_round_trips_optional_chat_id() {
@@ -292,7 +444,7 @@ mod tests {
             sender: AgentName::from_validated(TEST_SENDER),
             sender_chat_id: Some("1234".parse::<ChatId>().expect("chat id")),
             sender_team: TeamName::from_validated(TEST_TEAM),
-            recipient: AgentName::from_validated(TEST_ARCH_CTM),
+            recipient: AgentName::from_validated(TEST_RECIPIENT),
             recipient_team: TeamName::from_validated(TEST_TEAM),
             message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
             description: "nudge".to_string(),
@@ -304,6 +456,84 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn receiver_callback_receives_the_canonical_typed_nudge() {
+        Python::initialize();
+        let event = PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_chat_id: Some("1234".parse::<ChatId>().expect("chat id")),
+            sender_team: TeamName::from_validated(TEST_TEAM),
+            recipient: AgentName::from_validated(TEST_RECIPIENT),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
+            message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
+            description: "nudge".to_string(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id: None,
+        };
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(
+                py,
+                c"received = []\ndef callback(nudge):\n    assert nudge.source.chat_id == '1234'\n    received.append(nudge.message_id)\n",
+                c"receiver_callback_test.py",
+                c"receiver_callback_test",
+            )
+            .expect("callback module");
+            let injector = PythonNudgeInjector {
+                callback: module.getattr("callback").expect("callback").unbind(),
+            };
+
+            injector.inject_nudge(&event).expect("callback delivery");
+
+            assert_eq!(
+                module
+                    .getattr("received")
+                    .expect("received")
+                    .len()
+                    .expect("length"),
+                1
+            );
+        });
+    }
+
+    #[test]
+    fn receiver_callback_error_is_an_atm_error() {
+        Python::initialize();
+        let event = PostSendHookEvent {
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_chat_id: None,
+            sender_team: TeamName::from_validated(TEST_TEAM),
+            recipient: AgentName::from_validated(TEST_RECIPIENT),
+            recipient_team: TeamName::from_validated(TEST_TEAM),
+            message_id: "01KX1TEST00000000000000000".parse().expect("message id"),
+            description: "nudge".to_string(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
+            recipient_pane_id: None,
+        };
+
+        Python::attach(|py| {
+            let module = PyModule::from_code(
+                py,
+                c"def callback(_nudge):\n    raise RuntimeError('callback failed')\n",
+                c"receiver_callback_error_test.py",
+                c"receiver_callback_error_test",
+            )
+            .expect("callback module");
+            let injector = PythonNudgeInjector {
+                callback: module.getattr("callback").expect("callback").unbind(),
+            };
+
+            let error = injector
+                .inject_nudge(&event)
+                .expect_err("callback failure must propagate");
+            assert_eq!(error.code(), atm_core::error::AtmErrorCode::InternalError);
+        });
     }
 
     #[test]

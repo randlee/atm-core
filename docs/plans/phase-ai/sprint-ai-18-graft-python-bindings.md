@@ -35,11 +35,11 @@ rebase and renewed review.
 
 - A versioned Python package built with PyO3/Maturin, without changing the
   public Rust `atm-graft` API.
-- Python representations of the existing `GraftClient`, `GraftSession`,
-  `GraftSessionOptions`, `GraftSessionState`, `SessionSnapshot`, and
-  `HostNudgeInjector` host surface. Python callback registration forwards a
-  canonical `PyNudge` through the existing receiver loop exactly once per
-  delivered graft nudge.
+- Python coverage of the complete supported `atm-graft` host surface: client
+  operations, receiver activation/lifecycle/snapshot/close, and canonical
+  `HostNudgeInjector` callback registration. The callback forwards one
+  canonical `PyNudge` through the existing receiver loop per delivered graft
+  nudge.
 - Typed Python representations for a canonical nudge and address, including
   optional `chat_id`; no string-only substitute for `AgentAddress`.
 - A session is created with one typed caller address. `send(to, body)` uses
@@ -73,6 +73,9 @@ struct PyGraftSessionSnapshot {
     state: String,
 }
 
+#[pyclass]
+struct PyGraftSessionOptions { workspace_root: String, agent: String, team: String }
+
 #[pymethods]
 impl PyGraftSession {
     #[new]
@@ -80,7 +83,11 @@ impl PyGraftSession {
     fn send(&self, to: PyAgentAddress, body: String) -> PyResult<()>;
     fn read(&self) -> PyResult<Vec<PyMessage>>;
     fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()>;
-    fn activate_receiver(&self, on_nudge: Py<PyAny>) -> PyResult<()>;
+    fn activate_receiver(
+        &self,
+        options: PyGraftSessionOptions,
+        on_nudge: Py<PyAny>,
+    ) -> PyResult<()>;
     fn snapshot(&self) -> PyResult<PyGraftSessionSnapshot>;
     fn close(&self) -> PyResult<()>;
 }
