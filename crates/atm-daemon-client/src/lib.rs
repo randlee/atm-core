@@ -16,8 +16,6 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 #[cfg(not(windows))]
 use interprocess::local_socket::traits::Stream as _;
 #[cfg(windows)]
-use serde_json;
-#[cfg(windows)]
 use std::net::TcpStream;
 #[cfg(windows)]
 use std::net::TcpStream as LocalSocketStream;
@@ -141,6 +139,16 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn reject_socket_override() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+        return Err(AtmError::socket_override_forbidden(
+            "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
+        ));
+    }
+    Ok(())
+}
+
 /// # Errors
 ///
 /// Returns [`AtmError`] when the canonical same-host daemon socket path cannot
@@ -148,9 +156,14 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
 pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
     #[cfg(windows)]
     {
-        return DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
-            &atm_core::home::atm_home()?,
-        ));
+        reject_socket_override()?;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        DaemonLocalIpcEndpoint::new(
+            runtime_scope
+                .runtime_root
+                .as_ref()
+                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+        )
     }
     #[cfg(not(windows))]
     DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path()?)
@@ -165,7 +178,15 @@ pub fn resolve_daemon_local_ipc_endpoint_from_home(
 ) -> Result<DaemonLocalIpcEndpoint, AtmError> {
     #[cfg(windows)]
     {
-        return DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(home_dir));
+        let _home_dir = home_dir;
+        reject_socket_override()?;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        DaemonLocalIpcEndpoint::new(
+            runtime_scope
+                .runtime_root
+                .as_ref()
+                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+        )
     }
     #[cfg(not(windows))]
     DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path_from_home(home_dir))
@@ -372,7 +393,7 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
     #[cfg(windows)]
     {
-        return try_connect_local_http_record(endpoint.as_ref());
+        try_connect_local_http_record(endpoint.as_ref())
     }
     #[cfg(not(windows))]
     {

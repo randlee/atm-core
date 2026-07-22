@@ -158,34 +158,44 @@ fn read_owner_record(lock_path: &Path) -> Result<String, AtmError> {
         Ok(_) => Err(AtmError::daemon_unavailable(
             "daemon owner record is empty while local HTTP metadata is present",
         )),
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
-            #[cfg(windows)]
-            {
-                let shadow_path = lock_path.with_file_name(format!(
-                    "{}.meta",
-                    lock_path
-                        .file_name()
-                        .and_then(|value| value.to_str())
-                        .unwrap_or("owner.lock")
-                ));
-                return fs::read_to_string(&shadow_path).map_err(|_source| {
-                    AtmError::daemon_unavailable(
-                        "daemon owner record is unavailable while local HTTP metadata is present",
-                    )
-                });
-            }
-            #[cfg(not(windows))]
-            {
-                let _ = source;
-                Err(AtmError::daemon_unavailable(
-                    "daemon owner record is unavailable while local HTTP metadata is present",
-                ))
-            }
-        }
+        Err(source) if should_read_owner_shadow(&source) => read_owner_shadow_record(lock_path),
         Err(_source) => Err(AtmError::daemon_unavailable(
             "failed to read daemon owner record for local HTTP metadata",
         )),
     }
+}
+
+#[cfg(windows)]
+fn should_read_owner_shadow(_source: &std::io::Error) -> bool {
+    true
+}
+
+#[cfg(not(windows))]
+fn should_read_owner_shadow(source: &std::io::Error) -> bool {
+    source.kind() == std::io::ErrorKind::NotFound
+}
+
+#[cfg(windows)]
+fn read_owner_shadow_record(lock_path: &Path) -> Result<String, AtmError> {
+    let shadow_path = lock_path.with_file_name(format!(
+        "{}.meta",
+        lock_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("owner.lock")
+    ));
+    fs::read_to_string(&shadow_path).map_err(|_source| {
+        AtmError::daemon_unavailable(
+            "daemon owner record is unavailable while local HTTP metadata is present",
+        )
+    })
+}
+
+#[cfg(not(windows))]
+fn read_owner_shadow_record(_lock_path: &Path) -> Result<String, AtmError> {
+    Err(AtmError::daemon_unavailable(
+        "daemon owner record is unavailable while local HTTP metadata is present",
+    ))
 }
 
 fn constant_time_eq(

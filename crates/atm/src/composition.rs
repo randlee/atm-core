@@ -140,8 +140,8 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
-        daemon_try_connect(&self.endpoint)
+    fn probe_connection(&self) -> Result<(), AtmError> {
+        daemon_try_connect(&self.endpoint).map(|_| ())
     }
 
     /// This function performs blocking IPC I/O on the synchronous ATM CLI path.
