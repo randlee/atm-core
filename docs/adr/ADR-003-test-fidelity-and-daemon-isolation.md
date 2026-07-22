@@ -1,9 +1,5 @@
 # ADR-003 — Test Fidelity And Daemon Isolation
 
-> **Phase AI update:** the retained Tier 1 and Tier 2 seams model the shared
-> HTTP application contract and `ApiRouter`; pre-AI.6 custom transport names
-> below are historical labels, not an additional protocol path.
-
 | Field | Value |
 |---|---|
 | ID | ADR-003 |
@@ -76,12 +72,12 @@ ATM adopts a layered testing model.
 
 ### Tier 1 — Fake Transport Tests
 
-Use a fake HTTP application client for deterministic CLI/composition tests.
+Use `FakeClientTransport` for deterministic CLI/composition tests.
 
 Definition:
-- an in-process test double for the shared HTTP application contract
+- an in-process implementation of `ClientTransport`
 - used only in tests
-- returns route-specific responses or ADR-032 `AtmError` values directly
+- returns typed `ResponseEnvelope` or `AtmError` values directly
 - never opens a socket
 - never launches `atm-daemon`
 
@@ -90,16 +86,18 @@ Primary seam:
 
 ### Tier 2 — Loopback Transport Tests
 
-Use an in-process HTTP adapter when tests need real router or handler behavior
-without a real daemon process.
+Use `LoopbackClientTransport`, an in-process `ClientTransport`, when tests need
+real dispatcher or handler behavior without a real daemon process.
 
 Definition:
-- routes the same HTTP application request through `ApiRouter` and handler logic
+- same `ClientTransport` contract
+- routes requests to in-process dispatcher / handler logic
 - preserves typed request/response behavior without process or socket timing
 
 Naming note:
-- `test-socket` is a historical name for this Tier 2 shape
-- Tier 1 is a pure fake and does not dispatch to real handlers
+- the older term `test-socket` refers to this Tier 2 transport shape
+- Tier 1 `FakeClientTransport` is a pure fake and does not dispatch to real
+  handlers
 
 ### Tier 3 — Daemon Runtime Tests
 
@@ -109,7 +107,7 @@ Keep a narrow explicit daemon-runtime suite only for:
 - stale-owner recovery
 - graceful shutdown
 - signal handling
-- HTTP listener/admission behavior when it is itself the runtime subject
+- transport framing behavior when it is itself the runtime subject
 
 These tests are not the ordinary correctness strategy.
 
@@ -157,8 +155,8 @@ Prohibited named patterns:
 
 ## Follow-Up Work
 
-- define the fake HTTP application-client contract
-- define loopback HTTP adapter requirements
+- define `FakeClientTransport`
+- define loopback transport requirements
 - add the singleton lint gate
 - remove the current daemon-spawn helpers from ordinary tests
 - rewrite CLI tests around the approved transport seams

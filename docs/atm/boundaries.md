@@ -1,8 +1,6 @@
 # ATM Boundary Inventory
 
-This document captures CLI-owned concrete adapters. Phase-R custom-frame
-records are historical through AI.5; Phase AI uses the shared HTTP client
-contract and daemon HTTP resources.
+This document captures CLI-owned concrete adapters for Phase R.
 
 Interpretation note:
 - `allowed_dependents: []` means no external crate should depend on the CLI's
@@ -11,16 +9,15 @@ Interpretation note:
 Canonical machine-readable boundary source:
 - [`boundaries/atm/local-socket-client-transport.toml`](../../boundaries/atm/local-socket-client-transport.toml)
 
-## LocalIpcClientTransportAdapter (historical through AI.5)
+## LocalIpcClientTransportAdapter
 
 Purpose:
-- Historically owned the CLI-local custom-frame client contract.
+- Owns the CLI-local implementation of the ClientTransport contract.
 
 Notes:
-- The CLI stays thin: parse, map a route-specific HTTP request, call the shared
-  HTTP client, and render the response.
-- Unix uses UDS or loopback TCP; Windows uses loopback TCP; peers use HTTPS.
-  These are HTTP adapters to one router, not separate client contracts.
+- The CLI stays thin: parse, map request, call transport, render response.
+- The CLI-local transport must use the same framed ATM packet helpers as the
+  daemon local IPC and remote peer transport adapters.
 - `atm send --stdin` is resolved before this adapter boundary: daemon-bound
   request DTOs may carry inline bytes or the retained file contract only, never
   a deferred stdin-read marker.

@@ -60,16 +60,23 @@ Required behavior:
 This sidecar is a recovery aid only. It does not replace the locked file as the source of truth
 while the lock handle remains readable.
 
-### Phase AI Windows Local Transport
+### `ErrorKind::Unsupported` Is Not a Timeout Exemption
 
-Windows local daemon traffic is HTTP over loopback TCP with no alternate local
-transport or fallback path. The daemon publishes its owner-readable loopback
-endpoint record and local capability only after binding; clients use the record
-rather than deriving a port or path.
+The current legacy Windows local transport reports `ErrorKind::Unsupported` for `set_recv_timeout()` and
+`set_send_timeout()`. Code may tolerate that result only when it immediately installs a bounded
+fallback contract.
 
-All local TCP connect, request, response, drain, and shutdown operations use
-the ordinary bounded HTTP timeout and cancellation contract. No Windows-only
-watchdog, unsupported-timeout bypass, or alternate local request path exists.
+Required fallback shapes:
+- request reads: a watchdog or equivalent bounded fallback that prevents blocked Windows
+  local-transport reads from pinning the connection slot or shutdown drain past the documented deadline
+- shutdown wake connections: no unbounded `flush()`/drain after the `Unsupported` bypass; the wake
+  path must still return within the same bounded deadline
+- shutdown drain: unsupported socket deadlines must not leave `active_connections` pinned past the
+  forced-cancel window
+
+Forbidden shape:
+- swallowing `ErrorKind::Unsupported` and then proceeding to an unbounded read, write, flush, or
+  shutdown wait
 
 ### AD.30 Windows Local IPC Depth Cases
 
@@ -91,11 +98,86 @@ Required proof shape:
 
 ## Windows Smoke Test
 
-AI.11 owns the reusable Windows local smoke procedure and AI.15 owns the
-Windows physical-peer proof. A Windows smoke must prove loopback-TCP HTTP
-endpoint publication, `atm doctor` readiness, and send/read/ack/nudge through
-the persistent daemon. Endpoint publication or raw TCP connection alone is not
-evidence of Phase AI closure.
+Use this procedure on a fresh Windows checkout of `feature/windows-test-parity`. The Windows
+machine should treat Git as the handoff channel: pull this branch first, then run the steps below
+from Windows PowerShell in the repository root.
+
+Observed result on the first Windows machine for this branch:
+- `PASS` after pulling `feature/windows-test-parity` and running the same-host daemon smoke flow
+- verified outcomes: `doctor --json` reached ready, the local endpoint was published, `send` succeeded,
+  and `read --all --json` returned the delivered body
+- one environment caveat: stale local daemon/test processes can hold the host owner lock and must
+  be cleared before rerunning the smoke
+
+1. Prerequisites
+   - Install the Rust MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc` or equivalent).
+   - Clone `atm-core`, then pull the branch under test:
+   ```powershell
+   git fetch origin
+   git switch feature/windows-test-parity
+   git pull --ff-only origin feature/windows-test-parity
+   ```
+
+2. Create a disposable ATM environment
+   ```powershell
+   $SmokeRoot = Join-Path $env:TEMP "atm-win-smoke"
+   Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+   New-Item -ItemType Directory -Force -Path $SmokeRoot | Out-Null
+   Set-Content -Path (Join-Path (Get-Location) ".atm.toml") -Value "[atm]`ndefault_team = `"smoke-team`"`n"
+   $env:ATM_HOME = $SmokeRoot
+   $env:ATM_CONFIG_HOME = $SmokeRoot
+   $env:ATM_TEAM = "smoke-team"
+   $env:ATM_IDENTITY = "smoke-user"
+   $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
+   ```
+   Then initialize the roster with ATM itself:
+   ```powershell
+   .\target\debug\atm.exe teams add-member smoke-team smoke-user worker gpt-5 --home-dir $SmokeRoot
+   ```
+
+3. Build the workspace
+   ```powershell
+   just build
+   ```
+   Pass indicator:
+   - workspace build exits zero
+   - `target\debug\atm-daemon.exe` and `target\debug\atm.exe` exist
+   Fail indicator:
+   - `just build` exits non-zero or the binaries are missing
+
+4. Run `atm doctor` and confirm the daemon reaches ready state
+   ```powershell
+   $Doctor = .\target\debug\atm.exe doctor --json | ConvertFrom-Json
+   $Doctor.summary.status
+   $Doctor.runtime_status.readiness
+   ```
+   Pass indicator:
+   - `summary.status` is `healthy` or `warning`
+   - `runtime_status.readiness` is `ready`
+   Fail indicator:
+   - `doctor` exits non-zero
+   - `runtime_status.readiness` is absent or not `ready`
+
+5. Verify the current local endpoint remains usable
+   ```powershell
+   .\target\debug\atm.exe doctor --json
+   ```
+   Pass indicator:
+   - `runtime_status.readiness` remains `ready` after the client reaches the daemon
+   Fail indicator:
+   - the command reports daemon unavailable or a non-ready runtime
+
+6. Confirm the daemon accepts a connection and a round-trip mailbox operation
+   ```powershell
+   .\target\debug\atm.exe send smoke-user "windows smoke hello" --json
+   .\target\debug\atm.exe read --all --json
+   ```
+   Pass indicator:
+   - `send` returns a normal sent result
+   - `read --all --json` includes the `windows smoke hello` body for `smoke-user@smoke-team`
+   Fail indicator:
+   - `send` reports daemon unavailable / connection refused
+   - `read` does not show the just-sent message
 
 ## Home Directory Resolution
 
