@@ -10,38 +10,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import Any
-
 import atm_graft
-
-
-_SAFE_SEGMENT = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
-
-
-def _required_segment(value: object, name: str) -> str:
-    if not isinstance(value, str) or not value or any(char not in _SAFE_SEGMENT for char in value):
-        raise ValueError(f"invalid ATM {name}")
-    return value
-
-
-def _optional_segment(value: object, name: str) -> str | None:
-    if value is None:
-        return None
-    return _required_segment(value, name)
-
-
-def hermes_chat_key(source: Any) -> str:
-    """Map a typed ATM source to its isolated Hermes ``atm:`` chat key.
-
-    This constructs the key from structured fields. It never parses a rendered
-    ``agent:chat-id@team`` string.
-    """
-
-    agent = _required_segment(getattr(source, "agent", None), "source agent")
-    team = _required_segment(getattr(source, "team", None), "source team")
-    chat_id = _optional_segment(getattr(source, "chat_id", None), "source chat ID")
-    identity = f"{agent}@{team}" if chat_id is None else f"{agent}:{chat_id}@{team}"
-    return f"atm:{identity}"
 
 
 class HermesGraftBridge:
@@ -79,11 +48,11 @@ class HermesGraftBridge:
         self._session.close()
 
     def _deliver_nudge(self, nudge: atm_graft.PyNudge) -> None:
-        message_id = _required_segment(nudge.message_id, "message ID")
+        message_id = nudge.message_id
         if message_id in self._recent_message_ids:
             return
 
-        chat_key = hermes_chat_key(nudge.source)
+        chat_key = f"atm:{nudge.source}"
         self._recent_message_ids[message_id] = None
         try:
             self._inject_user_message(chat_key, nudge.body)

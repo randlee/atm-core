@@ -43,6 +43,8 @@ def main() -> None:
                     "address = atm_graft.PyAgentAddress('omega-prime', 'hermes', '1234'); "
                     "assert address.chat_id == '1234'; "
                     "assert str(address) == 'omega-prime:1234@hermes'; "
+                    "nudge = atm_graft.PyNudge('01KX1TEST00000000000000000', address, 'body'); "
+                    "assert str(nudge.source) == 'omega-prime:1234@hermes'; "
                     "assert hasattr(atm_graft, 'PyGraftSessionOptions'); "
                     "assert hasattr(atm_graft, 'PyGraftSessionSnapshot')"
                 ),
