@@ -12,6 +12,7 @@ use std::{
 
 use cargo_metadata::{DependencyKind, MetadataCommand};
 use serde::Deserialize;
+use syn::visit::Visit;
 
 const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm", "atm-storage-rusqlite"),
@@ -39,7 +40,7 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
     "error_kind_for_code",
 ];
 
-const AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS: &[&str] = &[
+const AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS: &[&str] = &[
     "NamedPipe",
     "named_pipe",
     "AF_UNIX",
@@ -49,6 +50,14 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS: &[&str] = &[
     "FrameHeader",
     "read_framed_request",
     "write_framed_response",
+];
+
+const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
+    "named_pipe",
+    "named-pipe",
+    "tokio-named-pipes",
+    "tokio_named_pipes",
+    "windows-named-pipe",
 ];
 
 #[test]
@@ -341,13 +350,14 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 }
 
 #[test]
-fn ai11_deletion_gate_preserves_windows_loopback_transport_boundary() {
+fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
     let daemon_client = root.join("crates/atm-daemon-client/src/lib.rs");
     let cli_transport = root.join("crates/atm/src/composition.rs");
     let dispatcher = root.join("crates/atm-daemon/src/runtime_health.rs");
+    let protocol = root.join("crates/atm-core/src/protocol.rs");
 
     let daemon_lib_source = read_source(&daemon_lib);
     assert!(
@@ -362,20 +372,52 @@ fn ai11_deletion_gate_preserves_windows_loopback_transport_boundary() {
         "Windows must select the loopback-TCP local transport adapter"
     );
 
-    let guarded_sources = [&daemon_lib, &local_tcp, &daemon_client, &cli_transport];
+    let guarded_sources = [
+        &protocol,
+        &daemon_lib,
+        &local_tcp,
+        &daemon_client,
+        &cli_transport,
+    ];
     let retired = guarded_sources
         .iter()
-        .flat_map(|path| {
-            let source = read_source(path);
-            AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS
-                .iter()
-                .filter(move |symbol| source.contains(**symbol))
-                .map(move |symbol| format!("{} contains retired `{symbol}`", path.display()))
-        })
+        .flat_map(|path| retired_windows_transport_ast_findings(path))
         .collect::<Vec<_>>();
     assert!(
         retired.is_empty(),
         "AI.11 must not restore Windows pipe/AF_UNIX or generic frame-codec transport: {retired:?}"
+    );
+
+    let metadata = MetadataCommand::new()
+        .manifest_path(root.join("Cargo.toml"))
+        .no_deps()
+        .exec()
+        .expect("cargo metadata must succeed for the workspace");
+    let forbidden_dependencies = metadata
+        .packages
+        .into_iter()
+        .filter(|package| {
+            matches!(
+                package.name.as_str(),
+                "atm" | "atm-core" | "atm-daemon" | "atm-daemon-client"
+            )
+        })
+        .flat_map(|package| {
+            package
+                .dependencies
+                .into_iter()
+                .filter_map(move |dependency| {
+                    AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES
+                        .contains(&dependency.name.as_str())
+                        .then(|| {
+                            format!("{} directly depends on {}", package.name, dependency.name)
+                        })
+                })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        forbidden_dependencies.is_empty(),
+        "AI.11 must not restore retired Windows transport dependencies: {forbidden_dependencies:?}"
     );
 
     let local_tcp_source = read_source(&local_tcp);
@@ -409,14 +451,26 @@ fn ai11_deletion_gate_preserves_windows_loopback_transport_boundary() {
 }
 
 #[test]
-fn ai11_deletion_gate_detector_rejects_retired_windows_transport_fixture() {
-    let fixture = "NamedPipe FrameCodec";
-    let detected = AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS
-        .iter()
-        .filter(|symbol| fixture.contains(**symbol))
-        .copied()
-        .collect::<Vec<_>>();
-    assert_eq!(detected, vec!["NamedPipe", "FrameCodec"]);
+fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() {
+    let fixture = syn::parse_file(
+        r#"
+        use windows::named_pipe::NamedPipe;
+        const ENDPOINT: &str = r"\\.\pipe\atm";
+        const DOMAIN: i32 = AF_UNIX;
+        "#,
+    )
+    .expect("fixture must parse");
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&fixture);
+    assert_eq!(
+        detector.findings,
+        BTreeSet::from([
+            "identifier `AF_UNIX`".to_string(),
+            "identifier `NamedPipe`".to_string(),
+            "identifier `named_pipe`".to_string(),
+            "named-pipe endpoint literal".to_string(),
+        ])
+    );
 }
 
 #[test]
@@ -802,6 +856,42 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
 fn read_source(path: &Path) -> String {
     fs::read_to_string(path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+fn retired_windows_transport_ast_findings(path: &Path) -> Vec<String> {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&syntax);
+    detector
+        .findings
+        .into_iter()
+        .map(|finding| format!("{}: {finding}", path.display()))
+        .collect()
+}
+
+#[derive(Default)]
+struct RetiredWindowsTransportDetector {
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for RetiredWindowsTransportDetector {
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let value = ident.to_string();
+        if AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS.contains(&value.as_str()) {
+            self.findings.insert(format!("identifier `{value}`"));
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+
+    fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
+        if literal.value().contains(r"\\.\pipe\") {
+            self.findings
+                .insert("named-pipe endpoint literal".to_string());
+        }
+        syn::visit::visit_lit_str(self, literal);
+    }
 }
 
 fn workspace_root() -> PathBuf {
