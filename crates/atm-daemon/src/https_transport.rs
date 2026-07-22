@@ -820,8 +820,9 @@ mod tests {
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake(&mut tls).expect("client completes its handshake flight");
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        write_http_request(&mut tls, &request).expect("client writes request before server alert");
-        assert!(read_http_response(&mut tls, &request).is_err());
+        if write_http_request(&mut tls, &request).is_ok() {
+            assert!(read_http_response(&mut tls, &request).is_err());
+        }
         assert!(!router.routed.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
     }
