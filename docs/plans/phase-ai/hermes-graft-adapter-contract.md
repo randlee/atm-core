@@ -14,20 +14,22 @@ message ID retained in its bounded in-memory duplicate set.
 
 ## Typed callback
 
-The callback receives `PyNudge` from AI.18. It uses only these structured
-fields:
+The callback receives `PyNudge` from AI.18. It uses only these typed values:
 
 - `nudge.message_id` — immutable duplicate-suppression key;
-- `nudge.source.agent`, `nudge.source.chat_id`, and `nudge.source.team` —
-  chat identity inputs;
+- `nudge.source` — a validated `PyAgentAddress` whose `__str__()` renders the
+  canonical chat identity;
 - `nudge.body` — the body submitted to Hermes's normal inbound-user-message
   path.
 
-It never parses the rendered `agent:chat-id@team` form. For a source with a
-chat ID it constructs `atm:agent:chat-id@team`; without one it constructs
-`atm:agent@team`. The `atm:` prefix is reserved for ATM conversations and
-keeps their state disjoint from Telegram, Discord, and every other host
-namespace.
+`PyNudge(message_id, source, body)` is a validated Python value constructor
+for bridge/reference-adapter tests. It validates the immutable message ID and
+nonblank body; it does not write, route, or synthesize a nudge.
+
+It performs no address parsing, segment validation, or rendering. It prefixes
+the binding-rendered identity with `atm:`, yielding `atm:agent:chat-id@team`
+or `atm:agent@team`. The prefix keeps ATM state disjoint from Telegram,
+Discord, and every other host namespace.
 
 The callback is emitted only after the canonical write is durable. A failed
 host injection propagates to the existing graft callback caller; the bridge

@@ -194,6 +194,21 @@ impl PyNudge {
 
 #[pymethods]
 impl PyNudge {
+    #[new]
+    fn new(message_id: String, source: PyAgentAddress, body: String) -> PyResult<Self> {
+        message_id
+            .parse::<atm_core::schema::AtmMessageId>()
+            .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?;
+        if body.trim().is_empty() {
+            return Err(PyValueError::new_err("nudge body must not be blank"));
+        }
+        Ok(Self {
+            message_id,
+            source,
+            body,
+        })
+    }
+
     fn __repr__(&self) -> String {
         format!("PyNudge(message_id={})", self.message_id)
     }
@@ -456,6 +471,26 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn python_nudge_constructor_validates_immutable_event_fields() {
+        let source = PyAgentAddress::new(
+            TEST_SENDER.to_string(),
+            TEST_TEAM.to_string(),
+            Some("1234".to_string()),
+        )
+        .expect("valid source");
+
+        let nudge = PyNudge::new(
+            "01KX1TEST00000000000000000".to_string(),
+            source,
+            "nudge".to_string(),
+        )
+        .expect("valid nudge");
+        assert_eq!(nudge.message_id, "01KX1TEST00000000000000000");
+        assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+        assert!(PyNudge::new("not-a-ulid".to_string(), nudge.source, "nudge".to_string()).is_err());
     }
 
     #[test]
