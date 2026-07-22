@@ -111,7 +111,7 @@ impl ListCommand {
 #[cfg(test)]
 mod tests {
     use atm_core::test_support::EnvGuard;
-    use atm_core::test_support::ROLE_TEAM_LEAD;
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_TEAM};
     use atm_core::types::ReadSelection;
     use serial_test::serial;
 
@@ -187,6 +187,24 @@ mod tests {
 
         assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
         assert_eq!(query.caller_team.as_str(), "override-team");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_query_accepts_as_without_ambient_identity() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", None),
+            ("ATM_CHAT_ID", None),
+            ("ATM_TEAM", None),
+        ]);
+        let mut command = base_command();
+        command.actor = Some(ROLE_TEAM_LEAD.to_string());
+        command.team = Some(TEST_TEAM.to_string());
+
+        let query = command.build_query(".".into(), ".".into()).expect("query");
+
+        assert_eq!(query.caller_identity.as_str(), ROLE_TEAM_LEAD);
+        assert_eq!(query.caller_team.as_str(), TEST_TEAM);
     }
 
     fn base_command() -> ListCommand {

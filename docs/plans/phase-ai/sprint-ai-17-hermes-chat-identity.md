@@ -1,7 +1,7 @@
 ---
 id: AI.17
 title: Ambient Chat Context (Hermes First Client)
-status: planned
+status: complete
 branch: feature/pAI-s17-hermes-chat-identity
 worktree: ../atm-core-worktrees/feature/pAI-s17-hermes-chat-identity
 target: integrate/phase-AI
