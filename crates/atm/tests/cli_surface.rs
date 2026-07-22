@@ -21,8 +21,9 @@
 //! ```
 //!
 //! or via `cargo run -p agent-team-mail --example gen_cli_docs`, which
-//! regenerates both this baseline and `docs/atm/cli-reference.md` from the
-//! same live tree in one step. No established bless/regen convention exists
+//! regenerates both this baseline and the version-suffixed
+//! `docs/atm/cli-reference-<version>.md` from the same live tree in one
+//! step. No established bless/regen convention exists
 //! elsewhere in this repo (searched for `bless`/`UPDATE_*` env vars in
 //! existing golden-file tests and found none), so this follows the common
 //! Rust ecosystem `UPDATE_<THING>=1` pattern (cf. `UPDATE_EXPECT`,

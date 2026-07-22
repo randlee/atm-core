@@ -16,7 +16,7 @@
 //!   consumed by `crates/atm/tests/cli_surface.rs` and used to regenerate
 //!   `crates/atm/tests/cli_surface_baseline.json`.
 //! - `atm __dump-cli-surface --format markdown` prints [`command_surface_markdown`]
-//!   output, used to regenerate `docs/atm/cli-reference.md`.
+//!   output, used to regenerate the version-suffixed `docs/atm/cli-reference-<version>.md`.
 //!
 //! The command is hidden from normal help but still uses the normal parse,
 //! tracing, and observability bootstrap path. It is invoked by
