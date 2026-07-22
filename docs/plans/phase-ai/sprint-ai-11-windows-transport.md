@@ -1,7 +1,8 @@
 ---
 title: AI.11 HTTP contract and Windows local TCP
-status: proposed
+status: complete
 branch: feature/pAI-s11-post-merge-remediation
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation
 target: integrate/phase-AI
 ---
 

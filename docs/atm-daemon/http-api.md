@@ -34,6 +34,11 @@ owner-readable endpoint record plus `X-ATM-Local-Capability` (32-byte base64url
 capability). These checks create typed local or peer ingress context before the
 router; socket family and address never determine request semantics.
 
+The endpoint record contains the serving singleton instance ID. A loopback
+client compares it with the owner record and rejects missing, revoked, stale,
+or mismatched metadata before opening a connection. Shutdown syncs a revoked
+record before removing it.
+
 All routes have a bounded request deadline and reject a body over `1_048_576`
 bytes before decode. UDS uses the `3s` same-host deadline; HTTPS uses the documented `5s`
 connect, handshake, and request legs within its `10s` synchronous wait budget.
@@ -46,11 +51,13 @@ tracked requests within the daemon shutdown deadline.
 | --- | --- | --- | --- |
 | `/v1/atm/messages` | `GET` | List/query visible messages; non-mutating | read/query |
 | `/v1/atm/messages` | `POST` | Create/send immutable message | canonical write |
-| `/v1/atm/message/{message-id}` | `GET` | Inspect one message; non-mutating | read/query |
-| `/v1/atm/message/{message-id}` | `DELETE` | Clear one message where authorized | clear |
-| `/v1/atm/message/{message-id}/read` | `POST` | Owner-only read-state mutation | read mutation |
+| `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
+| `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
+| `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
 | `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
+| `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
+| `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
 
 `GET /v1/atm/messages` accepts independent `agent` and `chat_id` query
 filters. `agent=hendrix` searches that base agent across every chat identity;

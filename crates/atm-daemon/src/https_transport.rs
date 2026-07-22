@@ -144,9 +144,10 @@ impl HttpsMessageTransport for HttpsTransport {
             })?;
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake(&mut tls)?;
-        write_http_request(&mut tls, &RequestEnvelope::Write(Box::new(request)))?;
+        let request = RequestEnvelope::Write(Box::new(request));
+        write_http_request(&mut tls, &request)?;
         apply_deadline(tls.get_ref(), deadline.request)?;
-        read_http_response(&mut tls)
+        read_http_response(&mut tls, &request)
     }
 }
 
@@ -735,9 +736,9 @@ mod tests {
         .expect("client connection");
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake(&mut tls).expect("mutual TLS handshake");
-        write_http_request(&mut tls, &RequestEnvelope::Doctor(DoctorQuery::default()))
-            .expect("write shared request");
-        let _ = read_http_response(&mut tls).expect("shared router response");
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        write_http_request(&mut tls, &request).expect("write shared request");
+        let _ = read_http_response(&mut tls, &request).expect("shared router response");
         assert!(router.routed.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
     }
@@ -818,9 +819,9 @@ mod tests {
         .expect("client connection");
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake(&mut tls).expect("client completes its handshake flight");
-        write_http_request(&mut tls, &RequestEnvelope::Doctor(DoctorQuery::default()))
-            .expect("client writes request before server alert");
-        assert!(read_http_response(&mut tls).is_err());
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        write_http_request(&mut tls, &request).expect("client writes request before server alert");
+        assert!(read_http_response(&mut tls, &request).is_err());
         assert!(!router.routed.load(Ordering::SeqCst));
         listener.shutdown().expect("shutdown listener");
     }
@@ -869,9 +870,9 @@ mod tests {
         )
         .expect("write request");
         write.authenticated_source_host = Some("spoofed.invalid".parse().expect("host"));
-        write_http_request(&mut tls, &RequestEnvelope::Write(Box::new(write)))
-            .expect("write shared request");
-        let _ = read_http_response(&mut tls).expect("shared router response");
+        let request = RequestEnvelope::Write(Box::new(write));
+        write_http_request(&mut tls, &request).expect("write shared request");
+        let _ = read_http_response(&mut tls, &request).expect("shared router response");
         let request = router
             .request
             .lock()

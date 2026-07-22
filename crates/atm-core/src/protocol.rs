@@ -7,7 +7,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use interprocess::local_socket::{GenericFilePath, Name, ToFsName};
+use interprocess::local_socket::Name;
+#[cfg(not(windows))]
+use interprocess::local_socket::{GenericFilePath, ToFsName};
 use serde::{Deserialize, Serialize};
 
 use crate::ack::AckOutcome;
@@ -171,8 +173,19 @@ pub fn daemon_socket_path_from_home(home_dir: &Path) -> PathBuf {
 ///
 /// Returns [`AtmError`] when the active endpoint cannot be mapped to a valid
 /// platform-local IPC name.
+#[cfg(not(windows))]
 pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
     daemon_local_ipc_name_from_path(&daemon_socket_path()?)
+}
+
+/// Windows has no local IPC endpoint. Local clients discover the daemon's
+/// loopback HTTP record instead. Retaining this symbol only keeps legacy
+/// callers buildable until they migrate; it never constructs a fallback.
+#[cfg(windows)]
+pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
+    Err(AtmError::daemon_unavailable(
+        "Windows local IPC is retired; use the local HTTP endpoint record",
+    ))
 }
 
 /// Convert one daemon endpoint path into the concrete platform-local IPC name
@@ -182,8 +195,10 @@ pub fn daemon_local_ipc_name() -> Result<Name<'static>, AtmError> {
 ///
 /// Returns [`AtmError`] when the endpoint cannot be represented by the current
 /// platform-local IPC implementation.
+#[cfg(not(windows))]
 pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
-    platform_local_ipc_endpoint_path(endpoint_path.to_path_buf())
+    endpoint_path
+        .to_path_buf()
         .into_os_string()
         .to_fs_name::<GenericFilePath>()
         .map_err(|_source| {
@@ -195,35 +210,8 @@ pub fn daemon_local_ipc_name_from_path(endpoint_path: &Path) -> Result<Name<'sta
 }
 
 #[cfg(windows)]
-fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
-    const WINDOWS_PIPE_PREFIX: &str = r"\\.\pipe\";
-
-    let raw = path.to_string_lossy();
-    if raw.starts_with(WINDOWS_PIPE_PREFIX) {
-        return path;
-    }
-
-    let mut hash = 0xcbf29ce484222325u64;
-    for byte in raw.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-
-    let mut leaf = path
-        .file_stem()
-        .map(|value| value.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "atm-daemon".to_string());
-    leaf.retain(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
-    if leaf.is_empty() {
-        leaf = "atm-daemon".to_string();
-    }
-
-    PathBuf::from(format!(r"\\.\pipe\atm-{}-{hash:016x}", leaf))
-}
-
-#[cfg(not(windows))]
-fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
-    path
+pub fn daemon_local_ipc_name_from_path(_endpoint_path: &Path) -> Result<Name<'static>, AtmError> {
+    daemon_local_ipc_name()
 }
 
 /// Shared notification event payload.
