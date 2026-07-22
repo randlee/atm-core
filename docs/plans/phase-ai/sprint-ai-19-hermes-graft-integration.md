@@ -43,6 +43,10 @@ not modify the post-write router, daemon transport, or `atm-graft` API.
   chats cannot collide with Telegram/Discord; malformed source addresses fail
   closed; duplicate notification delivery does not create a second Hermes turn
   for the same message ID.
+- `docs/plans/phase-ai/hermes-graft-adapter-contract.md` — checked-in Hermes
+  handoff contract specifying the typed callback, the `atm:` namespace, and
+  the downstream repository/test/review handoff; it authorizes no external
+  checkout edit in this sprint.
 
 ## Exact Targets and Contract
 
@@ -50,6 +54,11 @@ not modify the post-write router, daemon transport, or `atm-graft` API.
   reference adapter over AI.18; no socket or storage dependency.
 - `crates/atm-graft-python/tests/test_hermes_bridge.py` — tests for every
   reference-adapter assertion listed in Deliverables.
+- `.just/run_hermes_graft_bridge_tests.py` and the
+  `just test-hermes-graft-bridge` recipe — build the Maturin package in an
+  isolated venv, then execute `python -m unittest discover -s
+  crates/atm-graft-python/tests -p test_hermes_bridge.py`. This uses the
+  Python standard library; no unwired pytest dependency is introduced.
 - `docs/plans/phase-ai/hermes-graft-adapter-contract.md` — checked-in contract
   for Hermes maintainers, including the downstream test/merge handoff.
 
@@ -78,7 +87,13 @@ unchanged.
 
 ## Closure
 
-- Focused reference-adapter tests and a running daemon proof pass.
+- `just test-hermes-graft-bridge` passes, proving every reference-adapter
+  assertion named in Deliverables; `just test` alone is insufficient for this
+  target.
+- The checked-in `hermes-graft-adapter-contract.md` contains the typed
+  callback, namespace, and downstream handoff contract described in
+  Deliverables.
+- A running daemon proof passes.
 - The proof records message ID, persisted-row observation, rendered source
   address, selected Hermes chat key, and nudge receipt order.
 - `just lint`, `just test`, and `git diff --check` pass.

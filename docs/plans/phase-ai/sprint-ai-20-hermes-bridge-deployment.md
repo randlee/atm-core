@@ -17,7 +17,7 @@ name plus its `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
 configuration, and log path. Launchd supervises a process; it never
 participates in message identity or routing.
 
-## Inputs and Closure Prerequisites
+## Hard Dependencies
 
 - Before AI.20 starts, the operator supplies the raw profile inputs out of
   band: profile name, `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, bridge
@@ -51,6 +51,11 @@ remain blocked on AI.19 `PASS`.
 - `docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist` —
   checked-in parameterized template. Operator-rendered plist files and their
   local paths are evidence, not repository targets.
+- `scripts/phase-ai/run-hermes-bridge-probes.sh` and the
+  `just verify-hermes-bridge-deployment <profile-registry-path>` recipe —
+  launchd probes for every registry entry: independent supervision, restart
+  after controlled termination, receiver availability, and qualified chat
+  mapping.
 
 Every plist sets `ATM_TEAM`, `ATM_IDENTITY`, `HERMES_SESSION_KEY`, the bridge
 module path, and an explicit profile log path. `KeepAlive` is allowed only for
@@ -66,5 +71,8 @@ address parser, no transport protocol, and no cross-host feature.
 
 - Each registry profile starts and stops independently through launchd.
 - The runbook reproduces the validation without hidden configuration.
+- `just verify-hermes-bridge-deployment <profile-registry-path>` passes for
+  the recorded operator registry; `just test` alone is insufficient for the
+  launchd probes.
 - `just lint`, `just test`, and `git diff --check` pass for repository work;
   retained launchd evidence accompanies the operator-owned artifacts.
