@@ -1,6 +1,7 @@
 use atm_core::ack::AckRequest;
 use atm_core::boundary::RosterHarness;
 use atm_core::error_codes::AtmErrorCode;
+#[cfg(not(windows))]
 use atm_core::graft::{
     GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
     read_graft_post_send_message, write_graft_post_send_message,
@@ -8,10 +9,16 @@ use atm_core::graft::{
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
-use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
-use atm_core::types::{AgentName, TeamName};
+#[cfg(not(windows))]
+use atm_core::test_support::EnvGuard;
+use atm_core::test_support::ROLE_TEAM_LEAD;
+#[cfg(not(windows))]
+use atm_core::types::AgentName;
+use atm_core::types::TeamName;
 use atm_runtime_test_support::open_sqlite_boundary;
+#[cfg(not(windows))]
 use interprocess::local_socket::ListenerOptions;
+#[cfg(not(windows))]
 use interprocess::local_socket::traits::Listener as _;
 use tempfile::TempDir;
 
@@ -96,6 +103,7 @@ fn graft_warning_dispatcher() -> (
     (tempdir, atm_home, workspace_dir, dispatcher)
 }
 
+#[cfg(not(windows))]
 fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
     std::fs::write(
         workspace_dir.join(".atm.toml"),
@@ -132,6 +140,12 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         other => panic!("expected send response, got {other:?}"),
     };
     assert_eq!(outcome.warnings.len(), 1);
+    #[cfg(windows)]
+    assert_eq!(
+        outcome.warnings[0].code,
+        Some(AtmErrorCode::DaemonUnavailable)
+    );
+    #[cfg(not(windows))]
     assert_eq!(
         outcome.warnings[0].code,
         Some(AtmErrorCode::PostSendGraftUnavailable)
@@ -185,6 +199,12 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         other => panic!("expected ack response, got {other:?}"),
     };
     assert_eq!(ack_outcome.warnings.len(), 1);
+    #[cfg(windows)]
+    assert_eq!(
+        ack_outcome.warnings[0].code,
+        Some(AtmErrorCode::DaemonUnavailable)
+    );
+    #[cfg(not(windows))]
     assert_eq!(
         ack_outcome.warnings[0].code,
         Some(AtmErrorCode::PostSendGraftUnavailable)
@@ -192,6 +212,7 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     assert!(ack_outcome.warnings[0].recovery.is_some());
 }
 
+#[cfg(not(windows))]
 #[test]
 #[serial_test::serial(env)]
 fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
