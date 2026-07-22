@@ -39,6 +39,18 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
     "error_kind_for_code",
 ];
 
+const AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS: &[&str] = &[
+    "NamedPipe",
+    "named_pipe",
+    "AF_UNIX",
+    "PipeClient",
+    "PipeServer",
+    "FrameCodec",
+    "FrameHeader",
+    "read_framed_request",
+    "write_framed_response",
+];
+
 #[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
@@ -326,6 +338,85 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
         findings.is_empty(),
         "retired peer-delivery constructs must not re-enter workspace Rust source: {findings:?}"
     );
+}
+
+#[test]
+fn ai11_deletion_gate_preserves_windows_loopback_transport_boundary() {
+    let root = workspace_root();
+    let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
+    let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
+    let daemon_client = root.join("crates/atm-daemon-client/src/lib.rs");
+    let cli_transport = root.join("crates/atm/src/composition.rs");
+    let dispatcher = root.join("crates/atm-daemon/src/runtime_health.rs");
+
+    let daemon_lib_source = read_source(&daemon_lib);
+    assert!(
+        daemon_lib_source.contains("#[cfg(not(windows))]")
+            && daemon_lib_source.contains("mod local_ipc_transport;"),
+        "AI.11 permits UDS only behind the Unix-only local_ipc_transport module gate"
+    );
+    assert!(
+        daemon_lib_source.contains("#[cfg(windows)]")
+            && daemon_lib_source
+                .contains("pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
+        "Windows must select the loopback-TCP local transport adapter"
+    );
+
+    let guarded_sources = [&daemon_lib, &local_tcp, &daemon_client, &cli_transport];
+    let retired = guarded_sources
+        .iter()
+        .flat_map(|path| {
+            let source = read_source(path);
+            AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS
+                .iter()
+                .filter(move |symbol| source.contains(**symbol))
+                .map(move |symbol| format!("{} contains retired `{symbol}`", path.display()))
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        retired.is_empty(),
+        "AI.11 must not restore Windows pipe/AF_UNIX or generic frame-codec transport: {retired:?}"
+    );
+
+    let local_tcp_source = read_source(&local_tcp);
+    let non_loopback_binds = local_tcp_source
+        .lines()
+        .filter(|line| line.contains("TcpListener::bind"))
+        .filter(|line| !line.contains("Ipv4Addr::LOCALHOST"))
+        .collect::<Vec<_>>();
+    assert!(
+        non_loopback_binds.is_empty(),
+        "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
+    );
+    for forbidden in [
+        "LocalServiceRuntime",
+        "persist_message",
+        "emit_post_send_effects",
+        "write_mail_with_runtime",
+    ] {
+        assert!(
+            !local_tcp_source.contains(forbidden),
+            "local transport adapter must not call storage/write/nudge code directly: `{forbidden}`"
+        );
+    }
+
+    let dispatcher_source = read_source(&dispatcher);
+    assert_eq!(
+        dispatcher_source.matches("impl ApiRouter for").count(),
+        1,
+        "AI.11 requires exactly one production ApiRouter implementation"
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_detector_rejects_retired_windows_transport_fixture() {
+    let fixture = "NamedPipe FrameCodec";
+    let detected = AI11_RETIRED_WINDOWS_TRANSPORT_SYMBOLS
+        .iter()
+        .filter(|symbol| fixture.contains(**symbol))
+        .copied()
+        .collect::<Vec<_>>();
+    assert_eq!(detected, vec!["NamedPipe", "FrameCodec"]);
 }
 
 #[test]
@@ -706,6 +797,11 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
         .map(|(index, _)| index)
         .unwrap_or(rest.len());
     Some(&rest[..next])
+}
+
+fn read_source(path: &Path) -> String {
+    fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
 fn workspace_root() -> PathBuf {
