@@ -201,16 +201,25 @@ impl PreparedWrite {
         runtime: &LocalServiceRuntime,
         post_send_emitter: &dyn PostSendHookEmitter,
     ) {
-        self.emit_local_post_write_with_runtime(runtime, post_send_emitter);
+        hook::emit_post_send_effects(
+            runtime,
+            &mut self.outcome.warnings,
+            self.post_write.post_send_config.as_ref(),
+            Some(post_send_emitter),
+            &self.post_write.recipient,
+            &self.post_write.delivery_snapshot,
+            &self.post_write.messages,
+        );
     }
 
-    fn emit_local_post_write_with_runtime<R>(
+    #[cfg(test)]
+    pub(crate) fn emit_local_post_write_for_test<
+        R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
+    >(
         &mut self,
         runtime: &R,
         post_send_emitter: &dyn PostSendHookEmitter,
-    ) where
-        R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
-    {
+    ) {
         hook::emit_post_send_effects(
             runtime,
             &mut self.outcome.warnings,
@@ -515,7 +524,7 @@ fn send_mail_with_runtime_impl<
     {
         // Test-only harness: production notification is owned by
         // `PostWriteRouter::dispatch` in atm-daemon.
-        prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);
+        prepared.emit_local_post_write_for_test(runtime, post_send_emitter);
     }
     match prepared.finish_with_runtime(runtime, observability)? {
         WriteOutcome::Sent(outcome) => Ok(outcome),
