@@ -934,7 +934,7 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
     let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
-    let daemon_lib_source = read_source(&daemon_lib);
+    let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
         daemon_lib_source.contains("mod local_tcp_transport;")
             && daemon_lib_source.contains("#[cfg(not(windows))]\nmod local_ipc_transport;")
