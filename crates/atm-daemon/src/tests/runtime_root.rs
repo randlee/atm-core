@@ -20,8 +20,8 @@ use tempfile::TempDir;
 
 use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::test_support::{
-    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-    write_test_local_ipc_request,
+    configure_test_local_http_timeouts, connect_daemon_local_http_until_ready,
+    write_test_local_http_request,
 };
 
 #[derive(Default)]
@@ -565,7 +565,7 @@ fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
+fn local_http_runtime_round_trips_send_after_add_member_roster_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -598,7 +598,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         ("USERPROFILE", None),
     ]);
     let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
+    let server_transport = LocalHttpServerTransportAdapter::new();
     let runtime = server_transport
         .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
         .expect("prepare runtime");
@@ -639,8 +639,8 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
+    let (mut stream, capability) = connect_daemon_local_http_until_ready(&atm_home, ready_rx);
+    configure_test_local_http_timeouts(&stream);
     let request = RequestEnvelope::Write(Box::new(
         SendRequest::new(
             atm_home.clone(),
@@ -656,7 +656,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
         )
         .expect("send request"),
     ));
-    write_test_local_ipc_request(&mut stream, &request).expect("write send request");
+    write_test_local_http_request(&mut stream, &request, &capability).expect("write send request");
     let response =
         atm_core::api::read_http_response(&mut stream, &request).expect("read send response");
     match response {
@@ -676,7 +676,7 @@ fn local_ipc_runtime_round_trips_send_after_add_member_roster_state() {
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state() {
+fn local_http_client_preflight_round_trips_ack_required_send_after_add_member_roster_state() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -709,7 +709,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         ("USERPROFILE", None),
     ]);
     let socket_path = atm_core::home::host_runtime_dir_from_home(&atm_home).join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
+    let server_transport = LocalHttpServerTransportAdapter::new();
     let runtime = server_transport
         .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
         .expect("prepare runtime");
@@ -750,11 +750,7 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    drop(connect_daemon_local_ipc_until_ready(&socket_path, ready_rx));
-    #[cfg(windows)]
-    let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
-        .expect("windows local HTTP endpoint");
-    #[cfg(not(windows))]
+    drop(connect_daemon_local_http_until_ready(&atm_home, ready_rx));
     let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new(
         atm_core::local_http::local_http_record_path(&atm_home),
     )
