@@ -64,7 +64,16 @@ second routing or acknowledgement path.
 - No separate ack sender, ack transport, or sender-side ack state mutation.
 - No second routing decision in CLI, graft, HTTP, TLS, storage, or nudge code.
 - No cross-host-specific persistence or inbound nudge handler.
-- No host inspection before persistence or outside `PostWriteRouter`.
+- No local-versus-peer delivery routing decision before persistence or outside
+  `PostWriteRouter::dispatch`. A delivery-routing decision selects between
+  local nudge and peer HTTPS transport from the destination host, or invokes
+  either mechanism.
+- The canonical writer may perform one narrow persistence-time admission check:
+  local writes, including authenticated peer writes landing on their destination
+  host, enforce local roster membership and reject an unknown local recipient;
+  host-qualified writes that are not authenticated peer writes skip local roster
+  validation and defer admission to the receiving host. This check cannot call,
+  or be reachable from, local-nudge or peer-HTTPS delivery.
 - No socket-family or socket-address inference of local versus peer ingress.
 
 Architecture checks must reject these shapes structurally, not merely by a
@@ -83,3 +92,7 @@ pre-persistence `route_write` remote-host branch and no-op
 `PostWriteRouter::dispatch` remain; AI.12 is the sole owning sprint for their
 deletion and the structural enforcement of this ADR. Until AI.12 closes, no
 current code claim may describe the post-write routing invariants as enforced.
+
+`DeliveryPolicyCoordinator::resolve_write_recipient_snapshot` is the sole
+persistence-time admission check permitted by this ADR. It is exempt from the
+delivery-routing prohibition above because it selects no delivery mechanism.
