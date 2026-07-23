@@ -220,6 +220,10 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "fn write() { let emit = &emit_local_post_write; emit(); }",
         ),
         (
+            "cast delivery function binding",
+            "fn write() { let emit = emit_local_post_write as fn(); emit(); }",
+        ),
+        (
             "transitive delivery function alias",
             "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
         ),
@@ -333,6 +337,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         }
         if let syn::Pat::Ident(binding) = &node.pat
             && let Some(init) = node.init.as_ref()
+            && self.is_function_binding_candidate(&init.expr)
             && let provenance = self.function_binding_provenance(&init.expr)
             && let Some(function) = self.current_function_mut()
         {
@@ -437,7 +442,47 @@ impl HostRoutingVisitor {
         self.current_function
             .and_then(|index| self.functions.get(index))
             .and_then(|current| current.function_bindings.get(&name))
-            .is_some_and(|binding| *binding == FunctionBinding::Delivery)
+            .is_some_and(|binding| *binding != FunctionBinding::Safe)
+    }
+
+    fn is_function_binding_candidate(&self, expression: &syn::Expr) -> bool {
+        match expression {
+            syn::Expr::Path(path) => path
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| {
+                    let name = segment.ident.to_string();
+                    is_delivery_function_name(&name)
+                        || self.delivery_function_aliases.contains(&name)
+                        || self
+                            .current_function
+                            .and_then(|index| self.functions.get(index))
+                            .is_some_and(|function| function.function_bindings.contains_key(&name))
+                }),
+            syn::Expr::Cast(cast) => self.is_function_binding_candidate(&cast.expr),
+            syn::Expr::Closure(closure) => self.is_function_binding_candidate(&closure.body),
+            syn::Expr::Paren(paren) => self.is_function_binding_candidate(&paren.expr),
+            syn::Expr::Group(group) => self.is_function_binding_candidate(&group.expr),
+            syn::Expr::Reference(reference) => self.is_function_binding_candidate(&reference.expr),
+            syn::Expr::Block(block) => block.block.stmts.last().is_some_and(|statement| {
+                matches!(statement, syn::Stmt::Expr(expression, _) if self.is_function_binding_candidate(expression))
+            }),
+            syn::Expr::Call(call) => {
+                self.is_function_binding_candidate(&call.func)
+                    || call.args.iter().any(|argument| self.is_function_binding_candidate(argument))
+            }
+            syn::Expr::MethodCall(call) => {
+                self.is_function_binding_candidate(&call.receiver)
+                    || call.args.iter().any(|argument| self.is_function_binding_candidate(argument))
+            }
+            syn::Expr::Field(field) => self.is_function_binding_candidate(&field.base),
+            syn::Expr::Tuple(tuple) => tuple
+                .elems
+                .iter()
+                .any(|element| self.is_function_binding_candidate(element)),
+            _ => false,
+        }
     }
 
     fn function_binding_provenance(&self, expression: &syn::Expr) -> FunctionBinding {
