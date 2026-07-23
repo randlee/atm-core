@@ -54,7 +54,7 @@ human intermediary.
 
 ## Current direct action
 
-**cwin:** pull `0b99a252`, configure the durable HTTPS interface for
+**cwin:** pull `7856835a`, configure the durable HTTPS interface for
 `10.10.100.98:43101`, initialize the Windows certificate from its real local
 certificate material, then append its resulting fingerprint and interface
 JSON here. Add the Mac trust record using host `10.202.137.160` and fingerprint
