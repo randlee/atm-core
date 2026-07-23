@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(windows)]
 use std::time::Instant;
 
 #[cfg(windows)]
@@ -30,15 +31,96 @@ use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
 use ulid::Ulid;
 
+#[cfg(windows)]
 use crate::SubsystemObservability;
+#[cfg(windows)]
 use crate::active_connection_registry::ActiveConnectionRegistry;
+#[cfg(windows)]
 use crate::active_connection_registry::TrackedDispatchHandle;
+#[cfg(windows)]
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+#[cfg(windows)]
+use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
+
+/// Secondary Unix local ingress used for UDS/TCP parity. It owns only the
+/// loopback listener and the capability record; daemon singleton ownership
+/// remains with the primary runtime server.
+#[cfg(unix)]
+pub(crate) struct LocalTcpLoopbackServer {
+    listener: TcpListener,
+    capability: LocalCapability,
+    _endpoint_guard: SocketEndpointGuard,
+}
+
+#[cfg(unix)]
+impl LocalTcpLoopbackServer {
+    pub(crate) fn bind_in_runtime_dir(
+        runtime_dir: &Path,
+        daemon_instance_id: Ulid,
+    ) -> Result<Self, AtmError> {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to bind local loopback HTTP listener: {source}"
+            ))
+        })?;
+        listener.set_nonblocking(true).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to configure local loopback HTTP listener: {source}"
+            ))
+        })?;
+        let capability = LocalCapability::generate()?;
+        let record_path = runtime_dir.join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        let endpoint = listener.local_addr().map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to read local loopback HTTP address: {source}"
+            ))
+        })?;
+        publish_record(&record_path, daemon_instance_id, endpoint, &capability)?;
+        Ok(Self {
+            listener,
+            capability,
+            _endpoint_guard: SocketEndpointGuard::new(record_path),
+        })
+    }
+
+    pub(crate) fn serve_until_terminated(
+        self,
+        router: Arc<dyn ApiRouter + Send + Sync>,
+        lifecycle: &LifecycleControlSourceAdapter,
+        stop: &AtomicBool,
+    ) -> Result<(), AtmError> {
+        loop {
+            if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
+                return Ok(());
+            }
+            match self.listener.accept() {
+                Ok((stream, peer)) if peer.ip().is_loopback() => {
+                    handle_connection(
+                        stream,
+                        Arc::clone(&router),
+                        &self.capability,
+                        &AtomicBool::new(false),
+                    )?;
+                }
+                Ok(_) => {}
+                Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(ACCEPT_POLL_INTERVAL);
+                }
+                Err(source) => {
+                    return Err(AtmError::daemon_unavailable(format!(
+                        "local loopback HTTP listener accept failed: {source}"
+                    )));
+                }
+            }
+        }
+    }
+}
 
 /// Removes the runtime capability record when this listener stops.
 #[derive(Debug)]
@@ -70,6 +152,7 @@ impl Drop for SocketEndpointGuard {
     }
 }
 
+#[cfg(windows)]
 pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishReady> {
     pub(crate) endpoint_guard: SocketEndpointGuard,
     pub(crate) graceful_drain_deadline: Duration,
@@ -79,6 +162,7 @@ pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, PublishRea
     pub(crate) publish_ready: PublishReady,
 }
 
+#[cfg(windows)]
 pub(crate) struct PreparedRuntimeServer {
     _ownership: HostOwnershipGuard,
     listener: TcpListener,
@@ -87,6 +171,7 @@ pub(crate) struct PreparedRuntimeServer {
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
+#[cfg(windows)]
 impl PreparedRuntimeServer {
     fn bind(
         home_dir: &Path,
@@ -98,29 +183,6 @@ impl PreparedRuntimeServer {
             LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
         let ownership =
             HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
-        Self::bind_after_install(home_dir, observability, lifecycle, ownership)
-    }
-
-    #[cfg(test)]
-    fn bind_at_home_for_test(
-        home_dir: &Path,
-        observability: SubsystemObservability,
-        host_ownership_observability: SubsystemObservability,
-        lifecycle_observability: SubsystemObservability,
-    ) -> Result<Self, AtmError> {
-        let lifecycle =
-            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
-        let ownership = HostOwnershipAdapter::new_with_observability(host_ownership_observability)
-            .acquire_at_home_for_test(home_dir)?;
-        Self::bind_after_install(home_dir, observability, lifecycle, ownership)
-    }
-
-    fn bind_after_install(
-        home_dir: &Path,
-        observability: SubsystemObservability,
-        lifecycle: LifecycleControlSourceAdapter,
-        ownership: HostOwnershipGuard,
-    ) -> Result<Self, AtmError> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to bind local loopback HTTP listener: {source}"
@@ -132,7 +194,12 @@ impl PreparedRuntimeServer {
             ))
         })?;
         let capability = LocalCapability::generate()?;
-        let record_path = atm_core::local_http::local_http_record_path(home_dir);
+        let _ = home_dir;
+        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+        let record_path = runtime_scope
+            .runtime_root
+            .as_ref()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
         publish_record(
             &record_path,
             ownership.instance_id(),
@@ -214,7 +281,6 @@ impl PreparedRuntimeServer {
                     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
                     let join_handle = thread::spawn(move || {
                         let _active = dispatch_registry.register();
-                        let _dispatch = dispatch_registry.register_dispatch_work();
                         let _ =
                             handle_connection(stream, router, &capability, force_shutdown.as_ref());
                         let _ = completion_tx.send(());
@@ -289,45 +355,6 @@ fn handle_connection(
         }
     };
     write_http_response(&mut stream, &response)
-}
-
-fn drain_active_connections_for_shutdown(
-    registry: &ActiveConnectionRegistry,
-    force_shutdown: &AtomicBool,
-    graceful_drain_deadline: Duration,
-    force_cancel_deadline: Duration,
-    shutdown_started: Instant,
-    tracked_dispatch_join_deadline: Duration,
-) -> Result<(), AtmError> {
-    tracing::info!(
-        active_connections = registry.active_connections(),
-        active_work_items = registry.active_work_items(),
-        "daemon local HTTP shutdown signal received; starting graceful drain"
-    );
-    let graceful_deadline = shutdown_started + graceful_drain_deadline;
-    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
-        registry.wait_for_connection_change(
-            graceful_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    if registry.active_work_items() > 0 {
-        force_shutdown.store(true, Ordering::SeqCst);
-        registry.interrupt_all();
-    }
-    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
-        registry.wait_for_connection_change(
-            force_cancel_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    registry.join_tracked_dispatches(tracked_dispatch_join_deadline)?;
-    let remaining_work_items = registry.active_work_items();
-    if remaining_work_items > 0 {
-        return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
-        )));
-    }
-    Ok(())
 }
 
 fn publish_record(
@@ -485,18 +512,20 @@ fn revoke_record(record_path: &Path) -> Result<(), AtmError> {
     })
 }
 
+#[cfg(windows)]
 #[derive(Debug, Clone)]
-pub(crate) struct LocalHttpServerTransportAdapter {
+pub(crate) struct LocalIpcServerTransportAdapter {
     observability: SubsystemObservability,
     host_ownership_observability: SubsystemObservability,
     lifecycle_observability: SubsystemObservability,
 }
 
-impl LocalHttpServerTransportAdapter {
+#[cfg(windows)]
+impl LocalIpcServerTransportAdapter {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(
-            SubsystemObservability::disabled(crate::DaemonSubsystem::LocalHttpTransport),
+            SubsystemObservability::disabled(crate::DaemonSubsystem::LocalIpcTransport),
             SubsystemObservability::disabled(crate::DaemonSubsystem::HostOwnership),
             SubsystemObservability::disabled(crate::DaemonSubsystem::LifecycleControl),
         )
@@ -529,7 +558,7 @@ impl LocalHttpServerTransportAdapter {
         _socket_path: PathBuf,
         home_dir: &Path,
     ) -> Result<PreparedRuntimeServer, AtmError> {
-        PreparedRuntimeServer::bind_at_home_for_test(
+        PreparedRuntimeServer::bind(
             home_dir,
             self.observability.clone(),
             self.host_ownership_observability.clone(),
@@ -551,10 +580,7 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use ulid::Ulid;
 
-    use super::{
-        LOCAL_CAPABILITY_HEADER, LocalCapability, drain_active_connections_for_shutdown,
-        handle_connection,
-    };
+    use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
     use crate::test_support::DoctorOnlyDispatcher;
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
@@ -642,6 +668,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn tcp_listener_drain_honors_the_force_cancel_deadline() {
         use std::sync::atomic::AtomicBool;
@@ -649,6 +676,8 @@ mod tests {
         use std::time::Instant;
 
         use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+        use crate::local_ipc_connection::drain_active_connections_for_shutdown;
+
         let registry = Arc::new(ActiveConnectionRegistry::default());
         let (release_tx, release_rx) = mpsc::sync_channel(1);
         let (registered_tx, registered_rx) = mpsc::sync_channel(1);

@@ -1,13 +1,16 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
+#[cfg(not(windows))]
+use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+#[cfg(windows)]
 use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
-use crate::{AtmHomeDir, DaemonSubsystem, LocalHttpServerTransportAdapter};
+use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
@@ -120,7 +123,7 @@ pub(crate) struct RuntimeComposition {
     // Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this
     // mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
-    server_transport: LocalHttpServerTransportAdapter,
+    server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     // This is deliberately a transport-only capability. The canonical writer
@@ -314,7 +317,7 @@ impl RuntimeComposition {
 
     fn prepare_runtime_with<F>(&self, prepare_runtime: F) -> Result<PreparedRuntimeServer, AtmError>
     where
-        F: FnOnce(&LocalHttpServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
+        F: FnOnce(&LocalIpcServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
     {
         prepare_runtime(&self.server_transport)
     }
@@ -512,10 +515,10 @@ fn build_request_dispatcher(
 
 fn build_server_transport(
     observability: &Arc<dyn DaemonRuntimeObservability>,
-) -> LocalHttpServerTransportAdapter {
-    LocalHttpServerTransportAdapter::new_with_observability(
+) -> LocalIpcServerTransportAdapter {
+    LocalIpcServerTransportAdapter::new_with_observability(
         SubsystemObservability::new(
-            DaemonSubsystem::LocalHttpTransport,
+            DaemonSubsystem::LocalIpcTransport,
             Arc::clone(observability),
         ),
         SubsystemObservability::new(DaemonSubsystem::HostOwnership, Arc::clone(observability)),
