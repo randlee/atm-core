@@ -22,7 +22,6 @@ const EXPECTED_FORBIDDEN_EDGES: &[(&str, &str)] = &[
     ("atm-graft", "atm-daemon"),
     ("atm-graft", "atm-daemon-bootstrap"),
     ("atm-graft", "atm-storage-rusqlite"),
-    ("atm-graft", "interprocess"),
     ("atm-runtime", "atm-daemon"),
 ];
 
@@ -39,6 +38,26 @@ const RETIRED_ERROR_CONTRACT_SYMBOLS: &[&str] = &[
     "AtmErrorKind",
     "ProtocolErrorEnvelope",
     "error_kind_for_code",
+];
+
+const AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS: &[&str] = &[
+    "NamedPipe",
+    "named_pipe",
+    "AF_UNIX",
+    "PipeClient",
+    "PipeServer",
+    "FrameCodec",
+    "FrameHeader",
+    "read_framed_request",
+    "write_framed_response",
+];
+
+const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
+    "named_pipe",
+    "named-pipe",
+    "tokio-named-pipes",
+    "tokio_named_pipes",
+    "windows-named-pipe",
 ];
 
 #[test]
@@ -90,25 +109,32 @@ fn canonical_write_router_has_one_host_routing_decision() {
         let file = syn::parse_file(&source)
             .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
         visitor.source_path = Some(path);
+        visitor.collect_delivery_function_aliases(&file);
         visitor.visit_file(&file);
     }
 
     assert_eq!(
-        visitor.route_write_host_accesses, 0,
-        "AI.12 forbids destination-host routing before canonical persistence"
-    );
-    assert_eq!(
-        visitor.post_router_host_accesses, 1,
+        visitor.post_router_host_accesses(),
+        1,
         "AI.12 requires PostWriteRouter::dispatch to make the sole host decision"
     );
     assert_eq!(
-        visitor.peer_delivery_calls, 1,
+        visitor.peer_delivery_calls(),
+        1,
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
+    assert_eq!(
+        visitor.message_writer_implementations, 1,
+        "AI.12 requires exactly one production MessageWriter implementation"
+    );
+    assert_eq!(
+        visitor.post_write_router_implementations, 1,
+        "AI.12 requires exactly one production PostWriteRouter implementation"
+    );
     assert!(
-        visitor.violations.is_empty(),
+        visitor.violations().is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
-        visitor.violations
+        visitor.violations()
     );
     let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
         .expect("daemon request dispatcher source must be readable");
@@ -116,6 +142,18 @@ fn canonical_write_router_has_one_host_routing_decision() {
         !daemon.contains("dispatch_remote_write"),
         "AI.12 forbids the pre-persistence remote write branch"
     );
+    let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
+        .expect("canonical writer source must be readable");
+    for retired in [
+        "write_mail_with_runtime_and_post_send_emitter",
+        "send_mail_with_runtime_and_post_send_emitter",
+        "write_mail_persisted_with_runtime",
+    ] {
+        assert!(
+            !send.contains(retired),
+            "AI.12 forbids the pre-router local-nudge helper `{retired}`"
+        );
+    }
 }
 
 #[test]
@@ -123,16 +161,35 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     for (name, source) in [
         (
             "second writer",
-            "impl MessageWriter for Second { fn write(&self) { } }",
+            "impl MessageWriter for First { fn write(&self) { } } impl MessageWriter for Second { fn write(&self) { } }",
+        ),
+        (
+            "second post-write router",
+            "impl PostWriteRouter for First { fn dispatch(&self) { } } impl PostWriteRouter for Second { fn dispatch(&self) { } }",
         ),
         (
             "pre-write nudge",
             "fn write() { self.emit_local_post_write(); }",
         ),
-        ("pre-write peer send", "fn write() { transport.deliver(); }"),
         (
-            "host check outside router",
-            "fn route_write() { request.host; }",
+            "pre-write peer send",
+            "fn write() { transport.deliver_to_peer(); }",
+        ),
+        (
+            "host-routing delivery outside router",
+            "impl Pick { fn pick_transport(&self) { let transport = self.https_transport; request.host; transport.deliver(); } }",
+        ),
+        (
+            "aliased local nudge",
+            "use nudge::emit_local_post_write as emit; fn write() { emit(); }",
+        ),
+        (
+            "local delivery function binding",
+            "fn write() { let emit = emit_local_post_write; emit(); }",
+        ),
+        (
+            "transitive delivery function alias",
+            "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
         ),
     ] {
         let violations = routing_violations_in_fixture(source);
@@ -141,6 +198,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "AI.12 guard must reject the mandated {name} fixture"
         );
     }
+
+    let permitted_admission_check = routing_violations_in_fixture(
+        "impl PostWriteRouter for Only { fn dispatch(&self) { } } fn resolve_write_recipient_snapshot() { request.host; snapshot(); }",
+    );
+    assert!(
+        permitted_admission_check.is_empty(),
+        "AI.12 permits a host-only persistence admission check: {permitted_admission_check:?}"
+    );
 }
 
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
@@ -152,102 +217,331 @@ fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
 fn routing_violations_in_fixture(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).expect("negative fixture must parse");
     let mut visitor = HostRoutingVisitor::default();
+    visitor.collect_delivery_function_aliases(&file);
     visitor.visit_file(&file);
-    visitor.violations
+    visitor.violations()
 }
 
 #[derive(Default)]
 struct HostRoutingVisitor {
-    route_write_host_accesses: usize,
-    post_router_host_accesses: usize,
-    peer_delivery_calls: usize,
-    violations: Vec<String>,
+    functions: Vec<HostRoutingFunction>,
+    message_writer_implementations: usize,
+    post_write_router_implementations: usize,
+    delivery_function_aliases: BTreeSet<String>,
     source_path: Option<PathBuf>,
-    current_method: Option<String>,
+    current_function: Option<usize>,
     in_post_write_router: bool,
+    in_test_module: bool,
+}
+
+#[derive(Default)]
+struct HostRoutingFunction {
+    name: String,
+    is_post_write_dispatch: bool,
+    is_test: bool,
+    accesses_host: bool,
+    calls_delivery: bool,
+    peer_delivery_calls: usize,
+    https_transport_bindings: BTreeSet<String>,
+    function_bindings: BTreeMap<String, FunctionBinding>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FunctionBinding {
+    Delivery,
+    Safe,
+    Unresolved,
 }
 
 impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
-        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+        let is_message_writer = node.trait_.as_ref().is_some_and(|(_, path, _)| {
             path.segments
                 .last()
                 .is_some_and(|segment| segment.ident == "MessageWriter")
-        }) && !self.is_runtime_dispatcher_source()
-        {
-            self.violations
-                .push("second MessageWriter implementation".to_string());
-        }
-        let previous = self.in_post_write_router;
-        self.in_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
+        });
+        let is_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
             path.segments
                 .last()
                 .is_some_and(|segment| segment.ident == "PostWriteRouter")
         });
+        if self.is_production_source() && !self.in_test_module {
+            self.message_writer_implementations += usize::from(is_message_writer);
+            self.post_write_router_implementations += usize::from(is_post_write_router);
+        }
+        let previous = self.in_post_write_router;
+        self.in_post_write_router = is_post_write_router;
         syn::visit::visit_item_impl(self, node);
         self.in_post_write_router = previous;
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
-        let previous = self.current_method.replace(node.sig.ident.to_string());
+        let previous = self.begin_function(node.sig.ident.to_string(), &node.attrs);
         syn::visit::visit_impl_item_fn(self, node);
-        self.current_method = previous;
+        self.current_function = previous;
     }
 
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
-        let previous = self.current_method.replace(node.sig.ident.to_string());
+        let previous = self.begin_function(node.sig.ident.to_string(), &node.attrs);
         syn::visit::visit_item_fn(self, node);
-        self.current_method = previous;
+        self.current_function = previous;
+    }
+
+    fn visit_local(&mut self, node: &'ast syn::Local) {
+        if node
+            .init
+            .as_ref()
+            .is_some_and(|init| contains_https_transport_field(&init.expr))
+            && let syn::Pat::Ident(binding) = &node.pat
+            && let Some(function) = self.current_function_mut()
+        {
+            function
+                .https_transport_bindings
+                .insert(binding.ident.to_string());
+        }
+        if let syn::Pat::Ident(binding) = &node.pat
+            && let Some(init) = node.init.as_ref()
+            && let Some(provenance) = self.function_binding_provenance(&init.expr)
+            && let Some(function) = self.current_function_mut()
+        {
+            function
+                .function_bindings
+                .insert(binding.ident.to_string(), provenance);
+        }
+        syn::visit::visit_local(self, node);
     }
 
     fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
-        if matches!(&node.member, syn::Member::Named(name) if name == "host") {
-            if self.current_method.as_deref() == Some("route_write") {
-                self.route_write_host_accesses += 1;
-            }
-            if self.in_post_write_router && self.current_method.as_deref() == Some("dispatch") {
-                self.post_router_host_accesses += 1;
-            }
-            if self.current_method.as_deref() == Some("route_write") {
-                self.violations
-                    .push("destination host inspected before canonical writer".to_string());
-            }
+        if matches!(&node.member, syn::Member::Named(name) if name == "host")
+            && let Some(function) = self.current_function_mut()
+        {
+            function.accesses_host = true;
         }
         syn::visit::visit_expr_field(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if matches!(
-            node.method.to_string().as_str(),
-            "deliver_to_peer" | "deliver"
-        ) {
-            if !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-                && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
-            {
-                self.violations
-                    .push("peer delivery outside PostWriteRouter::dispatch".to_string());
-            }
-            if self.is_runtime_dispatcher_source() {
-                self.peer_delivery_calls += 1;
-            }
-        }
-        if node.method == "emit_local_post_write"
-            && !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-            && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
+        let method = node.method.to_string();
+        let local_nudge = method.starts_with("emit_local_post_write");
+        let peer_delivery = method == "deliver_to_peer"
+            || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
+        if (peer_delivery || local_nudge)
+            && let Some(function) = self.current_function_mut()
+            && !function.is_test
         {
-            self.violations
-                .push("local nudge outside PostWriteRouter::dispatch".to_string());
+            function.calls_delivery = true;
+            if peer_delivery {
+                function.peer_delivery_calls += 1;
+            }
         }
         syn::visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if self.is_delivery_function_call(&node.func)
+            && let Some(function) = self.current_function_mut()
+            && !function.is_test
+        {
+            function.calls_delivery = true;
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
     }
 }
 
 impl HostRoutingVisitor {
-    fn is_runtime_dispatcher_source(&self) -> bool {
-        self.source_path.as_ref().is_some_and(|path| {
-            path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
-        })
+    fn begin_function(&mut self, name: String, attrs: &[syn::Attribute]) -> Option<usize> {
+        let index = self.functions.len();
+        self.functions.push(HostRoutingFunction {
+            is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
+            is_test: self.in_test_module
+                || attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("test") || is_cfg_test_attribute(attr)),
+            name,
+            ..HostRoutingFunction::default()
+        });
+        self.current_function.replace(index)
     }
+
+    fn current_function_mut(&mut self) -> Option<&mut HostRoutingFunction> {
+        self.current_function
+            .and_then(|index| self.functions.get_mut(index))
+    }
+
+    fn is_https_transport_receiver(&self, receiver: &syn::Expr) -> bool {
+        let syn::Expr::Path(path) = receiver else {
+            return false;
+        };
+        let Some(segment) = path.path.segments.last() else {
+            return false;
+        };
+        self.current_function
+            .and_then(|index| self.functions.get(index))
+            .is_some_and(|function| {
+                function
+                    .https_transport_bindings
+                    .contains(&segment.ident.to_string())
+            })
+    }
+
+    fn is_delivery_function_call(&self, function: &syn::Expr) -> bool {
+        let syn::Expr::Path(path) = function else {
+            return false;
+        };
+        let Some(segment) = path.path.segments.last() else {
+            return false;
+        };
+        let name = segment.ident.to_string();
+        if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
+            return true;
+        }
+        self.current_function
+            .and_then(|index| self.functions.get(index))
+            .and_then(|current| current.function_bindings.get(&name))
+            .is_some_and(|binding| *binding != FunctionBinding::Safe)
+    }
+
+    fn function_binding_provenance(&self, expression: &syn::Expr) -> Option<FunctionBinding> {
+        if matches!(expression, syn::Expr::Cast(_)) {
+            return Some(FunctionBinding::Unresolved);
+        }
+        let syn::Expr::Path(path) = expression else {
+            return None;
+        };
+        let segment = path.path.segments.last()?;
+        let name = segment.ident.to_string();
+        if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
+            Some(FunctionBinding::Delivery)
+        } else {
+            Some(FunctionBinding::Safe)
+        }
+    }
+
+    fn collect_delivery_function_aliases(&mut self, file: &syn::File) {
+        let mut aliases = Vec::new();
+        collect_use_aliases(file, &mut aliases);
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for (source, alias) in &aliases {
+                if (is_delivery_function_name(source)
+                    || self.delivery_function_aliases.contains(source))
+                    && self.delivery_function_aliases.insert(alias.clone())
+                {
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    fn post_router_host_accesses(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_post_write_dispatch && function.accesses_host)
+            .count()
+    }
+
+    fn peer_delivery_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_post_write_dispatch)
+            .map(|function| function.peer_delivery_calls)
+            .sum()
+    }
+
+    fn violations(&self) -> Vec<String> {
+        let mut violations = self
+            .functions
+            .iter()
+            .filter(|function| function.calls_delivery && !function.is_post_write_dispatch)
+            .map(|function| {
+                format!(
+                    "delivery call outside PostWriteRouter::dispatch in {}",
+                    function.name
+                )
+            })
+            .collect::<Vec<_>>();
+        if self.message_writer_implementations > 1 {
+            violations.push("second MessageWriter implementation".to_string());
+        }
+        if self.post_write_router_implementations > 1 {
+            violations.push("second PostWriteRouter implementation".to_string());
+        }
+        violations
+    }
+
+    fn is_production_source(&self) -> bool {
+        self.source_path
+            .as_ref()
+            .is_none_or(|path| !is_test_only_source(path))
+    }
+}
+
+fn is_delivery_function_name(name: &str) -> bool {
+    name.starts_with("emit_local_post_write") || name == "deliver_to_peer"
+}
+
+fn collect_use_aliases(file: &syn::File, aliases: &mut Vec<(String, String)>) {
+    struct UseAliasCollector<'a> {
+        aliases: &'a mut Vec<(String, String)>,
+    }
+
+    impl<'ast> Visit<'ast> for UseAliasCollector<'_> {
+        fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
+            collect_use_aliases_from_tree(&node.tree, self.aliases);
+        }
+    }
+
+    UseAliasCollector { aliases }.visit_file(file);
+}
+
+fn collect_use_aliases_from_tree(tree: &syn::UseTree, aliases: &mut Vec<(String, String)>) {
+    match tree {
+        syn::UseTree::Rename(rename) => {
+            aliases.push((rename.ident.to_string(), rename.rename.to_string()))
+        }
+        syn::UseTree::Name(name) => aliases.push((name.ident.to_string(), name.ident.to_string())),
+        syn::UseTree::Path(path) => collect_use_aliases_from_tree(&path.tree, aliases),
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                collect_use_aliases_from_tree(item, aliases);
+            }
+        }
+        syn::UseTree::Glob(_) => {}
+    }
+}
+
+fn is_cfg_test_attribute(attribute: &syn::Attribute) -> bool {
+    attribute.path().is_ident("cfg")
+        && attribute
+            .parse_args::<syn::Ident>()
+            .is_ok_and(|ident| ident == "test")
+}
+
+fn contains_https_transport_field(expression: &syn::Expr) -> bool {
+    struct HttpsTransportFieldVisitor {
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for HttpsTransportFieldVisitor {
+        fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
+            if matches!(&node.member, syn::Member::Named(name) if name == "https_transport") {
+                self.found = true;
+            }
+            syn::visit::visit_expr_field(self, node);
+        }
+    }
+
+    let mut visitor = HttpsTransportFieldVisitor { found: false };
+    visitor.visit_expr(expression);
+    visitor.found
 }
 
 #[test]
@@ -468,6 +762,155 @@ fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() {
 }
 
 #[test]
+fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
+    let root = workspace_root();
+    let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
+    let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
+    let local_ipc = root.join("crates/atm-daemon/src/local_ipc_transport.rs");
+    let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
+
+    let daemon_lib_source = read_source(&daemon_lib);
+    assert!(
+        daemon_lib_source.contains("#[cfg(not(windows))]")
+            && daemon_lib_source.contains("mod local_ipc_transport;"),
+        "AI.11 permits UDS only behind the Unix-only local_ipc_transport module gate"
+    );
+    assert!(
+        daemon_lib_source.contains("#[cfg(windows)]")
+            && daemon_lib_source
+                .contains("pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
+        "Windows must select the loopback-TCP local transport adapter"
+    );
+
+    let retired = ai11_guarded_workspace_sources(&root)
+        .iter()
+        .flat_map(|path| retired_windows_transport_ast_findings(path))
+        .collect::<Vec<_>>();
+    assert!(
+        retired.is_empty(),
+        "AI.11 must not restore Windows pipe/AF_UNIX or generic frame-codec transport: {retired:?}"
+    );
+
+    let metadata = MetadataCommand::new()
+        .manifest_path(root.join("Cargo.toml"))
+        .no_deps()
+        .exec()
+        .expect("cargo metadata must succeed for the workspace");
+    let forbidden_dependencies = metadata
+        .packages
+        .into_iter()
+        .filter(|package| {
+            matches!(
+                package.name.as_str(),
+                "atm" | "atm-core" | "atm-daemon" | "atm-daemon-client"
+            )
+        })
+        .flat_map(|package| {
+            package
+                .dependencies
+                .into_iter()
+                .filter_map(move |dependency| {
+                    AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES
+                        .contains(&dependency.name.as_str())
+                        .then(|| {
+                            format!("{} directly depends on {}", package.name, dependency.name)
+                        })
+                })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        forbidden_dependencies.is_empty(),
+        "AI.11 must not restore retired Windows transport dependencies: {forbidden_dependencies:?}"
+    );
+
+    let local_tcp_source = read_source(&local_tcp);
+    let non_loopback_binds = local_tcp_source
+        .lines()
+        .filter(|line| line.contains("TcpListener::bind"))
+        .filter(|line| !line.contains("Ipv4Addr::LOCALHOST"))
+        .collect::<Vec<_>>();
+    assert!(
+        non_loopback_binds.is_empty(),
+        "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
+    );
+    let adapter_sources = [
+        ("local TCP", read_source(&local_tcp)),
+        ("local IPC", read_source(&local_ipc)),
+        ("peer HTTPS", read_source(&peer_https)),
+    ];
+    for forbidden in [
+        "LocalServiceRuntime",
+        "persist_message",
+        "emit_post_send_effects",
+        "write_mail_with_runtime",
+    ] {
+        for (adapter, source) in &adapter_sources {
+            assert!(
+                !source.contains(forbidden),
+                "{adapter} adapter must not call storage/write/nudge code directly: `{forbidden}`"
+            );
+        }
+    }
+
+    let router_implementations = ai11_guarded_workspace_sources(&root)
+        .iter()
+        .filter(|path| !is_test_only_source(path))
+        .map(|path| production_api_router_implementation_count(path))
+        .sum::<usize>();
+    assert_eq!(
+        router_implementations, 1,
+        "AI.11 requires exactly one production ApiRouter implementation"
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() {
+    let fixture = syn::parse_file(
+        r#"
+        use windows::named_pipe::NamedPipe;
+        const ENDPOINT: &str = r"\\.\pipe\atm";
+        const DOMAIN: i32 = AF_UNIX;
+        "#,
+    )
+    .expect("fixture must parse");
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&fixture);
+    assert_eq!(
+        detector.findings,
+        BTreeSet::from([
+            "identifier `AF_UNIX`".to_string(),
+            "identifier `NamedPipe`".to_string(),
+            "identifier `named_pipe`".to_string(),
+            "named-pipe endpoint literal".to_string(),
+        ])
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() {
+    let fixture = syn::parse_file(
+        r#"
+        struct FrameHeader { length: u32 }
+        struct FrameCodec;
+        fn read_framed_request() {}
+        fn write_framed_response() {}
+        "#,
+    )
+    .expect("fixture must parse");
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&fixture);
+    assert_eq!(
+        detector.findings,
+        BTreeSet::from([
+            "identifier `FrameCodec`".to_string(),
+            "identifier `FrameHeader`".to_string(),
+            "identifier `read_framed_request`".to_string(),
+            "identifier `write_framed_response`".to_string(),
+        ])
+    );
+}
+
+#[test]
 fn deleted_daemon_boundary_modules_must_be_retired() {
     let root = workspace_root();
     let stale = daemon_boundary_files()
@@ -632,6 +1075,69 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
             files.push(path);
         }
     }
+}
+
+fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    files.retain(|path| path != &ai11_deletion_gate_fixture_path(root));
+    files.sort();
+    files
+}
+
+fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
+    root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
+fn is_test_only_source(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str() == "tests")
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("test_") || name.ends_with("_tests.rs"))
+}
+
+fn production_api_router_implementation_count(path: &Path) -> usize {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = ProductionApiRouterImplementationDetector::default();
+    detector.visit_file(&syntax);
+    detector.count
+}
+
+#[derive(Default)]
+struct ProductionApiRouterImplementationDetector {
+    count: usize,
+}
+
+impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if item.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "ApiRouter")
+        }) {
+            self.count += 1;
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if item.attrs.iter().any(is_test_configuration_attribute) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
+}
+
+fn is_test_configuration_attribute(attribute: &syn::Attribute) -> bool {
+    attribute.path().is_ident("cfg")
+        && attribute
+            .meta
+            .require_list()
+            .is_ok_and(|list| list.tokens.to_string().contains("test"))
 }
 
 fn daemon_boundary_module_sources(root: &Path, module: &str) -> Option<Vec<PathBuf>> {
@@ -845,6 +1351,47 @@ fn documented_boundary_section<'a>(docs: &'a str, name: &str) -> Option<&'a str>
         .map(|(index, _)| index)
         .unwrap_or(rest.len());
     Some(&rest[..next])
+}
+
+fn read_source(path: &Path) -> String {
+    fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+fn retired_windows_transport_ast_findings(path: &Path) -> Vec<String> {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&syntax);
+    detector
+        .findings
+        .into_iter()
+        .map(|finding| format!("{}: {finding}", path.display()))
+        .collect()
+}
+
+#[derive(Default)]
+struct RetiredWindowsTransportDetector {
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for RetiredWindowsTransportDetector {
+    fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+        let value = ident.to_string();
+        if AI11_RETIRED_WINDOWS_TRANSPORT_IDENTIFIERS.contains(&value.as_str()) {
+            self.findings.insert(format!("identifier `{value}`"));
+        }
+        syn::visit::visit_ident(self, ident);
+    }
+
+    fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
+        if literal.value().contains(r"\\.\pipe\") {
+            self.findings
+                .insert("named-pipe endpoint literal".to_string());
+        }
+        syn::visit::visit_lit_str(self, literal);
+    }
 }
 
 fn workspace_root() -> PathBuf {
