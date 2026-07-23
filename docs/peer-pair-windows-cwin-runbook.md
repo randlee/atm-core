@@ -85,7 +85,17 @@ mechanism.
 ## 5. Configure reciprocal peer trust only after exchange
 
 The Mac and Windows operators exchange advertised host and certificate
-fingerprint out of band, then each uses only durable CLI-managed records:
+fingerprint out of band. Before enabling an interface, provision a PEM bundle
+containing the local certificate and private key outside the repository with
+owner-only filesystem access. Compute the SHA-256 fingerprint of its leaf
+certificate and register only the fingerprint and local reference; never
+commit the PEM or its private-key reference:
+
+```powershell
+.\target\release\atm.exe peer certificate init --fingerprint <local-fingerprint> --private-key-ref <local-pem-bundle> --yes
+```
+
+Each operator then uses only durable CLI-managed records:
 
 ```powershell
 .\target\release\atm.exe peer interface set --bind <windows-ip:43101> --advertise-host <windows-ip> --enabled
@@ -95,6 +105,11 @@ fingerprint out of band, then each uses only durable CLI-managed records:
 Use `peer trust replace` only when replacing an already-recorded peer with the
 agreed fingerprint. Never use environment variables, raw sockets, or ad-hoc
 address overrides for peer configuration.
+
+The daemon snapshots enabled HTTPS interfaces and certificate material during
+startup. After changing either record, stop the identified singleton and start
+the same release daemon once; verify the configured HTTPS listener before
+adding trust or sending traffic. Do not overlap daemon processes.
 
 ## 6. Execute the physical peer smoke
 

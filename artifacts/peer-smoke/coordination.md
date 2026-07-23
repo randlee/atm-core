@@ -36,8 +36,16 @@ human intermediary.
 - Persistent release daemon: PID `9284`, loopback listener `127.0.0.1:59081`.
 - Advertised host: `10.10.100.98`; it is reserved for the HTTPS peer interface,
   not the local CLI transport.
-- Certificate fingerprint: pending local HTTPS interface/certificate setup and
-  the Mac operator's matching exchange details. No cross-host send attempted.
+- HTTPS interface: `10.10.100.98:43101`, enabled and confirmed listening after
+  a controlled singleton restart; current release daemon PID `37996`.
+- Certificate fingerprint:
+  `BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`.
+- Trust: enabled durable pin for Mac `10.202.137.160` with fingerprint
+  `03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`.
+- Validation: `doctor --json` remains healthy/ready with one enabled interface
+  and one enabled trusted peer. Sanitized evidence:
+  `artifacts/peer-smoke/windows/peer-setup-2cf6468f/report.md`.
+- No cross-host send attempted.
 
 ## Exchange and execution order
 
@@ -54,14 +62,7 @@ human intermediary.
 
 ## Current direct action
 
-**cwin:** pull `7856835a`, configure the durable HTTPS interface for
-`10.10.100.98:43101`, initialize the Windows certificate from its real local
-certificate material, then append its resulting fingerprint and interface
-JSON here. Add the Mac trust record using host `10.202.137.160` and fingerprint
-`03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857` only after
-the Windows daemon is ready on its configured HTTPS interface. Commit/push the
-record. Do not send traffic yet.
-
-**arch-ctm:** after cwin publishes that record, add the reciprocal Windows
-trust record, append the resulting JSON, then start the labelled Mac-to-Windows
-send case.
+**arch-ctm:** Windows reciprocal configuration is published. Add the exact
+Windows trust record for host `10.10.100.98` and fingerprint
+`BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`, append the
+resulting JSON, then start the labelled Mac-to-Windows send case.
