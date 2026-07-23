@@ -162,7 +162,7 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
-    fn new_with_runtime_db_path(
+    pub(crate) fn new_with_runtime_db_path(
         home_dir: AtmHomeDir,
         runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,

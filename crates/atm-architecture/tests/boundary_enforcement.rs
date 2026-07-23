@@ -354,10 +354,8 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
-    let daemon_client = root.join("crates/atm-daemon-client/src/lib.rs");
-    let cli_transport = root.join("crates/atm/src/composition.rs");
-    let dispatcher = root.join("crates/atm-daemon/src/runtime_health.rs");
-    let protocol = root.join("crates/atm-core/src/protocol.rs");
+    let local_ipc = root.join("crates/atm-daemon/src/local_ipc_transport.rs");
+    let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
     let daemon_lib_source = read_source(&daemon_lib);
     assert!(
@@ -372,14 +370,7 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         "Windows must select the loopback-TCP local transport adapter"
     );
 
-    let guarded_sources = [
-        &protocol,
-        &daemon_lib,
-        &local_tcp,
-        &daemon_client,
-        &cli_transport,
-    ];
-    let retired = guarded_sources
+    let retired = ai11_guarded_workspace_sources(&root)
         .iter()
         .flat_map(|path| retired_windows_transport_ast_findings(path))
         .collect::<Vec<_>>();
@@ -430,22 +421,32 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
         non_loopback_binds.is_empty(),
         "AI.11 local TCP listeners must bind only IPv4 loopback: {non_loopback_binds:?}"
     );
+    let adapter_sources = [
+        ("local TCP", read_source(&local_tcp)),
+        ("local IPC", read_source(&local_ipc)),
+        ("peer HTTPS", read_source(&peer_https)),
+    ];
     for forbidden in [
         "LocalServiceRuntime",
         "persist_message",
         "emit_post_send_effects",
         "write_mail_with_runtime",
     ] {
-        assert!(
-            !local_tcp_source.contains(forbidden),
-            "local transport adapter must not call storage/write/nudge code directly: `{forbidden}`"
-        );
+        for (adapter, source) in &adapter_sources {
+            assert!(
+                !source.contains(forbidden),
+                "{adapter} adapter must not call storage/write/nudge code directly: `{forbidden}`"
+            );
+        }
     }
 
-    let dispatcher_source = read_source(&dispatcher);
+    let router_implementations = ai11_guarded_workspace_sources(&root)
+        .iter()
+        .filter(|path| !is_test_only_source(path))
+        .map(|path| production_api_router_implementation_count(path))
+        .sum::<usize>();
     assert_eq!(
-        dispatcher_source.matches("impl ApiRouter for").count(),
-        1,
+        router_implementations, 1,
         "AI.11 requires exactly one production ApiRouter implementation"
     );
 }
@@ -469,6 +470,30 @@ fn ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures() 
             "identifier `NamedPipe`".to_string(),
             "identifier `named_pipe`".to_string(),
             "named-pipe endpoint literal".to_string(),
+        ])
+    );
+}
+
+#[test]
+fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() {
+    let fixture = syn::parse_file(
+        r#"
+        struct FrameHeader { length: u32 }
+        struct FrameCodec;
+        fn read_framed_request() {}
+        fn write_framed_response() {}
+        "#,
+    )
+    .expect("fixture must parse");
+    let mut detector = RetiredWindowsTransportDetector::default();
+    detector.visit_file(&fixture);
+    assert_eq!(
+        detector.findings,
+        BTreeSet::from([
+            "identifier `FrameCodec`".to_string(),
+            "identifier `FrameHeader`".to_string(),
+            "identifier `read_framed_request`".to_string(),
+            "identifier `write_framed_response`".to_string(),
         ])
     );
 }
@@ -638,6 +663,69 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) {
             files.push(path);
         }
     }
+}
+
+fn ai11_guarded_workspace_sources(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates"), &mut files);
+    files.retain(|path| path != &ai11_deletion_gate_fixture_path(root));
+    files.sort();
+    files
+}
+
+fn ai11_deletion_gate_fixture_path(root: &Path) -> PathBuf {
+    root.join("crates/atm-architecture/tests/boundary_enforcement.rs")
+}
+
+fn is_test_only_source(path: &Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str() == "tests")
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("test_"))
+}
+
+fn production_api_router_implementation_count(path: &Path) -> usize {
+    let source = read_source(path);
+    let syntax = syn::parse_file(&source)
+        .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+    let mut detector = ProductionApiRouterImplementationDetector::default();
+    detector.visit_file(&syntax);
+    detector.count
+}
+
+#[derive(Default)]
+struct ProductionApiRouterImplementationDetector {
+    count: usize,
+}
+
+impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if item.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments
+                .last()
+                .is_some_and(|segment| segment.ident == "ApiRouter")
+        }) {
+            self.count += 1;
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if item.attrs.iter().any(is_test_configuration_attribute) {
+            return;
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
+}
+
+fn is_test_configuration_attribute(attribute: &syn::Attribute) -> bool {
+    attribute.path().is_ident("cfg")
+        && attribute
+            .meta
+            .require_list()
+            .is_ok_and(|list| list.tokens.to_string().contains("test"))
 }
 
 fn daemon_boundary_module_sources(root: &Path, module: &str) -> Option<Vec<PathBuf>> {
