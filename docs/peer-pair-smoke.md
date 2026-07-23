@@ -35,25 +35,31 @@ capabilities, or secrets. It has this shape:
   },
   "identities": {"sender": "agent-a@team-a", "recipient": "agent-b@team-b"},
   "cases": [
-    {"id": "preflight", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "local_smoke", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "reverse_send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."]},
-    {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."]}
+    {"id": "preflight", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "doctor", "--json"], "expected_json": {"runtime_status.readiness": "ready"}}},
+    {"id": "local_smoke", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
+    {"id": "send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
+    {"id": "reverse_send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
+    {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
+    {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}, "forbidden_daemon_log_entries": ["duplicate nudge"]}},
+    {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
+    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}, "forbidden_daemon_log_entries": ["peer delivery"]}},
+    {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid", "requires_ack": true}}}
   ]
 }
 ```
 
-Use only public `atm` or graft-facing daemon-client commands in `command`.
-Each successful case must verify its stated semantic result: receiver-visible
-read/nudge, same-ULID duplicate with no repeat side effect, or a typed error
-without acknowledgement mutation. The runner writes sanitized JSON evidence
-with commands, daemon/client versions, trust identity, result, daemon-log window,
-role, identities, ULID, transport, and teardown.
+Every case requires a `verification` object. Its `command` must be a public
+`atm` or graft-facing daemon-client command that emits JSON. `expected_json`
+maps dotted JSON paths to exact scalar values; `$message_ulid` resolves to that
+case's `message_ulid`. This verifies receiver-visible state instead of asking a
+case command to invent runner-only metrics. For example, the duplicate case
+verifies one receiver record with the original ULID, and failed-ack verifies the
+source remains pending. `untrusted_or_allowlist_rejection` additionally requires
+`forbidden_daemon_log_entries`: the runner snapshots the configured daemon log
+before the command and rejects any listed routing/delivery entry in the new log
+window. The runner writes sanitized JSON evidence with commands, daemon/client
+versions, trust identity, transport result, semantic verification, daemon-log
+window, role, identities, ULID, transport, and teardown.
 
 The runner stops only its optional `launch_command` child. It waits for that
 recorded PID, checks the configured TCP endpoint is closed, then removes only
