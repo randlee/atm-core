@@ -1,25 +1,16 @@
 use atm_core::ack::AckRequest;
 use atm_core::boundary::RosterHarness;
 use atm_core::error_codes::AtmErrorCode;
-#[cfg(not(windows))]
 use atm_core::graft::{
-    GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-    read_graft_post_send_message, write_graft_post_send_message,
+    GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest};
-#[cfg(not(windows))]
-use atm_core::test_support::EnvGuard;
-use atm_core::test_support::ROLE_TEAM_LEAD;
-#[cfg(not(windows))]
-use atm_core::types::AgentName;
-use atm_core::types::TeamName;
+use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+use atm_core::types::{AgentName, TeamName};
 use atm_runtime_test_support::open_sqlite_boundary;
-#[cfg(not(windows))]
-use interprocess::local_socket::ListenerOptions;
-#[cfg(not(windows))]
-use interprocess::local_socket::traits::Listener as _;
+use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
@@ -103,7 +94,6 @@ fn graft_warning_dispatcher() -> (
     (tempdir, atm_home, workspace_dir, dispatcher)
 }
 
-#[cfg(not(windows))]
 fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
     std::fs::write(
         workspace_dir.join(".atm.toml"),
@@ -140,12 +130,6 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         other => panic!("expected send response, got {other:?}"),
     };
     assert_eq!(outcome.warnings.len(), 1);
-    #[cfg(windows)]
-    assert_eq!(
-        outcome.warnings[0].code,
-        Some(AtmErrorCode::DaemonUnavailable)
-    );
-    #[cfg(not(windows))]
     assert_eq!(
         outcome.warnings[0].code,
         Some(AtmErrorCode::PostSendGraftUnavailable)
@@ -199,12 +183,6 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         other => panic!("expected ack response, got {other:?}"),
     };
     assert_eq!(ack_outcome.warnings.len(), 1);
-    #[cfg(windows)]
-    assert_eq!(
-        ack_outcome.warnings[0].code,
-        Some(AtmErrorCode::DaemonUnavailable)
-    );
-    #[cfg(not(windows))]
     assert_eq!(
         ack_outcome.warnings[0].code,
         Some(AtmErrorCode::PostSendGraftUnavailable)
@@ -212,7 +190,6 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
     assert!(ack_outcome.warnings[0].recovery.is_some());
 }
 
-#[cfg(not(windows))]
 #[test]
 #[serial_test::serial(env)]
 fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
@@ -221,41 +198,25 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let recipient_team = TEST_TEAM.parse::<TeamName>().expect("team");
     let recipient_agent = "qa-a".parse::<AgentName>().expect("agent");
     let receiver_path =
-        graft_receiver_socket_path_from_home(&workspace_dir, &recipient_team, &recipient_agent);
-    if let Some(parent) = receiver_path.parent() {
-        std::fs::create_dir_all(parent).expect("receiver dir");
-    }
-    #[cfg(unix)]
-    if receiver_path.exists() {
-        std::fs::remove_file(&receiver_path).expect("remove stale receiver");
-    }
-    let receiver_name =
-        atm_core::protocol::daemon_local_ipc_name_from_path(&receiver_path).expect("receiver name");
-    let listener = ListenerOptions::new()
-        .name(receiver_name)
-        .create_sync()
-        .expect("bind fake graft receiver");
+        graft_receiver_record_path_from_home(&workspace_dir, &recipient_team, &recipient_agent);
+    let listener = GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
     let (event_tx, event_rx) = std::sync::mpsc::sync_channel(1);
     let receiver_thread = std::thread::spawn(move || {
-        let mut stream = listener.accept().expect("accept graft receiver");
-        let request: GraftPostSendRequest = read_graft_post_send_message(
-            &mut stream,
-            "failed to read graft post-send request",
-            "graft post-send request exceeded the bounded payload cap",
-        )
-        .expect("read graft request");
+        let mut stream = loop {
+            if let Some(stream) = listener.poll_accept().expect("poll graft receiver") {
+                break stream;
+            }
+            std::thread::yield_now();
+        };
+        let request = listener
+            .read_request(&mut stream, Duration::from_secs(5))
+            .expect("read graft request");
         event_tx
             .send(request.event.clone())
             .expect("send captured event");
-        write_graft_post_send_message(
-            &mut stream,
-            &GraftPostSendResponse::Delivered,
-            "failed to write graft post-send response",
-            "graft post-send response exceeded the bounded payload cap",
-        )
-        .expect("write graft response");
-        use std::io::Write as _;
-        stream.flush().expect("flush graft response");
+        listener
+            .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+            .expect("write graft response");
     });
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
