@@ -377,27 +377,20 @@ fn outbound_message() -> InboxMessage {
         extra: Map::new(),
     }
 }
-
 pub(super) fn send_request(home_dir: &Path) -> SendRequest {
-    SendRequest {
-        home_dir: home_dir.to_path_buf(),
-        current_dir: home_dir.to_path_buf(),
-        caller_identity: AgentName::from_validated(TEST_SENDER),
-        caller_chat_id: None,
-        caller_team: TeamName::from_validated(TEST_TEAM),
-        authenticated_source_host: None,
-        origin_message_id: None,
-        to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
-        message_source: SendMessageSource::Inline("hello".to_string()),
-        summary_override: Some("hello".to_string()),
-        requires_ack: false,
-        task_id: Some("task-123".parse().expect("task id")),
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        acknowledges_message_id: None,
-        dry_run: false,
-    }
+    SendRequest::new(
+        home_dir.to_path_buf(),
+        home_dir.to_path_buf(),
+        AgentName::from_validated(TEST_SENDER),
+        &format!("recipient@{TEST_TEAM}"),
+        TeamName::from_validated(TEST_TEAM),
+        SendMessageSource::Inline("hello".to_string()),
+        Some("hello".to_string()),
+        false,
+        Some("task-123".parse().expect("task id")),
+        false,
+    )
+    .expect("test send request")
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
@@ -424,8 +417,7 @@ fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
 
 #[derive(Default)]
 pub(super) struct RecordingObservability {
-    // Mutex required: tests may emit delivery-policy events from multiple
-    // runtime calls before assertions snapshot the collected sequence.
+    // Mutex records concurrent delivery-policy events for deterministic assertions.
     events: Mutex<Vec<CommandEvent>>,
 }
 
@@ -523,7 +515,6 @@ fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite
     let inbox_path = tempdir.path().join("recipient.jsonl");
     let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
     let original = outbound_message();
-
     persist_message(
         &runtime,
         tempdir.path(),

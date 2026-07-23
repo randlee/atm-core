@@ -11,6 +11,10 @@ pub(crate) enum DeliveryPersistenceDisposition {
 #[derive(Debug, Clone)]
 pub(crate) struct DeliveryPersistenceResult {
     pub(crate) disposition: DeliveryPersistenceDisposition,
+    /// True only when this write inserted the immutable message record.
+    /// Replays of the same ULID are durable no-ops and must not re-run the
+    /// daemon-owned post-write action.
+    pub(crate) newly_persisted: bool,
     pub(crate) original_message: InboxMessage,
     pub(crate) companion_message: Option<InboxMessage>,
     pub(crate) warnings: Vec<WarningEntry>,
@@ -20,6 +24,17 @@ impl DeliveryPersistenceResult {
     pub(crate) fn persisted(original_message: InboxMessage) -> Self {
         Self {
             disposition: DeliveryPersistenceDisposition::Persisted,
+            newly_persisted: true,
+            original_message,
+            companion_message: None,
+            warnings: Vec::new(),
+        }
+    }
+
+    pub(crate) fn already_persisted(original_message: InboxMessage) -> Self {
+        Self {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            newly_persisted: false,
             original_message,
             companion_message: None,
             warnings: Vec::new(),
@@ -33,6 +48,7 @@ impl DeliveryPersistenceResult {
     ) -> Self {
         Self {
             disposition: DeliveryPersistenceDisposition::SqliteFailedRecovered,
+            newly_persisted: true,
             original_message,
             companion_message: Some(companion_message),
             warnings: vec![warning],
