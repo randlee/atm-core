@@ -394,34 +394,14 @@ pub fn send_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    write_mail_persisted_with_runtime(request, observability, runtime, None)
-}
-
-pub fn send_mail_with_runtime_and_post_send_emitter(
-    request: SendRequest,
-    observability: &dyn ObservabilityPort,
-    runtime: &LocalServiceRuntime,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<SendOutcome, AtmError> {
-    write_mail_persisted_with_runtime(request, observability, runtime, Some(post_send_emitter))
-}
-
-/// The sole daemon write entry point for every message ingress.
-///
-/// The acknowledgement form is normalized here, then uses the same durable
-/// persistence and post-write execution as an ordinary send.  No protocol
-/// dispatcher or transport chooses a separate acknowledgement path.
-pub fn write_mail_with_runtime_and_post_send_emitter(
-    request: WriteRequest,
-    observability: &dyn ObservabilityPort,
-    runtime: &LocalServiceRuntime,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<WriteOutcome, AtmError> {
-    let mut prepared = prepare_write_with_runtime(request, observability, runtime)?;
-    if prepared.requires_post_write_route() {
-        prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);
+    match write_mail_with_runtime_impl(request, observability, runtime)?
+        .finish(runtime, observability)?
+    {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "send helper cannot finish an acknowledgement write",
+        )),
     }
-    prepared.finish(runtime, observability)
 }
 
 /// Prepares the shared durable write for daemon-owned post-write routing.
@@ -439,8 +419,8 @@ pub fn prepare_write_with_runtime(
 }
 
 /// The sole write pipeline. `acknowledges_message_id` selects only an
-/// acknowledgement-source normalization step; both variants persist and emit
-/// through `write_mail_persisted_with_runtime` exactly once.
+/// acknowledgement-source normalization step; both variants persist through
+/// the same canonical writer exactly once.
 fn write_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
@@ -526,30 +506,6 @@ fn prepare_persisted_write<
     })
 }
 
-/// Shared durable persistence and post-write execution after write
-/// normalization has resolved a destination.
-pub(crate) fn write_mail_persisted_with_runtime<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    request: SendRequest,
-    observability: &dyn ObservabilityPort,
-    runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-) -> Result<SendOutcome, AtmError> {
-    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
-    if prepared.requires_post_write_route()
-        && let Some(post_send_emitter) = post_send_emitter
-    {
-        prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);
-    }
-    match prepared.finish_with_runtime(runtime, observability)? {
-        WriteOutcome::Sent(outcome) => Ok(outcome),
-        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
-            "persisted send helper cannot finish an acknowledgement write",
-        )),
-    }
-}
-
 #[cfg(test)]
 fn send_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
@@ -559,7 +515,20 @@ fn send_mail_with_runtime_impl<
     runtime: &R,
     post_send_emitter: Option<&dyn PostSendHookEmitter>,
 ) -> Result<SendOutcome, AtmError> {
-    write_mail_persisted_with_runtime(request, observability, runtime, post_send_emitter)
+    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    if prepared.requires_post_write_route()
+        && let Some(post_send_emitter) = post_send_emitter
+    {
+        // Test-only harness: production notification is owned by
+        // `PostWriteRouter::dispatch` in atm-daemon.
+        prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);
+    }
+    match prepared.finish_with_runtime(runtime, observability)? {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "test send helper cannot finish an acknowledgement write",
+        )),
+    }
 }
 
 #[expect(
