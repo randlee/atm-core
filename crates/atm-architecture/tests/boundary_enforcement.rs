@@ -113,21 +113,19 @@ fn canonical_write_router_has_one_host_routing_decision() {
     }
 
     assert_eq!(
-        visitor.route_write_host_accesses, 0,
-        "AI.12 forbids destination-host routing before canonical persistence"
-    );
-    assert_eq!(
-        visitor.post_router_host_accesses, 1,
+        visitor.post_router_host_accesses(),
+        1,
         "AI.12 requires PostWriteRouter::dispatch to make the sole host decision"
     );
     assert_eq!(
-        visitor.peer_delivery_calls, 1,
+        visitor.peer_delivery_calls(),
+        1,
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
     assert!(
-        visitor.violations.is_empty(),
+        visitor.violations().is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
-        visitor.violations
+        visitor.violations()
     );
     let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
         .expect("daemon request dispatcher source must be readable");
@@ -160,10 +158,13 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "pre-write nudge",
             "fn write() { self.emit_local_post_write(); }",
         ),
-        ("pre-write peer send", "fn write() { transport.deliver(); }"),
         (
-            "host check outside router",
-            "fn route_write() { request.host; }",
+            "pre-write peer send",
+            "fn write() { transport.deliver_to_peer(); }",
+        ),
+        (
+            "host-routing delivery outside router",
+            "impl Pick { fn pick_transport(&self) { let transport = self.https_transport; request.host; transport.deliver(); } }",
         ),
     ] {
         let violations = routing_violations_in_fixture(source);
@@ -172,6 +173,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "AI.12 guard must reject the mandated {name} fixture"
         );
     }
+
+    let permitted_admission_check = routing_violations_in_fixture(
+        "fn resolve_write_recipient_snapshot() { request.host; snapshot(); }",
+    );
+    assert!(
+        permitted_admission_check.is_empty(),
+        "AI.12 permits a host-only persistence admission check: {permitted_admission_check:?}"
+    );
 }
 
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
@@ -184,18 +193,27 @@ fn routing_violations_in_fixture(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).expect("negative fixture must parse");
     let mut visitor = HostRoutingVisitor::default();
     visitor.visit_file(&file);
-    visitor.violations
+    visitor.violations()
 }
 
 #[derive(Default)]
 struct HostRoutingVisitor {
-    route_write_host_accesses: usize,
-    post_router_host_accesses: usize,
-    peer_delivery_calls: usize,
-    violations: Vec<String>,
+    functions: Vec<HostRoutingFunction>,
+    second_message_writer: bool,
     source_path: Option<PathBuf>,
-    current_method: Option<String>,
+    current_function: Option<usize>,
     in_post_write_router: bool,
+}
+
+#[derive(Default)]
+struct HostRoutingFunction {
+    name: String,
+    is_post_write_dispatch: bool,
+    is_test: bool,
+    accesses_host: bool,
+    calls_delivery: bool,
+    peer_delivery_calls: usize,
+    https_transport_bindings: BTreeSet<String>,
 }
 
 impl<'ast> Visit<'ast> for HostRoutingVisitor {
@@ -206,8 +224,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
                 .is_some_and(|segment| segment.ident == "MessageWriter")
         }) && !self.is_runtime_dispatcher_source()
         {
-            self.violations
-                .push("second MessageWriter implementation".to_string());
+            self.second_message_writer = true;
         }
         let previous = self.in_post_write_router;
         self.in_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
@@ -220,65 +237,148 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
-        let previous = self.current_method.replace(node.sig.ident.to_string());
+        let previous = self.begin_function(node.sig.ident.to_string(), &node.attrs);
         syn::visit::visit_impl_item_fn(self, node);
-        self.current_method = previous;
+        self.current_function = previous;
     }
 
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
-        let previous = self.current_method.replace(node.sig.ident.to_string());
+        let previous = self.begin_function(node.sig.ident.to_string(), &node.attrs);
         syn::visit::visit_item_fn(self, node);
-        self.current_method = previous;
+        self.current_function = previous;
+    }
+
+    fn visit_local(&mut self, node: &'ast syn::Local) {
+        if node
+            .init
+            .as_ref()
+            .is_some_and(|init| contains_https_transport_field(&init.expr))
+            && let syn::Pat::Ident(binding) = &node.pat
+            && let Some(function) = self.current_function_mut()
+        {
+            function
+                .https_transport_bindings
+                .insert(binding.ident.to_string());
+        }
+        syn::visit::visit_local(self, node);
     }
 
     fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
-        if matches!(&node.member, syn::Member::Named(name) if name == "host") {
-            if self.current_method.as_deref() == Some("route_write") {
-                self.route_write_host_accesses += 1;
-            }
-            if self.in_post_write_router && self.current_method.as_deref() == Some("dispatch") {
-                self.post_router_host_accesses += 1;
-            }
-            if self.current_method.as_deref() == Some("route_write") {
-                self.violations
-                    .push("destination host inspected before canonical writer".to_string());
-            }
+        if matches!(&node.member, syn::Member::Named(name) if name == "host")
+            && let Some(function) = self.current_function_mut()
+        {
+            function.accesses_host = true;
         }
         syn::visit::visit_expr_field(self, node);
     }
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if matches!(
-            node.method.to_string().as_str(),
-            "deliver_to_peer" | "deliver"
-        ) {
-            if !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-                && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
-            {
-                self.violations
-                    .push("peer delivery outside PostWriteRouter::dispatch".to_string());
-            }
-            if self.is_runtime_dispatcher_source() {
-                self.peer_delivery_calls += 1;
-            }
-        }
-        if node.method == "emit_local_post_write"
-            && !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
-            && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
+        let method = node.method.to_string();
+        let peer_delivery = method == "deliver_to_peer"
+            || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
+        if (peer_delivery || method == "emit_local_post_write")
+            && let Some(function) = self.current_function_mut()
+            && !function.is_test
         {
-            self.violations
-                .push("local nudge outside PostWriteRouter::dispatch".to_string());
+            function.calls_delivery = true;
+            if peer_delivery {
+                function.peer_delivery_calls += 1;
+            }
         }
         syn::visit::visit_expr_method_call(self, node);
     }
 }
 
 impl HostRoutingVisitor {
+    fn begin_function(&mut self, name: String, attrs: &[syn::Attribute]) -> Option<usize> {
+        let index = self.functions.len();
+        self.functions.push(HostRoutingFunction {
+            is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
+            is_test: attrs.iter().any(|attr| attr.path().is_ident("test")),
+            name,
+            ..HostRoutingFunction::default()
+        });
+        self.current_function.replace(index)
+    }
+
+    fn current_function_mut(&mut self) -> Option<&mut HostRoutingFunction> {
+        self.current_function
+            .and_then(|index| self.functions.get_mut(index))
+    }
+
+    fn is_https_transport_receiver(&self, receiver: &syn::Expr) -> bool {
+        let syn::Expr::Path(path) = receiver else {
+            return false;
+        };
+        let Some(segment) = path.path.segments.last() else {
+            return false;
+        };
+        self.current_function
+            .and_then(|index| self.functions.get(index))
+            .is_some_and(|function| {
+                function
+                    .https_transport_bindings
+                    .contains(&segment.ident.to_string())
+            })
+    }
+
+    fn post_router_host_accesses(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_post_write_dispatch && function.accesses_host)
+            .count()
+    }
+
+    fn peer_delivery_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.is_post_write_dispatch)
+            .map(|function| function.peer_delivery_calls)
+            .sum()
+    }
+
+    fn violations(&self) -> Vec<String> {
+        let mut violations = self
+            .functions
+            .iter()
+            .filter(|function| function.calls_delivery && !function.is_post_write_dispatch)
+            .map(|function| {
+                format!(
+                    "delivery call outside PostWriteRouter::dispatch in {}",
+                    function.name
+                )
+            })
+            .collect::<Vec<_>>();
+        if self.second_message_writer {
+            violations.push("second MessageWriter implementation".to_string());
+        }
+        violations
+    }
+
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
         })
     }
+}
+
+fn contains_https_transport_field(expression: &syn::Expr) -> bool {
+    struct HttpsTransportFieldVisitor {
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for HttpsTransportFieldVisitor {
+        fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
+            if matches!(&node.member, syn::Member::Named(name) if name == "https_transport") {
+                self.found = true;
+            }
+            syn::visit::visit_expr_field(self, node);
+        }
+    }
+
+    let mut visitor = HttpsTransportFieldVisitor { found: false };
+    visitor.visit_expr(expression);
+    visitor.found
 }
 
 #[test]
