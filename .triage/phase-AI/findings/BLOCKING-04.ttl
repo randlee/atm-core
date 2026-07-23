@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BLOCKING-04>
+  a triage:Finding ;
+  triage:findingId "BLOCKING-04" ;
+  triage:title "No pre-routing rejection proof in peer-pair smoke harness" ;
+  triage:description "run_peer_pair.py's execute() has no verification that pre-routing rejection actually occurs before delivery; it only checks exit_code/substring. Originally raised in AI13-QA1 findings batch, re-confirmed independently by req-qa/arch-qa/ruthless-boundary-qa on 2026-07-23 against s20 (commit a8567ca4, PR #616)." ;
+  triage:category "BLOCKING" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo-wide" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BLOCKING-04/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s13/62b67831> ;
+  triage:openOn <urn:atm:triage:worktree/s14/e148ea7a> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a6bac5b> ;
+  triage:openOn <urn:atm:triage:worktree/s16/b3749b90> ;
+  triage:openOn <urn:atm:triage:worktree/s17/f3af571e> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/fb781b27> ;
+  triage:openOn <urn:atm:triage:worktree/s20/a8567ca4> ;
+  triage:promoteTo <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s13/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 215 ;
+  triage:snippet "passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "62b67831" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/62b67831> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s14/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 215 ;
+  triage:snippet "passed = result[\"exit_code\"] != 0 and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "e148ea7a" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/e148ea7a> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/BLOCKING-04/s20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 229 ;
+  triage:snippet "passed = (\n                    result[\"exit_code\"] != 0\n                    and case[\"typed_error_code\"] in (result[\"stdout\"] + result[\"stderr\"])\n                )" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a8567ca4> .
+
+<urn:atm:triage:worktree/s13/62b67831>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "62b67831" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/e148ea7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "e148ea7a" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/5a6bac5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/a8567ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:orderIndex 20 .

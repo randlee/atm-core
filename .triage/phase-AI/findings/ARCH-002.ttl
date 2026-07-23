@@ -1,0 +1,137 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-002" ;
+  triage:title "Non-transitive taint propagation / silent-permissive-on-unrecognized-initializer in function_binding_provenance" ;
+  triage:description "function_binding_provenance in the post-write router's AST boundary check resolves use-alias fixed points but historically failed to (a) mirror that fixed-point loop onto local let-binding chains beyond one hop, and (b) fail closed on unrecognized initializer expression shapes (e.g. Expr::Call like Box::new(fn)), silently treating them as Safe instead of flagging them. Fixed on feature/pAI-s12-post-write-router via commits: round-3 fix (use-alias fixed-point, single-hop local, ARCH-003 twin removal), then commit c56ae0be (round-5: fail-closed provenance tracking for two-hop local bindings and Box::new-delivery bindings, with regression fixtures). arch-ctm has manually merge-forwarded this fix: AI.12->AI.13 via commit 62b67831, and AI.13->AI.14 via commit e148ea7a. He stopped there." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T18:57:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/s15> ;
+  triage:openOn <urn:atm:triage:worktree/s16> ;
+  triage:openOn <urn:atm:triage:worktree/s17> ;
+  triage:openOn <urn:atm:triage:worktree/s18> ;
+  triage:openOn <urn:atm:triage:worktree/s19> ;
+  triage:fixedOn <urn:atm:triage:worktree/s12> ;
+  triage:fixedOn <urn:atm:triage:worktree/s13> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19> .
+
+<urn:atm:triage:occurrence/ARCH-002/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s15> .
+
+<urn:atm:triage:occurrence/ARCH-002/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s16> .
+
+<urn:atm:triage:occurrence/ARCH-002/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s17> .
+
+<urn:atm:triage:occurrence/ARCH-002/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s18> .
+
+<urn:atm:triage:occurrence/ARCH-002/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s19> .
+
+<urn:atm:triage:worktree/s12>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "c56ae0be" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 19 .

@@ -7,13 +7,13 @@
   triage:title "Duplicate wake-helper listener logic across atm-daemon and atm-graft" ;
   triage:description "wake_listener/spawn_listener_wake_helper logic (same 250ms deadline constant, same thread-spawn/recv_timeout pattern) is implemented twice — once in atm-daemon/src/local_ipc_wake.rs (apply_listener_wake_deadline), once in atm-graft/src/runtime.rs (spawn_listener_wake_helper) — independently evolving duplicates (RBQA-F003 in the original report). Both define LISTENER_WAKE_CONNECT_DEADLINE = 250ms and implement similar thread spawn patterns." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "AI15" ;
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/12/1> ;
@@ -25,16 +25,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/20/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s11/1205695651> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s13/aecade2a23> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s15/56c08886> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s16/5a35a6cd> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s17/32407754> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s18/02aff5ca> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s19/1bd8e54d> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s20/82fb2441> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s20/82fb2441> ;
+  triage:closureReason "Superseded: atm-graft refactored to non-blocking accept model (commit 6ea4774c); spawn_listener_wake_helper and LISTENER_WAKE_CONNECT_DEADLINE removed as side effect. Only atm-daemon/src/local_ipc_wake.rs implementation remains, eliminating the duplicate." ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s20/82fb2441> .
 
 <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-01-DUPLICATE-WAKE-HELPER/11/1>
@@ -42,8 +34,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s11/1205695651> .
@@ -53,8 +45,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> .
@@ -64,8 +56,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a23> .
@@ -75,8 +67,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .
@@ -86,8 +78,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "56c088866cb42adecc2270035e273df660f8c3db" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s15/56c08886> .
@@ -97,8 +89,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "5a35a6cd06403a218de594a87ea4d2f2db9e2be7" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s16/5a35a6cd> .
@@ -108,8 +100,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "324077541b47567f6ffe2f7521ebcab75890b7db" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s17/32407754> .
@@ -119,8 +111,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s18/02aff5ca> .
@@ -130,8 +122,8 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "1bd8e54d3d78c51a89914127b402a94e2106e444" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s19/1bd8e54d> .
@@ -141,10 +133,10 @@
   triage:file "crates/atm-graft/src/runtime.rs + crates/atm-daemon/src/local_ipc_wake.rs" ;
   triage:line 0 ;
   triage:snippet "spawn_listener_wake_helper + apply_listener_wake_deadline (250ms pattern)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:headSha "82fb2441e590debf4630cf918c79e33f6bb2b38e" ;
+  triage:headSha "6ea4774cc563be4bd3e09b56918a3f51a6e49962" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s20/82fb2441> .
 
 <urn:atm:triage:worktree/pAI-s11/1205695651>
@@ -214,5 +206,5 @@
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:headSha "82fb2441e590debf4630cf918c79e33f6bb2b38e" ;
+  triage:headSha "6ea4774cc563be4bd3e09b56918a3f51a6e49962" ;
   triage:orderIndex 20 .

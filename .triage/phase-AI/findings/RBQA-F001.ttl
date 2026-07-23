@@ -1,0 +1,104 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-F001" ;
+  triage:title "Daemon reap fix has an un-guarded panic/poison window that leaks the spawned child" ;
+  triage:description "In crates/atm-daemon-client/src/lib.rs, arch-ctm's fix (commit a8567ca4 on feature/pAI-s20-hermes-bridge-deployment) makes spawn_daemon() retain and reap only its own spawned Child on a normal publish-wait failure. But ruthless-boundary-qa found a residual gap: a panic occurring between spawn_daemon() success and wait_for_published_daemon() returning — reachable via BootstrapTraceability's shared mutex getting poisoned — unwinds past reap_failed_auto_start() and leaks the child, because there is no Drop guard holding the Child across that window. Additionally, s12-s19 retain the original vulnerability: spawn_daemon() returns () and the child is never tracked or reaped." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001/s20/panic-window> ;
+  triage:openOn <urn:atm:triage:worktree/s20/a8567ca4> ;
+  triage:openOn <urn:atm:triage:worktree/s19/fb781b27> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
+  triage:openOn <urn:atm:triage:worktree/s17/f3af571e> ;
+  triage:openOn <urn:atm:triage:worktree/s16/b3749b90> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a6bac5b> ;
+  triage:openOn <urn:atm:triage:worktree/s14/e148ea7a> ;
+  triage:openOn <urn:atm:triage:worktree/s13/62b67831> ;
+  triage:openOn <urn:atm:triage:worktree/s12/c56ae0be> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/a8567ca4> .
+
+<urn:atm:triage:occurrence/RBQA-F001/s20/panic-window>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 747 ;
+  triage:snippet "let mut child = match self.spawn_daemon() { ... } ... let result = self.wait_for_published_daemon(...); if result.is_err() { reap_failed_auto_start(&mut child); } result" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:pattern "missing-drop-guard-on-panic-unwind" ;
+  triage:vulnerability "panic in wait_for_published_daemon or traceability.emit() unwinds past reap logic, leaking child" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a8567ca4> .
+
+<urn:atm:triage:worktree/s12/c56ae0be>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:headSha "c56ae0be" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/62b67831>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "62b67831" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/e148ea7a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "e148ea7a" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/5a6bac5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/a8567ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:orderIndex 20 .
