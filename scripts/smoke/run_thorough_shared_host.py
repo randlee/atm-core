@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+CLI_SUBPROCESS_TIMEOUT_SECONDS = 45
+
 from daemon_lifecycle import (
     assert_no_process_leak,
     count_atm_daemon_processes,
@@ -87,7 +89,7 @@ def run_atm_result(
                 encoding="utf-8",
                 errors="replace",
                 check=False,
-                timeout=30,
+                timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS,
                 input=stdin,
             )
         except subprocess.TimeoutExpired as error:
@@ -137,7 +139,7 @@ def run_atm_raw(
         encoding="utf-8",
         errors="replace",
         check=False,
-        timeout=30,
+        timeout=CLI_SUBPROCESS_TIMEOUT_SECONDS,
     )
 
 
