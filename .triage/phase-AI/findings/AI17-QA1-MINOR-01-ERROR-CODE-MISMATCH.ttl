@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH" ;
+  triage:title "New caller-context failures use generic MessageValidationFailed instead of dedicated CallerContextRequestInvalid" ;
+  triage:description "New caller-context failure paths use the generic MessageValidationFailed error code instead of the existing dedicated CallerContextRequestInvalid code, which is unused elsewhere in the workspace." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-code-domain" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/3> ;
+  triage:openOn <urn:atm:triage:worktree/s17/5560bf8d> ;
+  triage:promoteTo <urn:atm:triage:worktree/s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 33 ;
+  triage:snippet "AtmError::validation(" ;
+  triage:context "mutual exclusivity check: --as and --chat-id" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 99 ;
+  triage:snippet "AtmError::validation(" ;
+  triage:context "mutation caller context validation: impersonation check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 192 ;
+  triage:snippet "AtmError::validation(format!" ;
+  triage:context "environment variable UTF-8 validation: ATM_CHAT_ID" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .
+
+<urn:atm:triage:worktree/s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .
