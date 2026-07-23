@@ -105,6 +105,10 @@ fn canonical_write_router_has_one_host_routing_decision() {
         visitor.peer_delivery_calls, 1,
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
+    assert_eq!(
+        visitor.reconciliation_delivery_calls, 1,
+        "AI.16 permits exactly one replay delivery callsite in reconcile_after_success"
+    );
     assert!(
         visitor.violations.is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
@@ -161,6 +165,7 @@ struct HostRoutingVisitor {
     route_write_host_accesses: usize,
     post_router_host_accesses: usize,
     peer_delivery_calls: usize,
+    reconciliation_delivery_calls: usize,
     violations: Vec<String>,
     source_path: Option<PathBuf>,
     current_method: Option<String>,
@@ -221,14 +226,22 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             node.method.to_string().as_str(),
             "deliver_to_peer" | "deliver"
         ) {
-            if !(self.in_post_write_router && self.current_method.as_deref() == Some("dispatch"))
+            let is_primary_route =
+                self.in_post_write_router && self.current_method.as_deref() == Some("dispatch");
+            let is_reconciliation = self.is_runtime_dispatcher_source()
+                && self.current_method.as_deref() == Some("reconcile_after_success");
+            if !is_primary_route
+                && !is_reconciliation
                 && (self.is_runtime_dispatcher_source() || self.source_path.is_none())
             {
                 self.violations
                     .push("peer delivery outside PostWriteRouter::dispatch".to_string());
             }
-            if self.is_runtime_dispatcher_source() {
+            if is_primary_route {
                 self.peer_delivery_calls += 1;
+            }
+            if is_reconciliation {
+                self.reconciliation_delivery_calls += 1;
             }
         }
         if node.method == "emit_local_post_write"
