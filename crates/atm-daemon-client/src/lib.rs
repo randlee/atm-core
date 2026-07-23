@@ -147,44 +147,32 @@ fn reject_socket_override() -> Result<(), AtmError> {
 /// Returns [`AtmError`] when the canonical same-host daemon HTTP record cannot
 /// be resolved into a local IPC endpoint.
 pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    #[cfg(windows)]
-    {
-        reject_socket_override()?;
-        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
-        DaemonLocalIpcEndpoint::new(
-            runtime_scope
-                .runtime_root
-                .as_ref()
-                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
-        )
-    }
-    #[cfg(not(windows))]
-    DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(
-        &atm_core::home::atm_home()?,
-    ))
+    DaemonLocalIpcEndpoint::new(host_local_http_record_path()?)
 }
 
 /// # Errors
 ///
-/// Returns [`AtmError`] when the canonical same-host daemon HTTP record for
-/// `home_dir` cannot be resolved into a local IPC endpoint.
+/// Returns [`AtmError`] when the canonical host-scoped daemon HTTP record
+/// cannot be resolved into a local IPC endpoint.
+///
+/// The parameter is retained for source compatibility with callers that
+/// previously supplied an ATM configuration home. Runtime endpoint discovery
+/// is intentionally independent of `ATM_HOME`.
 pub fn resolve_daemon_local_ipc_endpoint_from_home(
-    home_dir: &Path,
+    _home_dir: &Path,
 ) -> Result<DaemonLocalIpcEndpoint, AtmError> {
+    resolve_daemon_local_ipc_endpoint()
+}
+
+fn host_local_http_record_path() -> Result<PathBuf, AtmError> {
     #[cfg(windows)]
-    {
-        let _home_dir = home_dir;
-        reject_socket_override()?;
-        let runtime_scope = atm_core::home::current_host_runtime_scope()?;
-        DaemonLocalIpcEndpoint::new(
-            runtime_scope
-                .runtime_root
-                .as_ref()
-                .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
-        )
-    }
-    #[cfg(not(windows))]
-    DaemonLocalIpcEndpoint::new(atm_core::local_http::local_http_record_path(home_dir))
+    reject_socket_override()?;
+
+    let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+    Ok(runtime_scope
+        .runtime_root
+        .as_ref()
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME))
 }
 
 /// # Errors
@@ -954,7 +942,8 @@ mod tests {
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
-        next_auto_start_poll_interval,
+        next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home,
     };
 
     #[derive(Debug, Default)]
@@ -982,6 +971,24 @@ mod tests {
 
     fn launch_lock_path(tempdir: &TempDir) -> PathBuf {
         tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE)
+    }
+
+    #[test]
+    fn local_ipc_endpoint_is_host_scoped_not_atm_home_scoped() {
+        let supplied_atm_home = TempDir::new().expect("temp ATM home");
+        let expected = atm_core::home::current_host_runtime_scope()
+            .expect("host runtime scope")
+            .runtime_root
+            .as_ref()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+
+        let canonical = resolve_daemon_local_ipc_endpoint().expect("canonical endpoint");
+        let compatibility_endpoint =
+            resolve_daemon_local_ipc_endpoint_from_home(supplied_atm_home.path())
+                .expect("compatibility endpoint");
+
+        assert_eq!(canonical.as_ref(), expected);
+        assert_eq!(compatibility_endpoint.as_ref(), expected);
     }
 
     #[test]

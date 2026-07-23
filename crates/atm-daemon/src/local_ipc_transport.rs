@@ -845,14 +845,10 @@ impl LocalIpcServerTransportAdapter {
     }
 
     pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
-        // The UDS endpoint and the loopback-TCP capability record are one
-        // local HTTP publication. They must therefore use the same accepted
-        // ATM home root that the daemon client uses to discover
-        // `local-http.json`; host-wide singleton admission remains owned by
-        // `HostOwnershipAdapter` below.
-        let endpoint_path =
-            atm_core::protocol::daemon_socket_path_from_home(&atm_core::home::atm_home()?);
-        self.prepare_runtime_at_socket_path(endpoint_path)
+        // Runtime endpoints and their local-HTTP capability record are
+        // host-singleton artifacts. `ATM_HOME` selects request/config state;
+        // it must not publish a second endpoint for another workspace.
+        self.prepare_runtime_at_socket_path(atm_core::protocol::daemon_socket_path()?)
     }
 
     pub(crate) fn prepare_runtime_at_socket_path(
