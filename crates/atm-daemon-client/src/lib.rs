@@ -964,12 +964,14 @@ mod tests {
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    use super::reap_failed_auto_start;
     use super::{
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
-        next_auto_start_poll_interval, reap_failed_auto_start, resolve_daemon_local_ipc_endpoint,
+        next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
         resolve_daemon_local_ipc_endpoint_from_home,
     };
 
