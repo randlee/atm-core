@@ -188,6 +188,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "fn write() { let emit = emit_local_post_write; emit(); }",
         ),
         (
+            "transitive local delivery function binding",
+            "fn write() { let first = emit_local_post_write; let second = first; second(); }",
+        ),
+        (
+            "boxed delivery function binding",
+            "fn write() { let emit = Box::new(emit_local_post_write); emit(); }",
+        ),
+        (
             "transitive delivery function alias",
             "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
         ),
@@ -301,7 +309,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         }
         if let syn::Pat::Ident(binding) = &node.pat
             && let Some(init) = node.init.as_ref()
-            && let Some(provenance) = self.function_binding_provenance(&init.expr)
+            && let provenance = self.function_binding_provenance(&init.expr)
             && let Some(function) = self.current_function_mut()
         {
             function
@@ -408,19 +416,33 @@ impl HostRoutingVisitor {
             .is_some_and(|binding| *binding != FunctionBinding::Safe)
     }
 
-    fn function_binding_provenance(&self, expression: &syn::Expr) -> Option<FunctionBinding> {
+    fn function_binding_provenance(&self, expression: &syn::Expr) -> FunctionBinding {
         if matches!(expression, syn::Expr::Cast(_)) {
-            return Some(FunctionBinding::Unresolved);
+            return FunctionBinding::Unresolved;
+        }
+        if let syn::Expr::Call(call) = expression {
+            return call
+                .args
+                .iter()
+                .map(|argument| self.function_binding_provenance(argument))
+                .find(|provenance| *provenance != FunctionBinding::Safe)
+                .unwrap_or(FunctionBinding::Safe);
         }
         let syn::Expr::Path(path) = expression else {
-            return None;
+            return FunctionBinding::Safe;
         };
-        let segment = path.path.segments.last()?;
+        let Some(segment) = path.path.segments.last() else {
+            return FunctionBinding::Unresolved;
+        };
         let name = segment.ident.to_string();
         if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
-            Some(FunctionBinding::Delivery)
+            FunctionBinding::Delivery
         } else {
-            Some(FunctionBinding::Safe)
+            self.current_function
+                .and_then(|index| self.functions.get(index))
+                .and_then(|function| function.function_bindings.get(&name))
+                .copied()
+                .unwrap_or(FunctionBinding::Safe)
         }
     }
 
