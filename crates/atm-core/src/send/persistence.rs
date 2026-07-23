@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use serde_json::Map;
+use tracing::error;
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -29,8 +30,15 @@ pub(crate) fn persist_message(
         load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
-    match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
-        Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
+    match mirror_message_to_store(
+        runtime,
+        home_dir,
+        &recipient.team,
+        &recipient.agent,
+        &prepared,
+    ) {
+        Ok(true) => Ok(DeliveryPersistenceResult::persisted(prepared)),
+        Ok(false) => Ok(DeliveryPersistenceResult::already_persisted(prepared)),
         Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
@@ -137,14 +145,30 @@ fn load_store_backed_mailbox_projection(
 
 fn mirror_message_to_store(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
     envelope: &InboxMessage,
-) -> Result<(), AtmError> {
+) -> Result<bool, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(());
+        return Ok(true);
     };
     let message_key = boundary::MessageKey::from(message_id);
+    if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
+        if immutable_envelopes_match(&existing.envelope, envelope) {
+            return Ok(false);
+        }
+        error!(
+            code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
+            message_id = %message_id,
+            team = %team,
+            agent = %agent,
+            "duplicate message ULID carried different immutable data; retaining original record"
+        );
+        return Err(AtmError::message_id_conflict(format!(
+            "message {message_id} already exists for {agent}@{team} with different immutable data"
+        )));
+    }
     runtime.persist_message_record(boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
@@ -162,5 +186,18 @@ fn mirror_message_to_store(
         expires_at: envelope.expires_at,
         deleted_at: None,
         updated_at: Some(IsoTimestamp::now()),
-    })
+    })?;
+    Ok(true)
+}
+
+fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {
+    let mut left = left.clone();
+    let mut right = right.clone();
+    left.read = false;
+    left.pending_ack_at = None;
+    left.acknowledged_at = None;
+    right.read = false;
+    right.pending_ack_at = None;
+    right.acknowledged_at = None;
+    left == right
 }

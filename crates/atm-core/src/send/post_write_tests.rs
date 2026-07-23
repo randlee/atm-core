@@ -1,0 +1,202 @@
+use tempfile::tempdir;
+
+use super::tests::{
+    RecordingObservability, RecordingPostSendEmitter, TestRuntime, message, send_request,
+};
+use super::{SendMessageSource, WriteOutcome, write_mail_with_runtime_impl};
+use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
+use crate::delivery_policy::DeliveryHarnessPath;
+use crate::error_codes::AtmErrorCode;
+use crate::schema::{AtmMessageId, set_authenticated_source_host};
+use crate::test_support::{TEST_SENDER, TEST_TEAM};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
+
+#[test]
+fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {
+    let tempdir = tempdir().expect("tempdir");
+    let mut runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    runtime.roster_member_missing = true;
+    let origin_id = AtmMessageId::new();
+    let mut request = send_request(tempdir.path()).with_origin_message_id(origin_id);
+    request.to = Some(
+        "recipient@test-team.localhost"
+            .parse()
+            .expect("remote address"),
+    );
+
+    let outcome = super::send_mail_with_runtime_impl(
+        request,
+        &RecordingObservability::default(),
+        &runtime,
+        None,
+    )
+    .expect("host-qualified origin write must not query the remote roster");
+    assert_eq!(outcome.message_id, origin_id);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].message_key, MessageKey::from(origin_id));
+}
+
+#[test]
+fn canonical_writer_persists_before_router_owned_local_nudge() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::succeed();
+    let mut prepared =
+        write_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
+            .expect("canonical write must persist before routing");
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .len(),
+        1,
+        "the durable message must exist before the router emits a nudge"
+    );
+    assert!(
+        emitter.emitted().is_empty(),
+        "the canonical writer must not emit a nudge before PostWriteRouter"
+    );
+
+    prepared.emit_local_post_write_for_test(&runtime, &emitter);
+    assert_eq!(
+        emitter.emitted().len(),
+        1,
+        "the router emits one local nudge"
+    );
+    assert!(matches!(
+        prepared
+            .finish_with_runtime(&runtime, &observability)
+            .expect("local route finish"),
+        WriteOutcome::Sent(_)
+    ));
+}
+
+#[test]
+fn conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::succeed();
+    let origin_id = AtmMessageId::new();
+
+    super::send_mail_with_runtime_impl(
+        send_request(tempdir.path()).with_origin_message_id(origin_id),
+        &observability,
+        &runtime,
+        Some(&emitter),
+    )
+    .expect("initial origin write");
+    let post_write_count = emitter.emitted().len();
+    let outbound_delivery_count = runtime
+        .non_claude_deliveries
+        .lock()
+        .expect("non-claude deliveries lock")
+        .len();
+
+    let mut conflicting = send_request(tempdir.path()).with_origin_message_id(origin_id);
+    conflicting.message_source =
+        SendMessageSource::Inline("different immutable payload".to_string());
+    let error =
+        super::send_mail_with_runtime_impl(conflicting, &observability, &runtime, Some(&emitter))
+            .expect_err("conflicting origin ULID must fail before routing");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")[0]
+            .envelope
+            .text,
+        "hello",
+        "the conflicting replay must retain the original row"
+    );
+    assert_eq!(emitter.emitted().len(), post_write_count);
+    assert_eq!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .len(),
+        outbound_delivery_count,
+        "the conflict must not start another outbound delivery"
+    );
+}
+
+#[test]
+fn failed_peer_route_leaves_acknowledgement_source_pending() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::ClaudeCode);
+    let source_id = AtmMessageId::new();
+    let source_key = MessageKey::from(source_id);
+    let mut source_envelope = message("remote-agent", source_id, None, None);
+    source_envelope.source_team = Some("remote-team".parse().expect("remote team"));
+    source_envelope.requires_ack = true;
+    source_envelope.pending_ack_at = Some(IsoTimestamp::now());
+    set_authenticated_source_host(
+        &mut source_envelope,
+        Some("peer.example.test".parse().expect("peer host")),
+    );
+    runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock")
+        .push(Message {
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated(TEST_SENDER),
+            message_key: source_key.clone(),
+            envelope: source_envelope.clone(),
+        });
+    runtime
+        .mailbox_rows
+        .lock()
+        .expect("mailbox rows lock")
+        .push(MailStoreMailboxMetadataRow {
+            message_key: source_key.clone(),
+            message_id: Some(source_id),
+            parent_message_id: None,
+            thread_mode: None,
+            from_agent: source_envelope.from.clone(),
+            source_chat_id: None,
+            destination_chat_id: None,
+            summary: None,
+            message_at: source_envelope.timestamp,
+            read: false,
+            requires_ack: true,
+            pending_ack: true,
+            acknowledged_at: None,
+            expires_at: None,
+            task_id: None,
+        });
+
+    let write = crate::ack::AckRequest {
+        home_dir: tempdir.path().to_path_buf(),
+        current_dir: tempdir.path().to_path_buf(),
+        caller_identity: AgentName::from_validated(TEST_SENDER),
+        caller_team: TeamName::from_validated(TEST_TEAM),
+        message_id: source_id,
+        reply_body: "acknowledged".to_string(),
+    }
+    .into_write_request();
+    let prepared =
+        write_mail_with_runtime_impl(write, &RecordingObservability::default(), &runtime)
+            .expect("ack reply must persist before the peer route");
+
+    drop(prepared); // Models a failed PostWriteRouter peer delivery before finish().
+    assert!(
+        runtime
+            .persisted_states
+            .lock()
+            .expect("persisted states lock")
+            .iter()
+            .all(|state| state.message_key != source_key),
+        "a failed peer route must not mark the source acknowledgement state"
+    );
+}

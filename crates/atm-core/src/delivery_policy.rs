@@ -1,3 +1,4 @@
+use crate::address::AgentAddress;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
@@ -59,6 +60,18 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
+    pub(crate) fn remote(agent: AgentName, team: TeamName) -> Self {
+        Self {
+            agent,
+            team,
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
+            roster_backed: false,
+        }
+    }
+
     fn from_roster(member: RosterEntry) -> Self {
         let local_tmux_post_send = member.recipient_pane_id.is_some()
             || member
@@ -322,10 +335,31 @@ impl DeliveryPolicyCoordinator {
         runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| {
-                // Two steps joined as one string; callers must split on '\n' to present individually
-                AtmError::agent_not_found(agent, team)
-            })
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))
+    }
+
+    /// Resolves the persistence-admission snapshot for the canonical writer.
+    ///
+    /// This is not a delivery action: `PostWriteRouter` alone selects local
+    /// nudge versus peer HTTPS after persistence. A local destination must be
+    /// validated against this host's roster before it is written. A
+    /// host-qualified origin destination cannot be validated locally, so it
+    /// retains its immutable origin record and the receiving host validates
+    /// its own recipient roster after peer delivery.
+    pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
+        &self,
+        runtime: &R,
+        address: &AgentAddress,
+        recipient: &crate::send::ResolvedRecipient,
+        authenticated_source_host: bool,
+    ) -> Result<DeliveryRecipientSnapshot, AtmError> {
+        if address.host.is_some() && !authenticated_source_host {
+            return Ok(DeliveryRecipientSnapshot::remote(
+                recipient.agent.clone(),
+                recipient.team.clone(),
+            ));
+        }
+        self.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)
     }
 
     #[allow(

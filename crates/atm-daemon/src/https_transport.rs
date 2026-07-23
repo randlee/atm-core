@@ -870,6 +870,8 @@ mod tests {
             false,
         )
         .expect("write request");
+        let origin_message_id = atm_core::schema::AtmMessageId::new();
+        write.origin_message_id = Some(origin_message_id);
         write.authenticated_source_host = Some("spoofed.invalid".parse().expect("host"));
         let request = RequestEnvelope::Write(Box::new(write));
         write_http_request(&mut tls, &request).expect("write shared request");
@@ -884,6 +886,7 @@ mod tests {
             panic!("expected canonical write request");
         };
         assert_eq!(write.authenticated_source_host, Some(peer.host));
+        assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert!(write.to.expect("destination").host.is_none());
         listener.shutdown().expect("shutdown listener");
     }

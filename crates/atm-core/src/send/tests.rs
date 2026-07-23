@@ -32,7 +32,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
-fn message(
+pub(super) fn message(
     from: &str,
     message_id: AtmMessageId,
     parent_message_id: Option<AtmMessageId>,
@@ -123,9 +123,12 @@ pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
-    roster_member_missing: bool,
+    pub(super) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+    pub(super) persisted_records: Mutex<Vec<Message>>,
+    pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
 pub(super) struct RecordingPostSendEmitter {
@@ -165,6 +168,9 @@ impl TestRuntime {
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
+            persisted_records: Mutex::new(Vec::new()),
+            mailbox_rows: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         }
     }
 }
@@ -295,27 +301,43 @@ impl RetainedMailboxRuntime for TestRuntime {
         _agent: &AgentName,
         _limit: Option<usize>,
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
-        Ok(Vec::new())
+        Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())
     }
 
     fn load_message_record(
         &self,
         _home_dir: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _message_key: &MessageKey,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &MessageKey,
     ) -> Result<Option<Message>, AtmError> {
-        Ok(None)
+        Ok(self
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .iter()
+            .find(|record| {
+                &record.team == team && &record.agent == agent && &record.message_key == message_key
+            })
+            .cloned())
     }
 
-    fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
+    fn persist_message_record(&self, record: Message) -> Result<(), AtmError> {
         if let Some(message) = self.commit_error_message {
             return Err(AtmError::mailbox_write(message));
         }
+        self.persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .push(record);
         Ok(())
     }
 
-    fn persist_message_state(&self, _state: MailMessageState) -> Result<(), AtmError> {
+    fn persist_message_state(&self, state: MailMessageState) -> Result<(), AtmError> {
+        self.persisted_states
+            .lock()
+            .expect("persisted states lock")
+            .push(state);
         Ok(())
     }
 }
@@ -355,26 +377,20 @@ fn outbound_message() -> InboxMessage {
         extra: Map::new(),
     }
 }
-
 pub(super) fn send_request(home_dir: &Path) -> SendRequest {
-    SendRequest {
-        home_dir: home_dir.to_path_buf(),
-        current_dir: home_dir.to_path_buf(),
-        caller_identity: AgentName::from_validated(TEST_SENDER),
-        caller_chat_id: None,
-        caller_team: TeamName::from_validated(TEST_TEAM),
-        authenticated_source_host: None,
-        to: Some(format!("recipient@{TEST_TEAM}").parse().expect("address")),
-        message_source: SendMessageSource::Inline("hello".to_string()),
-        summary_override: Some("hello".to_string()),
-        requires_ack: false,
-        task_id: Some("task-123".parse().expect("task id")),
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        acknowledges_message_id: None,
-        dry_run: false,
-    }
+    SendRequest::new(
+        home_dir.to_path_buf(),
+        home_dir.to_path_buf(),
+        AgentName::from_validated(TEST_SENDER),
+        &format!("recipient@{TEST_TEAM}"),
+        TeamName::from_validated(TEST_TEAM),
+        SendMessageSource::Inline("hello".to_string()),
+        Some("hello".to_string()),
+        false,
+        Some("task-123".parse().expect("task id")),
+        false,
+    )
+    .expect("test send request")
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
@@ -400,9 +416,8 @@ fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
 }
 
 #[derive(Default)]
-struct RecordingObservability {
-    // Mutex required: tests may emit delivery-policy events from multiple
-    // runtime calls before assertions snapshot the collected sequence.
+pub(super) struct RecordingObservability {
+    // Mutex records concurrent delivery-policy events for deterministic assertions.
     events: Mutex<Vec<CommandEvent>>,
 }
 
@@ -490,6 +505,81 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         &result.original_message,
         result.companion_message.as_ref().expect("companion"),
         &outbound.text,
+    );
+}
+
+#[test]
+fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("original write");
+
+    let mut conflicting = original.clone();
+    conflicting.text = "different immutable payload".to_string();
+    let error = persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &conflicting,
+        false,
+    )
+    .expect_err("mismatched duplicate ULID must fail");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].envelope.text, original.text);
+}
+
+#[test]
+fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("original write");
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+    )
+    .expect("same immutable replay");
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .len(),
+        1
     );
 }
 
@@ -1001,8 +1091,6 @@ fn prepare_threaded_message_rejects_non_originating_sender() {
         Some(root_id),
         Some(ThreadMode::Supersede),
     );
-
     let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
-
     assert!(error.message().contains("original sender"));
 }
