@@ -109,6 +109,7 @@ fn canonical_write_router_has_one_host_routing_decision() {
         let file = syn::parse_file(&source)
             .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
         visitor.source_path = Some(path);
+        visitor.collect_delivery_function_aliases(&file);
         visitor.visit_file(&file);
     }
 
@@ -182,6 +183,14 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "aliased local nudge",
             "use nudge::emit_local_post_write as emit; fn write() { emit(); }",
         ),
+        (
+            "local delivery function binding",
+            "fn write() { let emit = emit_local_post_write; emit(); }",
+        ),
+        (
+            "transitive delivery function alias",
+            "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
+        ),
     ] {
         let violations = routing_violations_in_fixture(source);
         assert!(
@@ -208,6 +217,7 @@ fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
 fn routing_violations_in_fixture(source: &str) -> Vec<String> {
     let file = syn::parse_file(source).expect("negative fixture must parse");
     let mut visitor = HostRoutingVisitor::default();
+    visitor.collect_delivery_function_aliases(&file);
     visitor.visit_file(&file);
     visitor.violations()
 }
@@ -221,6 +231,7 @@ struct HostRoutingVisitor {
     source_path: Option<PathBuf>,
     current_function: Option<usize>,
     in_post_write_router: bool,
+    in_test_module: bool,
 }
 
 #[derive(Default)]
@@ -232,6 +243,14 @@ struct HostRoutingFunction {
     calls_delivery: bool,
     peer_delivery_calls: usize,
     https_transport_bindings: BTreeSet<String>,
+    function_bindings: BTreeMap<String, FunctionBinding>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FunctionBinding {
+    Delivery,
+    Safe,
+    Unresolved,
 }
 
 impl<'ast> Visit<'ast> for HostRoutingVisitor {
@@ -246,7 +265,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
                 .last()
                 .is_some_and(|segment| segment.ident == "PostWriteRouter")
         });
-        if self.is_production_source() {
+        if self.is_production_source() && !self.in_test_module {
             self.message_writer_implementations += usize::from(is_message_writer);
             self.post_write_router_implementations += usize::from(is_post_write_router);
         }
@@ -254,11 +273,6 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         self.in_post_write_router = is_post_write_router;
         syn::visit::visit_item_impl(self, node);
         self.in_post_write_router = previous;
-    }
-
-    fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
-        collect_delivery_function_aliases(&node.tree, &mut self.delivery_function_aliases);
-        syn::visit::visit_item_use(self, node);
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
@@ -285,6 +299,15 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
                 .https_transport_bindings
                 .insert(binding.ident.to_string());
         }
+        if let syn::Pat::Ident(binding) = &node.pat
+            && let Some(init) = node.init.as_ref()
+            && let Some(provenance) = self.function_binding_provenance(&init.expr)
+            && let Some(function) = self.current_function_mut()
+        {
+            function
+                .function_bindings
+                .insert(binding.ident.to_string(), provenance);
+        }
         syn::visit::visit_local(self, node);
     }
 
@@ -299,9 +322,10 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
+        let local_nudge = method.starts_with("emit_local_post_write");
         let peer_delivery = method == "deliver_to_peer"
             || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
-        if (peer_delivery || method == "emit_local_post_write")
+        if (peer_delivery || local_nudge)
             && let Some(function) = self.current_function_mut()
             && !function.is_test
         {
@@ -322,6 +346,13 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         }
         syn::visit::visit_expr_call(self, node);
     }
+
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        let previous = self.in_test_module;
+        self.in_test_module = previous || node.attrs.iter().any(is_cfg_test_attribute);
+        syn::visit::visit_item_mod(self, node);
+        self.in_test_module = previous;
+    }
 }
 
 impl HostRoutingVisitor {
@@ -329,7 +360,10 @@ impl HostRoutingVisitor {
         let index = self.functions.len();
         self.functions.push(HostRoutingFunction {
             is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
-            is_test: attrs.iter().any(|attr| attr.path().is_ident("test")),
+            is_test: self.in_test_module
+                || attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("test") || is_cfg_test_attribute(attr)),
             name,
             ..HostRoutingFunction::default()
         });
@@ -364,12 +398,47 @@ impl HostRoutingVisitor {
         let Some(segment) = path.path.segments.last() else {
             return false;
         };
-        matches!(
-            segment.ident.to_string().as_str(),
-            "emit_local_post_write" | "deliver_to_peer"
-        ) || self
-            .delivery_function_aliases
-            .contains(&segment.ident.to_string())
+        let name = segment.ident.to_string();
+        if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
+            return true;
+        }
+        self.current_function
+            .and_then(|index| self.functions.get(index))
+            .and_then(|current| current.function_bindings.get(&name))
+            .is_some_and(|binding| *binding != FunctionBinding::Safe)
+    }
+
+    fn function_binding_provenance(&self, expression: &syn::Expr) -> Option<FunctionBinding> {
+        if matches!(expression, syn::Expr::Cast(_)) {
+            return Some(FunctionBinding::Unresolved);
+        }
+        let syn::Expr::Path(path) = expression else {
+            return None;
+        };
+        let segment = path.path.segments.last()?;
+        let name = segment.ident.to_string();
+        if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
+            Some(FunctionBinding::Delivery)
+        } else {
+            Some(FunctionBinding::Safe)
+        }
+    }
+
+    fn collect_delivery_function_aliases(&mut self, file: &syn::File) {
+        let mut aliases = Vec::new();
+        collect_use_aliases(file, &mut aliases);
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for (source, alias) in &aliases {
+                if (is_delivery_function_name(source)
+                    || self.delivery_function_aliases.contains(source))
+                    && self.delivery_function_aliases.insert(alias.clone())
+                {
+                    changed = true;
+                }
+            }
+        }
     }
 
     fn post_router_host_accesses(&self) -> usize {
@@ -415,32 +484,45 @@ impl HostRoutingVisitor {
     }
 }
 
-fn collect_delivery_function_aliases(tree: &syn::UseTree, aliases: &mut BTreeSet<String>) {
+fn is_delivery_function_name(name: &str) -> bool {
+    name.starts_with("emit_local_post_write") || name == "deliver_to_peer"
+}
+
+fn collect_use_aliases(file: &syn::File, aliases: &mut Vec<(String, String)>) {
+    struct UseAliasCollector<'a> {
+        aliases: &'a mut Vec<(String, String)>,
+    }
+
+    impl<'ast> Visit<'ast> for UseAliasCollector<'_> {
+        fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
+            collect_use_aliases_from_tree(&node.tree, self.aliases);
+        }
+    }
+
+    UseAliasCollector { aliases }.visit_file(file);
+}
+
+fn collect_use_aliases_from_tree(tree: &syn::UseTree, aliases: &mut Vec<(String, String)>) {
     match tree {
-        syn::UseTree::Rename(rename)
-            if matches!(
-                rename.ident.to_string().as_str(),
-                "emit_local_post_write" | "deliver_to_peer"
-            ) =>
-        {
-            aliases.insert(rename.rename.to_string());
+        syn::UseTree::Rename(rename) => {
+            aliases.push((rename.ident.to_string(), rename.rename.to_string()))
         }
-        syn::UseTree::Name(name)
-            if matches!(
-                name.ident.to_string().as_str(),
-                "emit_local_post_write" | "deliver_to_peer"
-            ) =>
-        {
-            aliases.insert(name.ident.to_string());
-        }
-        syn::UseTree::Path(path) => collect_delivery_function_aliases(&path.tree, aliases),
+        syn::UseTree::Name(name) => aliases.push((name.ident.to_string(), name.ident.to_string())),
+        syn::UseTree::Path(path) => collect_use_aliases_from_tree(&path.tree, aliases),
         syn::UseTree::Group(group) => {
             for item in &group.items {
-                collect_delivery_function_aliases(item, aliases);
+                collect_use_aliases_from_tree(item, aliases);
             }
         }
-        syn::UseTree::Glob(_) | syn::UseTree::Rename(_) | syn::UseTree::Name(_) => {}
+        syn::UseTree::Glob(_) => {}
     }
+}
+
+fn is_cfg_test_attribute(attribute: &syn::Attribute) -> bool {
+    attribute.path().is_ident("cfg")
+        && attribute
+            .parse_args::<syn::Ident>()
+            .is_ok_and(|ident| ident == "test")
 }
 
 fn contains_https_transport_field(expression: &syn::Expr) -> bool {
@@ -1013,7 +1095,7 @@ fn is_test_only_source(path: &Path) -> bool {
         || path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("test_"))
+            .is_some_and(|name| name.starts_with("test_") || name.ends_with("_tests.rs"))
 }
 
 fn production_api_router_implementation_count(path: &Path) -> usize {
