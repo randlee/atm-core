@@ -1,0 +1,28 @@
+{
+  "action": "read",
+  "team": "atm-dev",
+  "agent": "loopback-peer",
+  "selection_mode": "unread",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "history",
+    "class": "read",
+    "from": "arch-ctm",
+    "text": "AI14 local HTTP loopback proof after client fix",
+    "timestamp": "2026-07-22T16:34:12.114861Z",
+    "read": true,
+    "source_team": "atm-dev",
+    "summary": "AI14 local HTTP loopback proof after client fix",
+    "message_id": "01KY5ATY0JVA31AW513MM0HXTG",
+    "requires_ack": false
+  },
+  "selected_message_id": "01KY5ATY0JVA31AW513MM0HXTG",
+  "match_count": 1,
+  "additional_match_count": 0,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 0,
+    "history": 4
+  }
+}

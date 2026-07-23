@@ -46,3 +46,16 @@ substitutes TCP reachability for message delivery.
    receiver-visible message, nudge,
    duplicate-ULID idempotence, unavailable-peer, and failed-ack non-mutation
    evidence in this record.
+
+## AI.14 execution record
+
+AI.14 Role A preflight at `ef0e5e2b` is **BLOCKED before peer traffic**.
+The branch client issues an HTTP `POST` over local UDS, while the branch daemon
+rejects it as a retired framed-protocol request (`unsupported ATM daemon frame
+magic 0x504f5354`). `atm doctor --json` remains healthy because its request
+does not exercise the write path. The sanitized record is
+`artifacts/phase-ai/ai14/local-preflight-failure.json`.
+
+This is a local transport compatibility defect, not a two-Mac result. No
+physical-peer case is claimed and AI.14 remains open until the owning prior
+transport sprint restores the compatible local HTTP path.

@@ -845,8 +845,10 @@ impl LocalIpcServerTransportAdapter {
     }
 
     pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
-        let endpoint_path = atm_core::protocol::daemon_socket_path()?;
-        self.prepare_runtime_at_socket_path(endpoint_path)
+        // Runtime endpoints and their local-HTTP capability record are
+        // host-singleton artifacts. `ATM_HOME` selects request/config state;
+        // it must not publish a second endpoint for another workspace.
+        self.prepare_runtime_at_socket_path(atm_core::protocol::daemon_socket_path()?)
     }
 
     pub(crate) fn prepare_runtime_at_socket_path(

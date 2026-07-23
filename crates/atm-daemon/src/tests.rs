@@ -190,7 +190,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 
 #[test]
 #[serial_test::serial(env)]
-fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
+fn runtime_composition_start_writes_retained_log_and_reports_healthy_observability() {
     install_retained_runtime_factory();
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
@@ -223,10 +223,10 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let socket_path = tempdir.path().join("daemon.sock");
     let runtime = crate::composition::RuntimeComposition::new_with_runtime_db_path(
         crate::AtmHomeDir::from_path_for_test(atm_home.clone()),
-        db_path.clone(),
+        db_path,
         observability.clone(),
     )
-    .expect("compose test runtime");
+    .expect("compose isolated runtime");
     let (result_tx, result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let runtime_socket_path = socket_path.clone();
