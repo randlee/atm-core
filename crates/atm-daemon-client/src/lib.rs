@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
@@ -744,23 +744,30 @@ impl DaemonSupervisor {
         F: FnMut() -> Result<(), AtmError>,
     {
         self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
-        if let Err(error) = self.spawn_daemon() {
-            self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
-            return Err(error);
-        }
+        let mut child = match self.spawn_daemon() {
+            Ok(child) => child,
+            Err(error) => {
+                self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
+                return Err(error);
+            }
+        };
         self.emit_trace(
             traceability,
             "daemon_auto_start",
             "publish_wait_started",
             None,
         );
-        self.wait_for_published_daemon(
+        let result = self.wait_for_published_daemon(
             try_connect,
             deadline,
             publish_timeout,
             poll_interval,
             traceability,
-        )
+        );
+        if result.is_err() {
+            reap_failed_auto_start(&mut child);
+        }
+        result
     }
 
     fn wait_for_published_daemon<F>(
@@ -827,7 +834,7 @@ impl DaemonSupervisor {
         }
     }
 
-    fn spawn_daemon(&self) -> Result<(), AtmError> {
+    fn spawn_daemon(&self) -> Result<Child, AtmError> {
         if !self.daemon_bin.as_ref().is_file() {
             return Err(AtmError::daemon_unavailable(format!(
                 "daemon binary is missing at {}",
@@ -845,8 +852,28 @@ impl DaemonSupervisor {
                 "failed to spawn daemon binary at {}: {source}",
                 self.daemon_bin.display()
             ))
-        })?;
-        Ok(())
+        })
+    }
+}
+
+/// A daemon started by this invocation must not outlive a failed publish wait.
+/// Existing daemons are never represented by this child handle, so this cleanup
+/// cannot affect the host-wide singleton owned by another CLI invocation.
+fn reap_failed_auto_start(child: &mut Child) {
+    match child.try_wait() {
+        Ok(Some(_)) => return,
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(error = %error, "failed to inspect daemon child after auto-start timeout");
+            return;
+        }
+    }
+    if let Err(error) = child.kill() {
+        tracing::warn!(error = %error, "failed to terminate daemon child after auto-start timeout");
+        return;
+    }
+    if let Err(error) = child.wait() {
+        tracing::warn!(error = %error, "failed to reap daemon child after auto-start timeout");
     }
 }
 
@@ -954,7 +981,7 @@ mod tests {
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
-        next_auto_start_poll_interval,
+        next_auto_start_poll_interval, reap_failed_auto_start,
     };
 
     #[derive(Debug, Default)]
@@ -1201,5 +1228,21 @@ mod tests {
             .expect("daemon record becomes connectable before the bounded deadline");
 
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_auto_start_reaps_the_daemon_child() {
+        let mut child = super::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn daemon child fixture");
+
+        reap_failed_auto_start(&mut child);
+
+        assert!(
+            child.try_wait().expect("inspect reaped child").is_some(),
+            "failed auto-start must reap its child"
+        );
     }
 }
