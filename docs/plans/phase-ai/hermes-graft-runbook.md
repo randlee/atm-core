@@ -11,7 +11,7 @@ Start with
 [`templates/hermes-bridge-profiles.example.tsv`](templates/hermes-bridge-profiles.example.tsv)
 and replace every example value in an operator-owned registry. The checked-in
 template is
-[`templates/ai.hermes.atm-graft-<profile>.plist`](templates/ai.hermes.atm-graft-<profile>.plist).
+[`templates/ai.hermes.atm-graft-PROFILE.plist`](templates/ai.hermes.atm-graft-PROFILE.plist).
 Replace each `@...@` token from one registry row. `@BRIDGE_COMMAND@` is the
 profile-owned Hermes runner that imports `atm_graft_hermes_bridge`; it is not a
 daemon command. The runner uses its ordinary inbound-user-message hook.

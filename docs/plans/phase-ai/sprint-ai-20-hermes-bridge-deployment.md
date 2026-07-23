@@ -35,7 +35,7 @@ remain blocked on AI.19 `PASS`.
 
 ## Deliverables
 
-- One parameterized `ai.hermes.atm-graft-<profile>.plist` template, rendered
+- One parameterized `ai.hermes.atm-graft-PROFILE.plist` template, rendered
   once for each profile listed in the operator-provided registry.
 - A runbook covering install, status, restart, log collection, failure
   diagnosis, and adding a profile.
@@ -48,7 +48,7 @@ remain blocked on AI.19 `PASS`.
 - `docs/plans/phase-ai/hermes-graft-runbook.md` — install and recovery
   commands, expected logs, proof commands, and the authoritative
   profile registry rendered from the operator-supplied inputs.
-- `docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist` —
+- `docs/plans/phase-ai/templates/ai.hermes.atm-graft-PROFILE.plist` —
   checked-in parameterized template. Operator-rendered plist files and their
   local paths are evidence, not repository targets.
 - `scripts/phase-ai/run-hermes-bridge-probes.sh` and the
