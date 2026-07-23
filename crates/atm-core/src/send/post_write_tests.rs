@@ -64,7 +64,7 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
         "the canonical writer must not emit a nudge before PostWriteRouter"
     );
 
-    prepared.emit_local_post_write_with_runtime(&runtime, &emitter);
+    prepared.emit_local_post_write_for_test(&runtime, &emitter);
     assert_eq!(
         emitter.emitted().len(),
         1,
