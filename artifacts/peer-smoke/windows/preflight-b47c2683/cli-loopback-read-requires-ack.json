@@ -1,0 +1,29 @@
+{
+  "action": "read",
+  "team": "atm-dev",
+  "agent": "windows-smoke",
+  "selection_mode": "actionable",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "pending_ack",
+    "class": "pending_ack",
+    "from": "arch-ctm",
+    "text": "windows peer smoke requires-ack",
+    "timestamp": "2026-07-23T19:33:55.859045500Z",
+    "read": true,
+    "source_team": "atm-dev",
+    "summary": "windows peer smoke requires-ack",
+    "message_id": "01KY87GR0KC9BRG5VG206NES0R",
+    "requires_ack": true,
+    "pendingAckAt": "2026-07-23T19:33:55.859045500Z"
+  },
+  "selected_message_id": "01KY87GR0KC9BRG5VG206NES0R",
+  "match_count": 1,
+  "additional_match_count": 0,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 1,
+    "history": 1
+  }
+}

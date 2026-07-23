@@ -1,0 +1,26 @@
+{
+  "team": "atm-dev",
+  "members": [
+    {
+      "name": "arch-ctm",
+      "agent_id": "arch-ctm@atm-dev",
+      "agent_type": "general-purpose",
+      "model": "unknown",
+      "joined_at": 1784835203863,
+      "tmux_pane_id": null,
+      "home_dir": "F:\\github\\atm-core-worktrees\\evidence\\phase-ai-crosshost-smoke",
+      "live_cwd": "F:\\github\\atm-core-worktrees\\evidence\\phase-ai-crosshost-smoke",
+      "extra": {}
+    },
+    {
+      "name": "windows-smoke",
+      "agent_id": "windows-smoke@atm-dev",
+      "agent_type": "general-purpose",
+      "model": "unknown",
+      "joined_at": 1784835203878,
+      "tmux_pane_id": null,
+      "home_dir": "F:\\github\\atm-core-worktrees\\evidence\\phase-ai-crosshost-smoke",
+      "extra": {}
+    }
+  ]
+}

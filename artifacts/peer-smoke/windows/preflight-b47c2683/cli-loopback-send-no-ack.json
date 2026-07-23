@@ -1,0 +1,10 @@
+{
+  "action": "send",
+  "team": "atm-dev",
+  "agent": "windows-smoke",
+  "sender": "arch-ctm",
+  "outcome": "sent",
+  "message_id": "01KY87GCPR6D448MQ8SRC43CVD",
+  "requires_ack": false,
+  "summary": "windows peer smoke local no-ack"
+}

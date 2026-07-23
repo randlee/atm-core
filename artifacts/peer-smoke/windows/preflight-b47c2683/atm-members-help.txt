@@ -1,0 +1,18 @@
+List the current member roster for one ATM team
+
+Usage: atm.exe members [OPTIONS]
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --team <TEAM>
+
+
+      --json
+
+
+  -h, --help
+          Print help (see a summary with '-h')

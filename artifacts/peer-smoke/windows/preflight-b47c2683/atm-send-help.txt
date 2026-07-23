@@ -1,0 +1,51 @@
+Send one ATM mailbox message
+
+Usage: atm.exe send [OPTIONS] <TO> [MESSAGE]
+
+Arguments:
+  <TO>
+
+
+  [MESSAGE]
+
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --team <TEAM>
+
+
+      --chat-id <CHAT_ID>
+
+
+      --as <ACTOR>
+
+
+      --file <FILE>
+
+
+      --stdin
+
+
+      --summary <SUMMARY>
+
+
+      --requires-ack
+
+
+      --task-id <TASK_ID>
+
+
+      --dry-run
+
+
+      --json
+
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Post-send hooks can be configured in .atm.toml via one or more [[atm.post_send_hooks]] rules with recipient = "name-or-*" and command = ["argv", ...]. Matching rules run after a successful non-dry-run send, in config order. Path-like command[0] values resolve relative to the declaring .atm.toml; bare executables like bash or python3 use normal PATH resolution. Recipient non-match is silent. For hook troubleshooting, combine --stderr-logs with ATM_LOG=debug to surface debug-level hook diagnostics on stderr.

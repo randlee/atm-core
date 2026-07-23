@@ -1,0 +1,66 @@
+Read one ATM mailbox message and optionally update read state
+
+Usage: atm.exe read [OPTIONS]
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --team <TEAM>
+
+
+      --chat-id <CHAT_ID>
+
+
+      --as <ACTOR>
+
+
+      --all
+
+
+      --unread
+
+
+      --unread-only
+
+
+      --pending-ack
+
+
+      --pending-ack-only
+
+
+      --history
+
+
+      --message-id <MESSAGE_ID>
+
+
+      --task <TASK>
+
+
+      --contains <CONTAINS>
+
+
+      --since-last-seen
+
+
+      --no-since-last-seen
+
+
+      --since <SINCE>
+
+
+      --from <FROM>
+
+
+      --json
+
+
+      --timeout <TIMEOUT>
+
+
+  -h, --help
+          Print help (see a summary with '-h')

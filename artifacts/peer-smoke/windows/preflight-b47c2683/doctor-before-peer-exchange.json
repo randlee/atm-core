@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "status": "healthy",
+    "message": "ATM doctor completed with healthy findings only",
+    "info_count": 3,
+    "warning_count": 0,
+    "error_count": 0
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "code": "ATM_OBSERVABILITY_HEALTH_OK",
+      "message": "shared observability active at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-07-23 19:33:45.0601325 +00:00:00",
+      "remediation": null
+    },
+    {
+      "severity": "info",
+      "code": "ATM_OBSERVABILITY_HEALTH_OK",
+      "message": "daemon retained observability sink is healthy at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-07-23 19:33:45.0601325 +00:00:00",
+      "remediation": null
+    },
+    {
+      "severity": "info",
+      "code": "ATM_OBSERVABILITY_HEALTH_OK",
+      "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(9284); degraded_ingest=false; active=0, idle=0, offline=0, unknown=89",
+      "remediation": null
+    }
+  ],
+  "recommendations": [],
+  "environment": {
+    "atm_home": "C:\\Users\\rand.lee",
+    "atm_team": "atm-dev",
+    "atm_identity": "arch-ctm",
+    "team_override": null
+  },
+  "client_context": {
+    "team": "atm-dev",
+    "identity": "arch-ctm",
+    "version": "1.3.1"
+  },
+  "daemon_context": {
+    "version": "1.3.1"
+  },
+  "observability": {
+    "active_log_path": "C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl",
+    "logging_state": "healthy",
+    "query_state": null,
+    "maintenance": {
+      "state": "running",
+      "rotated_files_total": 0,
+      "pruned_files_total": 0,
+      "last_pass_at": "2026-07-23T19:33:45.060132500Z"
+    },
+    "diagnostic": null,
+    "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-07-23 19:33:45.0601325 +00:00:00"
+  },
+  "post_send": {
+    "config_root": "F:\\github\\atm-core-worktrees\\evidence\\phase-ai-crosshost-smoke",
+    "external_rules": [],
+    "recipient_paths": []
+  },
+  "config": {
+    "findings": []
+  },
+  "mail_store": {
+    "findings": []
+  },
+  "roster_store": {
+    "findings": []
+  },
+  "daemon_runtime": {
+    "findings": [
+      {
+        "severity": "info",
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon retained observability sink is healthy at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=2026-07-23 19:33:45.0601325 +00:00:00",
+        "remediation": null
+      },
+      {
+        "severity": "info",
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(9284); degraded_ingest=false; active=0, idle=0, offline=0, unknown=89",
+        "remediation": null
+      }
+    ],
+    "peer_config": {
+      "configured_interface_count": 0,
+      "enabled_interface_count": 0,
+      "trusted_peer_count": 0,
+      "enabled_trusted_peer_count": 0
+    }
+  },
+  "drift_findings": [],
+  "runtime_status": {
+    "liveness": "running",
+    "readiness": "ready",
+    "singleton_owner_pid": 9284,
+    "degraded_ingest": false,
+    "member_counts": {
+      "active_members": 0,
+      "idle_members": 0,
+      "offline_members": 0,
+      "unknown_members": 89
+    }
+  },
+  "bootstrap_trace": {
+    "daemon_connect": "connected",
+    "daemon_launch_gate": "skipped",
+    "daemon_auto_start": "skipped"
+  }
+}

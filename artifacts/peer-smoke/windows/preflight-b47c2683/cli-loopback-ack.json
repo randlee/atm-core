@@ -1,0 +1,12 @@
+{
+  "action": "ack",
+  "team": "atm-dev",
+  "agent": "windows-smoke",
+  "message_id": "01KY87GR0KC9BRG5VG206NES0R",
+  "reply_disposition": {
+    "kind": "sent",
+    "reply_message_id": "01KY87GR4KR174D4EZG0RT0Y6H",
+    "reply_target": "arch-ctm@atm-dev"
+  },
+  "reply_text": "windows local acknowledgement"
+}

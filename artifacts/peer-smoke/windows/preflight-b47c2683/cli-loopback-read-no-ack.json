@@ -1,0 +1,28 @@
+{
+  "action": "read",
+  "team": "atm-dev",
+  "agent": "windows-smoke",
+  "selection_mode": "actionable",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "history",
+    "class": "read",
+    "from": "arch-ctm",
+    "text": "windows peer smoke local no-ack",
+    "timestamp": "2026-07-23T19:33:44.280772100Z",
+    "read": true,
+    "source_team": "atm-dev",
+    "summary": "windows peer smoke local no-ack",
+    "message_id": "01KY87GCPR6D448MQ8SRC43CVD",
+    "requires_ack": false
+  },
+  "selected_message_id": "01KY87GCPR6D448MQ8SRC43CVD",
+  "match_count": 1,
+  "additional_match_count": 0,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 0,
+    "history": 1
+  }
+}

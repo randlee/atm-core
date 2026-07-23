@@ -107,7 +107,7 @@ class PeerPairSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             config = sample_config(Path(temp) / "daemon.log")
             config["cases"][0]["command"] = ["python3", "raw_socket_probe.py"]
-            with self.assertRaisesRegex(RuntimeError, "public ATM client"):
+            with self.assertRaisesRegex(RuntimeError, "public ATM CLI"):
                 RUNNER.validate(config)
 
     def test_rejects_missing_duplicate_semantic_assertion(self):

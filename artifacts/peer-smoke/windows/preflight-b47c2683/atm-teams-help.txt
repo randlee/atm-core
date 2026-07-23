@@ -1,0 +1,24 @@
+List teams or run one team-administration subcommand
+
+Usage: atm.exe teams [OPTIONS] [COMMAND]
+
+Commands:
+  add-member
+  update-member
+  set-nudge-template
+  disable-nudge-template
+  clear-nudge-template
+  backup
+  restore
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --json
+
+
+  -h, --help
+          Print help (see a summary with '-h')

@@ -1,0 +1,6 @@
+error: no bin target named `atm-graft` in default-run packages
+help: available bin targets:
+    atm
+    atm-daemon
+    atm_post_send_hook_fixture
+    sc-lint-boundary
