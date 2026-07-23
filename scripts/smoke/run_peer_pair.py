@@ -33,6 +33,20 @@ REQUIRED_CASES = (
     "failed_remote_ack",
 )
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability)=?[^\s,]+)")
+PUBLIC_CLIENT_COMMANDS = frozenset({"atm", "atm.exe", "atm-graft", "atm-graft.exe"})
+REQUIRED_ASSERTIONS = {
+    "preflight": frozenset({"daemon_ready"}),
+    "local_smoke": frozenset({"receiver_visible"}),
+    "send_read_nudge": frozenset({"receiver_visible", "nudge_visible"}),
+    "reverse_send_read_nudge": frozenset({"receiver_visible", "nudge_visible"}),
+    "requires_ack_reply": frozenset({"ack_reply_visible"}),
+    "duplicate_ulid": frozenset(
+        {"receiver_visible", "single_record_retained", "no_repeat_nudge", "no_ack_mutation"}
+    ),
+    "unavailable_peer": frozenset({"no_prohibited_delivery_state"}),
+    "untrusted_or_allowlist_rejection": frozenset({"rejected_before_routing"}),
+    "failed_remote_ack": frozenset({"ack_source_unchanged", "no_remote_ack_state"}),
+}
 
 
 def sanitize(value: str) -> str:
@@ -65,6 +79,60 @@ def require_command(value: Any, name: str) -> list[str]:
     return value
 
 
+def require_public_client_command(value: Any, name: str) -> list[str]:
+    command = require_command(value, name)
+    executable = Path(command[0]).name.lower()
+    if executable not in PUBLIC_CLIENT_COMMANDS:
+        fail(
+            f"config field `{name}` must invoke a public ATM client "
+            f"({', '.join(sorted(PUBLIC_CLIENT_COMMANDS))})"
+        )
+    return command
+
+
+def require_semantic_assertion(value: Any, name: str) -> None:
+    if not isinstance(value, dict):
+        fail(f"config field `{name}` must be an object")
+    require_public_client_command(value.get("command"), f"{name}.command")
+    require_string(value.get("json_path"), f"{name}.json_path")
+    if "absent" in value and value["absent"] is not True:
+        fail(f"config field `{name}.absent` must be true when present")
+    if value.get("absent") is True:
+        if "equals" in value:
+            fail(f"config field `{name}` cannot combine absent with equals")
+        return
+    expected = value.get("equals")
+    if not isinstance(expected, (str, int, float, bool, type(None))):
+        fail(f"config field `{name}.equals` must be a scalar")
+
+
+def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None:
+    verification = case.get("verification")
+    if not isinstance(verification, dict):
+        fail(f"config field `{name}.verification` must be an object")
+    assertions = verification.get("assertions")
+    if not isinstance(assertions, dict):
+        fail(f"config field `{name}.verification.assertions` must be an object")
+    required = REQUIRED_ASSERTIONS[case["id"]]
+    missing = sorted(required.difference(assertions))
+    if missing:
+        fail(f"config field `{name}.verification.assertions` is missing {', '.join(missing)}")
+    for assertion_name, assertion in assertions.items():
+        if not isinstance(assertion_name, str) or not assertion_name:
+            fail(f"config field `{name}.verification.assertions` has an invalid name")
+        require_semantic_assertion(assertion, f"{name}.verification.assertions.{assertion_name}")
+    forbidden_log_entries = verification.get("forbidden_daemon_log_entries", [])
+    if not isinstance(forbidden_log_entries, list) or not all(
+        isinstance(entry, str) and entry for entry in forbidden_log_entries
+    ):
+        fail(f"config field `{name}.verification.forbidden_daemon_log_entries` must be a string array")
+    if case["id"] == "untrusted_or_allowlist_rejection":
+        if not daemon_has_log_file:
+            fail("untrusted_or_allowlist_rejection requires daemon.log_file")
+        if not forbidden_log_entries:
+            fail("untrusted_or_allowlist_rejection requires forbidden_daemon_log_entries")
+
+
 def validate(config: dict[str, Any]) -> None:
     if config.get("schema_version") != 1:
         fail("config field `schema_version` must be 1")
@@ -75,8 +143,8 @@ def validate(config: dict[str, Any]) -> None:
     if not isinstance(daemon, dict):
         fail("config field `daemon` must be an object")
     require_string(daemon.get("endpoint"), "daemon.endpoint")
-    require_command(daemon.get("version_command"), "daemon.version_command")
-    require_command(config.get("client_version_command"), "client_version_command")
+    require_public_client_command(daemon.get("version_command"), "daemon.version_command")
+    require_public_client_command(config.get("client_version_command"), "client_version_command")
     security = config.get("peer_security")
     if not isinstance(security, dict):
         fail("config field `peer_security` must be an object")
@@ -97,19 +165,26 @@ def validate(config: dict[str, Any]) -> None:
     for case in cases:
         if not isinstance(case, dict):
             fail("each case must be an object")
-        require_command(case.get("command"), f"cases.{case.get('id', '<unknown>')}.command")
+        require_public_client_command(case.get("command"), f"cases.{case.get('id', '<unknown>')}.command")
         if case.get("expect") not in {"success", "typed_error"}:
             fail("each case expect must be `success` or `typed_error`")
         if case["expect"] == "typed_error":
             require_string(case.get("typed_error_code"), f"cases.{case.get('id', '<unknown>')}.typed_error_code")
         require_string(case.get("message_ulid"), f"cases.{case.get('id', '<unknown>')}.message_ulid")
+        require_semantic_verification(
+            case,
+            f"cases.{case.get('id', '<unknown>')}",
+            isinstance(daemon.get("log_file"), str),
+        )
     paths = daemon.get("owned_runtime_paths", [])
     if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
         fail("daemon.owned_runtime_paths must be an array of paths")
-    if paths:
+    if daemon.get("launch_command") is not None:
+        if not paths:
+            fail("daemon.launch_command requires daemon.owned_runtime_paths")
         require_string(daemon.get("runtime_dir"), "daemon.runtime_dir")
-        if daemon.get("launch_command") is None:
-            fail("daemon.owned_runtime_paths requires daemon.launch_command")
+    elif paths:
+        fail("daemon.owned_runtime_paths requires daemon.launch_command")
 
 
 def run_command(command: list[str], timeout: float) -> dict[str, Any]:
@@ -134,6 +209,77 @@ def log_window(raw_path: Any) -> str:
         return f"<unavailable: {sanitize(str(error))}>"
 
 
+def log_snapshot(raw_path: Any) -> str:
+    if not isinstance(raw_path, str) or not raw_path:
+        return ""
+    try:
+        return Path(raw_path).read_text(encoding="utf-8", errors="replace")
+    except OSError as error:
+        fail(f"cannot read daemon log for semantic verification: {error}")
+
+
+def json_path(value: Any, path: str) -> Any:
+    current = value
+    for segment in path.split("."):
+        if isinstance(current, dict) and segment in current:
+            current = current[segment]
+        elif isinstance(current, list) and segment.isdecimal() and int(segment) < len(current):
+            current = current[int(segment)]
+        else:
+            fail(f"semantic verification JSON path `{path}` was absent")
+    return current
+
+
+def resolved_expectation(value: Any, case: dict[str, Any]) -> Any:
+    return case["message_ulid"] if value == "$message_ulid" else value
+
+
+def verify_semantics(
+    case: dict[str, Any], timeout: float, daemon_log_before: str, daemon_log_file: Any
+) -> dict[str, Any]:
+    verification = case["verification"]
+    outcome: dict[str, Any] = {"assertions": {}, "status": "fail", "failures": []}
+    for assertion_name, assertion in verification["assertions"].items():
+        result = run_command(assertion["command"], timeout)
+        assertion_outcome: dict[str, Any] = {"result": result}
+        outcome["assertions"][assertion_name] = assertion_outcome
+        if result["exit_code"] != 0:
+            outcome["failures"].append(f"semantic assertion `{assertion_name}` command failed")
+            continue
+        try:
+            observed = json.loads(result["stdout"])
+            actual = json_path(observed, assertion["json_path"])
+        except (json.JSONDecodeError, RuntimeError) as error:
+            if assertion.get("absent") is True and isinstance(error, RuntimeError):
+                assertion_outcome["observed"] = "absent"
+                continue
+            outcome["failures"].append(f"semantic assertion `{assertion_name}` failed: {error}")
+            continue
+        if assertion.get("absent") is True:
+            outcome["failures"].append(
+                f"semantic assertion `{assertion_name}` expected `{assertion['json_path']}` to be absent"
+            )
+            continue
+        expected = resolved_expectation(assertion["equals"], case)
+        assertion_outcome.update({"observed": actual, "expected": expected})
+        if actual != expected:
+            outcome["failures"].append(
+                f"semantic assertion `{assertion_name}` expected {expected!r}, got {actual!r}"
+            )
+    if forbidden := verification.get("forbidden_daemon_log_entries", []):
+        after = log_snapshot(daemon_log_file)
+        delta = after[len(daemon_log_before):]
+        for entry in forbidden:
+            if entry in delta:
+                outcome["failures"].append(
+                    f"daemon log recorded forbidden post-rejection entry {entry!r}"
+                )
+        outcome["daemon_log_delta"] = sanitize(delta)[-8192:]
+    if not outcome["failures"]:
+        outcome["status"] = "pass"
+    return outcome
+
+
 def endpoint_closed(endpoint: str) -> bool:
     host, separator, port = endpoint.rpartition(":")
     if not separator or not port.isdecimal():
@@ -147,23 +293,24 @@ def endpoint_closed(endpoint: str) -> bool:
 
 def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {"launched_pid": process.pid if process else None, "status": "not_owned"}
-    if process is None:
+    daemon = config["daemon"]
+    if process is None and daemon.get("launch_command") is None:
         return result
-    if process.poll() is None:
+    if process is not None and process.poll() is None:
         process.terminate()
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
-    daemon = config["daemon"]
     listener_closed = endpoint_closed(daemon["endpoint"])
     result.update({"status": "stopped" if listener_closed else "listener_remaining", "listener_closed": listener_closed})
     if not listener_closed:
         return result
-    runtime_dir = Path(daemon.get("runtime_dir", ".")).resolve()
+    runtime_dir = Path(daemon["runtime_dir"]).resolve()
     marker = runtime_dir / ".peer-smoke-owned"
-    if daemon.get("owned_runtime_paths") and not marker.is_file():
+    expected_marker = str(process.pid) if process is not None else "pending"
+    if not marker.is_file() or marker.read_text(encoding="utf-8").strip() != expected_marker:
         result.update({"status": "ownership_marker_missing", "listener_closed": listener_closed})
         return result
     try:
@@ -174,10 +321,8 @@ def stop_owned(process: subprocess.Popen[str] | None, config: dict[str, Any]) ->
                 return result
             if path.is_file() or path.is_socket():
                 path.unlink()
-        if marker.is_file():
-            marker.unlink()
-        if daemon.get("owned_runtime_paths"):
-            runtime_dir.rmdir()
+        marker.unlink()
+        runtime_dir.rmdir()
     except OSError as error:
         result.update({"status": "cleanup_failed", "cleanup_error": sanitize(str(error))})
     return result
@@ -195,24 +340,30 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
     records: list[dict[str, Any]] = []
     status = "passed"
     try:
-        if daemon.get("owned_runtime_paths"):
+        if daemon.get("launch_command"):
             runtime_dir = Path(daemon["runtime_dir"])
             if runtime_dir.exists():
                 fail(f"runner-owned runtime_dir already exists: {runtime_dir}")
             runtime_dir.mkdir(parents=True)
-            (runtime_dir / ".peer-smoke-owned").touch()
+            (runtime_dir / ".peer-smoke-owned").write_text("pending", encoding="utf-8")
         if daemon.get("launch_command"):
             process = subprocess.Popen(
                 daemon["launch_command"], text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
+            (Path(daemon["runtime_dir"]) / ".peer-smoke-owned").write_text(
+                str(process.pid), encoding="utf-8"
+            )
         version = run_command(daemon["version_command"], timeout)
         client_version = run_command(config["client_version_command"], timeout)
         for case in config["cases"]:
+            daemon_log_before = log_snapshot(daemon.get("log_file"))
             result = run_command(case["command"], timeout)
             if case["expect"] == "success":
-                passed = result["exit_code"] == 0
+                transport_passed = result["exit_code"] == 0
             else:
-                passed = result["exit_code"] != 0 and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+                transport_passed = result["exit_code"] != 0 and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+            semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get("log_file"))
+            passed = transport_passed and semantic["status"] == "pass"
             record = {
                 "schema_version": 1,
                 "commit": config["commit"],
@@ -230,6 +381,7 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
                 "expected": case["expect"],
                 "expected_error_code": case.get("typed_error_code"),
                 "result": result,
+                "semantic_verification": semantic,
                 "daemon_log_window": log_window(daemon.get("log_file")),
                 "status": "pass" if passed else "fail",
             }

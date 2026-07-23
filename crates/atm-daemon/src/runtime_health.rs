@@ -548,11 +548,12 @@ impl DaemonRequestDispatcher {
 
 impl MessageWriter for DaemonRequestDispatcher {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError> {
-        let outbound_request = request.clone();
         self.persist_local_write(request).map(|prepared| {
             let message_id = prepared.persisted_message_id();
             MessageRecord {
-                outbound_request: outbound_request.with_origin_message_id(message_id),
+                outbound_request: prepared
+                    .outbound_request()
+                    .with_origin_metadata(message_id, prepared.persisted_timestamp()),
                 prepared,
             }
         })
@@ -587,13 +588,15 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        transport
-            .deliver(
-                message.outbound_request.clone(),
-                &peer,
-                HttpsRequestDeadline::default(),
-            )
-            .map(|_| ())
+        match transport.deliver(
+            message.outbound_request.clone(),
+            &peer,
+            HttpsRequestDeadline::default(),
+        ) {
+            Ok(ResponseEnvelope::Error(error)) => Err(error),
+            Ok(_) => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -804,14 +807,20 @@ impl ApiRouter for DaemonRequestDispatcher {
         let request = request.into_inner();
         if let RequestEnvelope::Write(write) = &request {
             match ingress {
-                AuthenticatedIngress::Local if write.origin_message_id.is_some() => {
+                AuthenticatedIngress::Local
+                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
+                {
                     return Err(AtmError::validation(
-                        "local write requests must not supply an origin message ID",
+                        "local write requests must not supply origin message metadata",
                     ));
                 }
-                AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() => {
+                AuthenticatedIngress::Peer
+                    if write.authenticated_source_host.is_none()
+                        || write.origin_message_id.is_none()
+                        || write.origin_timestamp.is_none() =>
+                {
                     return Err(AtmError::validation(
-                        "peer write requests require authenticated source provenance",
+                        "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
