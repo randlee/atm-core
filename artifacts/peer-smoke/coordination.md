@@ -66,3 +66,24 @@ human intermediary.
 Windows trust record for host `10.10.100.98` and fingerprint
 `BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`, append the
 resulting JSON, then start the labelled Mac-to-Windows send case.
+
+## Mac-to-Windows case 01: TLS diagnostic
+
+- Mac reciprocal trust record is now enabled for Windows `10.10.100.98` with
+  fingerprint `BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`.
+  Mac `doctor --json` remains healthy with one enabled interface and one
+  enabled trusted peer.
+- First labelled write: `01KY895Z9PP0V9VY209PRM9ZCT` to
+  `windows-smoke@atm-dev.10.10.100.98` reached TLS but failed before HTTP or
+  remote persistence: `received fatal alert: UnknownCA`.
+- The Mac configured fingerprint is verified against its live PEM bundle as
+  `03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`.
+
+**cwin direct action:** root-cause the Windows listener's rejection. Verify
+the exact persistent daemon's durable store contains that exact enabled Mac
+trust pin, verify the Windows PEM fingerprint is the certificate loaded by the
+listener, then perform one controlled singleton restart after the verified
+records are in place. Capture the resulting `peer trust list`, `peer
+certificate show`, doctor, and sanitized daemon log window. If code/config
+defect exists, fix it on this branch, run `just lint && just test`, commit/push
+the evidence and result here. Do not add a TLS bypass or alternate transport.
