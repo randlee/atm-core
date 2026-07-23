@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES" ;
+  triage:title "Sprint doc's required focused-test categories incomplete" ;
+  triage:description "Two of the sprint doc's five required focused-test categories are incomplete: (1) fully-absent-inputs case — all three overrides absent, no environment variables, should fail with identity_unavailable; (2) --chat-id+ATM_IDENTITY vs --as equivalence case — verifies that using --chat-id flag with ambient ATM_IDENTITY produces same caller_chat_id as qualified --as" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T13:35:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/2> .
+
+<urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing test: fully_absent_inputs case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing test: --chat-id+ATM_IDENTITY vs --as equivalence case" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

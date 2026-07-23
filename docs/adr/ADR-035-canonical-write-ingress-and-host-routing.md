@@ -87,11 +87,9 @@ peer-specific application handler.
 
 ## Compliance status
 
-This ADR is the accepted target contract. At the current integrated tip, the
-pre-persistence `route_write` remote-host branch and no-op
-`PostWriteRouter::dispatch` remain; AI.12 is the sole owning sprint for their
-deletion and the structural enforcement of this ADR. Until AI.12 closes, no
-current code claim may describe the post-write routing invariants as enforced.
+AI.12 closed the pre-persistence `route_write` remote-host branch and no-op
+`PostWriteRouter::dispatch`. The architecture gate enforces one production
+`MessageWriter` and `PostWriteRouter`, and rejects delivery outside the router.
 
 `DeliveryPolicyCoordinator::resolve_write_recipient_snapshot` is the sole
 persistence-time admission check permitted by this ADR. It is exempt from the
