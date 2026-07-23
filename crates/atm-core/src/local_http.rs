@@ -41,9 +41,13 @@ impl LocalCapability {
     pub fn parse_base64url(value: &str) -> Result<Self, AtmError> {
         let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(value)
-            .map_err(|_source| AtmError::validation("local HTTP capability is not base64url"))?;
+            .map_err(|_source| {
+                AtmError::local_http_capability_invalid("local HTTP capability is not base64url")
+            })?;
         let bytes: [u8; LOCAL_CAPABILITY_BYTES] = bytes.try_into().map_err(|_| {
-            AtmError::validation("local HTTP capability must decode to exactly 32 bytes")
+            AtmError::local_http_capability_invalid(
+                "local HTTP capability must decode to exactly 32 bytes",
+            )
         })?;
         Ok(Self(bytes))
     }
@@ -89,20 +93,18 @@ impl LocalHttpEndpointRecord {
 
     pub fn capability(&self) -> Result<LocalCapability, AtmError> {
         if self.schema_version != 1 {
-            return Err(AtmError::validation(format!(
+            return Err(AtmError::local_http_endpoint_schema_unsupported(format!(
                 "unsupported local HTTP endpoint record schema version {}",
                 self.schema_version
             )));
         }
         if self.revoked_at.is_some() {
-            return Err(AtmError::daemon_unavailable(
-                "local HTTP endpoint record is revoked",
-            ));
+            return Err(AtmError::local_http_capability_revoked());
         }
         Self::validate_loopback(self.ipv4_loopback)?;
         Self::validate_loopback(self.ipv6_loopback)?;
         if self.ipv4_loopback.is_none() && self.ipv6_loopback.is_none() {
-            return Err(AtmError::validation(
+            return Err(AtmError::local_http_endpoint_missing(
                 "local HTTP endpoint record has no loopback endpoint",
             ));
         }
@@ -118,7 +120,7 @@ impl LocalHttpEndpointRecord {
         if let Some(endpoint) = endpoint
             && !endpoint.ip().is_loopback()
         {
-            return Err(AtmError::validation(
+            return Err(AtmError::local_http_endpoint_non_loopback(
                 "local HTTP endpoint record contains a non-loopback address",
             ));
         }
@@ -137,7 +139,9 @@ pub fn local_http_record_path(home_dir: &Path) -> PathBuf {
 /// to a successor daemon instance with a different capability.
 pub fn owner_instance_id_for_local_http_record(record_path: &Path) -> Result<Ulid, AtmError> {
     let runtime_dir = record_path.parent().ok_or_else(|| {
-        AtmError::validation("local HTTP endpoint record has no runtime directory")
+        AtmError::local_http_runtime_directory_missing(
+            "local HTTP endpoint record has no runtime directory",
+        )
     })?;
     let lock_path = runtime_dir.join(crate::home::HOST_RUNTIME_OWNER_LOCK_FILE);
     let record = read_owner_record(&lock_path)?;
@@ -159,8 +163,9 @@ fn read_owner_record(lock_path: &Path) -> Result<String, AtmError> {
             "daemon owner record is empty while local HTTP metadata is present",
         )),
         Err(source) if should_read_owner_shadow(&source) => read_owner_shadow_record(lock_path),
-        Err(_source) => Err(AtmError::daemon_unavailable(
+        Err(source) => Err(AtmError::daemon_unavailable_with_cause(
             "failed to read daemon owner record for local HTTP metadata",
+            source,
         )),
     }
 }
@@ -184,9 +189,10 @@ fn read_owner_shadow_record(lock_path: &Path) -> Result<String, AtmError> {
             .and_then(|value| value.to_str())
             .unwrap_or("owner.lock")
     ));
-    fs::read_to_string(&shadow_path).map_err(|_source| {
-        AtmError::daemon_unavailable(
+    fs::read_to_string(&shadow_path).map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
             "daemon owner record is unavailable while local HTTP metadata is present",
+            source,
         )
     })
 }
@@ -212,6 +218,7 @@ fn constant_time_eq(
 #[cfg(test)]
 mod tests {
     use super::{LOCAL_CAPABILITY_BYTES, LocalCapability, LocalHttpEndpointRecord};
+    use crate::error::AtmErrorCode;
     use std::net::SocketAddr;
     use ulid::Ulid;
 
@@ -240,7 +247,10 @@ mod tests {
             None,
             &capability,
         );
-        assert!(record.capability().is_err());
+        assert_eq!(
+            record.capability().expect_err("reject non-loopback").code(),
+            AtmErrorCode::LocalHttpEndpointNonLoopback
+        );
     }
 
     #[test]
@@ -255,7 +265,53 @@ mod tests {
 
         record.revoke();
 
-        assert!(record.capability().is_err());
+        assert_eq!(
+            record
+                .capability()
+                .expect_err("reject revoked record")
+                .code(),
+            AtmErrorCode::LocalHttpCapabilityRevoked
+        );
+    }
+
+    #[test]
+    fn local_http_metadata_failures_have_specific_error_codes() {
+        assert_eq!(
+            LocalCapability::parse_base64url("not-base64url!")
+                .expect_err("reject malformed capability")
+                .code(),
+            AtmErrorCode::LocalHttpCapabilityInvalid
+        );
+
+        let capability = LocalCapability::generate().expect("capability");
+        let mut record = LocalHttpEndpointRecord::active(Ulid::new(), None, None, &capability);
+        record.schema_version = 2;
+        assert_eq!(
+            record.capability().expect_err("reject schema").code(),
+            AtmErrorCode::LocalHttpEndpointSchemaUnsupported
+        );
+
+        let record = LocalHttpEndpointRecord::active(Ulid::new(), None, None, &capability);
+        assert_eq!(
+            record.capability().expect_err("require endpoint").code(),
+            AtmErrorCode::LocalHttpEndpointMissing
+        );
+
+        assert_eq!(
+            super::owner_instance_id_for_local_http_record(std::path::Path::new(""))
+                .expect_err("require record runtime directory")
+                .code(),
+            AtmErrorCode::LocalHttpRuntimeDirectoryMissing
+        );
+    }
+
+    #[test]
+    fn owner_record_read_preserves_io_cause() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let error =
+            super::read_owner_record(tempdir.path()).expect_err("directory is not a lock file");
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert!(error.cause().is_some());
     }
 
     #[test]
