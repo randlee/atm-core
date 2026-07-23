@@ -37,7 +37,8 @@ pub(crate) fn persist_message(
         &recipient.agent,
         &prepared,
     ) {
-        Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
+        Ok(true) => Ok(DeliveryPersistenceResult::persisted(prepared)),
+        Ok(false) => Ok(DeliveryPersistenceResult::already_persisted(prepared)),
         Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
@@ -148,14 +149,14 @@ fn mirror_message_to_store(
     team: &TeamName,
     agent: &AgentName,
     envelope: &InboxMessage,
-) -> Result<(), AtmError> {
+) -> Result<bool, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(());
+        return Ok(true);
     };
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
-            return Ok(());
+            return Ok(false);
         }
         error!(
             code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
@@ -185,7 +186,8 @@ fn mirror_message_to_store(
         expires_at: envelope.expires_at,
         deleted_at: None,
         updated_at: Some(IsoTimestamp::now()),
-    })
+    })?;
+    Ok(true)
 }
 
 fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {

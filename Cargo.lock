@@ -147,6 +147,7 @@ dependencies = [
  "atm-storage",
  "chrono",
  "fs2",
+ "interprocess",
  "rcgen",
  "rustls",
  "sc-observability",

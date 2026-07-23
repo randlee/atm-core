@@ -35,34 +35,36 @@ capabilities, or secrets. It has this shape:
   },
   "identities": {"sender": "agent-a@team-a", "recipient": "agent-b@team-b"},
   "cases": [
-    {"id": "preflight", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "doctor", "--json"], "expected_json": {"runtime_status.readiness": "ready"}}},
-    {"id": "local_smoke", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
-    {"id": "send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
-    {"id": "reverse_send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
-    {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
-    {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}, "forbidden_daemon_log_entries": ["duplicate nudge"]}},
-    {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}}},
-    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid"}, "forbidden_daemon_log_entries": ["peer delivery"]}},
-    {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["..."], "verification": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "expected_json": {"message_id": "$message_ulid", "requires_ack": true}}}
+    {"id": "preflight", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "doctor", "--json"], "verification": {"assertions": {"daemon_ready": {"command": ["atm", "doctor", "--json"], "json_path": "runtime_status.readiness", "equals": "ready"}}}},
+    {"id": "local_smoke", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "peek", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}}}},
+    {"id": "send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}, "nudge_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.message_id", "equals": "$message_ulid"}}}},
+    {"id": "reverse_send_read_nudge", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}, "nudge_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.message_id", "equals": "$message_ulid"}}}},
+    {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"ack_reply_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}}}},
+    {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}, "single_record_retained": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "match_count", "equals": 1}, "no_repeat_nudge": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "additional_match_count", "equals": 0}, "no_ack_mutation": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}},
+    {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"no_prohibited_delivery_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}}},
+    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"rejected_before_routing": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}, "forbidden_daemon_log_entries": ["<configured-routing-attempt-record>"]}},
+    {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "ack", "..."], "verification": {"assertions": {"ack_source_unchanged": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.requires_ack", "equals": true}, "no_remote_ack_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}}
   ]
 }
 ```
 
-Every case requires a `verification` object. Its `command` must be a public
-`atm` or graft-facing daemon-client command that emits JSON. `expected_json`
-maps dotted JSON paths to exact scalar values; `$message_ulid` resolves to that
-case's `message_ulid`. This verifies receiver-visible state instead of asking a
-case command to invent runner-only metrics. For example, the duplicate case
-verifies one receiver record with the original ULID, and failed-ack verifies the
-source remains pending. `untrusted_or_allowlist_rejection` additionally requires
-`forbidden_daemon_log_entries`: the runner snapshots the configured daemon log
-before the command and rejects any listed routing/delivery entry in the new log
-window. The runner writes sanitized JSON evidence with commands, daemon/client
-versions, trust identity, transport result, semantic verification, daemon-log
-window, role, identities, ULID, transport, and teardown.
+Every case command and every assertion command must invoke a public `atm` or
+`atm-graft` client; the runner rejects raw sockets, storage helpers, and other
+executables. Each `verification.assertions` entry runs its command, reads one
+dotted JSON path, and compares it to its scalar `equals` value;
+`$message_ulid` resolves to that case's ID. The required assertion names are
+fixed by case: duplicate requires one retained record and no repeat side effect;
+failed remote ack requires unchanged source acknowledgement state; rejection
+requires both its state assertion and a daemon-log delta with no routing entry.
+Use `"absent": true` instead of `equals` when a false state is represented by
+an omitted JSON field (for example `message.acknowledgedAt`).
+The runner writes sanitized JSON evidence with transport and semantic results,
+daemon/client versions, trust identity, log window, role, identities, ULID, and
+teardown.
 
-The runner stops only its optional `launch_command` child. It waits for that
-recorded PID, checks the configured TCP endpoint is closed, then removes only
-explicit file/socket paths under a new runtime directory it marked as owned.
-Never list an ambient daemon's lock, socket, endpoint, or PID in this
-configuration.
+The runner accepts `launch_command` only with non-empty
+`owned_runtime_paths`. It records the launched PID in its ownership marker,
+waits for that PID, checks the configured TCP endpoint is closed, then removes
+only explicitly listed file/socket paths beneath that marked runtime directory.
+Without the matching marker it fails closed and deletes nothing. Never list an
+ambient daemon's lock, socket, endpoint, or PID in this configuration.
