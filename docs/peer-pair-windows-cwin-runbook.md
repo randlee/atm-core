@@ -106,10 +106,11 @@ Use `peer trust replace` only when replacing an already-recorded peer with the
 agreed fingerprint. Never use environment variables, raw sockets, or ad-hoc
 address overrides for peer configuration.
 
-The daemon snapshots enabled HTTPS interfaces and certificate material during
-startup. After changing either record, stop the identified singleton and start
-the same release daemon once; verify the configured HTTPS listener before
-adding trust or sending traffic. Do not overlap daemon processes.
+The daemon snapshots enabled HTTPS interfaces, certificate material, and
+trusted-peer pins during startup. After all three durable records are in
+place, stop the identified singleton and start the same release daemon once;
+verify the configured HTTPS listener before sending traffic. Do not overlap
+daemon processes.
 
 ## 6. Execute the physical peer smoke
 

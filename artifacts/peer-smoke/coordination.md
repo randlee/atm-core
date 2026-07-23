@@ -87,3 +87,20 @@ records are in place. Capture the resulting `peer trust list`, `peer
 certificate show`, doctor, and sanitized daemon log window. If code/config
 defect exists, fix it on this branch, run `just lint && just test`, commit/push
 the evidence and result here. Do not add a TLS bypass or alternate transport.
+
+## Windows TLS Diagnostic Result
+
+- Root cause: `HttpsListenerSet` snapshots enabled `TrustedPeer` records at
+  daemon startup. The Mac pin was added to durable storage after Windows PID
+  `37996` had already built its `PinnedClientVerifier`, so the live verifier
+  had no Mac pin and returned `UnknownCA`.
+- Verified durable inputs before remediation: enabled Mac host
+  `10.202.137.160` with fingerprint
+  `03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`;
+  enabled Windows interface `10.10.100.98:43101`; Windows certificate
+  fingerprint `BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`.
+- Remediation: controlled singleton restart, replacing PID `37996` with
+  release daemon PID `39856`. Listener and `doctor --json` are healthy/ready
+  with one enabled interface, certificate, and trusted peer.
+- Mac was asked to retry case 01. Sanitized evidence:
+  `artifacts/peer-smoke/windows/tls-retry-0751ceb9/report.md`.
