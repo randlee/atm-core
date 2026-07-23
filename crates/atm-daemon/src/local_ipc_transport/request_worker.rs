@@ -270,9 +270,10 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
         ApiRequest::Messages(_) | ApiRequest::Doctor(_) | ApiRequest::CompatibilityPreflight(_) => {
             RequestExecutionRisk::ReadOnly
         }
-        ApiRequest::Write(_) | ApiRequest::Heartbeat(_) | ApiRequest::Clear(_) => {
-            RequestExecutionRisk::SideEffecting
-        }
+        ApiRequest::Write(_)
+        | ApiRequest::Heartbeat(_)
+        | ApiRequest::Clear(_)
+        | ApiRequest::PeerSync(_) => RequestExecutionRisk::SideEffecting,
     }
 }
 
@@ -309,7 +310,7 @@ mod tests {
     use atm_core::error::AtmError;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::ConnectionFailureClassification;
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
     use interprocess::local_socket::ListenerOptions;
     use interprocess::local_socket::traits::Listener as _;
     use std::sync::Arc;
@@ -351,6 +352,18 @@ mod tests {
             idle_only: false,
             dry_run: false,
         });
+        assert_eq!(
+            request_execution_risk(&ApiRequest::new(request)),
+            RequestExecutionRisk::SideEffecting
+        );
+    }
+
+    #[test]
+    fn request_execution_risk_classifies_peer_sync_as_side_effecting() {
+        let request = RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: "peer.example.test".parse().expect("peer host"),
+        });
+
         assert_eq!(
             request_execution_risk(&ApiRequest::new(request)),
             RequestExecutionRisk::SideEffecting
