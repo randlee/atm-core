@@ -95,6 +95,12 @@ def require_semantic_assertion(value: Any, name: str) -> None:
         fail(f"config field `{name}` must be an object")
     require_public_client_command(value.get("command"), f"{name}.command")
     require_string(value.get("json_path"), f"{name}.json_path")
+    if "absent" in value and value["absent"] is not True:
+        fail(f"config field `{name}.absent` must be true when present")
+    if value.get("absent") is True:
+        if "equals" in value:
+            fail(f"config field `{name}` cannot combine absent with equals")
+        return
     expected = value.get("equals")
     if not isinstance(expected, (str, int, float, bool, type(None))):
         fail(f"config field `{name}.equals` must be a scalar")
@@ -244,7 +250,15 @@ def verify_semantics(
             observed = json.loads(result["stdout"])
             actual = json_path(observed, assertion["json_path"])
         except (json.JSONDecodeError, RuntimeError) as error:
+            if assertion.get("absent") is True and isinstance(error, RuntimeError):
+                assertion_outcome["observed"] = "absent"
+                continue
             outcome["failures"].append(f"semantic assertion `{assertion_name}` failed: {error}")
+            continue
+        if assertion.get("absent") is True:
+            outcome["failures"].append(
+                f"semantic assertion `{assertion_name}` expected `{assertion['json_path']}` to be absent"
+            )
             continue
         expected = resolved_expectation(assertion["equals"], case)
         assertion_outcome.update({"observed": actual, "expected": expected})
