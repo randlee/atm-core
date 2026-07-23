@@ -145,6 +145,10 @@ test-graft-python:
 test-hermes-graft-bridge:
     {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
 
+# Validate a Hermes bridge registry; append --active only for real operator profiles.
+verify-hermes-bridge-deployment profile_registry *args:
+    scripts/phase-ai/run-hermes-bridge-probes.sh {{profile_registry}} {{args}}
+
 # Remove workspace build artifacts.
 clean:
     cargo clean

@@ -1,7 +1,7 @@
 ---
 id: AI.20
 title: Hermes Bridge Deployment and Runbook
-status: planned
+status: complete
 branch: feature/pAI-s20-hermes-bridge-deployment
 worktree: ../atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment
 target: integrate/phase-AI
@@ -35,7 +35,7 @@ remain blocked on AI.19 `PASS`.
 
 ## Deliverables
 
-- One parameterized `ai.hermes.atm-graft-<profile>.plist` template, rendered
+- One parameterized `ai.hermes.atm-graft-PROFILE.plist` template, rendered
   once for each profile listed in the operator-provided registry.
 - A runbook covering install, status, restart, log collection, failure
   diagnosis, and adding a profile.
@@ -48,7 +48,7 @@ remain blocked on AI.19 `PASS`.
 - `docs/plans/phase-ai/hermes-graft-runbook.md` — install and recovery
   commands, expected logs, proof commands, and the authoritative
   profile registry rendered from the operator-supplied inputs.
-- `docs/plans/phase-ai/templates/ai.hermes.atm-graft-<profile>.plist` —
+- `docs/plans/phase-ai/templates/ai.hermes.atm-graft-PROFILE.plist` —
   checked-in parameterized template. Operator-rendered plist files and their
   local paths are evidence, not repository targets.
 - `scripts/phase-ai/run-hermes-bridge-probes.sh` and the
@@ -76,3 +76,10 @@ address parser, no transport protocol, and no cross-host feature.
   launchd probes.
 - `just lint`, `just test`, and `git diff --check` pass for repository work;
   retained launchd evidence accompanies the operator-owned artifacts.
+
+## Draft Validation Limit
+
+The operator profile registry is not yet available and AI.19 is `FROZEN`, not
+`PASS`. This sprint closes the checked-in deployment material only; it cannot
+run active launchd probes or claim AI.20 `PASS` until both prerequisites are
+met.
