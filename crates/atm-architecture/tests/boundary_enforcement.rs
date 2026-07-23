@@ -135,6 +135,18 @@ fn canonical_write_router_has_one_host_routing_decision() {
         !daemon.contains("dispatch_remote_write"),
         "AI.12 forbids the pre-persistence remote write branch"
     );
+    let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
+        .expect("canonical writer source must be readable");
+    for retired in [
+        "write_mail_with_runtime_and_post_send_emitter",
+        "send_mail_with_runtime_and_post_send_emitter",
+        "write_mail_persisted_with_runtime",
+    ] {
+        assert!(
+            !send.contains(retired),
+            "AI.12 forbids the pre-router local-nudge helper `{retired}`"
+        );
+    }
 }
 
 #[test]

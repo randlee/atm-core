@@ -14,4 +14,3 @@ cargo_metadata.workspace = true
 serde.workspace = true
 syn = { version = "2", features = ["full", "visit"] }
 toml = "0.8"
-syn.workspace = true
