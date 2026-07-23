@@ -62,10 +62,10 @@ human intermediary.
 
 ## Current direct action
 
-**arch-ctm:** Windows reciprocal configuration is published. Add the exact
-Windows trust record for host `10.10.100.98` and fingerprint
-`BAF9EC036814C613BBBB77C645DF3AD8A91C5E65D78CF3BDDE900FC7ABB7836F`, append the
-resulting JSON, then start the labelled Mac-to-Windows send case.
+**cwin:** poll `windows-smoke@atm-dev` for Mac message
+`01KY8GPS700NA7RQG1JVXX6XQG`, record the received envelope/ULID, then send one
+new labelled reciprocal message to `arch-ctm@atm-dev.10.202.137.160`. Append
+the result here and push. Do not start acknowledgement or negative cases yet.
 
 ## Mac-to-Windows case 01: TLS diagnostic
 
@@ -104,3 +104,17 @@ the evidence and result here. Do not add a TLS bypass or alternate transport.
   with one enabled interface, certificate, and trusted peer.
 - Mac was asked to retry case 01. Sanitized evidence:
   `artifacts/peer-smoke/windows/tls-retry-0751ceb9/report.md`.
+
+## Mac TLS restart and case 02
+
+- The Mac trust record for Windows was likewise added after its listener had
+  started. A controlled singleton restart replaced the prior candidate daemon;
+  current PID `42711` is the only smoke-worktree daemon process.
+- `atm doctor --json` is healthy/ready at client and daemon release `1.3.1`,
+  with one enabled HTTPS interface and one enabled trusted peer.
+- Post-restart labelled Mac-to-Windows write
+  `01KY8GPS700NA7RQG1JVXX6XQG` to
+  `windows-smoke@atm-dev.10.10.100.98` returned `outcome: sent`.
+- The pre-restart Windows retry `01KY89HN323HXVA2JYDX397KAN` was not present
+  on the Mac; it is treated as a pre-remediation failed delivery, not a proof
+  case.
