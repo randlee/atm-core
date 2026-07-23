@@ -58,8 +58,10 @@ success is never a message-delivery proof.
 - A displayed `from` address and every reply/ack `to` address preserve a
   present chat-id exactly; no operator training or separate session command is
   needed to reply.
-- No prior custom frame, retired local transport, peer/replay, duplicate write-path, or
-  runtime SQLite escape-hatch source remains.
+- No prior custom frame, the pre-AI.6 local frame transport, the pre-AI.11
+  Windows named-pipe/AF_UNIX transport, peer/replay, duplicate write-path, or
+  runtime SQLite escape-hatch source remains. Unix HTTP/UDS remains required
+  by REQ-CORE-TRANSPORT-001 and ADR-033.
 - The CLI compatibility gate proves the pre-Phase-AI public CLI surface is
   additions-only; the OpenAPI compatibility gate proves the published HTTP API
   is additions-only from its AI.6 baseline.
