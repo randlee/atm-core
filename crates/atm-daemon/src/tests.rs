@@ -1,20 +1,13 @@
-#[cfg(not(windows))]
-use super::local_ipc_transport::RuntimeServeHooks;
-#[cfg(windows)]
 use super::local_tcp_transport::RuntimeServeHooks;
 use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
 use super::{
-    LocalIpcServerTransportAdapter,
+    LocalHttpServerTransportAdapter,
     composition::build_production_runtime,
     lifecycle_control::LifecycleControlSourceAdapter,
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
-};
-use crate::test_support::{
-    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-    write_test_local_ipc_request,
 };
 use atm_core::ApiRouter;
 use atm_core::doctor::DoctorQuery;
@@ -40,6 +33,29 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
+fn connect_local_http_after_ready(
+    home_dir: &std::path::Path,
+    ready_rx: mpsc::Receiver<()>,
+) -> (std::net::TcpStream, String) {
+    ready_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("daemon should publish local HTTP readiness");
+    let record_path = atm_core::local_http::local_http_record_path(home_dir);
+    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
+        &std::fs::read(&record_path).expect("read local HTTP endpoint record"),
+    )
+    .expect("parse local HTTP endpoint record");
+    let capability = record
+        .capability()
+        .expect("active local HTTP capability")
+        .to_base64url();
+    let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
+    (
+        std::net::TcpStream::connect(endpoint).expect("connect local HTTP endpoint"),
+        capability,
+    )
+}
+
 pub(crate) const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
@@ -58,13 +74,11 @@ impl Drop for ShutdownFinalizerDrainGuard {
     }
 }
 
-#[cfg(not(windows))]
-mod local_ipc_depth;
 mod runtime_root;
 
 #[test]
 #[serial_test::serial(env)]
-fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
+fn local_http_runtime_round_trips_doctor_requests_on_shared_transport() {
     install_retained_runtime_factory();
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
@@ -85,10 +99,9 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
-    let socket_path = tempdir.path().join("daemon.sock");
-    let server_transport = LocalIpcServerTransportAdapter::new();
+    let server_transport = LocalHttpServerTransportAdapter::new();
     let runtime = server_transport
-        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
+        .prepare_runtime_at_socket_path_for_home(tempdir.path().join("daemon.sock"), &atm_home)
         .expect("prepare runtime");
     let mut runtime = runtime;
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
@@ -122,15 +135,22 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
+    let (mut stream, capability_header) = connect_local_http_after_ready(&atm_home, ready_rx);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: tempdir.path().join("home"),
         current_dir: tempdir.path().join("cwd"),
         team_override: None,
         ..DoctorQuery::default()
     });
-    write_test_local_ipc_request(&mut stream, &request).expect("write doctor request");
+    atm_core::api::write_http_request_with_headers(
+        &mut stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability_header.as_str(),
+        )],
+    )
+    .expect("write doctor request");
     let response =
         atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
@@ -139,46 +159,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         }
         other => panic!("unexpected response: {other:?}"),
     }
-
-    // The loopback TCP record is published by whichever transport bound the
-    // runtime. On Windows the local_tcp_transport ignores the caller's socket
-    // path and writes the record under the host runtime root, so we resolve it
-    // through the same production lookup a client would use. On Unix the
-    // local_ipc_transport writes the record next to the endpoint socket
-    // (`endpoint_path.parent()`), so we read it from `socket_path`'s parent.
-    // Resolving the record from its real write location keeps this full
-    // round-trip assertion running on every platform.
-    #[cfg(windows)]
-    let record_path = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
-        .expect("resolve local loopback TCP endpoint record")
-        .as_ref()
-        .to_path_buf();
-    #[cfg(not(windows))]
-    let record_path = socket_path
-        .parent()
-        .expect("socket path has a runtime directory")
-        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
-
-    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
-        &std::fs::read(&record_path).expect("read local loopback TCP endpoint record"),
-    )
-    .expect("parse local loopback TCP endpoint record");
-    let capability = record.capability().expect("active local capability");
-    let capability_header = capability.to_base64url();
-    let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
-    let mut tcp_stream = std::net::TcpStream::connect(endpoint).expect("connect loopback TCP");
-    atm_core::api::write_http_request_with_headers(
-        &mut tcp_stream,
-        &request,
-        &[(
-            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
-            capability_header.as_str(),
-        )],
-    )
-    .expect("write loopback TCP doctor request");
-    let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
-        .expect("read loopback TCP doctor response");
-    assert!(matches!(tcp_response, ResponseEnvelope::Doctor(_)));
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -220,7 +200,6 @@ fn runtime_composition_start_writes_retained_log_and_reports_healthy_observabili
         )
         .expect("test observability"),
     );
-    let socket_path = tempdir.path().join("daemon.sock");
     let runtime = crate::composition::RuntimeComposition::new_with_runtime_db_path(
         crate::AtmHomeDir::from_path_for_test(atm_home.clone()),
         db_path,
@@ -229,22 +208,29 @@ fn runtime_composition_start_writes_retained_log_and_reports_healthy_observabili
     .expect("compose isolated runtime");
     let (result_tx, result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-    let runtime_socket_path = socket_path.clone();
+    let runtime_socket_path = tempdir.path().join("daemon.sock");
 
     let join = std::thread::spawn(move || {
         let result = runtime.start_with_socket_path_for_test(runtime_socket_path, Some(ready_tx));
         result_tx.send(result).expect("send runtime result");
     });
 
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    configure_test_local_ipc_timeouts(&stream);
+    let (mut stream, capability_header) = connect_local_http_after_ready(&atm_home, ready_rx);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),
         current_dir: atm_home.clone(),
         team_override: None,
         ..DoctorQuery::default()
     });
-    write_test_local_ipc_request(&mut stream, &request).expect("write doctor request");
+    atm_core::api::write_http_request_with_headers(
+        &mut stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability_header.as_str(),
+        )],
+    )
+    .expect("write doctor request");
     let response =
         atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
