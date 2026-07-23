@@ -20,19 +20,11 @@ mod host_ownership;
 mod https_transport;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;
-mod local_ipc_connection;
-#[cfg(not(windows))]
-mod local_ipc_transport;
-#[cfg(not(windows))]
-mod local_ipc_wake;
-#[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
 mod post_send_emitter;
 mod runtime_health;
 mod runtime_status_cache;
-#[cfg_attr(windows, allow(dead_code))]
-mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
 #[cfg(test)]
@@ -56,10 +48,7 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
-#[cfg(not(windows))]
-pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
-#[cfg(windows)]
-pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;
+pub(crate) use local_tcp_transport::LocalHttpServerTransportAdapter;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
