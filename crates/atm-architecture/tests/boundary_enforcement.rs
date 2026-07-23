@@ -460,7 +460,7 @@ impl HostRoutingVisitor {
         self.current_function
             .and_then(|index| self.functions.get(index))
             .and_then(|current| current.function_bindings.get(&name))
-            .is_some_and(|binding| *binding == FunctionBinding::Delivery)
+            .is_some_and(|binding| *binding != FunctionBinding::Safe)
     }
 
     fn is_function_binding_candidate(&self, expression: &syn::Expr) -> bool {
