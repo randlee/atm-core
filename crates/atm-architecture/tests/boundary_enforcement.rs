@@ -123,6 +123,14 @@ fn canonical_write_router_has_one_host_routing_decision() {
         1,
         "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
     );
+    assert_eq!(
+        visitor.message_writer_implementations, 1,
+        "AI.12 requires exactly one production MessageWriter implementation"
+    );
+    assert_eq!(
+        visitor.post_write_router_implementations, 1,
+        "AI.12 requires exactly one production PostWriteRouter implementation"
+    );
     assert!(
         visitor.violations().is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
@@ -153,7 +161,11 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     for (name, source) in [
         (
             "second writer",
-            "impl MessageWriter for Second { fn write(&self) { } }",
+            "impl MessageWriter for First { fn write(&self) { } } impl MessageWriter for Second { fn write(&self) { } }",
+        ),
+        (
+            "second post-write router",
+            "impl PostWriteRouter for First { fn dispatch(&self) { } } impl PostWriteRouter for Second { fn dispatch(&self) { } }",
         ),
         (
             "pre-write nudge",
@@ -167,6 +179,10 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "host-routing delivery outside router",
             "impl Pick { fn pick_transport(&self) { let transport = self.https_transport; request.host; transport.deliver(); } }",
         ),
+        (
+            "aliased local nudge",
+            "use nudge::emit_local_post_write as emit; fn write() { emit(); }",
+        ),
     ] {
         let violations = routing_violations_in_fixture(source);
         assert!(
@@ -176,7 +192,7 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     }
 
     let permitted_admission_check = routing_violations_in_fixture(
-        "fn resolve_write_recipient_snapshot() { request.host; snapshot(); }",
+        "impl PostWriteRouter for Only { fn dispatch(&self) { } } fn resolve_write_recipient_snapshot() { request.host; snapshot(); }",
     );
     assert!(
         permitted_admission_check.is_empty(),
@@ -200,7 +216,9 @@ fn routing_violations_in_fixture(source: &str) -> Vec<String> {
 #[derive(Default)]
 struct HostRoutingVisitor {
     functions: Vec<HostRoutingFunction>,
-    second_message_writer: bool,
+    message_writer_implementations: usize,
+    post_write_router_implementations: usize,
+    delivery_function_aliases: BTreeSet<String>,
     source_path: Option<PathBuf>,
     current_function: Option<usize>,
     in_post_write_router: bool,
@@ -219,22 +237,29 @@ struct HostRoutingFunction {
 
 impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
-        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+        let is_message_writer = node.trait_.as_ref().is_some_and(|(_, path, _)| {
             path.segments
                 .last()
                 .is_some_and(|segment| segment.ident == "MessageWriter")
-        }) && !self.is_runtime_dispatcher_source()
-        {
-            self.second_message_writer = true;
-        }
-        let previous = self.in_post_write_router;
-        self.in_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
+        });
+        let is_post_write_router = node.trait_.as_ref().is_some_and(|(_, path, _)| {
             path.segments
                 .last()
                 .is_some_and(|segment| segment.ident == "PostWriteRouter")
         });
+        if self.is_production_source() {
+            self.message_writer_implementations += usize::from(is_message_writer);
+            self.post_write_router_implementations += usize::from(is_post_write_router);
+        }
+        let previous = self.in_post_write_router;
+        self.in_post_write_router = is_post_write_router;
         syn::visit::visit_item_impl(self, node);
         self.in_post_write_router = previous;
+    }
+
+    fn visit_item_use(&mut self, node: &'ast syn::ItemUse) {
+        collect_delivery_function_aliases(&node.tree, &mut self.delivery_function_aliases);
+        syn::visit::visit_item_use(self, node);
     }
 
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
@@ -288,6 +313,16 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         }
         syn::visit::visit_expr_method_call(self, node);
     }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if self.is_delivery_function_call(&node.func)
+            && let Some(function) = self.current_function_mut()
+            && !function.is_test
+        {
+            function.calls_delivery = true;
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
 }
 
 impl HostRoutingVisitor {
@@ -323,6 +358,21 @@ impl HostRoutingVisitor {
             })
     }
 
+    fn is_delivery_function_call(&self, function: &syn::Expr) -> bool {
+        let syn::Expr::Path(path) = function else {
+            return false;
+        };
+        let Some(segment) = path.path.segments.last() else {
+            return false;
+        };
+        matches!(
+            segment.ident.to_string().as_str(),
+            "emit_local_post_write" | "deliver_to_peer"
+        ) || self
+            .delivery_function_aliases
+            .contains(&segment.ident.to_string())
+    }
+
     fn post_router_host_accesses(&self) -> usize {
         self.functions
             .iter()
@@ -350,16 +400,47 @@ impl HostRoutingVisitor {
                 )
             })
             .collect::<Vec<_>>();
-        if self.second_message_writer {
+        if self.message_writer_implementations > 1 {
             violations.push("second MessageWriter implementation".to_string());
+        }
+        if self.post_write_router_implementations > 1 {
+            violations.push("second PostWriteRouter implementation".to_string());
         }
         violations
     }
 
-    fn is_runtime_dispatcher_source(&self) -> bool {
-        self.source_path.as_ref().is_some_and(|path| {
-            path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
-        })
+    fn is_production_source(&self) -> bool {
+        self.source_path
+            .as_ref()
+            .is_none_or(|path| !is_test_only_source(path))
+    }
+}
+
+fn collect_delivery_function_aliases(tree: &syn::UseTree, aliases: &mut BTreeSet<String>) {
+    match tree {
+        syn::UseTree::Rename(rename)
+            if matches!(
+                rename.ident.to_string().as_str(),
+                "emit_local_post_write" | "deliver_to_peer"
+            ) =>
+        {
+            aliases.insert(rename.rename.to_string());
+        }
+        syn::UseTree::Name(name)
+            if matches!(
+                name.ident.to_string().as_str(),
+                "emit_local_post_write" | "deliver_to_peer"
+            ) =>
+        {
+            aliases.insert(name.ident.to_string());
+        }
+        syn::UseTree::Path(path) => collect_delivery_function_aliases(&path.tree, aliases),
+        syn::UseTree::Group(group) => {
+            for item in &group.items {
+                collect_delivery_function_aliases(item, aliases);
+            }
+        }
+        syn::UseTree::Glob(_) | syn::UseTree::Rename(_) | syn::UseTree::Name(_) => {}
     }
 }
 
