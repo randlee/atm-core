@@ -196,6 +196,34 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
             "fn write() { let emit = Box::new(emit_local_post_write); emit(); }",
         ),
         (
+            "parenthesized delivery function binding",
+            "fn write() { let emit = (emit_local_post_write); emit(); }",
+        ),
+        (
+            "block-wrapped delivery function binding",
+            "fn write() { let emit = { emit_local_post_write }; emit(); }",
+        ),
+        (
+            "method-wrapped delivery function binding",
+            "fn write() { let emit = emit_local_post_write.clone(); emit(); }",
+        ),
+        (
+            "tuple-field delivery function binding",
+            "fn write() { let pair = (emit_local_post_write,); let emit = pair.0; emit(); }",
+        ),
+        (
+            "closure-call delivery function binding",
+            "fn write() { let emit = (|| emit_local_post_write)(); emit(); }",
+        ),
+        (
+            "borrowed delivery function binding",
+            "fn write() { let emit = &emit_local_post_write; emit(); }",
+        ),
+        (
+            "cast delivery function binding",
+            "fn write() { let emit = emit_local_post_write as fn(); emit(); }",
+        ),
+        (
             "transitive delivery function alias",
             "use nudge::emit_local_post_write as step_one; use step_one as step_two; fn write() { step_two(); }",
         ),
@@ -309,6 +337,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
         }
         if let syn::Pat::Ident(binding) = &node.pat
             && let Some(init) = node.init.as_ref()
+            && self.is_function_binding_candidate(&init.expr)
             && let provenance = self.function_binding_provenance(&init.expr)
             && let Some(function) = self.current_function_mut()
         {
@@ -416,33 +445,112 @@ impl HostRoutingVisitor {
             .is_some_and(|binding| *binding != FunctionBinding::Safe)
     }
 
-    fn function_binding_provenance(&self, expression: &syn::Expr) -> FunctionBinding {
-        if matches!(expression, syn::Expr::Cast(_)) {
-            return FunctionBinding::Unresolved;
-        }
-        if let syn::Expr::Call(call) = expression {
-            return call
-                .args
+    fn is_function_binding_candidate(&self, expression: &syn::Expr) -> bool {
+        match expression {
+            syn::Expr::Path(path) => path
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| {
+                    let name = segment.ident.to_string();
+                    is_delivery_function_name(&name)
+                        || self.delivery_function_aliases.contains(&name)
+                        || self
+                            .current_function
+                            .and_then(|index| self.functions.get(index))
+                            .is_some_and(|function| function.function_bindings.contains_key(&name))
+                }),
+            syn::Expr::Cast(cast) => self.is_function_binding_candidate(&cast.expr),
+            syn::Expr::Closure(closure) => self.is_function_binding_candidate(&closure.body),
+            syn::Expr::Paren(paren) => self.is_function_binding_candidate(&paren.expr),
+            syn::Expr::Group(group) => self.is_function_binding_candidate(&group.expr),
+            syn::Expr::Reference(reference) => self.is_function_binding_candidate(&reference.expr),
+            syn::Expr::Block(block) => block.block.stmts.last().is_some_and(|statement| {
+                matches!(statement, syn::Stmt::Expr(expression, _) if self.is_function_binding_candidate(expression))
+            }),
+            syn::Expr::Call(call) => {
+                self.is_function_binding_candidate(&call.func)
+                    || call.args.iter().any(|argument| self.is_function_binding_candidate(argument))
+            }
+            syn::Expr::MethodCall(call) => {
+                self.is_function_binding_candidate(&call.receiver)
+                    || call.args.iter().any(|argument| self.is_function_binding_candidate(argument))
+            }
+            syn::Expr::Field(field) => self.is_function_binding_candidate(&field.base),
+            syn::Expr::Tuple(tuple) => tuple
+                .elems
                 .iter()
-                .map(|argument| self.function_binding_provenance(argument))
-                .find(|provenance| *provenance != FunctionBinding::Safe)
-                .unwrap_or(FunctionBinding::Safe);
+                .any(|element| self.is_function_binding_candidate(element)),
+            _ => false,
         }
-        let syn::Expr::Path(path) = expression else {
-            return FunctionBinding::Safe;
-        };
-        let Some(segment) = path.path.segments.last() else {
-            return FunctionBinding::Unresolved;
-        };
-        let name = segment.ident.to_string();
-        if is_delivery_function_name(&name) || self.delivery_function_aliases.contains(&name) {
-            FunctionBinding::Delivery
-        } else {
-            self.current_function
-                .and_then(|index| self.functions.get(index))
-                .and_then(|function| function.function_bindings.get(&name))
-                .copied()
-                .unwrap_or(FunctionBinding::Safe)
+    }
+
+    fn function_binding_provenance(&self, expression: &syn::Expr) -> FunctionBinding {
+        match expression {
+            syn::Expr::Path(path) => {
+                let Some(segment) = path.path.segments.last() else {
+                    return FunctionBinding::Unresolved;
+                };
+                let name = segment.ident.to_string();
+                if is_delivery_function_name(&name)
+                    || self.delivery_function_aliases.contains(&name)
+                {
+                    FunctionBinding::Delivery
+                } else {
+                    self.current_function
+                        .and_then(|index| self.functions.get(index))
+                        .and_then(|function| function.function_bindings.get(&name))
+                        .copied()
+                        .unwrap_or(FunctionBinding::Unresolved)
+                }
+            }
+            syn::Expr::Paren(paren) => self.function_binding_provenance(&paren.expr),
+            syn::Expr::Group(group) => self.function_binding_provenance(&group.expr),
+            syn::Expr::Reference(reference) => self.function_binding_provenance(&reference.expr),
+            syn::Expr::Block(block) => block
+                .block
+                .stmts
+                .last()
+                .and_then(|statement| match statement {
+                    syn::Stmt::Expr(expression, _) => Some(expression),
+                    _ => None,
+                })
+                .map_or(FunctionBinding::Safe, |expression| {
+                    self.function_binding_provenance(expression)
+                }),
+            syn::Expr::Call(call) => {
+                if self.function_binding_provenance(&call.func) == FunctionBinding::Delivery
+                    || call.args.iter().any(|argument| {
+                        self.function_binding_provenance(argument) == FunctionBinding::Delivery
+                    })
+                {
+                    FunctionBinding::Delivery
+                } else {
+                    FunctionBinding::Unresolved
+                }
+            }
+            syn::Expr::MethodCall(call) => {
+                let receiver = self.function_binding_provenance(&call.receiver);
+                if receiver == FunctionBinding::Delivery
+                    || call.args.iter().any(|argument| {
+                        self.function_binding_provenance(argument) == FunctionBinding::Delivery
+                    })
+                {
+                    FunctionBinding::Delivery
+                } else {
+                    FunctionBinding::Unresolved
+                }
+            }
+            syn::Expr::Field(field) => self.function_binding_provenance(&field.base),
+            syn::Expr::Tuple(tuple) => tuple
+                .elems
+                .iter()
+                .map(|element| self.function_binding_provenance(element))
+                .find(|provenance| *provenance == FunctionBinding::Delivery)
+                .unwrap_or(FunctionBinding::Unresolved),
+            syn::Expr::Closure(closure) => self.function_binding_provenance(&closure.body),
+            syn::Expr::Lit(_) => FunctionBinding::Safe,
+            _ => FunctionBinding::Unresolved,
         }
     }
 
