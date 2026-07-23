@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI12-QA1-BLOCKING-02>
+  a triage:Finding ;
+  triage:findingId "AI12-QA1-BLOCKING-02" ;
+  triage:title "PostWriteRouter::dispatch never emits the local nudge; nudge fires earlier inside the canonical writer" ;
+  triage:description "Confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa. For an empty destination host, PostWriteRouter::dispatch (crates/atm-daemon/src/runtime_health.rs:574-589) does emit the nudge when host is None. However, the canonical write path in MessageWriter (crates/atm-core/src/send/mod.rs:422) unconditionally calls emit_local_post_write_with_runtime for any non-dry-run message, BEFORE route_write ever invokes the router. This means the nudge is still emitted early in the writer, not exclusively in PostWriteRouter::dispatch. Directly contradicts deliverable 4 (router emits exactly one local post-write nudge) and boundary-enforcement item 4 (nudge calls occur only in the post-write router)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA1" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs and crates/atm-daemon/src/runtime_health.rs for any nudge/hook::emit_post_send_effects call sites outside PostWriteRouter::dispatch" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s20/2> ;
+  triage:openOn <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:highestFixedBranch "none" .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 422 ;
+  triage:snippet "prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:description "Early emit_local_post_write_with_runtime call in MessageWriter::write for any non-dry-run message, BEFORE router is invoked" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/34392e5c> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 587 ;
+  triage:snippet "message.prepared.emit_local_post_write(&self.service_runtime, &post_send_emitter);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:description "Router DOES emit nudge when host is None, but this is AFTER the writer already emitted it" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/34392e5c> .
+
+<urn:atm:triage:worktree/s20/34392e5c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:orderIndex 20 .
