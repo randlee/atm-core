@@ -1,0 +1,30 @@
+ATM CLI
+
+Usage: atm.exe [OPTIONS] <COMMAND>
+
+Commands:
+  api
+  send     Send one ATM mailbox message
+  list     List one ATM mailbox surface as bounded metadata rows
+  peek     Inspect one ATM mailbox message without mutating mailbox state
+  peer     Manage durable cross-host HTTPS control-plane configuration
+  read     Read one ATM mailbox message and optionally update read state
+  ack      Acknowledge one pending-ack message and emit a reply when required
+  clear    Clear read or acknowledged messages from a mailbox
+  log      Query or follow ATM retained observability records
+  doctor   Run ATM health and configuration diagnostics
+  help     Show ATM-owned conceptual help or delegated clap subcommand help
+  teams    List teams or run one team-administration subcommand
+  members  List the current member roster for one ATM team
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

@@ -1,0 +1,4 @@
+
+LocalAddress LocalPort OwningProcess  State
+------------ --------- -------------  -----
+127.0.0.1        59081          9284 Listen

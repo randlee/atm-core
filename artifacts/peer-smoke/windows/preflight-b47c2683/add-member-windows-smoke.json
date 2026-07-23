@@ -1,0 +1,6 @@
+{
+  "action": "add-member",
+  "team": "atm-dev",
+  "member": "windows-smoke",
+  "created_inbox": true
+}

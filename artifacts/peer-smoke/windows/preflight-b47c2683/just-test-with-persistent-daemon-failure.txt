@@ -1,0 +1,60 @@
+lint: pytests
+repo_root: F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke
+recorded_at_utc: 2026-07-23T19:34:48.419406+00:00
+duration: 2.9s
+command: C:\Program Files\Python312\python.exe -B F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\.just\run_pytests.py
+exit_code: 0
+
+stdout:
+pytests fixture counts:
+  test_check_env_var_boundary.CheckEnvVarBoundaryTests: 11
+  test_check_fixed_sleep_hygiene.CheckFixedSleepHygieneTests: 4
+  test_check_function_length.CheckFunctionLengthTests: 6
+  test_check_line_counts.CheckLineCountsTests: 6
+  test_check_test_identity_literals.CheckTestIdentityLiteralsTests: 6
+  test_check_version_sync.CheckVersionSyncTests: 6
+  test_lint_boundaries.LintBoundariesTests: 33
+  test_lint_cargo_modules.LintCargoModulesTests: 2
+  test_lint_common.LintCommonTests: 15
+  test_lint_daemon_singleton.LintDaemonSingletonTests: 26
+  test_lint_external_tools.ExternalLintToolTests: 9
+  test_lint_manifests.LintManifestsTests: 5
+  test_lint_runtime_waits.LintRuntimeWaitsTests: 2
+  test_lint_sc_boundary.LintScBoundaryTests: 3
+  test_lint_sc_portability.LintScPortabilityTests: 3
+  test_lint_ttl_triage_consistency.LintTtlTriageConsistencyTests: 4
+  test_lint_unix_gating.LintUnixGatingTests: 2
+  test_peer_pair_smoke.PeerPairSmokeTests: 5
+  test_phase_x_guardrails.PhaseXGuardrailTests: 3
+  test_print_help.PrintHelpTests: 1
+  test_release_artifacts.ReleaseArtifactsTests: 5
+  test_release_gate.ReleaseGateTests: 2
+  test_release_homebrew_workflow.ReleaseHomebrewWorkflowTests: 1
+  test_release_preflight.ReleasePreflightWorkflowTests: 2
+  test_run_fmt.RunFmtTests: 2
+  test_run_lint.RunLintTests: 13
+  test_run_pytests.RunPytestsTests: 2
+  test_run_version.RunVersionTests: 2
+  test_run_view.RunViewTests: 4
+  test_validate_release.ValidateReleaseProofTests: 4
+  test_verify_user_docs.VerifyUserDocsTests: 5
+  test_view_boundaries.ViewBoundariesTests: 2
+  test_view_common.ViewCommonTests: 3
+  test_view_deps.ViewDepsTests: 2
+  test_view_lines.ViewLinesTests: 1
+  test_view_modules.ViewModulesTests: 3
+  test_view_site.ViewSiteTests: 6
+  test_view_unsafe.ViewUnsafeTests: 1
+pytests fixtures total: 38
+.........................................................................module cycle check passed: cargo-modules found no internal dependency cycles.
+....................................................................................ss.......................view index generated: artifacts/view/index.html
+view completed: 1 target(s) generated
+....README.md: reviewed_for_release is 0.0.0, expected 1.3.0
+...............lines view generated: artifacts/view/lines/summary.txt
+...........
+----------------------------------------------------------------------
+Ran 212 tests in 2.686s
+
+OK (skipped=2)
+
+stderr:

@@ -1,0 +1,141 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling windows-link v0.2.1
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling serde v1.0.228
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.54
+   Compiling zmij v1.0.21
+   Compiling autocfg v1.5.1
+   Compiling serde_json v1.0.150
+   Compiling once_cell v1.21.4
+   Compiling itoa v1.0.18
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling smallvec v1.15.2
+   Compiling memchr v2.8.3
+   Compiling toml_write v0.1.2
+   Compiling winnow v0.7.15
+   Compiling libc v0.2.186
+   Compiling windows_x86_64_msvc v0.52.6
+   Compiling parking_lot_core v0.9.12
+   Compiling version_check v0.9.5
+   Compiling pkg-config v0.3.33
+   Compiling scopeguard v1.2.0
+   Compiling pin-project-lite v0.2.17
+   Compiling vcpkg v0.2.15
+   Compiling foldhash v0.1.5
+   Compiling recvmsg v1.0.0
+   Compiling windows-sys v0.61.2
+   Compiling doctest-file v1.1.1
+   Compiling widestring v1.2.1
+   Compiling hashbrown v0.15.5
+   Compiling winapi v0.3.9
+   Compiling tracing-core v0.1.36
+   Compiling lock_api v0.4.14
+   Compiling thiserror v2.0.18
+   Compiling base64 v0.22.1
+   Compiling typenum v1.20.1
+   Compiling bitflags v2.13.0
+   Compiling time-core v0.1.9
+   Compiling cc v1.2.67
+   Compiling generic-array v0.14.7
+   Compiling num-traits v0.2.19
+   Compiling fallible-iterator v0.3.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling num-conv v0.2.2
+   Compiling indexmap v2.14.0
+   Compiling powerfmt v0.2.0
+   Compiling hashlink v0.10.0
+   Compiling getrandom v0.2.17
+   Compiling parking_lot v0.12.5
+   Compiling utf8parse v0.2.2
+   Compiling zeroize v1.9.0
+   Compiling rustversion v1.0.23
+   Compiling anstyle v1.0.14
+   Compiling windows-targets v0.52.6
+   Compiling once_cell_polyfill v1.70.2
+   Compiling untrusted v0.9.0
+   Compiling signal-hook v0.3.18
+   Compiling colorchoice v1.0.5
+   Compiling windows-sys v0.59.0
+   Compiling rand_core v0.9.5
+   Compiling rustls-pki-types v1.15.0
+   Compiling anstyle-parse v1.0.0
+   Compiling rustls v0.23.42
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling clap_lex v1.1.0
+   Compiling log v0.4.33
+   Compiling subtle v2.6.1
+   Compiling lazy_static v1.5.0
+   Compiling strsim v0.11.1
+   Compiling cpufeatures v0.2.17
+   Compiling anyhow v1.0.103
+   Compiling heck v0.5.0
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.10
+   Compiling unsafe-libyaml v0.2.11
+   Compiling ryu v1.0.23
+   Compiling tracing-log v0.2.0
+   Compiling syn v2.0.118
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling libsqlite3-sys v0.31.0
+   Compiling ring v0.17.14
+   Compiling digest v0.10.7
+   Compiling arc-swap v1.9.2
+   Compiling interprocess v2.4.2
+   Compiling anstyle-wincon v3.0.11
+   Compiling errno v0.3.14
+   Compiling anstyle-query v1.1.5
+   Compiling nu-ansi-term v0.50.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling anstream v1.0.0
+   Compiling sha2 v0.10.9
+   Compiling fs2 v0.4.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling clap_builder v4.6.0
+   Compiling deranged v0.5.8
+   Compiling time v0.3.53
+   Compiling ppv-lite86 v0.2.21
+   Compiling serde_derive v1.0.228
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling tracing v0.1.44
+   Compiling clap v4.6.1
+   Compiling rustls-webpki v0.103.13
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling ulid v1.2.1
+   Compiling chrono v0.4.45
+   Compiling sc-observability-types v1.2.0
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling toml_edit v0.22.27
+   Compiling sc-observability v1.2.0
+   Compiling toml v0.8.23
+   Compiling atm-storage v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage)
+   Compiling agent-team-mail-core v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-core)
+   Compiling rusqlite v0.33.0
+   Compiling atm-storage-rusqlite v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage-rusqlite)
+   Compiling atm-runtime v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-runtime)
+   Compiling atm-daemon-client v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-client)
+warning: unused variable: `method`
+   --> crates\atm-storage-rusqlite\src\shared_db.rs:420:31
+    |
+420 | fn debug_assert_blocking_only(method: &str) {
+    |                               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_method`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling atm-daemon-bootstrap v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-bootstrap)
+   Compiling atm-daemon v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon)
+warning: `atm-storage-rusqlite` (lib) generated 1 warning (run `cargo fix --lib -p atm-storage-rusqlite` to apply 1 suggestion)
+   Compiling agent-team-mail v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm)
+    Finished `release` profile [optimized] target(s) in 21.90s

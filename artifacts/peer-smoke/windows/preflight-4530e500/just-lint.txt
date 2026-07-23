@@ -1,0 +1,27 @@
+python .just/run_lint.py all
+PowerShell profile loaded successfully!
+  - open: macOS-style file/URL opener
+  - sonnet/haiku/opus: Claude Code launchers (auto-loads .env)
+fmt passed [3.8s]
+clippy passed [19.7s]
+deny passed [6.0s]
+shear passed [0.35s]
+version passed [0.14s]
+boundaries passed [4.6s]
+unix-gating passed [9.9s]
+same-host-portability passed [0.11s]
+runtime-waits passed [11.7s]
+manifests passed [0.12s]
+silent-emit passed [0.12s]
+function-length passed [0.35s]
+legacy-mailbox-paths passed [0.42s]
+capability-degradation passed [0.17s]
+identities passed [0.28s]
+env-var-boundary passed [1.4s]
+fixed-sleep passed [0.19s]
+ttl-triage passed [8.1s]
+lines passed [0.19s]
+spell passed [6.6s]
+daemon-singleton passed [0.24s]
+pytests passed [5.6s]
+lint passed: 22 check(s) succeeded

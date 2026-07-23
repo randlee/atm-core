@@ -1,0 +1,2 @@
+a live ATM daemon already owns C:\Users\rand.lee\.atm\daemon\owner.lock
+  Recovery: Ensure atm-daemon binary is installed, then restore the single local daemon to a healthy serving state and retry.

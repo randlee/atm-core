@@ -30,11 +30,14 @@ human intermediary.
 
 ## Windows status (cwin)
 
-- Commit: `4530e500` preflight stopped because the runbook incorrectly asked
-  for an `atm-graft.exe` binary.
-- Required next action: pull the latest branch, follow the corrected runbook,
-  run the isolated graft smoke before its persistent daemon, complete local
-  preflight, and append the evidence path plus host/fingerprint.
+- Commit: `a496b1c1`, merged into this shared coordination commit.
+- Preflight: release build, loopback CLI send/read/ack, and graft same-host
+  smoke passed. Evidence: `artifacts/peer-smoke/windows/preflight-b47c2683/`.
+- Persistent release daemon: PID `9284`, loopback listener `127.0.0.1:59081`.
+- Advertised host: `10.10.100.98`; it is reserved for the HTTPS peer interface,
+  not the local CLI transport.
+- Certificate fingerprint: pending local HTTPS interface/certificate setup and
+  the Mac operator's matching exchange details. No cross-host send attempted.
 
 ## Exchange and execution order
 

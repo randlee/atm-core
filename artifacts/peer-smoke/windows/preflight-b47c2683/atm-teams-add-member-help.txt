@@ -1,0 +1,32 @@
+Usage: atm.exe teams add-member [OPTIONS] <TEAM> <MEMBER>
+
+Arguments:
+  <TEAM>
+
+
+  <MEMBER>
+
+
+Options:
+      --agent-type <AGENT_TYPE>
+          [default: general-purpose]
+
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --model <MODEL>
+          [default: unknown]
+
+      --home-dir <HOME_DIR>
+
+
+      --pane-id <PANE_ID>
+          tmux pane id in '%<number>' form or a bare numeric pane id
+
+      --json
+
+
+  -h, --help
+          Print help (see a summary with '-h')

@@ -1,0 +1,5 @@
+
+InterfaceAlias                     IPAddress    PrefixLength AddressState
+--------------                     ---------    ------------ ------------
+vEthernet (WSL (Hyper-V firewall)) 172.27.128.1           20    Preferred
+Ethernet 2                         10.10.100.98           24    Preferred

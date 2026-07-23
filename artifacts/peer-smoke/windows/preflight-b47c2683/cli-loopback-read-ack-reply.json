@@ -1,0 +1,29 @@
+{
+  "action": "read",
+  "team": "atm-dev",
+  "agent": "arch-ctm",
+  "selection_mode": "actionable",
+  "mutation_applied": true,
+  "count": 1,
+  "message": {
+    "bucket": "history",
+    "class": "read",
+    "from": "windows-smoke",
+    "text": "windows local acknowledgement",
+    "timestamp": "2026-07-23T19:33:55.987764900Z",
+    "read": true,
+    "source_team": "atm-dev",
+    "summary": "windows local acknowledgement",
+    "message_id": "01KY87GR4KR174D4EZG0RT0Y6H",
+    "requires_ack": false,
+    "acknowledgesMessageId": "01KY87GR0KC9BRG5VG206NES0R"
+  },
+  "selected_message_id": "01KY87GR4KR174D4EZG0RT0Y6H",
+  "match_count": 1,
+  "additional_match_count": 0,
+  "bucket_counts": {
+    "unread": 0,
+    "pending_ack": 0,
+    "history": 1
+  }
+}

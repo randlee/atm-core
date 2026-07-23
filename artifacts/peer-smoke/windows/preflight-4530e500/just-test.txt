@@ -1,0 +1,1197 @@
+python .just/run_tests.py default
+PowerShell profile loaded successfully!
+  - open: macOS-style file/URL opener
+  - sonnet/haiku/opus: Claude Code launchers (auto-loads .env)
+ok: verified user docs at docs\user-documents
+pytests fixture counts:
+  test_check_env_var_boundary.CheckEnvVarBoundaryTests: 11
+  test_check_fixed_sleep_hygiene.CheckFixedSleepHygieneTests: 4
+  test_check_function_length.CheckFunctionLengthTests: 6
+  test_check_line_counts.CheckLineCountsTests: 6
+  test_check_test_identity_literals.CheckTestIdentityLiteralsTests: 6
+  test_check_version_sync.CheckVersionSyncTests: 6
+  test_lint_boundaries.LintBoundariesTests: 33
+  test_lint_cargo_modules.LintCargoModulesTests: 2
+  test_lint_common.LintCommonTests: 15
+  test_lint_daemon_singleton.LintDaemonSingletonTests: 26
+  test_lint_external_tools.ExternalLintToolTests: 9
+  test_lint_manifests.LintManifestsTests: 5
+  test_lint_runtime_waits.LintRuntimeWaitsTests: 2
+  test_lint_sc_boundary.LintScBoundaryTests: 3
+  test_lint_sc_portability.LintScPortabilityTests: 3
+  test_lint_ttl_triage_consistency.LintTtlTriageConsistencyTests: 4
+  test_lint_unix_gating.LintUnixGatingTests: 2
+  test_peer_pair_smoke.PeerPairSmokeTests: 5
+  test_phase_x_guardrails.PhaseXGuardrailTests: 3
+  test_print_help.PrintHelpTests: 1
+  test_release_artifacts.ReleaseArtifactsTests: 5
+  test_release_gate.ReleaseGateTests: 2
+  test_release_homebrew_workflow.ReleaseHomebrewWorkflowTests: 1
+  test_release_preflight.ReleasePreflightWorkflowTests: 2
+  test_run_fmt.RunFmtTests: 2
+  test_run_lint.RunLintTests: 13
+  test_run_pytests.RunPytestsTests: 2
+  test_run_version.RunVersionTests: 2
+  test_run_view.RunViewTests: 4
+  test_validate_release.ValidateReleaseProofTests: 4
+  test_verify_user_docs.VerifyUserDocsTests: 5
+  test_view_boundaries.ViewBoundariesTests: 2
+  test_view_common.ViewCommonTests: 3
+  test_view_deps.ViewDepsTests: 2
+  test_view_lines.ViewLinesTests: 1
+  test_view_modules.ViewModulesTests: 3
+  test_view_site.ViewSiteTests: 6
+  test_view_unsafe.ViewUnsafeTests: 1
+pytests fixtures total: 38
+.........................................................................module cycle check passed: cargo-modules found no internal dependency cycles.
+....................................................................................ss.......................view index generated: artifacts/view/index.html
+view completed: 1 target(s) generated
+....README.md: reviewed_for_release is 0.0.0, expected 1.3.0
+...............lines view generated: artifacts/view/lines/summary.txt
+...........
+----------------------------------------------------------------------
+Ran 212 tests in 2.475s
+
+OK (skipped=2)
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling zerocopy v0.8.54
+   Compiling getrandom v0.3.4
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling once_cell v1.21.4
+   Compiling autocfg v1.5.1
+   Compiling libc v0.2.186
+   Compiling smallvec v1.15.2
+   Compiling windows_x86_64_msvc v0.52.6
+   Compiling parking_lot_core v0.9.12
+   Compiling scopeguard v1.2.0
+   Compiling pin-project-lite v0.2.17
+   Compiling widestring v1.2.1
+   Compiling doctest-file v1.1.1
+   Compiling recvmsg v1.0.0
+   Compiling vcpkg v0.2.15
+   Compiling pkg-config v0.3.33
+   Compiling windows-sys v0.61.2
+   Compiling base64 v0.22.1
+   Compiling winapi v0.3.9
+   Compiling foldhash v0.1.5
+   Compiling target-lexicon v0.13.5
+   Compiling version_check v0.9.5
+   Compiling fallible-iterator v0.3.0
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling bitflags v2.13.0
+   Compiling num-conv v0.2.2
+   Compiling syn v2.0.118
+   Compiling time-core v0.1.9
+   Compiling typenum v1.20.1
+   Compiling powerfmt v0.2.0
+   Compiling lock_api v0.4.14
+   Compiling tracing-core v0.1.36
+   Compiling getrandom v0.2.17
+   Compiling zeroize v1.9.0
+   Compiling hashbrown v0.15.5
+   Compiling rustversion v1.0.23
+   Compiling untrusted v0.9.0
+   Compiling rustls-pki-types v1.15.0
+   Compiling lazy_static v1.5.0
+   Compiling cc v1.2.67
+   Compiling log v0.4.33
+   Compiling rustls v0.23.42
+   Compiling signal-hook v0.3.18
+   Compiling thread_local v1.1.10
+   Compiling unsafe-libyaml v0.2.11
+   Compiling subtle v2.6.1
+   Compiling cpufeatures v0.2.17
+   Compiling ryu v1.0.23
+   Compiling num-traits v0.2.19
+   Compiling generic-array v0.14.7
+   Compiling windows-targets v0.52.6
+   Compiling sharded-slab v0.1.7
+   Compiling hashlink v0.10.0
+   Compiling tracing-log v0.2.0
+   Compiling windows-sys v0.59.0
+   Compiling rand_core v0.9.5
+   Compiling parking_lot v0.12.5
+   Compiling pyo3-build-config v0.29.0
+   Compiling arc-swap v1.9.2
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling libsqlite3-sys v0.31.0
+   Compiling ring v0.17.14
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling interprocess v2.4.2
+   Compiling anstyle-wincon v3.0.11
+   Compiling anstyle-query v1.1.5
+   Compiling errno v0.3.14
+   Compiling nu-ansi-term v0.50.3
+   Compiling fs2 v0.4.3
+   Compiling pyo3-ffi v0.29.0
+   Compiling pyo3 v0.29.0
+   Compiling anstream v1.0.0
+   Compiling signal-hook-registry v1.4.8
+   Compiling tracing-subscriber v0.3.23
+   Compiling clap_builder v4.6.0
+   Compiling serde_json v1.0.150
+   Compiling deranged v0.5.8
+   Compiling semver v1.0.28
+   Compiling cargo-platform v0.3.3
+   Compiling camino v1.2.4
+   Compiling pyo3-macros-backend v0.29.0
+   Compiling sc-lint-directives v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-directives)
+   Compiling serde_derive v1.0.228
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling sc-lint-attributes v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-attributes)
+   Compiling time v0.3.53
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling tracing v0.1.44
+   Compiling thiserror v2.0.18
+   Compiling rusqlite v0.33.0
+   Compiling clap v4.6.1
+   Compiling rustls-webpki v0.103.13
+   Compiling serde v1.0.228
+   Compiling pyo3-macros v0.29.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling chrono v0.4.45
+   Compiling ulid v1.2.1
+   Compiling sc-observability-types v1.2.0
+   Compiling cargo_metadata v0.23.1
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling toml_edit v0.22.27
+   Compiling sc-observability v1.2.0
+   Compiling toml v0.8.23
+   Compiling atm-storage v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage)
+   Compiling sc-lint-boundary v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-boundary)
+   Compiling agent-team-mail-core v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-core)
+   Compiling atm-storage-rusqlite v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage-rusqlite)
+   Compiling atm-storage-sqlserver-proof v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage-sqlserver-proof)
+   Compiling atm-runtime v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-runtime)
+   Compiling atm-daemon-client v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-client)
+   Compiling atm-daemon-bootstrap v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-bootstrap)
+   Compiling atm-runtime-test-support v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-runtime-test-support)
+   Compiling atm-daemon v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon)
+   Compiling atm-graft v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-graft)
+   Compiling atm-graft-python v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-graft-python)
+   Compiling agent-team-mail v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.44s
+   Compiling getrandom v0.4.3
+   Compiling fastrand v2.4.1
+   Compiling futures-core v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling pem v3.0.6
+   Compiling serial_test_derive v3.5.0
+   Compiling yasna v0.5.2
+   Compiling sc-lint-attributes v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-attributes)
+   Compiling sc-lint-directives v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-directives)
+   Compiling sc-observability v1.2.0
+   Compiling atm-storage v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage)
+   Compiling atm-architecture v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-architecture)
+   Compiling atm-storage-rusqlite v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage-rusqlite)
+   Compiling atm-storage-sqlserver-proof v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-storage-sqlserver-proof)
+   Compiling atm-runtime v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-runtime)
+   Compiling atm-graft v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-graft)
+   Compiling futures-util v0.3.32
+   Compiling atm-runtime-test-support v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-runtime-test-support)
+   Compiling atm-daemon-bootstrap v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-bootstrap)
+   Compiling tempfile v3.27.0
+   Compiling rcgen v0.13.2
+   Compiling atm-daemon v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon)
+   Compiling sc-lint-boundary v0.1.0 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\sc-lint-boundary)
+   Compiling atm-daemon-client v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-daemon-client)
+   Compiling agent-team-mail v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm)
+   Compiling atm-graft-python v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-graft-python)
+   Compiling futures-executor v0.3.32
+   Compiling serial_test v3.5.0
+   Compiling agent-team-mail-core v1.3.1 (F:\github\atm-core-worktrees\evidence\phase-ai-crosshost-smoke\crates\atm-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.69s
+     Running unittests src\main.rs (target\debug\deps\atm-84e9f442722faf01.exe)
+
+running 140 tests
+test adapter_tests::exit_code_categories_map_to_distinct_values ... ok
+test adapter_tests::level_for_outcome_matches_documented_outcomes ... ok
+test adapter_tests::unknown_outcome_maps_to_warn ... ok
+test adapter_tests::tracing_level_filter_maps_off ... ok
+test adapter_tests::logger_level_override_accepts_debug ... ok
+test cli_surface::tests::markdown_surface_includes_help_text_and_tables ... ok
+test cli_surface::tests::json_surface_recurses_into_subcommands ... ok
+test cli_surface::tests::json_surface_excludes_auto_injected_help_and_version ... ok
+test adapter_tests::init_observability_fails_closed_when_atm_log_dir_is_invalid ... ok
+test commands::help::tests::concept_topics_are_case_insensitive ... ok
+test adapter_tests::non_atm_errors_fall_back_to_exit_code_one ... ok
+test commands::clear::tests::build_query_preserves_environment_identity_with_team_override ... ok
+test commands::doctor::tests::build_query_preserves_team_override ... ok
+test commands::clear::tests::cli_rejects_positional_mailbox_target_for_owner_only_clear ... ok
+test commands::help::tests::skills_topic_does_not_claim_installed_long_form_docs ... ok
+test commands::help::tests::overview_mentions_runtime_model ... ok
+test commands::help::tests::list_includes_topics_and_commands ... ok
+test commands::help::tests::subcommand_help_renders_clap_output ... ok
+test commands::doctor::tests::build_query_adds_recovery_for_invalid_team_override ... ok
+test commands::ack::tests::build_request_preserves_environment_identity_with_team_override ... ok
+test commands::help::tests::unknown_target_returns_error ... ok
+test commands::internal_nudge::tests::built_in_template_kind_selection_covers_six_paths ... ok
+test commands::internal_nudge::tests::built_in_templates_keep_ack_payloads_compact ... ok
+test commands::api::tests::openapi_contract_is_versioned_and_parseable ... ok
+test commands::ack::tests::build_request_preserves_team_override_and_environment_identity ... ok
+test commands::help::tests::installed_doc_root_returns_none_for_dev_build_layout ... ok
+test commands::api::tests::openapi_declares_the_implemented_doctor_exchange ... ok
+test commands::internal_nudge::tests::render_template_rejects_unknown_placeholder ... ok
+test commands::internal_nudge::tests::render_template_replaces_only_supported_placeholders ... ok
+test commands::list::tests::build_query_preserves_limit_and_filters ... ok
+test commands::ack::tests::build_request_rejects_empty_message_id ... ok
+test commands::log::tests::parse_relative_duration_rejects_multibyte_suffix_without_panicking ... ok
+test commands::log::tests::parse_match_expression_coerces_supported_json_scalars ... ok
+test commands::log::tests::filter_mode_requires_at_least_one_predicate ... ok
+test commands::log::tests::snapshot_query_defaults_limit_and_orders_newest_first ... ok
+test commands::list::tests::selection_mode_maps_cli_flags_to_expected_bucket ... ok
+test commands::log::tests::tail_query_preserves_explicit_limit_without_defaulting ... ok
+test commands::help::tests::tier_two_topics_include_concrete_examples_after_y2 ... ok
+test commands::peek::tests::selection_mode_maps_cli_flags_to_expected_bucket ... ok
+test commands::peer::tests::certificate_input_uses_the_semantic_certificate_error ... ok
+test commands::peer::tests::mutations_require_explicit_confirmation ... ok
+test commands::peer::tests::json_flag_selects_compact_machine_output ... ok
+test commands::log::tests::run_snapshot_fails_without_caller_context ... ok
+test commands::read::tests::build_query_prefers_cli_overrides_over_environment ... ok
+test commands::clear::tests::build_query_uses_environment_when_overrides_are_absent ... ok
+test commands::peer::tests::all_confirmed_peer_mutations_fail_closed_without_yes ... ok
+test commands::read::tests::deprecation_warnings_cover_legacy_aliases ... ok
+test commands::peer::tests::parses_complete_peer_control_plane_lifecycle ... ok
+test commands::read::tests::selection_mode_maps_cli_flags_to_expected_bucket ... ok
+test commands::send::tests::build_message_source_rejects_conflicting_input_flags ... ok
+test commands::send::tests::build_message_source_requires_one_input_channel ... ok
+test commands::read::tests::cli_rejects_positional_mailbox_target_for_owner_only_read ... ok
+test commands::peer::tests::peer_commands_mutate_and_read_an_isolated_durable_store ... ok
+test commands::help::tests::concept_topic_json_fields_point_at_installed_docs_when_available ... ok
+test commands::help::tests::installed_doc_root_resolves_symlinked_executable ... ok
+test commands::help::tests::doc_link_for_every_topic_resolves_in_source_and_installed_copy ... ok
+test commands::doctor::tests::execute_runs_direct_local_doctor_path_without_inherited_bootstrap_configuration ... ok
+test adapter_tests::logger_level_override_rejects_invalid_values ... ok
+test commands::internal_nudge::tests::internal_nudge_input_accepts_explicit_disabled_template_state ... ok
+test commands::internal_nudge::tests::internal_nudge_run_skips_delivery_when_template_is_explicitly_disabled ... ok
+test commands::internal_nudge::tests::internal_nudge_input_reads_resolved_envelope ... ok
+test commands::teams::tests::add_member_build_request_preserves_atm_and_member_home_dirs ... ok
+test commands::teams::tests::build_request_rejects_invalid_member_before_core ... ok
+test commands::teams::tests::build_request_rejects_invalid_team_before_core ... ok
+test commands::teams::tests::backup_build_request_preserves_team ... ok
+test commands::teams::tests::restore_build_request_preserves_from_path_and_dry_run ... ok
+test commands::teams::tests::set_nudge_template_build_request_rejects_empty_template_body_before_core ... ok
+test commands::teams::tests::set_nudge_template_build_request_rejects_invalid_kind_before_core ... ok
+test commands::internal_nudge::tests::tmux_sink_uses_double_enter_sequence ... ok
+test commands::list::tests::build_query_prefers_cli_overrides_over_environment ... ok
+test commands::list::tests::build_query_uses_environment_when_overrides_are_absent ... ok
+test commands::list::tests::build_query_accepts_as_without_ambient_identity ... ok
+test commands::teams::tests::update_member_build_request_preserves_target_and_caller_context ... ok
+test commands::ack::tests::build_request_rejects_whitespace_only_message_id ... ok
+test commands::log::tests::run_snapshot_succeeds_with_fake_observability_snapshot ... ok
+test commands::log::tests::run_snapshot_surfaces_observability_query_error ... ok
+test commands::members::tests::build_query_preserves_team_override ... ok
+test commands::members::tests::build_query_rejects_invalid_team_override ... ok
+test commands::peek::tests::build_query_prefers_cli_as_overrides_for_cross_agent_peek ... ok
+test commands::peek::tests::build_query_uses_environment_when_overrides_are_absent ... ok
+test composition::tests::cli_graft_daemon_and_read_preserve_one_chat_identity_contract ... ok
+test composition::tests::daemon_path_newtypes_reject_empty_paths_and_preserve_path_access ... ok
+test composition::tests::bootstrap_propagates_daemon_availability_failure ... ok
+test composition::tests::fake_transport_maps_protocol_error_envelope_to_atm_error ... ok
+test composition::tests::host_runtime_lock_path_follows_the_explicit_home_root ... ok
+test composition::tests::launch_gate_treats_windows_lock_and_sharing_violations_as_contention ... ok
+test composition::tests::gate_timeout_maps_to_launch_gate_rejected ... ok
+test composition::tests::launch_gate_busy_maps_to_typed_rejection ... ok
+test composition::tests::launch_gate_is_host_wide_across_different_socket_paths ... ok
+test commands::members::tests::build_query_uses_command_invocation_dir_for_live_cwd ... ok
+test commands::members::tests::run_lists_member_roster_without_daemon ... ok
+test commands::peek::tests::build_query_accepts_as_without_ambient_identity ... ok
+test commands::log::tests::run_snapshot_reads_real_retained_log_without_daemon ... ok
+test commands::ack::tests::build_request_uses_environment_when_overrides_are_absent ... ok
+test commands::read::tests::build_query_propagates_filters_and_exact_message_id ... ok
+test composition::tests::loopback_transport_send_persists_inbox_without_daemon ... ok
+test commands::read::tests::chat_id_and_equivalent_as_construct_the_same_read_caller ... ok
+test commands::read::tests::read_rejects_as_for_a_different_base_agent ... ok
+test commands::send::tests::build_request_preserves_cli_send_options ... ok
+test commands::send::tests::build_request_rejects_invalid_target_before_core ... ok
+test observability::tests::cli_observability_is_debuggable ... ok
+test commands::send::tests::build_request_rejects_as_for_a_different_base_agent ... ok
+test observability::tests::command_emit_failure_message_mentions_command_action_and_error ... ok
+test commands::send::tests::build_request_supports_file_with_trailing_inline_note ... ok
+test commands::send::tests::build_request_uses_environment_identity_even_with_team_override ... ok
+test observability::tests::fatal_emit_failure_message_mentions_stage_and_error ... ok
+test observability::tests::emit_fatal_error_executes_secondary_failure_path_without_panicking ... ok
+test commands::send::tests::build_request_uses_environment_when_overrides_are_absent ... ok
+test commands::send::tests::chat_id_and_equivalent_as_construct_the_same_caller ... ok
+test output::tests::doctor_peer_text_redacts_private_key_material ... ok
+test output::tests::bootstrap_trace_section_renders_doctor_output_block ... ok
+test output::tests::ack_output_json_shape_preserves_sent_reply_disposition ... ok
+test commands::teams::tests::add_member_defaults_member_home_dir_to_command_invocation_dir ... ok
+test commands::teams::tests::backup_and_restore_dry_run_execute_without_daemon ... ok
+test commands::teams::tests::clear_nudge_template_executes_through_shared_override_boundary ... ok
+test commands::teams::tests::disable_nudge_template_executes_through_shared_override_boundary ... ok
+test commands::teams::tests::set_nudge_template_executes_through_shared_override_boundary ... ok
+test commands::teams::tests::teams_run_lists_discovered_teams_without_daemon ... ok
+test commands::teams::tests::update_member_rejects_invalid_identity_before_mutation ... ok
+test commands::teams::tests::update_member_rejects_invalid_team_before_mutation ... ok
+test commands::teams::tests::update_member_requires_identity_from_environment ... ok
+test commands::teams::tests::update_member_requires_team_from_environment_not_positional_target ... ok
+test composition::tests::cli_composition_supports_graft_client_surface_without_daemon ... ok
+test composition::tests::doctor_projects_bootstrap_trace_into_report ... ok
+test composition::tests::loopback_transport_ack_appends_reply_without_daemon ... ok
+test composition::tests::loopback_transport_clear_removes_read_messages_without_daemon ... ok
+test composition::tests::loopback_transport_no_longer_emits_missing_config_notice_under_concurrency ... ok
+test composition::tests::loopback_transport_rejects_self_addressed_send_without_persisting_inbox ... ok
+test commands::read::tests::build_query_uses_environment_when_overrides_are_absent ... ok
+test composition::tests::loopback_transport_send_preserves_ack_and_task_metadata_without_daemon ... ok
+test composition::tests::resolve_command_runtime_context_reports_atm_home_unresolved ... ok
+test composition::tests::resolve_command_runtime_context_reports_atm_home_unresolved_and_logs ... ok
+test composition::tests::resolve_command_runtime_context_reuses_atm_home_across_sibling_worktrees ... ok
+test observability::tests::concrete_adapter_emits_queries_follows_and_reports_health ... ok
+test composition::tests::loopback_transport_doctor_reports_health_without_daemon ... ok
+test composition::tests::loopback_transport_phase_ad_messaging_regression_matrix_without_daemon ... ok
+test composition::tests::loopback_transport_read_rejects_cross_agent_target_without_daemon ... ok
+test composition::tests::loopback_transport_read_surfaces_messages_without_daemon ... ok
+test observability::tests::concrete_adapter_fails_closed_when_atm_log_dir_is_invalid ... ok
+test observability::tests::concrete_adapter_uses_host_scoped_default_log_path ... ok
+
+test result: ok. 140 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running unittests src\bin\atm_post_send_hook_fixture.rs (target\debug\deps\atm_post_send_hook_fixture-ad13a996b1d4bac4.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\openapi_surface.rs (target\debug\deps\openapi_surface-d334d57d47ebfd8d.exe)
+
+running 2 tests
+test reviewed_removals_allow_only_exact_removed_entries ... ok
+test openapi_surface_is_additions_only ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\peer_cli.rs (target\debug\deps\peer_cli-1e1527ccef801174.exe)
+
+running 4 tests
+test peer_certificate_commands_are_wired_through_the_real_cli ... ok
+test peer_mutations_reject_missing_yes_before_touching_durable_configuration ... ok
+test peer_interface_commands_are_wired_through_the_real_cli ... ok
+test peer_trust_commands_are_wired_through_the_real_cli ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.96s
+
+     Running tests\version_alignment.rs (target\debug\deps\version_alignment-a7d0ef25a10116a7.exe)
+
+running 1 test
+test atm_core_dep_version_matches_workspace_version ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_core-3162a142605ff886.exe)
+
+running 344 tests
+test address::tests::parses_and_renders_chat_qualified_addresses ... ok
+test address::tests::display_round_trips_bare_and_qualified_addresses ... ok
+test address::tests::rejects_path_traversal_and_separator_segments ... ok
+test address::tests::parses_agent_with_team ... ok
+test address::tests::rejects_invalid_team_segment ... ok
+test address::tests::parses_bare_agent_address ... ok
+test address::tests::accepts_valid_segment_characters ... ok
+test caller_context::tests::chat_id_precedence_is_explicit_as_then_flag_then_environment_then_identity ... ok
+test address::tests::rejects_empty_agent_name ... ok
+test boundary::store::tests::roster_store_doctor_trait_is_object_safe_and_compiles ... ok
+test ack::tests::remote_ack_is_the_canonical_host_qualified_write ... ok
+test api::tests::declared_oversized_http_body_is_rejected_before_decode ... ok
+test caller_context::tests::mutually_exclusive_chat_overrides_use_caller_context_error ... ok
+test caller_context::tests::chat_id_flag_with_ambient_identity_matches_qualified_as ... ok
+test api::tests::http_decode_rejects_body_kind_that_does_not_match_route ... ok
+test api::tests::http_clear_uses_no_content_with_outcome_metadata ... ok
+test api::tests::http_wire_body_is_route_schema_not_request_envelope ... ok
+test caller_context::tests::unqualified_as_and_empty_ambient_chat_explicitly_select_no_chat ... ok
+test caller_context::tests::explicit_overrides_win_over_environment ... ok
+test api::tests::http_decode_uses_method_and_path_to_choose_write_variant ... ok
+test api::tests::http_uds_request_round_trip_preserves_the_canonical_envelope ... ok
+test boundary::store::tests::config_doctor_trait_is_object_safe_and_compiles ... ok
+test caller_context::tests::mutating_context_ignores_identity_override_surface ... ok
+test api::tests::http_error_is_direct_error_body_with_non_success_status ... ok
+test api::tests::peer_sync_uses_the_peer_scoped_http_route_and_rejects_path_body_mismatch ... ok
+test caller_context::tests::invalid_explicit_team_uses_team_invalid_contract ... ok
+test clear::tests::env_guard_restores_original_value_after_panic ... ok
+test caller_context::tests::inspection_as_override_does_not_require_ambient_identity ... ok
+test clear::tests::clear_mail_targets_only_the_owner_mailbox ... ok
+test caller_context::tests::invalid_atm_chat_id_fails_before_dispatch ... ok
+test config::discovery::tests::command_looks_like_path_matches_path_like_programs_only ... ok
+test config::aliases::tests::resolve_agent_returns_canonical_name_when_alias_exists ... ok
+test config::aliases::tests::preferred_alias_returns_first_alias_for_canonical_name ... ok
+test caller_context::tests::qualified_ambient_identity_supplies_chat_id_when_environment_override_is_absent ... ok
+test config::aliases::tests::resolve_agent_name_rejects_invalid_alias_target ... ok
+test caller_context::tests::inspection_context_with_all_identity_inputs_absent_is_unavailable ... ok
+test caller_context::tests::missing_identity_fails_before_dispatch ... ok
+test caller_context::tests::lossy_identity_env_read_warns_and_falls_back_to_none ... ok
+test caller_context::tests::lossy_team_env_read_warns_and_falls_back_to_none ... ok
+test caller_context::tests::optional_env_reads_return_none_when_missing ... ok
+test caller_context::tests::qualified_identity_and_atm_chat_id_preserve_distinct_precedence_values ... ok
+test caller_context::tests::environment_supplies_context_when_overrides_absent ... ok
+test config::discovery::tests::normalize_post_send_hooks_rejects_blank_program_name ... ok
+test config::discovery::tests::normalize_post_send_hooks_keeps_bare_executables_for_path_lookup ... ok
+test config::discovery::tests::normalize_post_send_hooks_preserves_absolute_paths ... ok
+test delivery_execution::tests::emit_delivery_plan_transitions_use_non_claude_path_for_persisted_delivery ... ok
+test delivery_execution::tests::execute_delivery_plan_allows_non_claude_target_for_claude_harness ... ok
+test delivery_execution::tests::execute_delivery_plan_routes_recovered_message_sets_through_non_claude_outbound ... ok
+test delivery_policy::tests::append_failure_routes_to_post_send_hook_fallback_only ... ok
+test config::discovery::tests::normalize_post_send_hooks_rejects_empty_command_array ... ok
+test delivery_policy::tests::claude_success_path_keeps_compat_append_transition ... ok
+test config::tests::load_team_config_reports_missing_document_distinctly ... ok
+test delivery_policy::tests::coordinator_state_enum_remains_explicit ... ok
+test delivery_policy::tests::missing_roster_member_returns_actionable_recovery_contract ... ok
+test delivery_policy::tests::non_claude_success_path_skips_compat_append_transition ... ok
+test delivery_policy::tests::send_family_defaults_to_new_message_without_thread_fields ... ok
+test delivery_policy::tests::sqlite_failure_contract_includes_original_and_error_for_both_paths ... ok
+test delivery_policy::tests::send_family_uses_thread_update_for_threaded_send ... ok
+test delivery_policy::tests::state_machine_sequences_stay_auditable ... ok
+test config::discovery::tests::normalize_post_send_hooks_rejects_invalid_recipient_selector ... ok
+test doctor::tests::ordered_member_summaries_overlay_live_cwd_for_calling_member_only ... ok
+test config::discovery::tests::normalize_post_send_hooks_rejects_overlong_expanded_path ... ok
+test config::discovery::tests::normalize_post_send_hooks_resolves_relative_script_commands ... ok
+test doctor::tests::peer_config_doctor_projects_configuration_failure_without_aborting ... ok
+test doctor::tests::peer_config_doctor_projection_redacts_private_key_reference_from_store ... ok
+test doctor::tests::post_send_report_projects_external_override_without_message_content ... ok
+test config::discovery::tests::normalize_post_send_hooks_rejects_empty_recipient ... ok
+test config::tests::load_config_does_not_fall_back_to_process_cwd ... ok
+test config::tests::parse_team_config_defaults_missing_members_to_empty ... ok
+test config::tests::parse_team_config_accepts_object_members ... ok
+test config::tests::parse_team_config_rejects_non_object_root ... ok
+test config::tests::parse_team_config_rejects_non_array_members ... ok
+test config::tests::parse_team_config_preserves_root_extra_fields ... ok
+test config::tests::parse_team_config_accepts_string_member_compatibility ... ok
+test config::tests::parse_team_config_reports_json_syntax_errors_with_detail ... ok
+test config::tests::parse_team_config_skips_invalid_member_records ... ok
+test config::tests::load_config_reads_team_members_aliases_and_post_send_hooks ... ok
+test graft::tests::atm_graft_client_trait_is_object_safe ... ok
+test config::tests::load_config_rejects_invalid_team_member_name ... ok
+test config::tests::load_config_ignores_core_section_hook_keys ... ok
+test config::tests::invalid_default_team_composes_one_recovery_line ... ok
+test config::tests::load_config_rejects_jsonl_body_export_cap_above_maximum ... ok
+test config::tests::load_config_accepts_legacy_top_level_keys_for_compatibility ... ok
+test home::tests::command_invocation_dir_matches_process_working_directory ... ok
+test config::discovery::tests::normalize_post_send_hooks_expands_home_tilde_path ... ok
+test config::tests::load_config_rejects_legacy_post_send_filter_keys ... ok
+test config::tests::load_config_reads_jsonl_body_export_cap_and_allows_zero ... ok
+test config::tests::load_config_rejects_retired_post_send_hook_members_key ... ok
+test doctor::tests::run_doctor_ignores_missing_team_directory_without_roster_truth_error ... ok
+test config::tests::load_config_walks_upward_for_dot_atm_toml ... ok
+test config::tests::load_config_rejects_too_many_post_send_hooks ... ok
+test home::tests::host_db_dir_from_home_uses_fixed_atm_db_subtree ... ok
+test home::tests::host_log_dir_from_home_uses_fixed_atm_logs_subtree ... ok
+test doctor::tests::run_doctor_reports_invalid_team_override_as_address_error ... ok
+test home::tests::host_mail_db_path_from_home_uses_mail_db_filename ... ok
+test home::tests::host_runtime_dir_from_home_uses_fixed_atm_daemon_subtree ... ok
+test config::tests::load_config_reads_graft_enabled_and_defaults_true ... ok
+test home::tests::host_runtime_lock_path_uses_host_runtime_root ... ok
+test list::tests::list_contains_filter_drops_superseded_parent_context ... ok
+test home::tests::team_dir_from_home_rejects_path_traversal_segments ... ok
+test home::tests::inbox_path_from_home_rejects_path_traversal_segments ... ok
+test list::tests::logical_current_messages_preserves_parent_context_for_add_details ... ok
+test local_http::tests::capability_is_base64url_and_exactly_32_bytes ... ok
+test local_http::tests::local_http_metadata_failures_have_specific_error_codes ... ok
+test doctor::tests::run_doctor_ignores_missing_inboxes_directory ... ok
+test list::tests::list_mail_rejects_explicit_targets_missing_from_atm_roster ... ok
+test local_http::tests::record_rejects_non_loopback_endpoint ... ok
+test local_http::tests::revoked_record_rejects_its_capability ... ok
+test doctor::tests::run_doctor_ignores_team_config_parse_failure ... ok
+test mailbox::source::tests::discover_source_paths_rejects_invalid_agent_segment ... ok
+test list::tests::list_mail_uses_atm_roster_truth_for_explicit_targets ... ok
+test mailbox::source::tests::discover_source_paths_rejects_invalid_team_segment ... ok
+test mailbox::source::tests::origin_inbox_enumeration_error_is_mailbox_read_failure ... ok
+test doctor::tests::run_doctor_ignores_stale_mailbox_lock_scan ... ok
+test local_http::tests::owner_record_read_preserves_io_cause ... ok
+test mailbox::source::tests::resolve_target_canonicalizes_alias_before_mailbox_lookup ... ok
+test mailbox::source::tests::resolve_target_rejects_invalid_alias_target ... ok
+test config::discovery::tests::normalize_post_send_hooks_expands_bare_home_tilde ... ok
+test mailbox::surface::tests::dedupe_message_id_surface_keeps_distinct_ids ... ok
+test mailbox::surface::tests::dedupe_message_id_surface_keeps_later_position_on_timestamp_tie ... ok
+test mailbox::source::tests::load_source_files_reports_disappearing_mailbox ... ok
+test mailbox::surface::tests::dedupe_message_id_surface_keeps_newest_timestamp ... ok
+test doctor::tests::run_doctor_reports_degraded_observability_as_warning ... ok
+test mailbox::surface::tests::dedupe_message_id_surface_preserves_records_without_message_id ... ok
+test doctor::tests::run_doctor_reports_healthy_observability ... ok
+test graft::tests::receiver_rejects_a_forged_capability ... ok
+test list::tests::metadata_backed_contains_fetches_durable_body_only_for_surviving_summary_miss_rows ... ok
+test doctor::tests::run_doctor_reports_observability_health_errors ... ok
+test local_http::tests::owner_instance_id_is_read_from_the_runtime_owner_record ... ok
+test doctor::tests::run_doctor_uses_atm_roster_without_claude_roster_drift_checks ... ok
+test doctor::tests::run_doctor_reports_unavailable_observability_as_error ... ok
+test mailbox::source::tests::discover_origin_inboxes_ignores_primary_and_sorts_matches ... ok
+test graft::tests::loopback_receiver_round_trips_a_capability_authenticated_request ... ok
+test doctor::tests::run_doctor_reports_member_metadata_from_roster_truth ... ok
+test doctor::tests::run_doctor_reports_obsolete_identity_drift_as_warning ... ok
+test config::discovery::tests::normalize_post_send_hooks_expands_windows_style_home_tilde_path ... ok
+test config::tests::team_resolution_prefers_flag_then_env_and_never_falls_back_to_config ... ok
+test mailbox::tests::append_message_keeps_approved_machine_fields_top_level ... ok
+test doctor::health::tests::caller_values_win_over_process_environment ... ok
+test mailbox::tests::load_compat_mailbox_messages_rejects_oversized_mailbox_before_loading_contents ... ok
+test doctor::health::tests::falls_back_to_process_environment_when_caller_absent ... ok
+test mailbox::tests::load_compat_mailbox_items_rejects_unreadable_array_without_segmentable_objects ... ok
+test observability::tests::atm_json_number_accepts_valid_json_numbers ... ok
+test observability::tests::atm_json_number_equality_is_value_based ... ok
+test observability::tests::atm_json_number_rejects_non_json_numeric_values ... ok
+test observability::tests::log_field_key_round_trips_through_json ... ok
+test observability::tests::log_field_map_round_trips_with_last_key_wins ... ok
+test mailbox::source::tests::rediscover_and_validate_source_paths_reports_drift ... ok
+test observability::tests::log_mode_serde_round_trips_using_snake_case_wire_format ... ok
+test observability::tests::log_field_value_variants_round_trip_through_json ... ok
+test observability::tests::normalize_json_number_handles_point_index_zero_boundary ... ok
+test observability::tests::normalize_json_number_preserves_raw_string_for_large_exponents ... ok
+test mailbox::tests::append_message_persists_one_jsonl_record ... ok
+test observability::tests::normalize_json_number_preserves_raw_string_for_malformed_exponent ... ok
+test mailbox::store::tests::write_compat_mailbox_projection_rewrites_mailbox_array_with_only_new_messages ... ok
+test observability::tests::normalize_json_number_preserves_raw_string_for_max_i64_exponent ... ok
+test mailbox::tests::append_message_preserves_both_records_under_concurrent_writers ... ok
+test observability::tests::normalize_json_number_preserves_raw_string_for_min_i64_exponent ... ok
+test observability::tests::null_observability_reports_unavailable_health ... ok
+test observability::tests::null_observability_returns_empty_snapshot_and_tail ... ok
+test process::tests::process_is_alive_reports_current_process ... ok
+test mailbox::store::tests::write_compat_mailbox_projection_exports_retrieval_stub_when_config_cap_is_zero ... ok
+test protocol::tests::heartbeat_request_envelope_round_trips ... ok
+test protocol::tests::heartbeat_response_envelope_round_trips ... ok
+test protocol::tests::protocol_error_round_trip_preserves_exact_code_and_message ... ok
+test protocol::tests::request_envelope_round_trips_nested_list_caller_context ... ok
+test protocol::tests::request_envelope_round_trips_nested_send_caller_context ... ok
+test protocol::tests::runtime_status_snapshot_round_trips ... ok
+test persistence::tests::atomic_write_temp_paths_are_unique_across_rapid_writes ... ok
+test protocol::tests::daemon_socket_path_from_home_uses_atm_home_runtime_subtree ... ok
+test read::tests::actionable_selection_does_not_preserve_parent_context_for_supersede ... ok
+test read::tests::actionable_selection_prefers_terminal_thread_message ... ok
+test read::tests::actionable_selection_preserves_parent_context_for_add_details ... ok
+test mailbox::tests::load_compat_mailbox_items_reports_malformed_jsonl_lines_without_hiding_valid_messages ... ok
+test mailbox::tests::load_compat_mailbox_items_salvages_valid_messages_before_truncated_array_tail ... ok
+test mailbox::tests::append_message_appends_after_existing_jsonl_record ... ok
+test read::tests::chat_qualified_read_filters_source_and_metadata_surfaces_identically ... ok
+test read::tests::expired_ephemeral_message_is_cleaned_from_all_views ... ok
+test read::tests::idle_notification_sender_returns_none_for_malformed_json ... ok
+test read::tests::exact_message_id_bypasses_logical_current_collapse ... ok
+test mailbox::tests::load_compat_mailbox_messages_ignores_metadata_atm_but_keeps_foreign_metadata ... ok
+test read::tests::malformed_idle_notification_adjacent_to_valid_records_remains_readable_and_classifiable ... ok
+test read::tests::read_ephemeral_message_is_hidden_outside_view_all ... ok
+test read::seen_state::tests::load_missing_seen_state_returns_none ... ok
+test read::seen_state::tests::load_seen_state_rejects_invalid_team_segment ... ok
+test read::tests::successor_after_read_stays_actionable_for_add_details ... ok
+test mailbox::tests::load_compat_mailbox_messages_preserves_duplicate_message_ids_for_surface_canonicalization ... ok
+test read::seen_state::tests::save_seen_state_rejects_invalid_agent_segment ... ok
+test read::tests::successor_after_read_stays_actionable_for_supersede ... ok
+test read::wait::tests::wait_for_eligible_message_propagates_eligibility_errors ... ok
+test mailbox::tests::load_compat_mailbox_items_salvages_valid_messages_around_malformed_array_fragment ... ok
+test schema::agent_member::tests::canonical_home_dir_reads_typed_metadata ... ok
+test read::tests::task_filter_matches_logical_current_terminal_message_only ... ok
+test schema::agent_member::tests::compatible_home_dir_falls_back_to_legacy_cwd ... ok
+test schema::agent_member::tests::parse_legacy_cwd_record_maps_to_home_dir ... ok
+test schema::agent_member::tests::parse_full_claude_code_record_preserves_values_and_extra ... ok
+test schema::agent_member::tests::parse_name_and_agent_type_record_succeeds ... ok
+test schema::agent_member::tests::parse_name_only_record_defaults_optional_fields ... ok
+test schema::inbox_message::tests::ack_intent_fields_helpers_keep_the_three_field_invariant_together ... ok
+test schema::inbox_message::tests::alert_kind_round_trips_known_and_unknown_wire_values ... ok
+test schema::inbox_message::tests::atm_message_id_parses_from_ulid_string ... ok
+test mailbox::tests::load_compat_mailbox_messages_supports_json_array_mailboxes_with_atm_fields ... ok
+test schema::inbox_message::tests::atm_message_id_timestamp_matches_derived_timestamp ... ok
+test schema::inbox_message::tests::blank_task_id_is_rejected ... ok
+test schema::inbox_message::tests::legacy_ack_reply_metadata_prevents_requires_ack_requalification ... ok
+test schema::inbox_message::tests::legacy_pending_ack_without_ack_reply_metadata_defaults_requires_ack_true ... ok
+test schema::inbox_message::tests::message_id_is_optional ... ok
+test schema::inbox_message::tests::message_envelope_round_trips_with_current_inbox_shape ... ok
+test schema::inbox_message::tests::pending_ack_round_trips ... ok
+test schema::inbox_message::tests::shared_inbox_write_exports_full_body_at_exact_cap ... ok
+test read::tests::read_mail_rejects_explicit_cross_agent_targets_on_mutating_path ... ok
+test mailbox::tests::load_compat_mailbox_messages_supports_json_array_mailboxes_without_message_id ... ok
+test schema::inbox_message::tests::shared_inbox_write_exports_stub_above_cap ... ok
+test schema::inbox_message::tests::shared_inbox_write_keeps_full_body_for_claude_native_messages ... ok
+test schema::inbox_message::tests::shared_inbox_write_keeps_only_approved_immutable_fields ... ok
+test schema::inbox_message::tests::shared_inbox_write_keeps_parent_message_id_and_thread_mode_when_set ... ok
+test schema::inbox_message::tests::shared_inbox_write_strips_ack_workflow_fields_from_export ... ok
+test read::tests::read_query_new_rejects_invalid_target_before_command_execution ... ok
+test mailbox::tests::read_messages_jsonl_format_still_works ... ok
+test schema::inbox_message::tests::shared_inbox_write_strips_expires_at ... ok
+test schema::inbox_message::tests::shared_inbox_write_strips_metadata_atm_namespace ... ok
+test schema::inbox_message::tests::shared_inbox_write_stubs_oversized_atm_authored_messages ... ok
+test schema::inbox_message::tests::unknown_fields_are_preserved ... ok
+test read::tests::peek_mail_rejects_explicit_targets_missing_from_atm_roster ... ok
+test read::tests::peek_mail_with_runtime_does_not_persist_message_state_or_seen_watermark ... ok
+test send::hook::tests::error_hook_results_map_to_error_level ... ok
+test send::hook::tests::hook_cancellation_token_tracks_cancelled_state ... ok
+test send::hook::tests::hook_matches_recipient_exact_and_wildcard_values ... ok
+test send::hook::tests::load_post_send_config_uses_sender_roster_metadata_not_caller_cwd ... ok
+test send::hook::tests::parse_post_send_hook_result_accepts_valid_json_object ... ok
+test send::hook::tests::parse_post_send_hook_result_ignores_invalid_schema ... ok
+test send::hook::tests::parse_post_send_hook_result_ignores_oversized_stdout ... ok
+test send::hook::tests::post_send_event_preserves_the_canonical_source_chat_id ... ok
+test send::hook::tests::sender_config_root_prefers_home_dir_and_falls_back_to_cwd ... ok
+test send::input::tests::read_message_from_reader_accepts_small_utf8_input ... ok
+test send::input::tests::read_message_from_reader_rejects_empty_and_whitespace_input ... ok
+test send::input::tests::read_message_from_reader_rejects_non_utf8_input ... ok
+test read::tests::read_wait_propagates_contains_reload_errors_instead_of_timeout ... ok
+test mailbox::tests::load_compat_mailbox_messages_skips_malformed_lines ... ok
+test read::tests::metadata_backed_read_contains_fetches_durable_body_when_summary_misses ... ok
+test send::input::tests::read_message_from_reader_reports_unreadable_input ... ok
+test send::nudge_template::tests::qualified_sender_identity_preserves_chat_id ... ok
+test send::nudge_template::tests::qualified_sender_identity_uses_sender_and_team ... ok
+test send::input::tests::validate_message_text_rejects_oversized_inline_input ... ok
+test mailbox::tests::load_compat_mailbox_messages_use_top_level_compatibility_fields ... ok
+test send::nudge_template::tests::resolve_template_uses_explicit_override_body ... ok
+test send::nudge_template::tests::render_built_in_nudge_populates_placeholders ... ok
+test send::input::tests::read_message_from_reader_rejects_oversized_input ... ok
+test mailbox::tests::load_compat_mailbox_messages_treats_malformed_message_id_as_absent ... ok
+test send::self_address_tests::validate_non_self_recipient_rejects_case_variant_self_target ... ok
+test persistence::tests::atomic_write_bytes_succeeds_without_parent_directory_sync ... ok
+test send::tests::prepare_threaded_message_rejects_non_originating_sender ... ok
+test send::tests::prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread ... ok
+test send::tests::prepare_threaded_message_reopens_ack_for_ack_required_thread ... ok
+test send::post_write_tests::failed_peer_route_leaves_acknowledgement_source_pending ... ok
+test send::tests::duplicate_ulid_with_same_immutable_payload_is_idempotent ... ok
+test send::post_write_tests::host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid ... ok
+test send::tests::process_is_alive_reports_current_process ... ok
+test send::tests::named_plan_builder_proves_payload_equality_across_harnesses ... ok
+test send::tests::duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite ... ok
+test doctor::tests::client_context_reflects_caller_not_ambient_environment ... ok
+test send::tests::resolve_recipient_rejects_invalid_alias_target ... ok
+test send::file_policy::tests::rejects_oversized_non_repo_file_references_before_copying ... ok
+test send::tests::send_request_new_rejects_invalid_caller_team_before_command_execution ... ok
+test send::tests::send_request_new_rejects_invalid_recipient_before_command_execution ... ok
+test send::tests::sqlite_failure_for_claude_preserves_original_and_companion_error_payloads ... ok
+test send::tests::warning_render_keeps_catalog_recovery_singleton ... ok
+test read::seen_state::tests::save_and_load_seen_state_round_trips ... ok
+test send::tests::sqlite_failure_for_non_claude_preserves_original_and_companion_payloads ... ok
+test send::post_write_tests::conflicting_origin_ulid_stops_before_post_write_or_outbound_delivery ... ok
+test send::post_write_tests::canonical_writer_persists_before_router_owned_local_nudge ... ok
+test persistence::tests::atomic_write_bytes_replaces_existing_contents ... ok
+test doctor::tests::team_override_is_reflected_in_client_context ... ok
+test home::tests::atm_home_prefers_atm_home_env ... ok
+test team_admin::restore::tests::clear_restore_marker_missing_file_is_ok ... ok
+test home::tests::atm_home_rejects_overlong_atm_home_override ... ok
+test home::tests::atm_home_rejects_relative_atm_home_override ... ok
+test home::tests::host_log_dir_prefers_atm_log_dir_override ... ok
+test home::tests::team_and_inbox_paths_use_claude_team_layout ... ok
+test identity::tests::hook_identity_requires_runtime_identity_when_env_missing ... ok
+test identity::tests::resolves_hook_identity_from_environment ... ok
+test send::hook::tests::bounded_stdout_teardown_returns_promptly_for_completed_reader ... ok
+test identity::tests::resolves_sender_identity_from_environment ... ok
+test identity::tests::sender_identity_does_not_fall_back_to_config_when_env_missing ... ok
+test team_admin::restore::tests::prepare_restore_workspace_rejects_preexisting_staging_dir ... ok
+test protocol::tests::daemon_socket_path_ignores_atm_home ... ok
+test team_admin::tests::add_member_rejects_invalid_member_segment ... ok
+test team_admin::tests::add_member_rejects_invalid_team_segment ... ok
+test team_admin::tests::clear_nudge_template_override_deletes_row_and_reports_state ... ok
+test team_admin::tests::add_member_rejects_overlong_model_metadata ... ok
+test team_admin::tests::disable_nudge_template_override_saves_disabled_row_through_boundary ... ok
+test team_admin::tests::backup_root_from_home_rejects_invalid_team_segment ... ok
+test team_admin::tests::project_team_config_from_roster_rejects_invalid_persisted_agent_id ... ok
+test team_admin::tests::set_nudge_template_override_rejects_caller_team_mismatch ... ok
+test team_admin::tests::set_nudge_template_override_rejects_empty_body ... ok
+test team_admin::tests::set_nudge_template_override_rejects_invalid_kind ... ok
+test team_admin::tests::backup_team_rejects_invalid_team_segment ... ok
+test team_admin::tests::set_nudge_template_override_saves_row_through_boundary ... ok
+test team_admin::tests::restore_team_rejects_invalid_team_segment ... ok
+test team_admin::tests::tasks_dir_from_home_rejects_invalid_team_segment ... ok
+test service_runtime::tests::notification_logging_appends_directly_at_event_site ... ok
+test team_admin::tests::list_members_reports_atm_roster_truth_without_file_members ... ok
+test team_admin::tests::update_member_rejects_caller_missing_from_target_roster ... ok
+test text::tests::truncate_is_char_boundary_safe ... ok
+test text::tests::truncate_returns_original_when_shorter_than_limit ... ok
+test text::tests::wrap_lines_preserves_existing_line_breaks ... ok
+test text::tests::wrap_lines_wraps_on_word_boundaries ... ok
+test threading::tests::canonical_sender_identity_uses_from_field ... ok
+test threading::tests::ephemeral_helpers_use_expires_at ... ok
+test threading::tests::logical_current_envelope_appends_add_details_context ... ok
+test threading::tests::logical_current_envelope_resets_context_after_supersede ... ok
+test team_admin::tests::update_member_rejects_caller_team_mismatch_before_mutation ... ok
+test team_admin::tests::update_member_rejects_missing_existing_member ... ok
+test threading::tests::thread_index_resolves_root_terminal_and_ack_requirement ... ok
+test threading::tests::logical_current_envelope_truncates_oversized_add_details_chain ... ok
+test protocol::tests::daemon_socket_path_rejects_override ... ok
+test team_admin::restore::tests::restore_team_cleans_staging_and_preserves_live_config_on_inbox_stage_failure ... ok
+test team_admin::restore::tests::restore_task_state_from_backup_round_trips_highwatermark ... ok
+test team_admin::tests::backup_team_writes_atm_roster_audit_snapshot ... ok
+test service_runtime::tests::local_non_claude_outbound_rejects_oversized_payloads ... ok
+test send::graft_warning_tests::send_non_claude_success_delivers_original_via_outbound_boundary ... ok
+test send::graft_warning_tests::send_non_claude_warns_when_graft_post_send_delivery_fails ... ok
+test team_admin::restore::tests::restore_team_ignores_legacy_config_write_failure_hook ... ok
+test team_admin::restore::tests::restore_team_no_longer_projects_config_from_roster ... ok
+test send::hook::tests::built_in_fallback_dispatches_local_tmux_through_emitter ... ok
+test team_admin::restore::tests::restore_team_treats_marker_cleanup_failure_as_warning_only ... ok
+test team_admin::tests::add_member_bootstraps_roster_without_team_config_projection ... ok
+test team_admin::tests::add_member_normalizes_tmux_shape_when_pane_is_provided ... ok
+test team_admin::tests::add_member_preserves_session_scoped_tmux_target_syntax ... ok
+test send::hook::tests::external_post_send_hook_takes_precedence_over_built_in_nudge ... ok
+test team_admin::tests::list_teams_reports_atm_roster_truth ... ok
+test send::hook::tests::graft_fallback_dispatches_through_emitter_without_tmux_fields ... ok
+test team_admin::tests::update_member_repairs_blank_pane_ids_for_team_lead_and_arch_ctm_fixture ... ok
+test team_admin::tests::update_member_repairs_existing_roster_metadata_and_projects_config ... ok
+test send::hook::tests::mixed_success_hook_accounting_preserves_delivery_and_warning ... ok
+test send::tests::claude_harness_delivery_no_longer_has_append_degradation_path ... ok
+test send::tests::recovered_claude_harness_sqlite_failure_routes_via_non_claude_outbound ... ok
+test send::tests::self_addressed_dry_run_is_rejected_before_reporting_success ... ok
+test send::tests::self_addressed_plain_send_is_rejected_before_persistence ... ok
+test send::tests::self_addressed_task_send_is_rejected_before_persistence ... ok
+test send::tests::send_claude_harness_success_delivers_original_via_outbound_boundary ... ok
+test send::tests::send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary ... ok
+test send::tests::z11_empty_atm_roster_failure_is_actionable_without_fallback ... ok
+test send::tests::z6_post_write_warning_uses_store_backed_claude_roster ... ok
+
+test result: ok. 344 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+     Running tests\mailbox_locking.rs (target\debug\deps\mailbox_locking-92dc74b1dbf81c53.exe)
+
+running 14 tests
+test multi_source_read_and_clear_complete_without_deadlock ... ok
+test concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss ... ok
+test concurrent_same_recipient_sends_preserve_mixed_payloads_and_sqlite_state ... ok
+test read_contains_matches_summary_only_and_body_only_on_store_backed_path ... ok
+test ack_self_addressed_empty_host_target_rejects_without_mutating_source ... ok
+test peek_cross_agent_target_store_backed_keeps_read_and_ack_fields_unchanged ... ok
+test concurrent_normal_send_and_sqlite_only_delivery_complete_without_data_loss ... ok
+test concurrent_same_recipient_sends_preserve_sqlite_state ... ok
+test ack_persists_read_state_and_acknowledged_timestamp ... ok
+test list_contains_matches_body_only_on_store_backed_path ... ok
+test missing_team_config_no_longer_seeds_team_lead_notice_state ... ok
+test concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock ... ok
+test read_unread_output_stays_consistent_with_the_mutated_message ... ok
+test read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.46s
+
+     Running tests\boundary_enforcement.rs (target\debug\deps\boundary_enforcement-c4c101d99cc1671f.exe)
+
+running 29 tests
+test retired_error_contract_detector_rejects_duplicate_code_mapping_fixture ... ok
+test bare_daemon_boundary_module_resolves_crate_entry_points ... ok
+test acknowledgement_cannot_restore_a_second_write_pipeline ... ok
+test direct_atm_error_literal_detector_rejects_constructor_fixture ... ok
+test ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures ... ok
+test ai11_deletion_gate_detector_rejects_retired_windows_transport_ast_fixtures ... ok
+test missing_daemon_module_requires_retired_boundary_state ... ok
+test synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge ... ok
+test synthetic_daemon_boundary_relaxation_fixture_is_detected ... ok
+test retired_bare_daemon_boundary_records_are_checked_against_entry_points ... ok
+test missing_core_module_requires_retired_boundary_state ... ok
+test retired_error_contract_guard_exempts_only_its_own_fixture ... ok
+test canonical_write_router_rejects_all_mandated_negative_fixtures ... ok
+test boundary_toml_forbidden_edges_match_rust_guard_catalog ... ok
+test deleted_daemon_boundary_modules_must_be_retired ... ok
+test retired_core_boundary_records_must_not_name_live_dependents_and_must_be_historical_docs ... ok
+test daemon_boundary_tomls_must_not_allow_atm_storage_rusqlite ... ok
+test deleted_core_boundary_modules_must_be_retired ... ok
+test only_the_error_contract_module_may_define_an_atm_error_literal ... ok
+test atm_graft_must_not_depend_on_atm_storage_rusqlite ... ok
+test atm_must_not_depend_on_atm_storage_rusqlite ... ok
+test atm_runtime_must_not_depend_on_atm_daemon ... ok
+test atm_storage_rusqlite_must_not_depend_on_atm_runtime ... ok
+test atm_daemon_must_not_depend_on_atm_storage_rusqlite ... ok
+test atm_runtime_must_not_depend_on_atm_storage_rusqlite ... ok
+test production_code_cannot_restore_retired_error_contract_symbols ... ok
+test workspace_source_must_not_reintroduce_retired_peer_delivery_constructs ... ok
+test canonical_write_router_has_one_host_routing_decision ... ok
+test ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_daemon-270060194ac28288.exe)
+
+running 74 tests
+test composition::tests::runtime_lifecycle_happy_path_matches_documented_owner_sequence ... ok
+test composition::tests::runtime_lifecycle_rejects_illegal_transitions ... ok
+test https_transport::tests::fingerprints_are_exact_after_presentation_normalization ... ok
+test composition::tests::runtime_lifecycle_allows_only_documented_transitions ... ok
+test runtime_status_cache::tests::runtime_status_cache_heartbeat_publish_is_atomically_visible ... ok
+test runtime_status_cache::tests::runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking ... ok
+test runtime_status_cache::tests::runtime_status_cache_all_tracked_members_offline_are_unavailable ... ok
+test composition::tests::startup_failure_path_can_transition_back_to_stopped ... ok
+test https_transport::tests::peer_deadline_defaults_bound_every_network_leg ... ok
+test active_connection_registry::tests::reap_finished_dispatches_logs_and_continues_after_panic ... ok
+test active_connection_registry::tests::join_tracked_dispatches_escalates_after_panic ... ok
+test local_tcp_transport::tests::invalid_capability_is_rejected_before_router ... ok
+test shutdown_beacon::tests::wait_until_tripped_returns_true_after_trip ... ok
+test local_tcp_transport::tests::loopback_tcp_capability_reaches_shared_router ... ok
+test composition::tests::runtime_composition_fails_closed_when_runtime_storage_cannot_open ... ok
+test lifecycle_control::windows_tests::windows_reload_flag_is_shared_across_install_calls ... ok
+test lifecycle_control::windows_tests::windows_install_reuses_one_lifecycle_worker_until_shutdown ... ok
+test lifecycle_control::windows_tests::windows_terminate_request_wakes_waiters ... ok
+test lifecycle_control::windows_tests::windows_terminate_flag_is_shared_across_install_calls ... ok
+test non_claude_outbound_runtime::tests::daemon_non_claude_outbound_appends_typed_payload_record ... ok
+test https_transport::tests::invalid_enabled_interface_leaves_no_partial_listener ... ok
+test non_claude_outbound_runtime::tests::daemon_non_claude_outbound_rejects_payloads_above_size_cap ... ok
+test composition::tests::shutdown_lane_timeout_returns_without_waiting_for_worker_completion ... ok
+test https_transport::tests::exact_pinned_mtls_peer_reaches_the_shared_router ... ok
+test https_transport::tests::authenticated_peer_host_overwrites_wire_source_host_on_shared_write ... ok
+test https_transport::tests::untrusted_mtls_peer_is_rejected_before_router ... ok
+test runtime_health::tests::bounded_shutdown_step_returns_after_deadline ... ok
+test tests::heartbeat_retries_identity_conflict_after_old_pid_dies ... ok
+test tests::dispatcher_hydrates_unknown_members_from_team_roster_on_startup ... ok
+test tests::heartbeat_accepts_pid_takeover_when_previous_pid_is_dead ... ok
+test local_tcp_transport::tests::tcp_listener_drain_honors_the_force_cancel_deadline ... ok
+test lifecycle_control::tests::finish_lifecycle_shutdown_timeout_returns_without_waiting_for_join_helper_completion ... ok
+test runtime_health::tests::bounded_shutdown_step_does_not_exceed_retained_finalizer_cap ... ok
+test tests::heartbeat_rejects_live_pid_conflict ... ok
+test tests_host_ownership::daemon_host_runtime_lock_path_follows_the_explicit_home_root ... ok
+test tests::reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_state ... ok
+test tests_host_ownership::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release ... ok
+test tests_lifecycle::daemon_exit_code_mapping_matches_supervisor_contract ... ok
+test tests::reload_runtime_view_applies_updated_team_config_and_preserves_live_state ... ok
+test tests_lifecycle::daemon_shutdown_signals_for_test_are_isolated ... ok
+test tests_host_ownership::singleton_guard_is_host_wide_across_distinct_atm_home_roots ... ok
+test tests::doctor_projects_degraded_runtime_when_member_identity_conflicts_exist ... ok
+test tests::doctor_client_context_reflects_caller_over_daemon_launch_environment ... ok
+test tests::heartbeat_updates_status_cache_and_doctor_projection ... ok
+test tests::doctor_projects_unavailable_runtime_when_all_members_are_offline ... ok
+test tests::production_runtime_only_logs_notifications_after_successful_post_send_emission ... ok
+test tests::local_ipc_runtime_round_trips_doctor_requests_on_shared_transport ... ok
+test tests::runtime_composition_start_writes_retained_log_and_reports_healthy_observability ... ok
+test tests::runtime_root::authenticated_peer_ingress_uses_canonical_writer_without_reforwarding ... ok
+test tests::runtime_root::dispatcher_read_rejects_cross_agent_target_on_mutating_path ... ok
+test tests::runtime_root::dispatcher_send_after_add_member_roster_state_serializes_cleanly ... ok
+test tests::runtime_root::dispatcher_send_rejects_self_addressed_message_before_persistence ... ok
+test tests::runtime_root::failed_peer_route_returns_transport_error_after_canonical_persistence ... ok
+test tests::runtime_root::host_qualified_write_reaches_https_delivery_only_through_post_write_router ... ok
+test runtime_health::tests::heartbeat_only_insert_evicts_oldest_member_when_cache_is_full ... ok
+test tests::identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full ... ok
+test tests::heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown ... ok
+test tests::runtime_root::local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_roster_state ... ok
+test tests::runtime_root::local_ipc_runtime_round_trips_send_after_add_member_roster_state ... ok
+test tests::runtime_root::local_write_uses_post_write_router_without_peer_delivery ... ok
+test tests::runtime_root::peer_reconciliation::explicit_peer_sync_resends_one_bounded_immutable_write ... ok
+test tests::runtime_root::peer_error_response_is_returned_as_the_post_write_result ... ok
+test tests::runtime_root::peer_reconciliation::automatic_peer_sync_cooldown_is_bounded_and_expires ... ok
+test tests_host_ownership::singleton_guard_reports_stale_owner_record_failure ... ok
+test tests::runtime_root::peer_reconciliation::failed_peer_ack_keeps_source_pending_until_the_shared_write_retries ... ok
+test tests_host_ownership::singleton_guard_recovers_stale_owner_once_lock_is_released ... ok
+test tests_host_ownership::singleton_guard_rejects_stale_recovery_when_owner_token_changes ... ok
+test tests::runtime_root::threaded_dispatcher_send_after_add_member_roster_state_serializes_cleanly ... ok
+test tests_post_send_graft_warning::dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable ... ok
+test tests_lifecycle::daemon_shutdown_signal_install_reuses_shared_flags ... ok
+test tests_post_send_graft_warning::dispatcher_send_delivers_direct_graft_nudge_without_warning ... ok
+test tests_post_send_graft_warning::dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable ... ok
+test https_transport::tests::shutdown_bounds_an_incomplete_peer_handshake ... ok
+test https_transport::tests::shutdown_joins_an_incomplete_peer_request_within_its_deadline ... ok
+
+test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.03s
+
+     Running unittests src\main.rs (target\debug\deps\atm_daemon-7e0bd2b8a75a96b9.exe)
+
+running 8 tests
+test daemon_observability::tests::delivery_policy_outcomes_map_to_debug ... ok
+test daemon_observability::tests::daemon_outcomes_map_to_documented_levels ... ok
+test daemon_observability::tests::bootstrap_fails_closed_when_retained_log_dir_cannot_be_created ... ok
+test daemon_observability::tests::best_effort_flush_syncs_the_last_written_handle_without_reopening_the_active_path ... ok
+test daemon_observability::tests::retained_log_prune_runs_on_a_background_worker ... ok
+test daemon_observability::tests::bootstrap_writes_lifecycle_events_to_host_scoped_retained_log ... ok
+test daemon_observability::tests::bootstrap_fails_closed_when_atm_log_dir_is_invalid ... ok
+test daemon_observability::tests::bootstrap_fails_closed_when_retained_log_file_is_not_appendable ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_daemon_bootstrap-83366ba6e72bf59c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_daemon_client-59d1478186baa6b2.exe)
+
+running 12 tests
+test tests::auto_start_poll_backoff_is_bounded ... ok
+test tests::bootstrap_traceability_preserves_explicit_identity ... ok
+test tests::auto_start_publish_budget_covers_cold_daemon_bootstrap ... ok
+test compatibility::tests::matching_versions_transition_to_verified_connection ... ok
+test tests::local_ipc_deadline_handles_unsupported_timeout_per_platform_contract ... ok
+test compatibility::tests::compatibility_preflight_retains_canonical_request_shape ... ok
+test tests::local_ipc_deadline_preserves_non_unsupported_errors ... ok
+test tests::traceability_emits_pending_and_connected_for_retry_success ... ok
+test tests::launch_gate_rejected_error_uses_daemon_launch_gate_code ... ok
+test tests::traceability_emits_spawn_failure_error ... ok
+test tests::local_ipc_endpoint_is_host_scoped_not_atm_home_scoped ... ok
+test tests::publish_wait_retries_until_the_daemon_record_is_connectable ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_graft-17edf38748ab1faa.exe)
+
+running 13 tests
+test nudge_sink::tests::graft_nudge_sink_delivers_to_host_injector ... ok
+test nudge_sink::tests::graft_nudge_sink_returns_typed_error_envelope ... ok
+test runtime::tests::receiver_ready_latch_signals_and_waits ... ok
+test tests::session_stays_inactive_without_atm_config ... ok
+test tests::session_stays_inactive_when_graft_is_disabled ... ok
+test tests::client_routes_send_read_and_ack_over_transport ... ok
+test tests::load_config_drives_public_activation_path ... ok
+test runtime::tests::load_config_reads_graft_enabled_and_defaults ... ok
+test runtime::tests::receiver_listener_binds_at_expected_endpoint ... ok
+test runtime::tests::receiver_loop_returns_typed_error_when_injector_fails ... ok
+test runtime::tests::bounded_host_nudge_injector_timeout_does_not_wedge_future_delivery ... ok
+test runtime::tests::bounded_host_nudge_injector_caps_helper_growth_under_repeated_hangs ... ok
+test runtime::tests::receiver_loop_delivers_direct_nudge_and_returns_ack_under_repeated_load ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.56s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_graft_python-c63425a3c20b2348.exe)
+
+running 6 tests
+test tests::invalid_address_returns_a_python_error ... ok
+test tests::nudge_preserves_typed_source_chat_id ... ok
+test tests::python_nudge_constructor_validates_immutable_event_fields ... ok
+test tests::typed_address_round_trips_optional_chat_id ... ok
+test tests::receiver_callback_receives_the_canonical_typed_nudge ... ok
+test tests::receiver_callback_error_is_an_atm_error ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\python_api.rs (target\debug\deps\python_api-f7603702e284a46c.exe)
+
+running 1 test
+test python_binding_crate_is_linkable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_runtime-e1ba61eeafe0fb02.exe)
+
+running 3 tests
+test composition::tests::disabled_peer_configuration_requires_no_certificate ... ok
+test composition::tests::enabled_peer_configuration_rejects_missing_certificate ... ok
+test composition::tests::enabled_peer_configuration_accepts_complete_configuration ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_runtime_test_support-0c1da90b7aca1b53.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_storage-bdf6288cbd46d6c9.exe)
+
+running 15 tests
+test contract::tests::derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at ... ok
+test error::tests::detail_prevents_nested_recovery_guidance ... ok
+test contract::tests::security_reference_newtypes_reject_blank_deserialization ... ok
+test error::tests::member_not_found_preserves_its_stable_code ... ok
+test error::tests::adapter_cause_is_preserved_without_changing_the_error_code ... ok
+test validation::tests::validate_agent_at_team_accepts_safe_set_shapes_and_rejects_invalid_segments ... ok
+test types::tests::agent_id_deserialize_applies_validation ... ok
+test types::tests::agent_id_new_rejects_invalid_path_segments ... ok
+test types::tests::agent_identity_owns_chat_id_parsing_and_rendering ... ok
+test error::tests::serializes_only_the_error_contract ... ok
+test validation::tests::validate_path_segment_accepts_safe_set_and_rejects_reserved_characters ... ok
+test types::tests::iso_timestamp_from_str_round_trips_rfc3339_input ... ok
+test types::tests::agent_id_new_matches_agent_name_validation_for_valid_value ... ok
+test contract::tests::storage_traits_are_object_safe ... ok
+test validation::tests::validate_path_segment_rejects_empty_values ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_storage_rusqlite-daa2bfa554bf2022.exe)
+
+running 16 tests
+test peer_config_store::tests::peer_configuration_rejects_blank_secret_references_and_fingerprints ... ok
+test shared_db::tests::ensure_team_nudge_template_override_columns_migrates_legacy_empty_rows_to_disabled ... ok
+test roster_store::tests::save_roster_rejects_mismatched_team_names ... ok
+test nudge_template_override_store::tests::sqlite_override_store_returns_none_for_missing_row ... ok
+test nudge_template_override_store::tests::sqlite_override_store_saves_and_loads_override_row ... ok
+test nudge_template_override_store::tests::sqlite_override_store_disables_and_clears_rows ... ok
+test tests::load_message_rejects_invalid_team_row ... ok
+test tests::sqlite_backend_saves_loads_and_lists_rosters ... ok
+test tests::load_roster_rejects_invalid_model ... ok
+test nudge_template_override_store::tests::sqlite_override_store_returns_none_after_override_row_is_deleted ... ok
+test nudge_template_override_store::tests::sqlite_override_store_migrates_legacy_empty_rows_to_disabled ... ok
+test nudge_template_override_store::tests::sqlite_override_store_rejects_empty_override_body ... ok
+test peer_config_store::tests::peer_configuration_round_trips_without_private_key_material ... ok
+test tests::query_mailbox_metadata_rejects_invalid_task_id ... ok
+test tests::sqlite_backend_saves_loads_lists_and_deletes_messages ... ok
+test tests::recent_outbound_for_peer_filters_by_host_and_age ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running unittests src\lib.rs (target\debug\deps\atm_storage_sqlserver_proof-3ad6693b71100383.exe)
+
+running 1 test
+test tests::proof_types_implement_storage_traits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\sc_lint_attributes-9b94d4e9f1d460be.exe)
+
+running 6 tests
+test tests::parses_boundary_internal_only ... ok
+test tests::parses_boundary_allow_rule ... ok
+test tests::expansion_is_noop_for_supported_directives ... ok
+test tests::rejects_unknown_boundary_directive ... ok
+test tests::parses_boundary_forbid_external_impls ... ok
+test tests::parses_multiple_directives ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\sc_lint_boundary-f82c8ba31c1dfa70.exe)
+
+running 62 tests
+test tests::findings_report_text_is_stable ... ok
+test tests::default_rule_config_ignores_common_non_architectural_trait_paths ... ok
+test tests::does_not_flag_signature_only_self_return_as_self_loop ... ok
+test tests::does_not_flag_comparison_like_trait_impl_self_loop ... ok
+test tests::does_not_flag_constructor_factory_self_loop ... ok
+test tests::does_not_flag_newtype_factory_self_loop ... ok
+test tests::graph_export_serializes_tool_metadata ... ok
+test tests::does_not_flag_cross_module_acyclic_chain ... ok
+test tests::does_not_flag_receiver_only_method_as_self_loop ... ok
+test tests::node_id_rejects_empty_identifier - should panic ... ok
+test tests::normalizes_trait_paths_for_exact_policy_matching ... ok
+test tests::owner_id_rejects_empty_identifier - should panic ... ok
+test tests::fails_when_sc_lint_attribute_uses_unknown_scope ... ok
+test tests::fails_when_internal_only_item_is_public ... ok
+test tests::does_not_flag_acyclic_chain ... ok
+test tests::fails_when_sc_lint_attribute_has_mixed_valid_and_invalid_directives ... ok
+test tests::fails_when_sc_lint_attribute_has_no_allow_args ... ok
+test tests::fails_when_sc_lint_attribute_uses_unknown_boundary_directive ... ok
+test tests::rejects_unknown_rule_filter ... ok
+test tests::fails_when_sc_lint_attribute_is_invalid ... ok
+test tests::allows_internal_only_item_inside_own_module ... ok
+test tests::emits_both_inherent_and_trait_self_loop_findings_for_same_owner ... ok
+test tests::fails_when_external_module_is_missing ... ok
+test tests::exports_field_and_variant_nodes_for_type_graph ... ok
+test tests::does_not_flag_conversion_like_trait_impl_self_loop ... ok
+test tests::downgrades_trait_impl_self_loop ... ok
+test tests::fails_when_path_attribute_file_is_missing ... ok
+test tests::fails_when_internal_only_item_is_referenced_from_other_module ... ok
+test tests::fails_when_module_resolution_is_ambiguous ... ok
+test tests::analyze_workspace_counts_crate_targets ... ok
+test tests::does_not_promote_function_owned_references_into_module_cycles ... ok
+test tests::exports_graph_for_inline_and_file_modules_and_attributes ... ok
+test tests::allows_forbid_external_impls_trait_impl_in_same_module ... ok
+test tests::keeps_unsuppressed_method_flagged_when_other_method_is_allowed ... ok
+test tests::flags_discarded_wait_timeout_result_in_production_code ... ok
+test tests::keeps_recursive_value_container_cycle_when_only_one_owner_allows_it ... ok
+test tests::rejects_non_path_impl_owners ... ok
+test tests::preserves_full_trait_path_in_trait_impl_self_loop_messages ... ok
+test tests::reports_multi_owner_architectural_cycle_as_failure ... ok
+test tests::reports_multi_owner_cycle_across_modules_as_failure ... ok
+test tests::renders_graph_as_turtle ... ok
+test tests::resolves_self_prefixed_references ... ok
+test tests::resolves_mod_rs_module_layout ... ok
+test tests::flags_bare_wait_in_production_code ... ok
+test tests::resolves_path_attribute_module_layout ... ok
+test tests::resolves_super_prefixed_references ... ok
+test tests::suppresses_recursive_value_container_cycle_when_all_owners_allow_it ... ok
+test tests::reports_type_method_self_loop_as_non_fatal_signal ... ok
+test tests::suppresses_type_method_self_loop_when_allowed ... ok
+test tests::resolves_nested_submodule_inside_path_attribute_module ... ok
+test tests::fails_when_forbid_external_impls_trait_is_implemented_elsewhere ... ok
+test tests::flags_dirs_home_dir_without_override_check ... ok
+test tests::flags_cfg_attr_not_unix_allow_dead_code_in_production_code ... ok
+test tests::suppresses_type_method_self_loop_when_allowed_on_method ... ok
+test tests::does_not_flag_unix_only_production_code ... ok
+test tests::flags_hardcoded_tmp_path_in_test_scope ... ok
+test tests::passes_cfg_unix_gated_std_os_unix_import_in_production_code ... ok
+test tests::flags_set_var_in_test_scope ... ok
+test tests::flags_ungated_std_os_unix_import_in_production_code ... ok
+test tests::passes_dirs_home_dir_after_override_check ... ok
+test tests::passes_inspected_wait_timeout_result_in_production_code ... ok
+test tests::passes_temp_dir_usage_in_test_scope ... ok
+
+test result: ok. 62 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running unittests src\main.rs (target\debug\deps\sc_lint_boundary-fe582e15a7bc1658.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\sc_lint_directives-17cbd023e40ae51c.exe)
+
+running 5 tests
+test tests::rejects_unknown_boundary_directive ... ok
+test tests::parses_boundary_internal_only ... ok
+test tests::parses_multiple_directives ... ok
+test tests::parses_boundary_forbid_external_impls ... ok
+test tests::parses_boundary_allow_rule ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_daemon_bootstrap
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_daemon_client
+
+running 1 test
+test crates\atm-daemon-client\src\compatibility.rs - compatibility::Connection (line 19) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests atm_graft
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_graft_python
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_runtime_test_support
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_storage
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_storage_rusqlite
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests atm_storage_sqlserver_proof
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sc_lint_attributes
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sc_lint_boundary
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sc_lint_directives
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1,0 +1,25 @@
+Acknowledge one pending-ack message and emit a reply when required
+
+Usage: atm.exe ack [OPTIONS] <MESSAGE_ID> <REPLY>
+
+Arguments:
+  <MESSAGE_ID>
+
+
+  <REPLY>
+
+
+Options:
+      --stderr-logs
+          Route retained observability console logs to stderr.
+
+          ATM owns normal command stdout output; this flag opts the shared console sink into stderr so retained diagnostics do not pollute stdout.
+
+      --team <TEAM>
+
+
+      --json
+
+
+  -h, --help
+          Print help (see a summary with '-h')

@@ -52,8 +52,12 @@ failure.
 
 ## 3. Prove local Windows transport before peer work
 
-Use the public release clients only. Run each test first through `127.0.0.1`
-and then the Windows machine's advertised IPv4 address. For each address:
+Use the public release clients only. The local client transport is intentionally
+loopback-only, so run each test through the daemon's `127.0.0.1` endpoint.
+The Windows machine's advertised IPv4 address is reserved for the HTTPS peer
+interface after reciprocal trust is configured; do not treat it as a local CLI
+endpoint or substitute a raw TCP probe for delivery evidence. For the local
+loopback endpoint:
 
 1. send a no-ack message to a local test identity;
 2. read/peek its exact message ID;

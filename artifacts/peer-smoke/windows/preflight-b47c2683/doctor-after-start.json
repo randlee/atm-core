@@ -1,0 +1,64 @@
+{
+  "summary": {
+    "status": "healthy",
+    "message": "ATM doctor completed with healthy findings only",
+    "info_count": 1,
+    "warning_count": 0,
+    "error_count": 0
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "code": "ATM_OBSERVABILITY_HEALTH_OK",
+      "message": "shared observability active at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; logging health is healthy and query readiness is healthy. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=0 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+      "remediation": null
+    }
+  ],
+  "recommendations": [],
+  "environment": {
+    "atm_home": "C:\\Users\\rand.lee",
+    "atm_team": null,
+    "atm_identity": null,
+    "team_override": null
+  },
+  "client_context": {
+    "version": "1.3.1"
+  },
+  "observability": {
+    "active_log_path": "C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl",
+    "logging_state": "healthy",
+    "query_state": "healthy",
+    "maintenance": {
+      "state": "running",
+      "rotated_files_total": 0,
+      "pruned_files_total": 0,
+      "last_pass_at": null
+    },
+    "diagnostic": null,
+    "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=0 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never"
+  },
+  "post_send": {
+    "config_root": "F:\\github\\atm-core-worktrees\\evidence\\phase-ai-crosshost-smoke",
+    "external_rules": [],
+    "recipient_paths": []
+  },
+  "config": {
+    "findings": []
+  },
+  "mail_store": {
+    "findings": []
+  },
+  "roster_store": {
+    "findings": []
+  },
+  "daemon_runtime": {
+    "findings": [],
+    "peer_config": {
+      "configured_interface_count": 0,
+      "enabled_interface_count": 0,
+      "trusted_peer_count": 0,
+      "enabled_trusted_peer_count": 0
+    }
+  },
+  "drift_findings": []
+}
