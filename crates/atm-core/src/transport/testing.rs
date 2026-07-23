@@ -98,6 +98,9 @@ impl DaemonApiClient for LoopbackClientTransport {
                 doctor::run_doctor(query, self.observability.as_ref())
                     .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
+            RequestEnvelope::PeerSync(_) => Err(AtmError::daemon_unavailable(
+                "peer sync requires the daemon HTTPS transport",
+            )),
         };
         response.map(ApiResponse::new)
     }

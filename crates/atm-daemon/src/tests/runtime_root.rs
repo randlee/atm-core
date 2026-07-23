@@ -2,7 +2,9 @@ use super::*;
 use atm_core::ack::AckRequest;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
+use atm_core::protocol::{
+    PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+};
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
 use atm_core::team_admin::{AddMemberRequest, add_member_with_roster_store};
@@ -10,13 +12,15 @@ use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
 use atm_core::types::ReadSelection;
 use atm_core::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
 use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
-use atm_storage::TrustedPeer;
+use atm_storage::{PeerSyncPolicy, TrustedPeer};
+use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+mod peer_reconciliation;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
     write_test_local_ipc_request,
@@ -469,114 +473,6 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
             .expect("HTTPS delivery recording lock")
             .is_empty(),
         "a peer replay must not create a reverse peer delivery"
-    );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        "local-recipient",
-        &workspace_dir,
-    );
-    open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store()
-        .save_trusted_peer(&TrustedPeer {
-            host: "peer.example.test".parse().expect("peer host"),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-        })
-        .expect("save trusted peer");
-
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let origin_message_id = atm_core::schema::AtmMessageId::new();
-    let mut inbound = SendRequest::new(
-        atm_home.clone(),
-        workspace_dir.clone(),
-        "remote-sender".parse().expect("peer sender"),
-        "local-recipient@test-team",
-        "remote-team".parse().expect("peer team"),
-        SendMessageSource::Inline("please acknowledge".to_string()),
-        None,
-        true,
-        None,
-        false,
-    )
-    .expect("inbound peer request")
-    .with_origin_metadata(origin_message_id, atm_core::types::IsoTimestamp::now());
-    inbound.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
-    let inbound_response = ApiRouter::route(
-        &dispatcher,
-        ApiRequest::new(RequestEnvelope::Write(Box::new(inbound))),
-        AuthenticatedIngress::Peer,
-        RequestDeadline::after(Duration::from_secs(1)),
-    )
-    .expect("inbound peer write");
-    let source_message_id = match inbound_response.into_inner() {
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
-        other => panic!("expected inbound send response, got {other:?}"),
-    };
-
-    let ack = AckRequest {
-        home_dir: atm_home,
-        current_dir: workspace_dir,
-        caller_identity: "local-recipient".parse().expect("recipient"),
-        caller_team: TEST_TEAM.parse().expect("team"),
-        message_id: source_message_id,
-        reply_body: "acknowledged".to_string(),
-    };
-    let failing = Arc::new(FailingHttpsDelivery::default());
-    dispatcher
-        .install_https_transport(failing.clone())
-        .expect("install failing transport");
-    let error = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            ack.clone().into_write_request(),
-        )))
-        .expect_err("failed remote acknowledgement must return the transport error");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
-    assert_eq!(
-        failing
-            .attempted
-            .lock()
-            .expect("attempt recording lock")
-            .len(),
-        1,
-        "ack is one shared peer write attempt"
-    );
-
-    let succeeding = Arc::new(RecordingHttpsDelivery::default());
-    dispatcher
-        .install_https_transport(succeeding.clone())
-        .expect("replace test transport");
-    let retry = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(ack.into_write_request())))
-        .expect("source remains pending after failed peer acknowledgement");
-    assert!(matches!(
-        retry,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
-    ));
-    assert_eq!(
-        succeeding
-            .delivered
-            .lock()
-            .expect("delivery recording lock")
-            .len(),
-        1,
-        "the successful retry follows the same write/router path"
     );
 }
 

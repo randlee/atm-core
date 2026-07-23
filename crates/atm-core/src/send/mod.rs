@@ -25,6 +25,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
+    set_peer_outbound_write,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -36,11 +37,16 @@ pub(crate) mod file_policy;
 pub(crate) mod hook;
 pub mod input;
 #[doc(hidden)]
-pub mod nudge_template;
+pub(crate) mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+#[doc(hidden)]
+pub use nudge_template::{
+    default_template, qualified_sender_identity as qualified_nudge_sender_identity,
+    render_resolved_built_in_nudge,
+};
 pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -783,34 +789,56 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     requires_ack: bool,
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
-    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
+    let mut envelope = build_send_envelope(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
+        timestamp,
+        requires_ack,
+        task_id,
+    );
     if request.dry_run {
-        let mut envelope = InboxMessage {
-            from: context.canonical_sender.clone(),
-            source_chat_id: request.caller_chat_id.clone(),
-            text: body.to_string(),
-            timestamp,
-            read: false,
-            source_team: Some(request.caller_team.clone()),
-            destination_chat_id: request
-                .to
-                .as_ref()
-                .and_then(|address| address.chat_id.clone()),
-            summary: Some(summary.to_string()),
-            message_id: Some(message_id),
-            requires_ack: ack_intent.requires_ack,
-            pending_ack_at: ack_intent.pending_ack_at,
-            acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: request.acknowledges_message_id,
-            parent_message_id: request.parent_message_id,
-            thread_mode: request.thread_mode,
-            expires_at: request.expires_at,
-            task_id: task_id.clone(),
-            extra: Map::new(),
-        };
-        set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
         return Ok(DeliveryPersistenceResult::persisted(envelope));
     }
+    if request.authenticated_source_host.is_none()
+        && let Some(host) = request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+    {
+        let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
+        let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
+            AtmError::mailbox_write("failed to serialize immutable peer outbound write")
+        })?;
+        set_peer_outbound_write(&mut envelope, host, request_json);
+    }
+    persist_message(
+        runtime,
+        &request.home_dir,
+        &context.delivery_snapshot,
+        &context.inbox_path,
+        &envelope,
+        false,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the immutable envelope is assembled from the canonical write fields"
+)]
+fn build_send_envelope(
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+) -> InboxMessage {
+    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
     let mut envelope = InboxMessage {
         from: context.canonical_sender.clone(),
         source_chat_id: request.caller_chat_id.clone(),
@@ -835,15 +863,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         extra: Map::new(),
     };
     set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
-    let persistence = persist_message(
-        runtime,
-        &request.home_dir,
-        &context.delivery_snapshot,
-        &context.inbox_path,
-        &envelope,
-        false,
-    )?;
-    Ok(persistence)
+    envelope
 }
 
 fn emit_send_command_event(

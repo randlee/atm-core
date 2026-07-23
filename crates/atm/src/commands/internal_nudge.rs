@@ -12,7 +12,9 @@ use atm_core::graft::{
     graft_receiver_record_path_from_home,
 };
 use atm_core::home;
-use atm_core::send::nudge_template;
+#[cfg(test)]
+use atm_core::send::qualified_nudge_sender_identity;
+use atm_core::send::render_resolved_built_in_nudge;
 use clap::Args;
 
 use crate::observability::CliObservability;
@@ -38,9 +40,7 @@ pub struct InternalNudgeCommand;
 impl InternalNudgeCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
-        let Some(template) =
-            nudge_template::render_resolved_built_in_nudge(&input.event, &input.template)?
-        else {
+        let Some(template) = render_resolved_built_in_nudge(&input.event, &input.template)? else {
             return Ok(());
         };
         match input.sink_target {
@@ -79,10 +79,7 @@ impl InternalNudgeInput {
     #[cfg(test)]
     fn render_values(&self) -> BTreeMap<&'static str, String> {
         BTreeMap::from([
-            (
-                "from",
-                nudge_template::qualified_sender_identity(&self.event),
-            ),
+            ("from", qualified_nudge_sender_identity(&self.event)),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
             ("description", self.event.description.clone()),
@@ -263,7 +260,7 @@ mod tests {
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
         ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
     };
-    use atm_core::send::nudge_template::default_template;
+    use atm_core::send::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
     use tempfile::tempdir;

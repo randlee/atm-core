@@ -132,6 +132,11 @@ fn canonical_write_router_has_one_host_routing_decision() {
         visitor.post_write_router_implementations, 1,
         "AI.12 requires exactly one production PostWriteRouter implementation"
     );
+    assert_eq!(
+        visitor.reconciliation_delivery_calls(),
+        1,
+        "AI.16 permits exactly one bounded reconciliation delivery callsite"
+    );
     assert!(
         visitor.violations().is_empty(),
         "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
@@ -279,6 +284,7 @@ struct HostRoutingFunction {
     accesses_host: bool,
     calls_delivery: bool,
     peer_delivery_calls: usize,
+    reconciliation_delivery_calls: usize,
     https_transport_bindings: BTreeSet<String>,
     function_bindings: BTreeMap<String, FunctionBinding>,
 }
@@ -361,7 +367,15 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
         let local_nudge = method.starts_with("emit_local_post_write");
-        let peer_delivery = method == "deliver_to_peer"
+        let reconciliation_delivery = method == "deliver"
+            && self.is_runtime_dispatcher_source()
+            && self.current_function.is_some_and(|index| {
+                self.functions
+                    .get(index)
+                    .is_some_and(|function| function.name == "reconcile_after_success")
+            });
+        let peer_delivery = reconciliation_delivery
+            || method == "deliver_to_peer"
             || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
         if (peer_delivery || local_nudge)
             && let Some(function) = self.current_function_mut()
@@ -370,6 +384,9 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             function.calls_delivery = true;
             if peer_delivery {
                 function.peer_delivery_calls += 1;
+            }
+            if reconciliation_delivery {
+                function.reconciliation_delivery_calls += 1;
             }
         }
         syn::visit::visit_expr_method_call(self, node);
@@ -587,11 +604,22 @@ impl HostRoutingVisitor {
             .sum()
     }
 
+    fn reconciliation_delivery_calls(&self) -> usize {
+        self.functions
+            .iter()
+            .map(|function| function.reconciliation_delivery_calls)
+            .sum()
+    }
+
     fn violations(&self) -> Vec<String> {
         let mut violations = self
             .functions
             .iter()
-            .filter(|function| function.calls_delivery && !function.is_post_write_dispatch)
+            .filter(|function| {
+                function.calls_delivery
+                    && !function.is_post_write_dispatch
+                    && function.reconciliation_delivery_calls == 0
+            })
             .map(|function| {
                 format!(
                     "delivery call outside PostWriteRouter::dispatch in {}",
@@ -612,6 +640,12 @@ impl HostRoutingVisitor {
         self.source_path
             .as_ref()
             .is_none_or(|path| !is_test_only_source(path))
+    }
+
+    fn is_runtime_dispatcher_source(&self) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+        })
     }
 }
 
@@ -897,20 +931,15 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
-    let local_ipc = root.join("crates/atm-daemon/src/local_ipc_transport.rs");
+    let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
     let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
-    let daemon_lib_source = read_source(&daemon_lib);
+    let daemon_lib_source = read_source(&daemon_lib).replace("\r\n", "\n");
     assert!(
-        daemon_lib_source.contains("#[cfg(not(windows))]")
-            && daemon_lib_source.contains("mod local_ipc_transport;"),
-        "AI.11 permits UDS only behind the Unix-only local_ipc_transport module gate"
-    );
-    assert!(
-        daemon_lib_source.contains("#[cfg(windows)]")
-            && daemon_lib_source
-                .contains("pub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
-        "Windows must select the loopback-TCP local transport adapter"
+        daemon_lib_source.contains("mod local_tcp_transport;")
+            && daemon_lib_source.contains("#[cfg(not(windows))]\nmod local_ipc_transport;")
+            && daemon_lib_source.contains("#[cfg(windows)]\npub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
+        "Unix keeps its UDS HTTP ingress while Windows selects the TCP HTTP adapter"
     );
 
     let retired = ai11_guarded_workspace_sources(&root)
@@ -955,6 +984,17 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     );
 
     let local_tcp_source = read_source(&local_tcp);
+    let local_ipc_source = read_source(&local_ipc_worker);
+    assert!(
+        local_tcp_source.contains("pub(crate) struct LocalIpcServerTransportAdapter"),
+        "the Windows local HTTP adapter must remain implemented by loopback TCP"
+    );
+    for http_primitive in ["read_http_request", "write_http_response"] {
+        assert!(
+            local_tcp_source.contains(http_primitive) && local_ipc_source.contains(http_primitive),
+            "Unix UDS and loopback TCP must use the same HTTP primitive `{http_primitive}`"
+        );
+    }
     let non_loopback_binds = local_tcp_source
         .lines()
         .filter(|line| line.contains("TcpListener::bind"))
@@ -966,7 +1006,6 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     );
     let adapter_sources = [
         ("local TCP", read_source(&local_tcp)),
-        ("local IPC", read_source(&local_ipc)),
         ("peer HTTPS", read_source(&peer_https)),
     ];
     for forbidden in [

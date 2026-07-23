@@ -28,8 +28,10 @@ use atm_storage::contract::{
 use atm_storage::schema::MessageEnvelope;
 #[cfg(test)]
 use atm_storage::schema::{AtmMessageId, ThreadMode};
-use atm_storage::types::{AgentName, TeamName};
-use atm_storage::{AtmError, IsoTimestamp, StorageFactory, StorageHandles};
+use atm_storage::types::{AgentName, HostName, IsoTimestamp as StorageIsoTimestamp, TeamName};
+use atm_storage::{
+    AtmError, IsoTimestamp, OutboundMessageQuery, StorageFactory, StorageHandles, StoredPeerWrite,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
@@ -38,6 +40,62 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub(crate) struct SqliteWriterLockGuard {
     connection: Connection,
+}
+
+#[derive(Debug)]
+pub(crate) struct SqliteOutboundMessageQuery {
+    db: Arc<SharedDb>,
+}
+
+impl SqliteOutboundMessageQuery {
+    fn new(db: Arc<SharedDb>) -> Self {
+        Self { db }
+    }
+}
+
+impl OutboundMessageQuery for SqliteOutboundMessageQuery {
+    fn recent_outbound_for_peer(
+        &self,
+        peer: &HostName,
+        not_before: StorageIsoTimestamp,
+        limit: std::num::NonZeroU16,
+    ) -> Result<Vec<StoredPeerWrite>, AtmError> {
+        self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT json_extract(envelope_json, '$.peerOutbound.request')
+                 FROM mail_messages
+                 WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
+                   AND message_at >= ?2
+                 ORDER BY message_at ASC, message_key ASC
+                 LIMIT ?3",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare outbound peer message query", error)
+                })?;
+            statement
+                .query_map(
+                    params![
+                        peer.as_str(),
+                        not_before.to_string(),
+                        i64::from(limit.get())
+                    ],
+                    |row| row.get::<_, String>(0),
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to query outbound peer messages", error)
+                })?
+                .map(|row| {
+                    row.map(|request_json| StoredPeerWrite { request_json })
+                        .map_err(|error| {
+                            self.db.error("failed to read outbound peer message", error)
+                        })
+                })
+                .collect()
+        })
+    }
 }
 
 impl Drop for SqliteWriterLockGuard {
@@ -364,6 +422,7 @@ pub struct SqliteStorageBackend {
     roster_store: Arc<SqliteRosterStore>,
     nudge_template_override_store: Arc<SqliteNudgeTemplateOverrideStore>,
     peer_config_store: Arc<SqlitePeerConfigStore>,
+    outbound_message_query: Arc<SqliteOutboundMessageQuery>,
 }
 
 /// Concrete SQLite selection owned by the SQLite backend and consumed only at
@@ -400,6 +459,7 @@ impl StorageFactory for SqliteStorageFactory {
             backend.roster_store(),
             backend.nudge_template_override_store(),
             backend.peer_config_store(),
+            backend.outbound_message_query(),
         ))
     }
 }
@@ -421,6 +481,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -434,6 +495,7 @@ impl SqliteStorageBackend {
                 Arc::clone(&db),
             )),
             peer_config_store: Arc::new(SqlitePeerConfigStore::new(Arc::clone(&db))),
+            outbound_message_query: Arc::new(SqliteOutboundMessageQuery::new(Arc::clone(&db))),
         })
     }
 
@@ -468,6 +530,10 @@ impl SqliteStorageBackend {
 
     pub fn peer_config_store(&self) -> Arc<dyn PeerConfigStore + Send + Sync> {
         self.peer_config_store.clone()
+    }
+
+    pub fn outbound_message_query(&self) -> Arc<dyn OutboundMessageQuery + Send + Sync> {
+        self.outbound_message_query.clone()
     }
 
     #[cfg(test)]
@@ -530,15 +596,17 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
+    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AgentType, Message, MessageKey, MessageQuery, RosterHarness, RosterMember,
         RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::MessageEnvelope;
-    use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
-    use chrono::Utc;
+    use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
+    use chrono::{Duration, Utc};
     use rusqlite::params;
-    use serde_json::Map;
+    use serde_json::{Map, json};
+    use std::num::NonZeroU16;
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -576,6 +644,71 @@ mod tests {
                 extra: Map::new(),
             },
         }
+    }
+
+    fn peer_outbound_message(
+        key: &str,
+        host: &str,
+        request_json: &str,
+        timestamp: IsoTimestamp,
+    ) -> Message {
+        let mut message = message(key, request_json);
+        message.envelope.timestamp = timestamp;
+        message.envelope.extra.insert(
+            "peerOutbound".to_string(),
+            json!({ "host": host, "request": request_json }),
+        );
+        message
+    }
+
+    #[test]
+    fn recent_outbound_for_peer_filters_by_host_and_age() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let now = Utc::now();
+        let not_before = IsoTimestamp::from_datetime(now - Duration::minutes(5));
+        let target: HostName = "peer.example.test".parse().expect("target host");
+
+        let retained = peer_outbound_message(
+            "atm:peer-retained",
+            target.as_str(),
+            "retained-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(1)),
+        );
+        let stale = peer_outbound_message(
+            "atm:peer-stale",
+            target.as_str(),
+            "stale-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(6)),
+        );
+        let other_peer = peer_outbound_message(
+            "atm:other-peer",
+            "other.example.test",
+            "other-peer-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(1)),
+        );
+        let local = message("atm:local", "local-request");
+
+        let store = backend.message_store();
+        for message in [&retained, &stale, &other_peer, &local] {
+            store.save_message(message).expect("save message");
+        }
+
+        let result = backend
+            .outbound_message_query()
+            .recent_outbound_for_peer(
+                &target,
+                not_before,
+                NonZeroU16::new(10).expect("nonzero limit"),
+            )
+            .expect("query peer outbound writes");
+
+        assert_eq!(
+            result,
+            vec![StoredPeerWrite {
+                request_json: "retained-request".to_string(),
+            }],
+            "only recent immutable writes for the requested peer are eligible"
+        );
     }
 
     #[test]
