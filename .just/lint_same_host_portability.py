@@ -22,7 +22,7 @@ SHARED_HOST_SHELL_FILES = (
     "crates/atm-daemon/src/composition.rs",
 )
 ADAPTER_FILES = (
-    "crates/atm-daemon/src/local_ipc_transport.rs",
+    "crates/atm-daemon/src/local_tcp_transport.rs",
     "crates/atm-daemon/src/lifecycle_control.rs",
     "crates/atm-daemon/src/host_ownership.rs",
 )

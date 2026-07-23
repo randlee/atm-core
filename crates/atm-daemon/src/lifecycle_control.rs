@@ -9,6 +9,7 @@ use signal_hook::SigId;
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 
+#[cfg(test)]
 const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 // Keep the Unix wake worker responsive to lifecycle signals without turning the
 // blocking read loop into a tight poll when no wake byte is pending.
@@ -32,6 +33,7 @@ pub(crate) struct LifecycleControlSourceAdapter {
     reload: Arc<AtomicBool>,
     #[cfg_attr(windows, allow(dead_code))]
     state_change: Arc<LifecycleStateChange>,
+    #[cfg(test)]
     observability: SubsystemObservability,
 }
 
@@ -44,6 +46,10 @@ struct SharedLifecycleControlState {
 }
 
 #[derive(Debug)]
+#[allow(
+    dead_code,
+    reason = "production retains the signal worker registration for the daemon lifetime; test-only teardown reads its handles"
+)]
 struct LifecycleWorkerRegistration {
     shutdown: Arc<AtomicBool>,
     signal_ids: Vec<SigId>,
@@ -76,7 +82,7 @@ impl LifecycleStateChange {
         Ok(())
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg(test)]
     fn snapshot(&self) -> Result<u64, AtmError> {
         self.generation
             .lock()
@@ -170,6 +176,7 @@ impl LifecycleControlSourceAdapter {
             terminate: Arc::clone(&shared.terminate),
             reload: Arc::clone(&shared.reload),
             state_change: Arc::clone(&shared.state_change),
+            #[cfg(test)]
             observability,
         })
     }
@@ -195,11 +202,12 @@ impl LifecycleControlSourceAdapter {
         self.reload.swap(false, Ordering::SeqCst)
     }
 
-    #[cfg_attr(windows, allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn event_generation(&self) -> Result<u64, AtmError> {
         self.state_change.snapshot()
     }
 
+    #[cfg(test)]
     pub(crate) fn notify_state_change(&self) -> Result<(), AtmError> {
         self.state_change.notify()
     }
@@ -227,6 +235,7 @@ impl LifecycleControlSourceAdapter {
         Arc::clone(&self.terminate)
     }
 
+    #[cfg(test)]
     pub(crate) fn shutdown_worker_with_timeout(&self) -> Result<(), AtmError> {
         let Some(worker) = take_lifecycle_worker()? else {
             return Ok(());
@@ -358,6 +367,7 @@ fn install_platform_hooks(
     })
 }
 
+#[cfg(test)]
 fn take_lifecycle_worker() -> Result<Option<LifecycleWorkerRegistration>, AtmError> {
     let _guard = INSTALL_LOCK
         .lock()
@@ -368,6 +378,7 @@ fn take_lifecycle_worker() -> Result<Option<LifecycleWorkerRegistration>, AtmErr
     Ok(shared.as_mut().and_then(|shared| shared.worker.take()))
 }
 
+#[cfg(test)]
 fn spawn_lifecycle_join_helper(
     worker: LifecycleWorkerRegistration,
 ) -> Result<
@@ -387,6 +398,7 @@ fn spawn_lifecycle_join_helper(
     Ok((join_helper, result_rx))
 }
 
+#[cfg(test)]
 fn finish_lifecycle_shutdown(
     observability: &SubsystemObservability,
     join_helper: std::thread::JoinHandle<()>,
@@ -400,6 +412,7 @@ fn finish_lifecycle_shutdown(
     )
 }
 
+#[cfg(test)]
 fn finish_lifecycle_shutdown_with_deadline(
     observability: &SubsystemObservability,
     join_helper: std::thread::JoinHandle<()>,
@@ -457,6 +470,7 @@ fn finish_lifecycle_shutdown_with_deadline(
     }
 }
 
+#[cfg(test)]
 fn join_completed_lifecycle_helper(
     join_helper: std::thread::JoinHandle<()>,
 ) -> Result<(), AtmError> {
