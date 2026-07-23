@@ -931,14 +931,15 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     let root = workspace_root();
     let daemon_lib = root.join("crates/atm-daemon/src/lib.rs");
     let local_tcp = root.join("crates/atm-daemon/src/local_tcp_transport.rs");
+    let local_ipc_worker = root.join("crates/atm-daemon/src/local_ipc_transport/request_worker.rs");
     let peer_https = root.join("crates/atm-daemon/src/https_transport.rs");
 
     let daemon_lib_source = read_source(&daemon_lib);
     assert!(
         daemon_lib_source.contains("mod local_tcp_transport;")
-            && daemon_lib_source.contains("LocalHttpServerTransportAdapter")
-            && !daemon_lib_source.contains("local_ipc_transport"),
-        "all platforms must use the one local HTTP loopback transport adapter"
+            && daemon_lib_source.contains("#[cfg(not(windows))]\nmod local_ipc_transport;")
+            && daemon_lib_source.contains("#[cfg(windows)]\npub(crate) use local_tcp_transport::LocalIpcServerTransportAdapter;"),
+        "Unix keeps its UDS HTTP ingress while Windows selects the TCP HTTP adapter"
     );
 
     let retired = ai11_guarded_workspace_sources(&root)
@@ -983,6 +984,17 @@ fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() {
     );
 
     let local_tcp_source = read_source(&local_tcp);
+    let local_ipc_source = read_source(&local_ipc_worker);
+    assert!(
+        local_tcp_source.contains("pub(crate) struct LocalIpcServerTransportAdapter"),
+        "the Windows local HTTP adapter must remain implemented by loopback TCP"
+    );
+    for http_primitive in ["read_http_request", "write_http_response"] {
+        assert!(
+            local_tcp_source.contains(http_primitive) && local_ipc_source.contains(http_primitive),
+            "Unix UDS and loopback TCP must use the same HTTP primitive `{http_primitive}`"
+        );
+    }
     let non_loopback_binds = local_tcp_source
         .lines()
         .filter(|line| line.contains("TcpListener::bind"))
