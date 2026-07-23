@@ -263,6 +263,33 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    pub fn local_http_capability_invalid(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpCapabilityInvalid, message)
+    }
+
+    pub fn local_http_endpoint_schema_unsupported(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointSchemaUnsupported, message)
+    }
+
+    pub fn local_http_endpoint_missing(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointMissing, message)
+    }
+
+    pub fn local_http_endpoint_non_loopback(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointNonLoopback, message)
+    }
+
+    pub fn local_http_runtime_directory_missing(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpRuntimeDirectoryMissing, message)
+    }
+
+    pub fn local_http_capability_revoked() -> Self {
+        Self::new(
+            AtmErrorCode::LocalHttpCapabilityRevoked,
+            "local HTTP endpoint record is revoked",
+        )
+    }
+
     pub fn message_id_conflict(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::MessageIdConflict, message)
     }
