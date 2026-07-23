@@ -975,6 +975,7 @@ Implementation Branches:
 | `AI.8` | `in progress` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
 | `AI.9` | `in progress` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
 | `AI.10` | `in progress` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout |
+| `AI.11` | `in progress` | `feature/pAI-s11-post-merge-remediation` | route-specific HTTP bodies and Windows loopback-TCP local transport |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 
