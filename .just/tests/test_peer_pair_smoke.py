@@ -25,7 +25,7 @@ RUNNER = load_runner()
 ATM = ["atm", "read", "--json"]
 READ_OUTCOME = {
     "action": "read",
-    "team": "atm-dev",
+    "team": "test-team",
     "agent": "peer",
     "selection_mode": "all",
     "mutation_applied": True,
