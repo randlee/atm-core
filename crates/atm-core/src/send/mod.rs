@@ -808,7 +808,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             .as_ref()
             .and_then(|address| address.host.as_ref())
     {
-        let exact_request = request.clone().with_origin_message_id(message_id);
+        let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
             AtmError::mailbox_write("failed to serialize immutable peer outbound write")
         })?;

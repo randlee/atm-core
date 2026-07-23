@@ -596,15 +596,17 @@ impl SqliteStorageBackend {
 #[cfg(test)]
 mod tests {
     use super::SqliteStorageBackend;
+    use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
         AgentType, Message, MessageKey, MessageQuery, RosterHarness, RosterMember,
         RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::MessageEnvelope;
-    use atm_storage::types::{AgentName, IsoTimestamp, ModelName, TeamName};
-    use chrono::Utc;
+    use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
+    use chrono::{Duration, Utc};
     use rusqlite::params;
-    use serde_json::Map;
+    use serde_json::{Map, json};
+    use std::num::NonZeroU16;
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -642,6 +644,71 @@ mod tests {
                 extra: Map::new(),
             },
         }
+    }
+
+    fn peer_outbound_message(
+        key: &str,
+        host: &str,
+        request_json: &str,
+        timestamp: IsoTimestamp,
+    ) -> Message {
+        let mut message = message(key, request_json);
+        message.envelope.timestamp = timestamp;
+        message.envelope.extra.insert(
+            "peerOutbound".to_string(),
+            json!({ "host": host, "request": request_json }),
+        );
+        message
+    }
+
+    #[test]
+    fn recent_outbound_for_peer_filters_by_host_and_age() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let now = Utc::now();
+        let not_before = IsoTimestamp::from_datetime(now - Duration::minutes(5));
+        let target: HostName = "peer.example.test".parse().expect("target host");
+
+        let retained = peer_outbound_message(
+            "atm:peer-retained",
+            target.as_str(),
+            "retained-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(1)),
+        );
+        let stale = peer_outbound_message(
+            "atm:peer-stale",
+            target.as_str(),
+            "stale-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(6)),
+        );
+        let other_peer = peer_outbound_message(
+            "atm:other-peer",
+            "other.example.test",
+            "other-peer-request",
+            IsoTimestamp::from_datetime(now - Duration::minutes(1)),
+        );
+        let local = message("atm:local", "local-request");
+
+        let store = backend.message_store();
+        for message in [&retained, &stale, &other_peer, &local] {
+            store.save_message(message).expect("save message");
+        }
+
+        let result = backend
+            .outbound_message_query()
+            .recent_outbound_for_peer(
+                &target,
+                not_before,
+                NonZeroU16::new(10).expect("nonzero limit"),
+            )
+            .expect("query peer outbound writes");
+
+        assert_eq!(
+            result,
+            vec![StoredPeerWrite {
+                request_json: "retained-request".to_string(),
+            }],
+            "only recent immutable writes for the requested peer are eligible"
+        );
     }
 
     #[test]
