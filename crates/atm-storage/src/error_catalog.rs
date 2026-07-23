@@ -24,6 +24,9 @@ const fn guidance(code: AtmErrorCode) -> &'static str {
     if let Some(message) = daemon_guidance(code) {
         return message;
     }
+    if let Some(message) = local_http_guidance(code) {
+        return message;
+    }
     if let Some(message) = mailbox_guidance(code) {
         return message;
     }
@@ -131,6 +134,11 @@ const fn mailbox_guidance(code: AtmErrorCode) -> Option<&'static str> {
 const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
     match code {
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::LocalHttpCapabilityInvalid
+        | AtmErrorCode::LocalHttpEndpointSchemaUnsupported
+        | AtmErrorCode::LocalHttpEndpointMissing
+        | AtmErrorCode::LocalHttpEndpointNonLoopback
+        | AtmErrorCode::LocalHttpRuntimeDirectoryMissing
         | AtmErrorCode::MessageIdConflict
         | AtmErrorCode::SelfAddressedSendInvalid
         | AtmErrorCode::EmptyNudgeTemplateBody
@@ -139,6 +147,15 @@ const fn request_guidance(code: AtmErrorCode) -> Option<&'static str> {
         | AtmErrorCode::ClearInvalidState => {
             Some("Correct the invalid ATM request or state before retrying.")
         }
+        _ => None,
+    }
+}
+
+const fn local_http_guidance(code: AtmErrorCode) -> Option<&'static str> {
+    match code {
+        AtmErrorCode::LocalHttpCapabilityRevoked => Some(
+            "Re-read local endpoint metadata and authenticate with the newly published capability.",
+        ),
         _ => None,
     }
 }
