@@ -9,10 +9,11 @@
 
 ## Decision
 
-ATM uses one daemon HTTP router. Unix local clients use HTTP over UDS and may
-use HTTP over loopback TCP; Windows local clients use HTTP over loopback TCP
-only. Remote peers use HTTPS over TCP. Every transport calls the same router
-and the same application handlers.
+ATM uses one daemon HTTP router. Unix local CLI and graft clients use HTTP over
+UDS; Unix loopback clients use HTTP over loopback TCP. Windows uses loopback
+TCP for every local client. Remote peers use HTTPS over TCP. UDS is never a
+loopback transport. Every transport calls the same router and the same
+application handlers.
 
 The initial stable application surface is resource-oriented REST under
 `/v1/atm`:
