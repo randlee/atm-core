@@ -494,9 +494,9 @@ fn runtime_assembly_failed(error: AtmError, observability: &SubsystemObservabili
         "failed",
         "daemon runtime assembly failed",
     );
-    AtmError::daemon_unavailable(
-        "daemon runtime assembly is unavailable; atm-daemon startup is blocked",
-    )
+    AtmError::daemon_unavailable(format!(
+        "daemon runtime assembly is unavailable; atm-daemon startup is blocked: {error}"
+    ))
 }
 
 fn build_request_dispatcher(
@@ -835,6 +835,10 @@ mod tests {
                 .to_string()
                 .contains("daemon runtime assembly is unavailable"),
             "{error}"
+        );
+        assert!(
+            error.to_string().contains("not-a-dir"),
+            "startup errors must retain their actionable cause: {error}"
         );
     }
 

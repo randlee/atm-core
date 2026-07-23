@@ -16,16 +16,25 @@ human intermediary.
 
 ## Mac status
 
-- Commit: pending green validation of this branch.
-- Preflight: pending.
-- Advertised host / certificate fingerprint: pending.
+- Commit: pending push of the candidate startup diagnostic and this record.
+- Candidate daemon: one launchd-owned daemon, PID `61975`; `doctor --json`
+  reports `running` / `ready` with matching 1.3.1 client and daemon versions.
+- Local CLI proof: sent `01KY88848R0AR6RCHZ72DR2JWG` (no ack) and
+  `01KY8884FYJN3FRB1P5YK691X4` (requires ack) through local HTTP.
+- Advertised host: `10.202.137.160:43101`.
+- Certificate fingerprint:
+  `03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`.
+- Root cause repaired locally: the durable interface record still bound the
+  departed address `192.168.128.82`; it now binds/advertises
+  `10.202.137.160`. No transport fallback or second daemon was used.
 
 ## Windows status (cwin)
 
 - Commit: `4530e500` preflight stopped because the runbook incorrectly asked
   for an `atm-graft.exe` binary.
 - Required next action: pull the latest branch, follow the corrected runbook,
-  complete local preflight, and append the evidence path plus host/fingerprint.
+  run the isolated graft smoke before its persistent daemon, complete local
+  preflight, and append the evidence path plus host/fingerprint.
 
 ## Exchange and execution order
 

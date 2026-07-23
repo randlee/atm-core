@@ -21,6 +21,17 @@ and report a mismatch; do not test different commits on the two hosts.
 
 ## 2. Start exactly one Windows daemon
 
+Before starting the persistent daemon, prove the graft library lane in its
+required clean-room process environment:
+
+```powershell
+python scripts/smoke/run_graft_same_host.py
+```
+
+That runner deliberately refuses an ambient daemon, starts and tears down only
+its own fixture daemon, and must not be attached to the persistent peer daemon.
+Record its result, then start the one persistent daemon below.
+
 Use the release `atm-daemon.exe` built above and the normal Windows runtime
 location. Windows has no UDS or named-pipe local client path: both `atm` and
 `atm-graft` must use the daemon's loopback TCP HTTP interface.
@@ -48,15 +59,6 @@ and then the Windows machine's advertised IPv4 address. For each address:
 2. read/peek its exact message ID;
 3. send a `--requires-ack` message;
 4. read it, run `atm ack <message-id> <reply>`, and read the reply;
-5. run the repository-owned graft host smoke:
-
-   ```powershell
-   python scripts/smoke/run_graft_same_host.py
-   ```
-
-   This builds and runs the `atm-graft` library's `smoke_same_host` example
-   through Windows loopback TCP. There is intentionally no `atm-graft.exe`.
-
 Record every command, message ULID, and JSON result. The daemon remains the
 same singleton for all local proof. Do not infer that a raw TCP connection is
 delivery evidence.
