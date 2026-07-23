@@ -403,6 +403,9 @@ resolved runtime destination. Harness and model are not the same thing.
 Send identity precedence:
 - `atm send team-lead \"...\"` always uses the resolved caller identity
 - ATM resolves caller identity from `ATM_IDENTITY` for mutating commands
+- Chat identity precedence is `--as agent:chat`, `--chat-id`, `ATM_CHAT_ID`,
+  qualified `ATM_IDENTITY=agent:chat`, then no chat ID. An unqualified `--as`
+  explicitly selects no chat ID.
 
 Inspection vs mutation:
 - `atm peek --as alice` inspects `alice`'s mailbox without mutating it

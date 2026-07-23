@@ -1,9 +1,10 @@
 //! Phase R boundary skeleton contracts.
 
+use crate::address::AgentAddress;
 use crate::error::AtmError;
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
@@ -41,6 +42,8 @@ pub trait StatusSource: sealed::Sealed {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct PostSendHookEvent {
     pub sender: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_chat_id: Option<ChatId>,
     pub sender_team: TeamName,
     pub recipient: AgentName,
     pub recipient_team: TeamName,
@@ -50,6 +53,18 @@ pub struct PostSendHookEvent {
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+impl PostSendHookEvent {
+    /// The canonical source address carried by every post-write nudge.
+    pub fn source_address(&self) -> AgentAddress {
+        AgentAddress {
+            agent: self.sender.clone(),
+            chat_id: self.sender_chat_id.clone(),
+            team: Some(self.sender_team.clone()),
+            host: None,
+        }
+    }
 }
 
 pub fn built_in_nudge_template_kind_from_post_send_event(

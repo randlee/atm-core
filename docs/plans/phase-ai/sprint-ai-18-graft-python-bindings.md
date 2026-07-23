@@ -38,8 +38,8 @@ rebase and renewed review.
   optional `chat_id`; no string-only substitute for `AgentAddress`.
 - A session is created with one typed caller address. `send(to, body)` uses
   that caller unchanged; `PyAgentAddress.chat_id` is the sole chat-id field.
-- A Python wrapper for AI.17's `hermes_chat_key` consumes a typed source
-  address; no Hermes code reimplements its formatting.
+- `PyNudge.source` exposes the canonical typed source address, including its
+  optional `chat_id`; no derived representation exists.
 - Tests for Python-to-Rust address round trip, nudge callback delivery, error
   propagation, absent/present chat ID, and no direct daemon socket or storage
   access from the binding.
@@ -68,8 +68,6 @@ impl PyGraftSession {
     fn acknowledge(&self, message_id: String) -> PyResult<()>;
 }
 
-#[pyfunction]
-fn hermes_chat_key(source: PyAgentAddress) -> PyResult<String>;
 ```
 
 Python receives typed address fields; it does not receive a raw daemon request
