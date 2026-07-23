@@ -51,3 +51,17 @@ human intermediary.
 6. Execute acknowledgement, duplicate-ULID, unavailable-peer, certificate,
    allowlist, and failed-ack cases. Append each outcome before starting the
    next case.
+
+## Current direct action
+
+**cwin:** pull `0b99a252`, configure the durable HTTPS interface for
+`10.10.100.98:43101`, initialize the Windows certificate from its real local
+certificate material, then append its resulting fingerprint and interface
+JSON here. Add the Mac trust record using host `10.202.137.160` and fingerprint
+`03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857` only after
+the Windows daemon is ready on its configured HTTPS interface. Commit/push the
+record. Do not send traffic yet.
+
+**arch-ctm:** after cwin publishes that record, add the reciprocal Windows
+trust record, append the resulting JSON, then start the labelled Mac-to-Windows
+send case.
