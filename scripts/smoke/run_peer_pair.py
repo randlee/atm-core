@@ -65,6 +65,37 @@ def require_command(value: Any, name: str) -> list[str]:
     return value
 
 
+def require_string_list(value: Any, name: str) -> list[str]:
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+        fail(f"config field `{name}` must be a non-empty string array")
+    return value
+
+
+def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None:
+    verification = case.get("verification")
+    if not isinstance(verification, dict):
+        fail(f"config field `{name}.verification` must be an object")
+    require_command(verification.get("command"), f"{name}.verification.command")
+    expected_json = verification.get("expected_json")
+    if not isinstance(expected_json, dict) or not expected_json:
+        fail(f"config field `{name}.verification.expected_json` must be a non-empty object")
+    if not all(isinstance(path, str) and path and isinstance(value, (str, int, float, bool, type(None)))
+               for path, value in expected_json.items()):
+        fail(f"config field `{name}.verification.expected_json` must map non-empty paths to scalar values")
+    forbidden_log_entries = verification.get("forbidden_daemon_log_entries", [])
+    if not isinstance(forbidden_log_entries, list) or not all(
+        isinstance(entry, str) and entry for entry in forbidden_log_entries
+    ):
+        fail(f"config field `{name}.verification.forbidden_daemon_log_entries` must be a string array")
+    if case.get("id") == "untrusted_or_allowlist_rejection":
+        if not daemon_has_log_file:
+            fail("untrusted_or_allowlist_rejection requires daemon.log_file")
+        require_string_list(
+            forbidden_log_entries,
+            f"{name}.verification.forbidden_daemon_log_entries",
+        )
+
+
 def validate(config: dict[str, Any]) -> None:
     if config.get("schema_version") != 1:
         fail("config field `schema_version` must be 1")
@@ -103,6 +134,8 @@ def validate(config: dict[str, Any]) -> None:
         if case["expect"] == "typed_error":
             require_string(case.get("typed_error_code"), f"cases.{case.get('id', '<unknown>')}.typed_error_code")
         require_string(case.get("message_ulid"), f"cases.{case.get('id', '<unknown>')}.message_ulid")
+        case_name = f"cases.{case.get('id', '<unknown>')}"
+        require_semantic_verification(case, case_name, isinstance(daemon.get("log_file"), str))
     paths = daemon.get("owned_runtime_paths", [])
     if not isinstance(paths, list) or not all(isinstance(path, str) for path in paths):
         fail("daemon.owned_runtime_paths must be an array of paths")
@@ -132,6 +165,72 @@ def log_window(raw_path: Any) -> str:
         return sanitize(Path(raw_path).read_text(encoding="utf-8", errors="replace"))[-8192:]
     except OSError as error:
         return f"<unavailable: {sanitize(str(error))}>"
+
+
+def log_snapshot(raw_path: Any) -> str:
+    if not isinstance(raw_path, str) or not raw_path:
+        return ""
+    try:
+        return Path(raw_path).read_text(encoding="utf-8", errors="replace")
+    except OSError as error:
+        fail(f"cannot read daemon log for semantic verification: {error}")
+
+
+def json_path(value: Any, path: str) -> Any:
+    current = value
+    for segment in path.split("."):
+        if isinstance(current, dict) and segment in current:
+            current = current[segment]
+        elif isinstance(current, list) and segment.isdecimal() and int(segment) < len(current):
+            current = current[int(segment)]
+        else:
+            fail(f"semantic verification JSON path `{path}` was absent")
+    return current
+
+
+def resolved_expectation(value: Any, case: dict[str, Any]) -> Any:
+    return case["message_ulid"] if value == "$message_ulid" else value
+
+
+def verify_semantics(case: dict[str, Any], timeout: float, daemon_log_before: str,
+                     daemon_log_file: Any) -> dict[str, Any]:
+    verification = case["verification"]
+    result = run_command(verification["command"], timeout)
+    outcome: dict[str, Any] = {"result": result, "status": "fail", "failures": []}
+    if result["exit_code"] != 0:
+        outcome["failures"].append("verification command failed")
+        return outcome
+    try:
+        observed = json.loads(result["stdout"])
+    except json.JSONDecodeError:
+        outcome["failures"].append("verification command did not emit JSON")
+        return outcome
+    observed_values: dict[str, Any] = {}
+    for path, expected in verification["expected_json"].items():
+        try:
+            actual = json_path(observed, path)
+        except RuntimeError as error:
+            outcome["failures"].append(str(error))
+            continue
+        expected = resolved_expectation(expected, case)
+        observed_values[path] = actual
+        if actual != expected:
+            outcome["failures"].append(
+                f"semantic verification `{path}` expected {expected!r}, got {actual!r}"
+            )
+    if forbidden := verification.get("forbidden_daemon_log_entries", []):
+        after = log_snapshot(daemon_log_file)
+        delta = after[len(daemon_log_before):]
+        for entry in forbidden:
+            if entry in delta:
+                outcome["failures"].append(
+                    f"daemon log recorded forbidden post-rejection entry {entry!r}"
+                )
+        outcome["daemon_log_delta"] = sanitize(delta)[-8192:]
+    outcome["observed_json"] = observed_values
+    if not outcome["failures"]:
+        outcome["status"] = "pass"
+    return outcome
 
 
 def endpoint_closed(endpoint: str) -> bool:
@@ -208,11 +307,14 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
         version = run_command(daemon["version_command"], timeout)
         client_version = run_command(config["client_version_command"], timeout)
         for case in config["cases"]:
+            daemon_log_before = log_snapshot(daemon.get("log_file"))
             result = run_command(case["command"], timeout)
             if case["expect"] == "success":
-                passed = result["exit_code"] == 0
+                transport_passed = result["exit_code"] == 0
             else:
-                passed = result["exit_code"] != 0 and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+                transport_passed = result["exit_code"] != 0 and case["typed_error_code"] in (result["stdout"] + result["stderr"])
+            semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get("log_file"))
+            passed = transport_passed and semantic["status"] == "pass"
             record = {
                 "schema_version": 1,
                 "commit": config["commit"],
@@ -230,6 +332,7 @@ def execute(config: dict[str, Any], evidence_dir: Path, timeout: float) -> int:
                 "expected": case["expect"],
                 "expected_error_code": case.get("typed_error_code"),
                 "result": result,
+                "semantic_verification": semantic,
                 "daemon_log_window": log_window(daemon.get("log_file")),
                 "status": "pass" if passed else "fail",
             }
