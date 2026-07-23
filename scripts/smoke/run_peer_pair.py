@@ -33,7 +33,10 @@ REQUIRED_CASES = (
     "failed_remote_ack",
 )
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability)=?[^\s,]+)")
-PUBLIC_CLIENT_COMMANDS = frozenset({"atm", "atm.exe", "atm-graft", "atm-graft.exe"})
+# `atm-graft` is an embeddable Rust library (with Python bindings), not an
+# executable. Peer-pair case commands therefore use the public ATM CLI; graft
+# has its own in-process host smoke in `run_graft_same_host.py`.
+PUBLIC_CLIENT_COMMANDS = frozenset({"atm", "atm.exe"})
 REQUIRED_ASSERTIONS = {
     "preflight": frozenset({"daemon_ready"}),
     "local_smoke": frozenset({"receiver_visible"}),
@@ -84,7 +87,7 @@ def require_public_client_command(value: Any, name: str) -> list[str]:
     executable = Path(command[0]).name.lower()
     if executable not in PUBLIC_CLIENT_COMMANDS:
         fail(
-            f"config field `{name}` must invoke a public ATM client "
+            f"config field `{name}` must invoke the public ATM CLI "
             f"({', '.join(sorted(PUBLIC_CLIENT_COMMANDS))})"
         )
     return command

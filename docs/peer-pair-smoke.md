@@ -48,9 +48,11 @@ capabilities, or secrets. It has this shape:
 }
 ```
 
-Every case command and every assertion command must invoke a public `atm` or
-`atm-graft` client; the runner rejects raw sockets, storage helpers, and other
-executables. Each `verification.assertions` entry runs its command, reads one
+Every peer-pair case command and every assertion command must invoke the public
+`atm` CLI; the runner rejects raw sockets, storage helpers, and other
+executables. `atm-graft` is an embeddable library, not an executable: prove its
+local host lane separately with `python scripts/smoke/run_graft_same_host.py`.
+Each `verification.assertions` entry runs its command, reads one
 dotted JSON path, and compares it to its scalar `equals` value;
 `$message_ulid` resolves to that case's ID. The required assertion names are
 fixed by case: duplicate requires one retained record and no repeat side effect;

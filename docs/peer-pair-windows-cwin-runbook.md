@@ -12,7 +12,7 @@ git checkout <tested-commit>
 git rev-parse HEAD
 just lint
 just test
-cargo build --release --bin atm --bin atm-daemon --bin atm-graft
+cargo build --release --bin atm --bin atm-daemon
 .\target\release\atm.exe --version
 ```
 
@@ -48,7 +48,14 @@ and then the Windows machine's advertised IPv4 address. For each address:
 2. read/peek its exact message ID;
 3. send a `--requires-ack` message;
 4. read it, run `atm ack <message-id> <reply>`, and read the reply;
-5. repeat the send/read/ack proof through `atm-graft`.
+5. run the repository-owned graft host smoke:
+
+   ```powershell
+   python scripts/smoke/run_graft_same_host.py
+   ```
+
+   This builds and runs the `atm-graft` library's `smoke_same_host` example
+   through Windows loopback TCP. There is intentionally no `atm-graft.exe`.
 
 Record every command, message ULID, and JSON result. The daemon remains the
 same singleton for all local proof. Do not infer that a raw TCP connection is
@@ -105,8 +112,8 @@ Run the repository runner after the two host configs are completed:
 python scripts/smoke/run_peer_pair.py --config peer-smoke-role-b.json --evidence-dir artifacts/peer-smoke/windows
 ```
 
-Its configuration must invoke public `atm`/`atm-graft` commands and must not
-claim ownership of the persistent system daemon. Preserve the sanitized JSON
+Its configuration must invoke the public `atm` CLI and must not claim ownership
+of the persistent system daemon. Preserve the sanitized JSON
 evidence, doctor reports before/after, listener/PID output, and log window.
 
 ## 7. End state
@@ -115,3 +122,14 @@ After the suite, re-run `atm doctor --json` and listener inspection. Leave the
 one pre-existing persistent daemon running; the runner may stop only a daemon
 it launched and explicitly owns. Report failures with the case ID, exact
 command/result, both host commits/versions, and sanitized logs.
+
+## Defect handling
+
+Do not stop at a failed preflight or smoke case. Root-cause the failure in the
+checked-out source and fix it on this smoke branch when it is a product, test,
+or runbook defect. Keep the fix minimal and do not add an alternate transport,
+second daemon, or test-only bypass. Run `just lint && just test`, commit and
+push the fix, then write a detailed sanitized report in the shared evidence
+directory with the root cause, changed files, commit, commands/results,
+daemon/client versions, and any remaining physical-peer blocker. Poll for
+review or peer information while working; Windows has no initial nudge path.
