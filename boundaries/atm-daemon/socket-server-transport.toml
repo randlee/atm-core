@@ -1,14 +1,14 @@
-boundary_id = "BOUNDARY-LocalHttpIngress"
+boundary_id = "BOUNDARY-ServerTransport-Socket"
 owner_package = "atm-daemon"
 owner_crate_path = "atm_daemon"
-name = "LocalHttpServerTransportAdapter"
+name = "LocalIpcServerTransportAdapter"
 
 [public]
 trait = "ServerTransport"
 
 [implementation]
-type = "LocalHttpServerTransportAdapter"
-module = "atm_daemon::local_tcp_transport"
+type = "LocalIpcServerTransportAdapter"
+module = "atm_daemon::local_ipc_transport"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -16,7 +16,7 @@ constructor = "pub(crate)"
 roots = ["atm_daemon::composition::RuntimeComposition::start"]
 
 [ownership]
-io_owns = ["loopback_http_accept", "http_request_receive", "http_response_send", "capability_record_publish_revoke"]
+io_owns = ["listener_accept_loop", "framed_request_receive", "framed_response_send", "stale_endpoint_artifact_cleanup"]
 io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
@@ -29,7 +29,6 @@ scope = "outside_owner_crate"
 forbidden = [
   "LocalSocketServerTransport",
   "LocalIpcServerTransportAdapter",
-  "LocalSocketListener",
   "tokio::net::UnixListener",
   "std::os::unix::net::UnixListener",
   "interprocess::local_socket::Listener",
@@ -49,8 +48,8 @@ forbidden_test_bypasses = [
 
 [enforcement]
 lint_rules = [
-  "LINT-BOUNDARY-LOCAL-HTTP-INGRESS-EDGES",
-  "LINT-BOUNDARY-LOCAL-HTTP-INGRESS-REFERENCES",
+  "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-EDGES",
+  "LINT-BOUNDARY-SERVER-TRANSPORT-SOCKET-REFERENCES",
   "LINT-SAME-HOST-PORTABILITY",
 ]
 review_gates = [
@@ -58,13 +57,13 @@ review_gates = [
   "no_public_constructor",
   "no_cli_to_daemon_edge",
   "platform_parity_required",
-  "one_local_ingress_per_platform",
+  "no_nonunix_stub_release",
   "full_windows_workspace_clippy_required",
 ]
 
 [status]
-state = "active"
+state = "retired"
 notes = [
-  "The daemon has exactly one local ingress on every platform: capability-authenticated HTTP over loopback TCP.",
-  "UDS, named pipes, custom frame packets, and parallel local listeners are retired and forbidden.",
+  "Historical custom frame socket boundary retired by AI.6.",
+  "The live local IPC adapter now carries HTTP/UDS requests into ApiRouter rather than the retired ServerTransport trait or frame packet family.",
 ]

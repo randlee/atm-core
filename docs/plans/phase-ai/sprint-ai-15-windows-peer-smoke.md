@@ -9,6 +9,10 @@ depends_on: AI.11, AI.13
 
 # AI.15 — Mac↔Windows peer smoke execution
 
+Transport invariant: per REQ-CORE-TRANSPORT-001 and ADR-033, Unix hosts
+provide HTTP over UDS and loopback TCP; Windows provides loopback TCP only.
+All local adapters call the same HTTP router and application handlers.
+
 ## Closure
 
 One physical macOS daemon and one physical Windows daemon pass every AI.13

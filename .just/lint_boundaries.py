@@ -42,7 +42,7 @@ REQUIRED_BOUNDARY_FIELDS = (
 )
 VISIBILITY_VALUES = {"private", "pub(crate)", "public", "trait_only"}
 CONSTRUCTOR_VALUES = {"private", "pub(crate)", "public", "none"}
-REFERENCE_SCOPE_VALUES = {"global", "outside_owner_crate"}
+REFERENCE_SCOPE_VALUES = {"global", "inside_owner_crate", "outside_owner_crate"}
 STATE_VALUES = {
     "planned",
     "active",
@@ -1513,9 +1513,21 @@ def exempt_reference_files(repo_root: Path, record: BoundaryRecord) -> set[Path]
 
 def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord]) -> list[BoundaryViolation]:
     violations: list[BoundaryViolation] = []
-    source_paths = rust_sources(repo_root)
+    workspace_sources = rust_sources(repo_root)
     for record in records:
-        exempt_files = exempt_reference_files(repo_root, record) if record.references_scope == "outside_owner_crate" else set()
+        if record.references_scope == "inside_owner_crate":
+            owner = manifest_by_alias(repo_root).get(record.owner_package)
+            source_paths = source_files_for_crate(owner) if owner is not None else []
+            exempt_files: set[Path] = set()
+            reference_scope = "owner-crate"
+        else:
+            source_paths = workspace_sources
+            exempt_files = (
+                exempt_reference_files(repo_root, record)
+                if record.references_scope == "outside_owner_crate"
+                else set()
+            )
+            reference_scope = "external" if record.references_scope == "outside_owner_crate" else "global"
         compiled_patterns = [(reference, compile_reference_pattern(reference)) for reference in record.forbidden_references]
         if not compiled_patterns:
             continue
@@ -1531,7 +1543,7 @@ def collect_reference_violations(repo_root: Path, records: list[BoundaryRecord])
                         violations.append(
                             BoundaryViolation(
                                 f"{rel_source}:{line_number}",
-                                f"{record.boundary_id} forbids external reference {reference!r}",
+                                f"{record.boundary_id} forbids {reference_scope} reference {reference!r}",
                             )
                         )
     return violations

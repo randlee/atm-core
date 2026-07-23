@@ -76,6 +76,11 @@ pub struct WriteRequest {
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin_message_id: Option<AtmMessageId>,
+    /// The immutable origin timestamp carried with a peer write.  It is set
+    /// alongside `origin_message_id` by the canonical origin writer so a
+    /// repeated peer delivery compares equal at the receiving store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_timestamp: Option<IsoTimestamp>,
     /// Destination is omitted only by an `atm ack` command.  The daemon
     /// resolves that destination from the acknowledged source before calling
     /// the canonical writer.
@@ -116,6 +121,7 @@ impl WriteRequest {
             caller_team,
             authenticated_source_host: None,
             origin_message_id: None,
+            origin_timestamp: None,
             to: Some(to.parse()?),
             message_source,
             summary_override,
@@ -138,6 +144,17 @@ impl WriteRequest {
     #[must_use]
     pub fn with_origin_message_id(mut self, message_id: AtmMessageId) -> Self {
         self.origin_message_id = Some(message_id);
+        self
+    }
+
+    #[must_use]
+    pub fn with_origin_metadata(
+        mut self,
+        message_id: AtmMessageId,
+        timestamp: IsoTimestamp,
+    ) -> Self {
+        self.origin_message_id = Some(message_id);
+        self.origin_timestamp = Some(timestamp);
         self
     }
 }
@@ -180,6 +197,9 @@ impl WriteOutcome {
 /// committed when peer delivery fails.
 pub struct PreparedWrite {
     outcome: SendOutcome,
+    outbound_request: WriteRequest,
+    persisted_timestamp: IsoTimestamp,
+    post_write_needed: bool,
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
@@ -196,6 +216,19 @@ impl PreparedWrite {
     #[must_use]
     pub fn persisted_message_id(&self) -> AtmMessageId {
         self.outcome.message_id
+    }
+
+    #[must_use]
+    pub fn persisted_timestamp(&self) -> IsoTimestamp {
+        self.persisted_timestamp
+    }
+
+    /// Returns the canonical, resolved write payload for the post-write
+    /// router.  For an acknowledgement this includes the reply destination
+    /// resolved from the durable source record; it is not a second path.
+    #[must_use]
+    pub fn outbound_request(&self) -> WriteRequest {
+        self.outbound_request.clone()
     }
 
     /// Emits the local post-write notification after durable persistence.
@@ -266,7 +299,7 @@ impl PreparedWrite {
 
     #[must_use]
     pub fn requires_post_write_route(&self) -> bool {
-        !self.outcome.dry_run
+        !self.outcome.dry_run && self.post_write_needed
     }
 }
 
@@ -478,7 +511,7 @@ fn prepare_persisted_write<
     )?;
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
-    let timestamp = IsoTimestamp::now();
+    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
     let persistence = persist_send_message(
         runtime,
         &request,
@@ -490,6 +523,7 @@ fn prepare_persisted_write<
         requires_ack,
         task_id.clone(),
     )?;
+    let post_write_needed = persistence.newly_persisted;
     let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
     let outcome = finalize_send_outcome(
         runtime,
@@ -505,6 +539,9 @@ fn prepare_persisted_write<
     )?;
     Ok(PreparedWrite {
         outcome,
+        outbound_request: request,
+        persisted_timestamp: timestamp,
+        post_write_needed,
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
             recipient: context.recipient,
