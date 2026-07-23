@@ -335,19 +335,17 @@ impl DeliveryPolicyCoordinator {
         runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| {
-                // Two steps joined as one string; callers must split on '\n' to present individually
-                AtmError::agent_not_found(agent, team)
-            })
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))
     }
 
-    /// Resolves storage ownership before the canonical write. This is not a
-    /// transport-routing decision: the daemon's `PostWriteRouter` alone
-    /// chooses local notification versus peer HTTPS after persistence.
+    /// Resolves the persistence-admission snapshot for the canonical writer.
     ///
-    /// A locally-originated host-qualified write retains an immutable sender
-    /// record without querying the remote host's roster. Authenticated peer
-    /// ingress uses the receiving host's roster normally.
+    /// This is not a delivery action: `PostWriteRouter` alone selects local
+    /// nudge versus peer HTTPS after persistence. A local destination must be
+    /// validated against this host's roster before it is written. A
+    /// host-qualified origin destination cannot be validated locally, so it
+    /// retains its immutable origin record and the receiving host validates
+    /// its own recipient roster after peer delivery.
     pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
         &self,
         runtime: &R,
