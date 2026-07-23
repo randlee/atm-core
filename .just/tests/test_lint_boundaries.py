@@ -941,6 +941,28 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("forbids external reference 'SqliteMailStore::open'" in item for item in rendered), rendered)
 
+    def test_collect_boundary_violations_flags_forbidden_reference_inside_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace(
+                    "scope = \"outside_owner_crate\"", "scope = \"inside_owner_crate\""
+                ),
+            )
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub fn demo() { let _ = SqliteMailStore::open(); }\n", encoding="utf-8"
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(
+                any("forbids owner-crate reference 'SqliteMailStore::open'" in item for item in rendered),
+                rendered,
+            )
+
     def test_collect_boundary_violations_allows_composition_root_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
