@@ -62,6 +62,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         home_dir: atm_home,
         current_dir: workspace_dir,
         caller_identity: "local-recipient".parse().expect("recipient"),
+        caller_chat_id: None,
         caller_team: TEST_TEAM.parse().expect("team"),
         message_id: source_message_id,
         reply_body: "acknowledged".to_string(),

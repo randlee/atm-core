@@ -896,6 +896,7 @@ mod tests {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
                 caller_identity: TEST_SENDER.parse().expect("caller"),
+                caller_chat_id: None,
                 caller_team: TEST_TEAM.parse().expect("team"),
                 message_id,
                 reply_body: reply_body.to_string(),

@@ -27,7 +27,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-graft-python"]
 allowed_dependencies = ["atm-core", "atm-daemon-client"]
 forbidden_edges = [
   "atm-graft -> atm-daemon-bootstrap",

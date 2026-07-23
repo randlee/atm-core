@@ -97,7 +97,8 @@ starts.
 ### In scope
 
 - Client-neutral ambient `ATM_CHAT_ID` resolution, first consumed by Hermes.
-- PyO3/Maturin bindings for the existing graft API.
+- PyO3/Maturin bindings for the full supported graft host API: client
+  operations, session lifecycle/snapshot, and canonical nudge callback.
 - Graft-to-Hermes nudge injection, per-profile launchd deployment, runbook,
   and end-to-end validation.
 
@@ -113,11 +114,11 @@ starts.
 ## Validation Model
 
 AI.17 proves the identity mapping against Phase AI’s existing CLI/API behavior.
-AI.18 proves typed Python binding parity. AI.19 proves a durable write produces
-one Hermes in-process nudge and maps distinct chat IDs to distinct Hermes
-chats. AI.20 proves supervised per-profile operation. AI.21 records the four
-end-to-end stories with command transcripts, message IDs, rendered addresses,
-chat IDs, and explicit verdicts.
+AI.18 proves typed Python binding parity, including the existing graft receiver
+callback. AI.19 proves a durable write produces one Hermes in-process nudge and
+maps distinct chat IDs to distinct Hermes chats. AI.20 proves supervised
+per-profile operation. AI.21 records the four end-to-end stories with command
+transcripts, message IDs, rendered addresses, chat IDs, and explicit verdicts.
 
 Each sprint must pass `just lint`, `just test`, its focused tests, and
 `git diff --check`; an AI.17–AI.21 sprint may not close by deferring an unmet

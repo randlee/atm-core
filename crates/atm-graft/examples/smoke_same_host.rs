@@ -203,6 +203,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         home_dir: home_dir.clone(),
         current_dir: args.workspace_root.clone(),
         caller_identity: args.agent.parse().expect("caller"),
+        caller_chat_id: None,
         caller_team: args.team.parse().expect("team"),
         message_id: nudge.message_id,
         reply_body: "graft smoke ack reply".to_string(),

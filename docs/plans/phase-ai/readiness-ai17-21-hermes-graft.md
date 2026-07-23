@@ -10,7 +10,7 @@ closure evidence.
 | Sprint | Result | Required closure |
 |---|---|---|
 | AI.17 | `PARTIAL` | Ambient `ATM_CHAT_ID` resolution feeds existing Phase AI `chat_id`; Hermes is the first client; no new schema or CLI grammar |
-| AI.18 | `PENDING` | Python binding preserves typed canonical address and graft behavior |
+| AI.18 | `PENDING` | Python binding preserves the full supported graft host surface: typed canonical address, client operations, session lifecycle/snapshot, and canonical nudge callback |
 | AI.19 | `FROZEN` | `5947858a406fbfc8b8f07487880fa13ff53bbb1e` freezes `crates/atm-graft-python/python/atm_graft_hermes_bridge.py` (module, config keys, readiness probe); authorizes AI.20 drafting only, not closure |
 | AI.20 | `PENDING` | each bridge is launchd-supervised with a reproducible runbook |
 | AI.21 | `PENDING` | four production stories have complete evidence and explicit verdicts |

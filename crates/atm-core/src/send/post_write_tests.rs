@@ -180,6 +180,7 @@ fn failed_peer_route_leaves_acknowledgement_source_pending() {
         home_dir: tempdir.path().to_path_buf(),
         current_dir: tempdir.path().to_path_buf(),
         caller_identity: AgentName::from_validated(TEST_SENDER),
+        caller_chat_id: None,
         caller_team: TeamName::from_validated(TEST_TEAM),
         message_id: source_id,
         reply_body: "acknowledged".to_string(),

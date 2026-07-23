@@ -53,6 +53,9 @@ Rules:
 - the host executable owns the final insertion point
 - `atm-graft` must drive that path automatically once nudges arrive
 - external terminal automation is not an accepted production delivery path
+- a language binding may translate the existing `HostNudgeInjector` callback
+  into its host language, but may not add another receiver, transport, retry,
+  or routing path
 
 ## Post-Send Notification Transport
 
