@@ -133,3 +133,7 @@ push the fix, then write a detailed sanitized report in the shared evidence
 directory with the root cause, changed files, commit, commands/results,
 daemon/client versions, and any remaining physical-peer blocker. Poll for
 review or peer information while working; Windows has no initial nudge path.
+
+For this run, the shared report location is
+`artifacts/peer-smoke/windows/`. Commit and push the report with the fix (or
+with the documented external blocker) to `evidence/phase-ai-crosshost-smoke`.
