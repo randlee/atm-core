@@ -969,8 +969,8 @@ mod tests {
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
-        next_auto_start_poll_interval, reap_failed_auto_start,
-        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
+        next_auto_start_poll_interval, reap_failed_auto_start, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home,
     };
 
     #[derive(Debug, Default)]
