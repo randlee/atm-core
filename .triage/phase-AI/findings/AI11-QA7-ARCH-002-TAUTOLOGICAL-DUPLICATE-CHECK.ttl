@@ -12,7 +12,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-22T12:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/1> ;
@@ -20,7 +20,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ARCH-002/s11/4> ;
   triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
-  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> .
+  triage:fixedOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
+  triage:notes "RESOLUTION (2026-07-22 sweep): both sub-checks verifiably fixed on current integrate/phase-AI. (a) The adapter storage/nudge scan now iterates adapter_sources = [local TCP, local IPC, peer HTTPS] rather than only local_tcp_source (boundary_enforcement.rs ~line 423-439). (b) The duplicate-router check now sums production_api_router_implementation_count(path) across ai11_guarded_workspace_sources(&root) rather than matching a single hardcoded dispatcher file (~line 442-449). Cross-referenced with sibling finding AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST.ttl (same cwin fast-follow batch, PR #607), already recorded fixed on feature/pAI-s12-post-write-router (b6466aa1); this finding's fix landed in the same batch." .
 
 <urn:atm:triage:finding/AI11-QA7-ARCH-002-TAUTOLOGICAL-DUPLICATE-CHECK>
   triage:assignedTo "cwin" ;

@@ -12,24 +12,24 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/2> ;
   triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-11-remediation/0> ;
-  triage:highestOpenBranch "feature/pAI-s11-post-merge-remediation" ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:highestFixedBranch "none" ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:reviewedBy "qa-triage", "quality-mgr" ;
-  triage:notes "Post-merge audit finding. Scope: crates/atm-core/src/api.rs (response encoding, request routing). Issue 1: write_http_response must emit correct status per ResponseEnvelope variant. Issue 2: ApiRequest::matches_route must include pattern matches for /v1/atm/message/{id} and /v1/atm/message/{id}/read routes. Waiver check: openapi_surface_reviewed_removals.json allowlists only /v1/atm/teams deletion, not these routes." .
+  triage:notes "Post-merge audit finding. Scope: crates/atm-core/src/api.rs (response encoding, request routing). Issue 1: write_http_response must emit correct status per ResponseEnvelope variant. Issue 2: ApiRequest::matches_route must include pattern matches for /v1/atm/message/{id} and /v1/atm/message/{id}/read routes. Waiver check: openapi_surface_reviewed_removals.json allowlists only /v1/atm/teams deletion, not these routes. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607). Re-verified against current integrate/phase-AI: Issue 1 (hardcoded 200 OK) IS fixed -- write_http_response_body now derives status/reason from encode_response(response) rather than a literal 'HTTP/1.1 200 OK'. Issue 2 is NOT fixed -- decode_route_request (api.rs) still has no match arms for GET /v1/atm/message/{id} or /v1/atm/message/{id}/read. Status updated from open to fixed_partial to reflect Issue 1's resolution; redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment, for the remaining missing-routes half." .
 
 <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 112 ;
   triage:snippet "write!(writer, \"HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n...\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
@@ -52,9 +52,9 @@
   triage:headSha "8d0ccf01" ;
   triage:orderIndex 999 .
 
-<urn:atm:triage:worktree/pAI-11-remediation/0>
+<urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
-  triage:headSha "0" ;
-  triage:orderIndex 0 .
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

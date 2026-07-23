@@ -12,12 +12,15 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE/s11/1> ;
   triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
-  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> .
+  triage:fixedOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
+  triage:notes "RESOLUTION (2026-07-22 sweep): verifiably fixed on current integrate/phase-AI. A dedicated test, fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() (boundary_enforcement.rs ~line 478), now covers the retired generic HTTP RequestEnvelope/ResponseEnvelope wire-codec construct family that this finding identified as missing. Cross-referenced with sibling finding AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST.ttl (same cwin fast-follow batch, PR #607), already recorded fixed on feature/pAI-s12-post-write-router (b6466aa1); this finding's fix landed in the same batch." .
 
 <urn:atm:triage:finding/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE>
   triage:assignedTo "cwin" ;

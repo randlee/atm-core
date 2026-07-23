@@ -21,9 +21,13 @@
   triage:openOn <urn:atm:triage:worktree/pAI-s14/b64e8358> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s15/b64e8358> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s16/b64e8358> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/2> .
+  # STALE-POINTER FIX (2026-07-22 sweep): promoteTo previously targeted feature/pAI-s11-post-merge-remediation
+  # (merged, PR #607). Re-verified: AuthenticatedIngress::Local/Peer remain unit variants on integrate/phase-AI
+  # (crates/atm-core/src/api.rs:544-549), not payload-carrying; the sprint-doc mismatch is still live. Redirected
+  # to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment.
 
 <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-03/pAI-s11/1>
   a triage:Occurrence ;
@@ -105,3 +109,10 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

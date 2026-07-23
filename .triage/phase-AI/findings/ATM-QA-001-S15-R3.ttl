@@ -7,28 +7,28 @@
   triage:title "failed_remote_ack check is a static attribute check, not a mutation detector" ;
   triage:description "In scripts/smoke/run_peer_pair.py's new semantic-verification mechanism (added on feature/pAI-s15-windows-peer-smoke, commit 12f4b96e), the failed_remote_ack check inspects a static requires_ack attribute rather than detecting an actual ack-state mutation. It cannot detect whether an ack mutation genuinely occurred or failed to occur." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA-001" ;
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "repo-wide" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T20:15:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-22T20:35:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S15/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S19/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S20/1> ;
   triage:openOn <urn:atm:triage:worktree/S15/12f4b96e> ;
   triage:openOn <urn:atm:triage:worktree/S16/34e055b9> ;
   triage:openOn <urn:atm:triage:worktree/S17/2825b1c0> ;
   triage:openOn <urn:atm:triage:worktree/S18/a3cfdaa6> ;
   triage:openOn <urn:atm:triage:worktree/S19/e88825a7> ;
-  triage:openOn <urn:atm:triage:worktree/S20/bed07594> ;
   triage:fixedOn <urn:atm:triage:worktree/S14/cd640a84> ;
-  triage:promoteTo <urn:atm:triage:worktree/S20/bed07594> .
+  triage:fixedOn <urn:atm:triage:worktree/S20/bed07594> ;
+  triage:promoteTo <urn:atm:triage:worktree/S19/e88825a7> ;
+  triage:notes "FOLLOWUP CORRECTION: S20 (bed07594) removed verify_semantics function entirely (file shrunk from 395 to 292 lines), indicating either intentional removal via merge/rebase or regression. This may itself be a new finding requiring investigation. Highest open branch corrected to S19; dispatch should target S19 for fix application." .
 
 <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S15/1>
   a triage:Occurrence ;
@@ -90,8 +90,8 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 316 ;
   triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:occursIn <urn:atm:triage:worktree/S20/bed07594> .
