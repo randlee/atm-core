@@ -18,6 +18,8 @@ worktree binary directly.
    release and repeat the doctor check.
 5. If recovery fixes a missing or incompatible daemon, notify the team after it
    is healthy again.
+6. When peer-interface or trust configuration changes, use `restart` to reload
+   the one selected daemon; never launch an extra process.
 
 ## Commands
 
@@ -35,6 +37,10 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
 
 # Restore the latest Homebrew formula targets, not a Cellar path.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
+  --service com.atm.daemon --launch-agent-plist ~/Library/LaunchAgents/com.atm.daemon.plist
+
+# Reload changed peer configuration without switching the selected pair.
+python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart --yes \
   --service com.atm.daemon --launch-agent-plist ~/Library/LaunchAgents/com.atm.daemon.plist
 ```
 

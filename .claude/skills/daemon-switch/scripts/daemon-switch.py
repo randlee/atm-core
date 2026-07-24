@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Sequence
 
 
@@ -113,13 +114,34 @@ def service_commands(args: argparse.Namespace, action: str) -> list[str]:
 
 def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = False) -> None:
     command = service_commands(args, action)
-    result = run(command, timeout=20.0)
-    if result.returncode == 0:
-        return
-    if allow_absent and action == "stop":
-        return
-    detail = (result.stderr or result.stdout).strip()
-    raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
+    if platform.system() != "Darwin":
+        result = run(command, timeout=20.0)
+        if result.returncode == 0 or (allow_absent and action == "stop"):
+            return
+        detail = (result.stderr or result.stdout).strip()
+        raise SwitchError(f"service {action} failed: {' '.join(command)}: {detail}")
+
+    domain = f"gui/{os.getuid()}"
+    service = f"{domain}/{args.service}"
+    if action == "stop":
+        result = run(command, timeout=20.0)
+        if result.returncode != 0 and not allow_absent:
+            detail = (result.stderr or result.stdout).strip()
+            raise SwitchError(f"service stop failed: {' '.join(command)}: {detail}")
+        for _ in range(20):
+            if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
+                return
+            time.sleep(0.1)
+        raise SwitchError("LaunchAgent remained loaded after controlled stop")
+
+    last_detail = ""
+    for _ in range(10):
+        result = run(command, timeout=20.0)
+        if result.returncode == 0 or run(["launchctl", "print", service], timeout=2.0).returncode == 0:
+            return
+        last_detail = (result.stderr or result.stdout).strip()
+        time.sleep(0.2)
+    raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
 
 
 def replace_link(link: Path, target: Path) -> None:
@@ -193,6 +215,13 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
     raise SwitchError("cannot discover an installed release; pass --default-cli and --default-daemon")
 
 
+def restart(args: argparse.Namespace) -> None:
+    if not args.yes:
+        raise SwitchError("restart changes the singleton daemon; re-run with --yes")
+    run_service(args, "stop", allow_absent=True)
+    run_service(args, "start")
+
+
 def doctor(cli: Path) -> dict[str, object]:
     try:
         result = run([str(cli), "doctor", "--json"], timeout=10.0)
@@ -242,6 +271,8 @@ def parser() -> argparse.ArgumentParser:
     restore.add_argument("--default-daemon")
     restore.add_argument("--yes", action="store_true")
     restore.add_argument("--dry-run", action="store_true")
+    restart_parser = sub.add_parser("restart", parents=[selectors])
+    restart_parser.add_argument("--yes", action="store_true")
     return result
 
 
@@ -252,9 +283,11 @@ def main() -> int:
             status(args)
         elif args.command == "switch":
             switch_pair(args, Path(args.cli), Path(args.daemon))
-        else:
+        elif args.command == "restore":
             cli, daemon = restore_pair(args)
             switch_pair(args, cli, daemon)
+        else:
+            restart(args)
     except SwitchError as error:
         print(f"daemon-switch: {error}", file=sys.stderr)
         return 2
