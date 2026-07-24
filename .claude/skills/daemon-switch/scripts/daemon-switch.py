@@ -67,7 +67,11 @@ def homebrew_pair() -> tuple[Path, Path] | None:
 
 
 def state_path() -> Path:
-    return Path.home() / ".atm" / "daemon-switch.json"
+    if os.name == "nt":
+        root = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return root / "atm" / "daemon-switch.json"
 
 
 def load_state() -> dict[str, str]:
@@ -119,8 +123,6 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
 
 
 def replace_link(link: Path, target: Path) -> None:
-    if not link.is_symlink():
-        raise SwitchError(f"refusing to replace non-symlink selector: {link}")
     with tempfile.NamedTemporaryFile(dir=link.parent, prefix=f".{link.name}.", delete=False) as handle:
         temporary = Path(handle.name)
     temporary.unlink()
@@ -138,8 +140,15 @@ def selected_links(args: argparse.Namespace) -> tuple[Path, Path]:
     )
 
 
+def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
+    for label, link in (("atm CLI", cli_link), ("atm daemon", daemon_link)):
+        if not link.is_symlink():
+            raise SwitchError(f"refusing to replace non-symlink {label} selector: {link}")
+
+
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
     cli_link, daemon_link = selected_links(args)
+    validate_selectors(cli_link, daemon_link)
     old_cli = require_executable(cli_link, "selected atm CLI")
     old_daemon = require_executable(daemon_link, "selected atm daemon")
     cli_target = require_executable(cli_target, "target atm CLI")
@@ -215,19 +224,20 @@ def status(args: argparse.Namespace) -> None:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--cli-link", help="system selector symlink for atm")
-    result.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
-    result.add_argument("--service", help="LaunchAgent label or system service name")
-    result.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
+    selectors = argparse.ArgumentParser(add_help=False)
+    selectors.add_argument("--cli-link", help="system selector symlink for atm")
+    selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
+    selectors.add_argument("--service", help="LaunchAgent label or system service name")
+    selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
     sub = result.add_subparsers(dest="command", required=True)
-    status_parser = sub.add_parser("status")
+    status_parser = sub.add_parser("status", parents=[selectors])
     status_parser.add_argument("--doctor", action="store_true", help="query the live daemon through the selected CLI")
-    switch = sub.add_parser("switch")
+    switch = sub.add_parser("switch", parents=[selectors])
     switch.add_argument("--cli", required=True, help="branch/release atm binary")
     switch.add_argument("--daemon", required=True, help="matching branch/release atm-daemon binary")
     switch.add_argument("--yes", action="store_true")
     switch.add_argument("--dry-run", action="store_true")
-    restore = sub.add_parser("restore")
+    restore = sub.add_parser("restore", parents=[selectors])
     restore.add_argument("--default-cli")
     restore.add_argument("--default-daemon")
     restore.add_argument("--yes", action="store_true")
