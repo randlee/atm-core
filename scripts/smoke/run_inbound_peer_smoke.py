@@ -18,6 +18,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -63,9 +64,9 @@ def load_config(path: Path) -> dict[str, Any]:
         require_string(local["advertised_host"], "local.advertised_host")
     if "log_command" in local:
         require_argv(local["log_command"], "local.log_command")
-    peers = value.get("peers")
-    if not isinstance(peers, list) or not peers:
-        raise SmokeError("peers must be a non-empty array")
+    peers = value.get("peers", [])
+    if not isinstance(peers, list) or (not peers and not isinstance(value.get("host"), dict)):
+        raise SmokeError("peers must be a non-empty array unless host mode is configured")
     for index, peer in enumerate(peers):
         if not isinstance(peer, dict):
             raise SmokeError(f"peers[{index}] must be an object")
@@ -80,6 +81,25 @@ def load_config(path: Path) -> dict[str, Any]:
         if "log_command" in peer:
             require_argv(peer["log_command"], f"peers[{index}].log_command")
     return value
+
+
+def validate_host_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Validate the single-host role used independently on Mac, M5, and Windows."""
+    host = config.get("host")
+    if not isinstance(host, dict):
+        raise SmokeError("host mode requires a `host` object")
+    require_string(host.get("name"), "host.name")
+    checks = host.get("local_checks", {})
+    if not isinstance(checks, dict):
+        raise SmokeError("host.local_checks must be an object")
+    for name, command in checks.items():
+        if name not in {"localhost/local loopback", "own-IP", "nudge"}:
+            raise SmokeError(f"unsupported host.local_checks key `{name}`")
+        require_argv(command, f"host.local_checks.{name}")
+    outbound = host.get("outbound_target")
+    if outbound is not None:
+        require_string(outbound, "host.outbound_target")
+    return host
 
 
 def command_result(command: list[str], timeout: float) -> dict[str, Any]:
@@ -254,7 +274,7 @@ def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:
 
 
 def render_host_pane(host: str, doctor: dict[str, Any] | None, rows: dict[str, tuple[str, str]], records: list[dict[str, Any]]) -> str:
-    """Render one standalone XHTML evidence pane; all dynamic content is escaped."""
+    """Render escaped pane body; the repository sc-compose template wraps it."""
     table_rows = []
     for case in PANE_CASES:
         status, detail = rows.get(case, ("not-run", "not run"))
@@ -275,17 +295,34 @@ def render_host_pane(host: str, doctor: dict[str, Any] | None, rows: dict[str, t
         assessment = "No executed failure. Remaining investigation: " + ", ".join(not_run)
     else:
         assessment = "No issues found by executed checks."
-    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
-<html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>ATM peer smoke — {escape(host)}</title>
-<style type=\"text/css\">body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:2rem;max-width:70rem}}table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid #c9c9c9;padding:.45rem;text-align:left}}.pass{{background:#e8f5e9}}.fail{{background:#ffebee}}.not-run{{background:#f5f5f5;color:#555}}.assessment{{border-left:4px solid #607d8b;padding:.7rem;background:#f7f9fa}}code{{white-space:pre-wrap}}</style>
-</head><body><h1>ATM peer smoke: {escape(host)}</h1><p><strong>Version / daemon:</strong> {escape(doctor_summary(doctor))}</p>
+    return f"""<h1>ATM peer smoke: {escape(host)}</h1><p><strong>Version / daemon:</strong> {escape(doctor_summary(doctor))}</p>
 <table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr></thead><tbody>{''.join(table_rows)}</tbody></table>
-<h2>Session log</h2><ul>{log_rows}</ul><h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p></body></html>
-"""
+<h2>Session log</h2><ul>{log_rows}</ul><h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p>"""
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PANE_TEMPLATE = REPO_ROOT / "templates/smoke-report/inbound-peer-pane.xhtml.j2"
+REVIEW_TEMPLATE = REPO_ROOT / "templates/smoke-report/inbound-peer-review.xhtml.j2"
+
+
+def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
+    """Render only through the repository's sc-compose template mechanism."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", encoding="utf-8", delete=False) as handle:
+        json.dump(variables, handle)
+        variables_path = Path(handle.name)
+    try:
+        result = command_result([
+            "sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
+            "--var-file", str(variables_path), "--output", str(output),
+        ], 15.0)
+        if result["exit_code"] != 0:
+            raise SmokeError("sc-compose render failed: " + (result["stderr"] or result["stdout"]))
+    finally:
+        variables_path.unlink(missing_ok=True)
 
 
 def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict[str, Any]], records: list[dict[str, Any]]) -> None:
+    generated_at = datetime.now(timezone.utc).isoformat()
     local_doctor = next((item.get("result") for item in records if item.get("phase") == "local-doctor"), None)
     local_rows = {"doctor": status_for(records, "local-doctor")}
     for peer in peers:
@@ -295,7 +332,7 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
             read_status, _ = status_for(records, f"{peer['name']}-read-{kind}")
             status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
             local_rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, detail)
-    (evidence_dir / "local.xhtml").write_text(render_host_pane("local", local_doctor, local_rows, records), encoding="utf-8")
+    compose(PANE_TEMPLATE, {"title": "ATM peer smoke — local", "generated_at": generated_at, "host": "local", "body_html": render_host_pane("local", local_doctor, local_rows, records)}, evidence_dir / "local.xhtml")
     for peer in peers:
         doctor = next((item.get("result") for item in records if item.get("phase") == f"{peer['name']}-doctor"), None)
         rows = {"doctor": status_for(records, f"{peer['name']}-doctor")}
@@ -305,7 +342,50 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
             status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
             rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, send_detail if status == "pass" else read_detail)
         peer_records = [item for item in records if item.get("phase", "").startswith(f"{peer['name']}-")]
-        (evidence_dir / f"{peer['name']}.xhtml").write_text(render_host_pane(peer["name"], doctor, rows, peer_records), encoding="utf-8")
+        compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {peer['name']}", "generated_at": generated_at, "host": peer["name"], "body_html": render_host_pane(peer["name"], doctor, rows, peer_records)}, evidence_dir / f"{peer['name']}.xhtml")
+
+
+def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:
+    """Run one host independently; peers run this before sharing their pane/handoff."""
+    host = validate_host_config(config)
+    local = config["local"]
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    evidence_dir = output_root / stamp
+    evidence_dir.mkdir(parents=True, exist_ok=False)
+    records: list[dict[str, Any]] = []
+    doctor = command_result(local_command(local, ["doctor", "--json"]), timeout)
+    records.append({"phase": "doctor", "result": doctor, "passed": doctor["exit_code"] == 0})
+    compact("doctor", doctor["exit_code"] == 0, "ready" if doctor["exit_code"] == 0 else doctor["stderr"] or "failed")
+    for name, command in host.get("local_checks", {}).items():
+        result = command_result(command, timeout)
+        passed = result["exit_code"] == 0
+        records.append({"phase": name, "result": result, "passed": passed})
+        compact(name, passed, "completed" if passed else result["stderr"] or "failed")
+    handoff: list[dict[str, Any]] = []
+    target = host.get("outbound_target")
+    if target:
+        for kind, needs_ack in (("remote incoming no-ack", False), ("remote incoming requires-ack", True)):
+            args = ["send", target, f"inbound-smoke-{host['name']}-{kind}-{stamp}", "--json"]
+            if needs_ack:
+                args.insert(-1, "--requires-ack")
+            result = command_result(local_command(local, args), timeout)
+            try:
+                message_id = extract_message_id(result["stdout"]) if result["exit_code"] == 0 else None
+            except SmokeError as error:
+                message_id = None
+                result["parse_error"] = str(error)
+            passed = bool(message_id)
+            records.append({"phase": kind, "result": result, "message_id": message_id, "passed": passed})
+            handoff.append({"kind": kind, "message_id": message_id, "passed": passed})
+            compact(kind, passed, message_id or result.get("parse_error", result["stderr"] or "failed"))
+    rows = {case: status_for(records, case) for case in PANE_CASES}
+    logs = {"local": capture_log(local.get("log_command"), timeout)}
+    (evidence_dir / "handoff.json").write_text(json.dumps({"host": host["name"], "generated_at": datetime.now(timezone.utc).isoformat(), "outbound": handoff}, indent=2) + "\n", encoding="utf-8")
+    (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all(item.get("passed") for item in records) else "fail", "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
+    compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {host['name']}", "generated_at": datetime.now(timezone.utc).isoformat(), "host": host["name"], "body_html": render_host_pane(host["name"], doctor, rows, records)}, evidence_dir / f"{host['name']}.xhtml")
+    passed = all(item.get("passed") for item in records)
+    compact("evidence", passed, str(evidence_dir))
+    return 0 if passed else 1
 
 
 def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:
@@ -393,8 +473,10 @@ def main() -> int:
     parser.add_argument("--evidence-dir", required=True, type=Path)
     parser.add_argument("--timeout-seconds", type=float, default=8.0)
     parser.add_argument("--receive-timeout-seconds", type=float, default=12.0)
+    parser.add_argument("--host", action="store_true", help="run only this host's local checks/outbound sends")
     args = parser.parse_args()
-    return run(load_config(args.config), args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds)
+    config = load_config(args.config)
+    return run_host(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds) if args.host else run(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds)
 
 
 if __name__ == "__main__":

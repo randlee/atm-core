@@ -7,6 +7,13 @@
     "advertised_host": "192.168.128.82",
     "log_command": ["sh", "-lc", "tail -n 200 ~/.atm/logs/atm-daemon.log 2>/dev/null || true"]
   },
+  "host": {
+    "name": "local",
+    "local_checks": {
+      "localhost/local loopback": ["/opt/homebrew/bin/atm", "send", "arch-ctm@atm-dev.localhost", "local-loopback-proof", "--json"],
+      "own-IP": ["/opt/homebrew/bin/atm", "send", "arch-ctm@atm-dev.192.168.128.82", "own-ip-proof", "--json"]
+    }
+  },
   "peers": [
     {
       "name": "m5",

@@ -102,3 +102,27 @@ Every run also writes one valid standalone XHTML pane per computer:
 information, the full fixed smoke matrix, executed-session entries, and a
 bottom assessment. Rows not covered by this narrowly scoped inbound runner are
 explicitly `— not-run`; they are never represented as passing.
+
+### One invocation per host and combined review
+
+Do not make the Mac SSH runner a substitute for host evidence. Run this command
+once on each computer using its host-supplied config; a peer's `outbound_target`
+is the Mac's qualified address, so M5 and fastpc4 perform their own outbound
+sends and publish their own `handoff.json` and XHTML pane:
+
+```bash
+python3 scripts/smoke/run_inbound_peer_smoke.py --host \
+  --config inbound-peer-smoke.json --evidence-dir artifacts/peer-smoke/inbound
+```
+
+Each host pushes its timestamped evidence directory. After pulling the three
+current panes to one directory, the Mac combines them through the repository
+`sc-compose` template (and refuses an absent, wrongly labelled, malformed, or
+older-than-30-minute pane):
+
+```bash
+python3 scripts/smoke/combine_inbound_peer_smoke.py \
+  --panes-dir artifacts/peer-smoke/collected \
+  --hosts local,m5,fastpc4 \
+  --output artifacts/peer-smoke/collected/review.xhtml
+```
