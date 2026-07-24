@@ -40,3 +40,12 @@ add no message schema, CLI grammar, HTTP resource, or alternate write path.
 The checked-in OpenAPI 3.1 description is a durable interface artifact. A
 browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
+
+## Physical peer smoke
+
+Before peer smoke, use the
+[daemon-switch skill](../../../.claude/skills/daemon-switch/SKILL.md) to select
+one matching CLI/daemon candidate pair, restart its one managed daemon, and
+verify native `atm doctor --json`. After smoke completes or aborts, restore the
+latest installed pair with the same skill, restart once, and verify doctor
+again. Do not leave a worktree daemon selected for other teams.
