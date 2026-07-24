@@ -130,3 +130,30 @@ the evidence and result here. Do not add a TLS bypass or alternate transport.
 - The enabled durable peer-interface record now binds/advertises that address.
   The certificate fingerprint is unchanged. Windows must refresh its exact
   host-keyed trust record and restart before the reciprocal send.
+
+## Windows Mac Endpoint Refresh And Outbound Finding
+
+- Windows refreshed the durable Mac trust record to enabled host
+  `192.168.128.82` with the unchanged fingerprint
+  `03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`, and
+  revoked the stale `10.202.137.160` record. The CLI exposes `revoke`, not a
+  separate `disable` operation.
+- Controlled restart replaced the prior Windows release daemon with PID
+  `37876`; `doctor --json` is healthy/ready and listener
+  `10.10.100.98:43101` is present.
+- The requested reciprocal labelled send to
+  `arch-ctm@atm-dev.192.168.128.82` did not return a public CLI result before
+  the local request deadline. This is not reliable non-delivery evidence:
+  the prior `pong` returned the same CLI `10060` but was received by Mac.
+- Root cause: the local CLI/daemon HTTP request deadline is 3 seconds, but
+  `HttpsRequestDeadline::default()` permits each synchronous peer network leg
+  5 seconds. `DaemonRequestDispatcher::dispatch` ignores the incoming
+  `RequestDeadline` when it selects that HTTPS deadline. The client may time
+  out and report `failed to read daemon HTTP headers` while peer delivery is
+  still in progress or completes. This is a cross-platform product deadline
+  contract defect, not a Windows daemon crash or transport fallback issue.
+- Do not interpret additional CLI `10060` results as physical peer failures
+  until the outer request deadline is propagated to outbound HTTPS work (or
+  the public local request deadline is made coherently larger than that work).
+  Sanitized Windows evidence:
+  `artifacts/peer-smoke/windows/mac-endpoint-refresh-73835a4e/report.md`.
