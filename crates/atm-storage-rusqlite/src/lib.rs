@@ -745,6 +745,32 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_backend_replaces_a_verified_idempotent_message_envelope() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let original = message("atm:replace-envelope", "hello");
+        store.save_message(&original).expect("save origin");
+
+        let mut peer_ingress = original.clone();
+        peer_ingress
+            .envelope
+            .extra
+            .insert("sourceHost".to_string(), json!("localhost"));
+        store
+            .save_message(&peer_ingress)
+            .expect("replace verified peer ingress envelope");
+
+        let loaded = store
+            .load_message(&original.message_key)
+            .expect("load")
+            .expect("message");
+        assert_eq!(
+            loaded.envelope.extra.get("sourceHost"),
+            Some(&json!("localhost"))
+        );
+    }
+
+    #[test]
     fn sqlite_backend_saves_loads_and_lists_rosters() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let store = backend.roster_store();
