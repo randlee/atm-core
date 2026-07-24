@@ -81,6 +81,18 @@ class InboundPeerSmokeTests(unittest.TestCase):
             config = RUNNER.load_config(path)
         self.assertEqual(RUNNER.validate_host_config(config)["name"], "m5")
 
+    def test_handoff_requires_exact_ids_and_known_kinds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "handoff.json"
+            path.write_text(json.dumps({"host": "m5", "outbound": [
+                {"kind": "remote incoming no-ack", "message_id": "01NOACK"},
+                {"kind": "remote incoming requires-ack", "message_id": "01ACK"},
+            ]}), encoding="utf-8")
+            self.assertEqual(RUNNER.load_handoff(path), ("m5", [
+                {"kind": "remote incoming no-ack", "message_id": "01NOACK"},
+                {"kind": "remote incoming requires-ack", "message_id": "01ACK"},
+            ]))
+
 
 if __name__ == "__main__":
     unittest.main()

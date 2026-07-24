@@ -218,6 +218,32 @@ def read_received(local: dict[str, Any], message_id: str, timeout: float, deadli
     return latest
 
 
+def load_handoff(path: Path) -> tuple[str, list[dict[str, str]]]:
+    """Read peer-published exact IDs; never search a mailbox by body/content."""
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SmokeError(f"cannot read handoff {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise SmokeError(f"handoff {path} must be a JSON object")
+    host = require_string(value.get("host"), f"handoff {path}.host")
+    outbound = value.get("outbound")
+    if not isinstance(outbound, list):
+        raise SmokeError(f"handoff {path}.outbound must be an array")
+    accepted: list[dict[str, str]] = []
+    for item in outbound:
+        if not isinstance(item, dict):
+            raise SmokeError(f"handoff {path} has invalid outbound item")
+        kind = item.get("kind")
+        message_id = item.get("message_id")
+        if kind not in {"remote incoming no-ack", "remote incoming requires-ack"} or not isinstance(message_id, str) or not message_id:
+            raise SmokeError(f"handoff {path} has invalid outbound kind or message_id")
+        accepted.append({"kind": kind, "message_id": message_id})
+    if len({(item["kind"], item["message_id"]) for item in accepted}) != len(accepted):
+        raise SmokeError(f"handoff {path} repeats an exact message ID")
+    return host, accepted
+
+
 def compact(label: str, passed: bool, detail: str) -> None:
     print(f"{'PASS' if passed else 'FAIL'} {label}: {detail}", flush=True)
 
@@ -345,7 +371,7 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
         compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {peer['name']}", "generated_at": generated_at, "host": peer["name"], "body_html": render_host_pane(peer["name"], doctor, rows, peer_records)}, evidence_dir / f"{peer['name']}.xhtml")
 
 
-def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:
+def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float, handoff_paths: list[Path]) -> int:
     """Run one host independently; peers run this before sharing their pane/handoff."""
     host = validate_host_config(config)
     local = config["local"]
@@ -378,7 +404,23 @@ def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_
             records.append({"phase": kind, "result": result, "message_id": message_id, "passed": passed})
             handoff.append({"kind": kind, "message_id": message_id, "passed": passed})
             compact(kind, passed, message_id or result.get("parse_error", result["stderr"] or "failed"))
+    for handoff_path in handoff_paths:
+        peer, outbound_ids = load_handoff(handoff_path)
+        for item in outbound_ids:
+            message_id = item["message_id"]
+            result = read_received(local, message_id, timeout, time.monotonic() + receive_timeout)
+            message = result.get("message")
+            requires_ack = item["kind"] == "remote incoming requires-ack"
+            passed = bool(message) and (not requires_ack or message.get("requires_ack") is True)
+            phase = f"{item['kind']}:{peer}"
+            records.append({"phase": phase, "result": result, "message_id": message_id, "passed": passed})
+            compact(phase, passed, message_id if passed else result.get("stderr") or "exact ID not visible locally")
     rows = {case: status_for(records, case) for case in PANE_CASES}
+    for case in ("remote incoming no-ack", "remote incoming requires-ack"):
+        matching = [item for item in records if item.get("phase", "").startswith(case + ":")]
+        if matching:
+            passed = all(item.get("passed") for item in matching)
+            rows[case] = ("pass" if passed else "fail", ", ".join(str(item.get("message_id", "")) for item in matching))
     logs = {"local": capture_log(local.get("log_command"), timeout)}
     (evidence_dir / "handoff.json").write_text(json.dumps({"host": host["name"], "generated_at": datetime.now(timezone.utc).isoformat(), "outbound": handoff}, indent=2) + "\n", encoding="utf-8")
     (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all(item.get("passed") for item in records) else "fail", "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
@@ -474,9 +516,10 @@ def main() -> int:
     parser.add_argument("--timeout-seconds", type=float, default=8.0)
     parser.add_argument("--receive-timeout-seconds", type=float, default=12.0)
     parser.add_argument("--host", action="store_true", help="run only this host's local checks/outbound sends")
+    parser.add_argument("--handoff", action="append", type=Path, default=[], help="peer handoff.json with exact IDs for this host to verify; repeat per peer")
     args = parser.parse_args()
     config = load_config(args.config)
-    return run_host(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds) if args.host else run(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds)
+    return run_host(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds, args.handoff) if args.host else run(config, args.evidence_dir, args.timeout_seconds, args.receive_timeout_seconds)
 
 
 if __name__ == "__main__":
