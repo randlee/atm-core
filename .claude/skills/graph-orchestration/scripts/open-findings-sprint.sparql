@@ -26,7 +26,8 @@ SELECT ?finding ?sprint ?severity ?foundAt ?description WHERE {
 
   # Open: no Resolution references this finding
   FILTER NOT EXISTS { ?r a triage:Resolution ; triage:resolves ?finding . }
+
+  # Sort key: important before minor, then by time
+  BIND(IF(?severity = "important", 0, 1) AS ?sev_order)
 }
-ORDER BY
-  (IF(?severity = "important", 0, 1))
-  ?foundAt
+ORDER BY ?sev_order ?foundAt

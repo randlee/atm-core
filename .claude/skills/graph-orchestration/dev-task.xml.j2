@@ -46,7 +46,7 @@ defaults:
     <step id="0">Critically review the sprint plan and your implementation. Read `{{ criteria_doc }}` again and confirm every acceptance criterion is fully and completely met. Do not proceed if any criterion is unresolved or partially met.</step>
     <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing — do not proceed with a failing test suite.</step>
     <step id="2">Commit all remaining changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
-    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, and the full commit SHA from the push.</step>
+    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, and the full commit SHA from the push. Do NOT append any triage events — team-lead handles all TTL event writes.</step>
     <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`.</step>
   </final-actions>
 </atm-task>

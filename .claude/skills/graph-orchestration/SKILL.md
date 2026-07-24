@@ -66,11 +66,12 @@ RESULT=$(next-dev-task F .sprints/F)
 PHASE=$(echo "$RESULT" | jq -r .phase)
 ```
 
-Three outcomes from the cursor query:
+Four outcomes from the cursor query:
 
 | `phase` | Meaning |
 |---|---|
-| `TRAVERSAL` | A sprint is ready (no unfulfilled Assignment, no valid Completion) — check triage-findings to pick template |
+| `TRAVERSAL` | A sprint is ready (no in-flight Assignment, no valid Completion) — check triage-findings to pick template |
+| `AWAITING` | Cursor is empty but some sprints lack valid Completions — in-flight assignments are being worked |
 | `CLEANUP` | All sprints have valid Completions but open non-blocking findings remain |
 | `DONE` | All sprints have valid Completions and no open non-blocking findings — phase complete |
 
@@ -84,6 +85,9 @@ cursor_result = next-dev-task F .sprints/F
 
 if cursor_result.phase == "DONE":
     → phase complete, merge
+
+if cursor_result.phase == "AWAITING":
+    → wait for in-flight dev work; poll again after expected delivery
 
 if cursor_result.phase == "CLEANUP":
     → dispatch dev-fix.xml.j2 for open non-blocking findings
@@ -112,6 +116,7 @@ else:
   non-blocking findings back to origin branches causes 3–4× more QA cycles —
   avoid unless there is a specific reason (e.g. a finding is isolated to an
   early sprint with no forward merge path).
+- **Team-lead is sole writer of TTL events. Never delegate TTL writes to dev agents.**
 
 ## Dev Dispatch (no blocking findings)
 
@@ -164,6 +169,10 @@ triage-findings to determine template selection.
 
 ## Appending Events
 
+**Team-lead is the sole writer of TTL events.** Agents (dev, QA) never append to
+`.sprints/` files directly. Dev sends an ATM completion message; team-lead
+appends triage:Completion and triage:Resolution events, then validates.
+
 Assignments and Completions go into `events.ttl`. They are file-appended and
 committed immediately. Use UTC timestamps from the local clock — never from
 agent self-report.
@@ -177,22 +186,28 @@ triage:a<N> a triage:Assignment ;
     triage:assignedAt "<UTC>"^^xsd:dateTime .
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-S<n>"
+# Validate after every append
+.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Completion — append when a sprint's dev pass is accepted
+# Completion — append when team-lead receives dev's ATM completion message
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:c<N> a triage:Completion ;
     triage:ofSprint triage:Phase<X>-S<n> ;
     triage:at "<UTC>"^^xsd:dateTime .
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Completion <PHASE>-S<n>"
+# Validate after every append
+.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 
-# Resolution — append when a non-blocking finding is actually fixed
+# Resolution — append when team-lead confirms a non-blocking finding is fixed
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:r<N> a triage:Resolution ;
     triage:resolves triage:f<N> ;
     triage:resolvedAt "<UTC>"^^xsd:dateTime .
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Resolution f<N>"
+# Validate after every append
+.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
 ```
 
 **Assignment uniqueness**: Each Assignment must include the dev agent name and
@@ -261,10 +276,12 @@ A Completion is valid only if no blocking finding for that sprint was filed
 with `foundAt > completedAt`. If QA files a blocking finding after a
 Completion, the Completion is invalidated:
 
-1. `cursor.sparql` snaps back to that sprint (the unfulfilled Assignment
-   filter does not block — a new Assignment is required)
+1. `cursor.sparql` snaps back to that sprint (the truly-in-flight filter
+   does not block — dev has sent a Completion, so the sprint is not in-flight;
+   a new Assignment is required for re-dispatch)
 2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and appends a new Completion
+3. Dev fixes the blocker and sends an ATM completion message; team-lead
+   appends a new Completion
 4. Dev merges forward into the next sprint's worktree, picking up any
    important/minor findings on the way (Step 4 in the j2 template)
 
@@ -316,13 +333,13 @@ graph-orchestration:
 |---|---|---|
 | `triage:Phase` | — | Phase identity node |
 | `triage:Sprint` | `inPhase`, `order`, `criteria` | One per sprint; `order` is unique within a phase |
-| `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended when team-lead dispatches; must be unique per sprint |
-| `triage:Completion` | `ofSprint`, `at` | Appended when sprint dev pass is accepted; may be invalidated by a later blocking finding |
-| `triage:Resolution` | `resolves`, `resolvedAt` | Appended when a non-blocking finding is fixed; blocking findings need no Resolution |
+| `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by team-lead when dispatching; must be unique per sprint |
+| `triage:Completion` | `ofSprint`, `at` | Appended by team-lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
+| `triage:Resolution` | `resolves`, `resolvedAt` | Appended by team-lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
 Findings are defined by the triage-findings skill and live in
 `.triage/*/findings/*.ttl`. Resolution events referencing those findings are
-appended to events.ttl by the orchestrator.
+appended to events.ttl by team-lead.
 
 ## Scripts
 
@@ -332,9 +349,11 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 |---|---|
 | `next-dev-task` | Entry point: cursor resolution, returns JSON |
 | `query_runner.py` | Python SPARQL runner (rdflib) |
-| `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without an unfulfilled Assignment or valid Completion); parameter: `$PHASE` |
+| `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |
 | `open-findings-sprint.sparql` | Returns open non-blocking findings across the phase (used for CLEANUP detection); parameter: `$PHASE` |
+| `all-complete.sparql` | Returns sprints lacking a valid Completion; zero rows = all sprints done, proceed to CLEANUP/DONE check; parameter: `$PHASE` |
 | `validate-structure.sparql` | Phase structure integrity check — zero rows = valid; parameter: `$PHASE` |
+| `test_queries.py` | pytest unit tests for all SPARQL queries (run: `python3 -m pytest scripts/test_queries.py -v`) |
 
 Usage:
 ```bash
@@ -352,6 +371,15 @@ Output JSON (TRAVERSAL):
     "sprint_order": 1,
     "criteria_doc": "ac/FS1.md"
   }
+}
+```
+
+Output JSON (AWAITING):
+```json
+{
+  "phase": "AWAITING",
+  "vars": {},
+  "_incomplete_sprints": ["urn:atm:triage:PhaseF-S1"]
 }
 ```
 

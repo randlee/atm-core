@@ -15,6 +15,13 @@ Output shape (TRAVERSAL):
     }
   }
 
+Output shape (AWAITING):
+  {
+    "phase": "AWAITING",
+    "vars": {},
+    "_incomplete_sprints": ["urn:atm:triage:PhaseF-S1", ...]
+  }
+
 Output shape (CLEANUP):
   {
     "phase": "CLEANUP",
@@ -52,6 +59,19 @@ TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
 
 
+def _find_repo_root(start: Path):
+    """Walk up from start to find the directory containing .triage/"""
+    current = start.resolve()
+    for _ in range(10):  # max 10 levels up
+        if (current / ".triage").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
 def load_graph(ttl_dir: str) -> Graph:
     g = Graph()
     base = Path(ttl_dir)
@@ -63,6 +83,12 @@ def load_graph(ttl_dir: str) -> Graph:
     g.parse(str(structure), format="turtle")
     if events.exists():
         g.parse(str(events), format="turtle")
+    # Load triage findings from repo root .triage/ (relative to TTL dir's parent)
+    # Walk up from ttl_dir to find repo root (contains .triage/)
+    repo_root = _find_repo_root(base)
+    if repo_root:
+        for findings_file in sorted(repo_root.glob(".triage/*/findings/*.ttl")):
+            g.parse(str(findings_file), format="turtle")
     return g
 
 
@@ -82,6 +108,13 @@ def main():
 
     phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
     g = load_graph(ttl_dir)
+
+    # ── Validate structure before cursor ─────────────────────────────────────
+    validate_rows = run_sparql(g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri})
+    if validate_rows:
+        for row in validate_rows:
+            print(f"ERROR: structure violation: {row[0]} — {row[1]}", file=sys.stderr)
+        sys.exit(1)
 
     # ── Cursor ───────────────────────────────────────────────────────────────
     cursor_rows = run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})
@@ -103,7 +136,18 @@ def main():
         }, indent=2))
         return
 
-    # ── Cursor empty — check for open non-blocking findings (CLEANUP) ────────
+    # ── Cursor empty — verify all sprints have valid Completions ─────────────
+    incomplete_rows = run_sparql(g, script_dir / "all-complete.sparql", {"PHASE": phase_iri})
+    if incomplete_rows:
+        # Some sprints are in-flight or have invalid Completions
+        print(json.dumps({
+            "phase": "AWAITING",
+            "vars": {},
+            "_incomplete_sprints": [str(r[0]) for r in incomplete_rows],
+        }, indent=2))
+        return
+
+    # ── Check for open non-blocking findings (CLEANUP) ───────────────────────
     cleanup_rows = run_sparql(
         g, script_dir / "open-findings-sprint.sparql", {"PHASE": phase_iri}
     )

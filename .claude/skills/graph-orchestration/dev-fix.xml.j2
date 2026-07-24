@@ -28,7 +28,7 @@ defaults:
      All prior sprint branches have been merged forward into this branch before dispatch.
      The findings list covers the ENTIRE phase — not just one sprint. Fix all findings here;
      do not return any finding to its origin branch. #}
-  <description>Fix pass on sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}. Address all open findings listed below before appending Completion.</description>
+  <description>Fix pass on sprint node {{ node_id }} (order {{ node_order }}) in {{ sprint }}. Address all open findings listed below before sending ATM completion to team-lead.</description>
 
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
@@ -47,10 +47,10 @@ defaults:
 
   <fix-instructions>
     <rule id="priority-order">Fix ALL findings in order: Blocking → Important → Minor. Do not defer non-blocking findings to a later pass.</rule>
-    <rule id="blocking">Blocking findings: fix completely. Closure is by timestamp — a triage:Completion event postdating the finding's foundAt closes it. Do NOT append a triage:Resolution for blocking findings. If the fix is inadequate, QA will file a new finding.</rule>
-    <rule id="non-blocking">Important/Minor: fix all. Append a triage:Resolution per finding fixed. Skip only if fixing conflicts with a blocking fix.</rule>
+    <rule id="blocking">Blocking findings: fix completely. Team-lead will append a triage:Completion event after verifying your fix. Do NOT append any triage events yourself.</rule>
+    <rule id="non-blocking">Important/Minor: fix all. Note each finding IRI in your ATM completion message — team-lead will append triage:Resolution events. Skip only if fixing conflicts with a blocking fix; explain the reason in your completion message.</rule>
     <rule id="immutability">Never amend, edit, or delete existing findings. Never reference the old finding when re-assessing — QA files a new finding at the new severity if needed.</rule>
-    <rule id="completion">Append exactly one triage:Completion for sprint {{ node_id }} when done, with an accurate UTC timestamp from the local clock.</rule>
+    <rule id="no-ttl-writes">Do NOT append any triage:Completion, triage:Resolution, or other triage events to any TTL file. Team-lead is the sole writer of TTL events.</rule>
   </fix-instructions>
 
   <workflow>
@@ -58,22 +58,21 @@ defaults:
     <step id="b">Read `{{ criteria_doc }}` before editing. All acceptance criteria must still be met — do not weaken or skip any criterion from the original spec.</step>
     <step id="c">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
     <step id="d">Work through every finding in `<open-findings>` in listed order. Fix all. For blocking: address root cause fully. For non-blocking: fix all; skip only on direct conflict with a blocking fix.</step>
-    <step id="e">Append triage:Resolution events for each non-blocking finding you fixed, then append the triage:Completion for this sprint. Both go in the same commit.</step>
   </workflow>
 
   <final-actions>
     {% if cleanup_mode == "true" %}
     <step id="0">Confirm this is the merged highest-sprint branch. Verify `git log --oneline` shows commits from all prior sprints in this phase — do not proceed if any sprint's work is missing.</step>
-    <step id="1">Fix ALL listed findings — important findings before minor. For each one fixed, append a triage:Resolution referencing that finding's IRI.</step>
+    <step id="1">Fix ALL listed findings — important findings before minor.</step>
     <step id="2">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing.</step>
-    <step id="3">Commit all changes (including appended TTL events) and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
-    <step id="4">Send a completion message to team-lead via ATM including: branch `{{ branch }}`, the full commit SHA, and the full list of Resolution IRIs appended in this pass.</step>
+    <step id="3">Commit all changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
+    <step id="4">Send an ATM completion message to team-lead including: branch `{{ branch }}`, the full commit SHA, and for each finding in `<open-findings>`: its IRI, whether you fixed it, and a one-line note if skipped with reason. Do NOT append any triage events — team-lead handles all TTL writes.</step>
     <step id="5">Open a PR from `{{ branch }}` to `{{ pr_target }}` (the phase integration branch). Do NOT merge into a next sprint worktree — this branch is the final consolidated cleanup target.</step>
     {% else %}
     <step id="0">Critically review the sprint plan and your implementation. Confirm all blocking findings are fully resolved and every acceptance criterion in `{{ criteria_doc }}` is met. Do not proceed if any blocking finding is unaddressed or any criterion is incomplete.</step>
     <step id="1">Run `{{ test_command }}` and confirm it passes with zero failures. Fix any failures before continuing.</step>
-    <step id="2">Commit all changes (including appended TTL events) and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
-    <step id="3">Send a completion message to team-lead via ATM including: node `{{ node_id }}`, branch `{{ branch }}`, the full commit SHA, and the list of finding IRIs for which you appended triage:Resolution events.</step>
+    <step id="2">Commit all changes and push to remote: `git push origin {{ branch }}`. Note the full commit SHA.</step>
+    <step id="3">Send an ATM completion message to team-lead including: node `{{ node_id }}`, branch `{{ branch }}`, the full commit SHA, and for each finding in `<open-findings>`: its IRI, whether you fixed it, and a one-line note if skipped with reason. Do NOT append any triage events — team-lead handles all TTL writes.</step>
     <step id="4">Merge this branch into the next sprint worktree: from within the next sprint's worktree, run `git fetch origin && git merge origin/{{ branch }}`.</step>
     {% endif %}
   </final-actions>
