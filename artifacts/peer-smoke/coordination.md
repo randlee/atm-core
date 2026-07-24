@@ -62,10 +62,14 @@ human intermediary.
 
 ## Current direct action
 
-**cwin:** poll `windows-smoke@atm-dev` for Mac message
-`01KY8GPS700NA7RQG1JVXX6XQG`, record the received envelope/ULID, then send one
-new labelled reciprocal message to `arch-ctm@atm-dev.10.202.137.160`. Append
-the result here and push. Do not start acknowledgement or negative cases yet.
+**cwin:** the Mac LAN address changed. Update the enabled durable Mac trust
+record to host `192.168.128.82` with the unchanged fingerprint
+`03DC87FA38DD1C20C3528AC9444145C2B1EFA3F98FD46AC0470CCC4BB9730857`, disable
+the old `10.202.137.160` record, and perform one controlled singleton restart.
+Then poll `windows-smoke@atm-dev` for Mac message `01KY8GPS700NA7RQG1JVXX6XQG`,
+record the received envelope/ULID, and send one new labelled reciprocal message
+to `arch-ctm@atm-dev.192.168.128.82`. Append the result here and push. Do not
+start acknowledgement or negative cases yet.
 
 ## Mac-to-Windows case 01: TLS diagnostic
 
@@ -118,3 +122,11 @@ the evidence and result here. Do not add a TLS bypass or alternate transport.
 - The pre-restart Windows retry `01KY89HN323HXVA2JYDX397KAN` was not present
   on the Mac; it is treated as a pre-remediation failed delivery, not a proof
   case.
+
+## Mac current peer endpoint
+
+- Current Mac LAN address is `192.168.128.82`; candidate daemon PID `15899` is
+  the sole managed daemon and listens on `192.168.128.82:43101`.
+- The enabled durable peer-interface record now binds/advertises that address.
+  The certificate fingerprint is unchanged. Windows must refresh its exact
+  host-keyed trust record and restart before the reciprocal send.
