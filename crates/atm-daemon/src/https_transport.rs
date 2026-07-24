@@ -168,13 +168,7 @@ impl HttpsMessageTransport for HttpsTransport {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
         }
         let host = peer.host.to_string();
-        let address = resolve_peer_address(&host)?;
-        let mut stream =
-            TcpStream::connect_timeout(&address, deadline.connect).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to connect to HTTPS peer {host} at {address}: {source}"
-                ))
-            })?;
+        let mut stream = connect_peer(&host, deadline.connect)?;
         let request = RequestEnvelope::Write(Box::new(request));
         match self.security {
             HttpWireSecurity::MutualTls => {
@@ -560,16 +554,28 @@ fn complete_handshake(
     Ok(())
 }
 
-fn resolve_peer_address(host: &str) -> Result<SocketAddr, AtmError> {
+fn connect_peer(host: &str, deadline: Duration) -> Result<TcpStream, AtmError> {
     use std::net::ToSocketAddrs;
-    let mut addresses = format!("{host}:43101")
+    let addresses = format!("{host}:43101")
         .to_socket_addrs()
         .map_err(|_source| {
             AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}"))
         })?;
-    addresses.next().ok_or_else(|| {
-        AtmError::daemon_unavailable(format!("HTTPS peer {host} resolved to no addresses"))
-    })
+    let mut last_error = None;
+    for address in addresses {
+        match TcpStream::connect_timeout(&address, deadline) {
+            Ok(stream) => return Ok(stream),
+            Err(source) => last_error = Some((address, source)),
+        }
+    }
+    match last_error {
+        Some((address, source)) => Err(AtmError::daemon_unavailable(format!(
+            "failed to connect to HTTPS peer {host} at {address}: {source}"
+        ))),
+        None => Err(AtmError::daemon_unavailable(format!(
+            "HTTPS peer {host} resolved to no addresses"
+        ))),
+    }
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {

@@ -398,10 +398,17 @@ impl RuntimeComposition {
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         self.begin_startup()
             .or_else(|error| self.rollback_failed_startup(error))?;
+        // Bind the public peer listener before publishing the local HTTP
+        // endpoint. A second daemon is rejected by socket exclusivity here,
+        // before it can disturb the serving daemon's local-client metadata.
+        self.start_https_listeners()
+            .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
             .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
-            .or_else(|error| self.rollback_failed_startup(error))?;
-        self.start_https_listeners()
+            .map_err(|error| {
+                let _ = self.stop_https_listeners();
+                error
+            })
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
