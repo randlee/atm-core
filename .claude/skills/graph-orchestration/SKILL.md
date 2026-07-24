@@ -139,12 +139,14 @@ depends on which pass this is:
 - `req-qa`
 - `arch-qa`
 - `rust-qa-agent`
-- `flaky-test-qa` (when test instability risk is present)
 
 **QA-1 only** (first QA pass on a sprint node):
 - `ruthless-boundary-qa`
 - `rust-best-practices-agent`
 - `rust-service-hardening-agent`
+
+**Conditional:**
+- `flaky-test-qa` — only when flaky or long-running CI failures are present in this sprint
 
 **Subsequent passes:** these three run only if they have an open finding from
 this sprint node — i.e., they need to verify their own fix was addressed.
