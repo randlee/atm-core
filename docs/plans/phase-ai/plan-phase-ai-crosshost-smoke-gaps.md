@@ -23,7 +23,7 @@ only the post-write adapter of the existing canonical write path.
 | local 3s deadline conflicts with independent 5s peer legs | AI.23 | one propagated absolute deadline and cancellation ownership |
 | local timeout is falsely `DAEMON_UNAVAILABLE`; handler errors disappear | AI.24 | typed uncertainty result and retained terminal events |
 | persistence event claims `sent` before peer acceptance | AI.24 | truthful delivery event contract |
-| Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.25 | per-peer connection lock with release-then-check reconciliation loop |
+| Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.25 | bounded per-peer reconciliation schedule with backoff |
 | smoke treated local `outcome sent` as receipt | AI.26 | receiver-side ULID evidence and physical rerun |
 | product releases block compatible CLI/daemon pairs | AI.27 | explicit schema and HTTP SemVer compatibility contract |
 
@@ -57,46 +57,6 @@ CLI/daemon builds are not artificially blocked by release-label drift.
   persistence is separately observable, never proof of receiver receipt.
 - A failed peer write may schedule bounded reconciliation of existing immutable
   records, but it may not create a per-message queue, receipt, or retry state.
-- AI.25 gates outbound connection attempts (never local writes) behind a
-  per-peer connection lock:
-  1. **Connect, then read the backlog, then send it as one batch.** The
-     backlog is read only after the connection succeeds, not before, so any
-     record written during the connect attempt is still captured. Justification:
-     reading first risks missing stragglers written mid-attempt.
-  2. **The connect attempt is the only reachability signal.** No separate
-     probe: connect uses a non-blocking socket with an explicit bounded
-     deadline (not the OS default SYN-retry timeout, ~127s macOS/Linux,
-     ~21s Windows), so a failed attempt tears down its socket immediately.
-     ICMP is never used, even though the two current hosts (fastpc4, m5)
-     answer ping today: ping confirms IP-layer reachability, not that the
-     peer's ATM daemon is listening on its registered port, which is the
-     only fact that matters here. No OS interface-change listener and no
-     other application-level event (e.g. an SSH session succeeding)
-     triggers reconciliation, since either would only be a proxy for what
-     the connect attempt already establishes directly.
-  3. **On success: release the lock, then check the backlog again — never
-     check before releasing.** If it's non-empty, reacquire and repeat; if
-     empty, stop. Justification: checking before release always leaves a
-     gap between "found nothing" and "actually released" during which a
-     new record can land locked out and unwatched, since the task has
-     already committed to stopping and won't recheck. Checking after
-     release removes that gap entirely — the two states ("nothing to do"
-     and "lock still held") can never coexist, so a writer arriving at that
-     instant simply acquires the free lock itself. Whichever of the
-     finishing task's reacquire or a new writer's acquire wins the resulting
-     race is immaterial; both outcomes correctly service the record.
-  4. **On failure: release the lock and set/advance a per-peer backoff
-     timer.** No immediate retry.
-  5. **Writers never block on the lock.** After persisting locally, a writer
-     opportunistically tries to acquire the peer's lock; if free, it runs
-     the send cycle itself (this is what wakes a fully idle peer with no
-     task and no pending backoff); if held, it does nothing further, since
-     the running task's release-then-check step is guaranteed to observe
-     the record.
-  6. **At most one connection attempt in flight per peer, scoped per
-     peer — never global.** fastpc4 and m5 retry independently. Combined
-     with the bounded connect deadline in (2), this bounds socket and thread
-     usage regardless of how many backoff cycles run.
 - Every repeated immutable ULID follows the same write path and remains
   idempotent. No finding authorizes an outbox, replay queue, receipt, retry
   worker, or parallel acknowledgement workflow.
