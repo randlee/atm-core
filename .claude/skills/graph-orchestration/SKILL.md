@@ -31,7 +31,7 @@ phase, cursor position, or whether a sprint is done.
 | Findings storage | `.triage/*/findings/*.ttl` — managed by triage-findings skill |
 | Test command | `just test` |
 | Dev assignee | Set per-sprint at dispatch time (j2 variable) |
-| QA reviewer set | `req-qa` + `arch-qa` (language-agnostic) |
+| QA reviewer set | `req-qa`, `arch-qa`, `rust-qa-agent` every pass; RBP/service-hardening/ruthless on QA-1 or finding recheck |
 
 ## Phase Setup
 
@@ -132,17 +132,23 @@ not from events.ttl.
 
 ## QA Gate
 
-After every dev Completion, assign QA to `quality-mgr` using the existing
-`quality-mgr` prompt. For atm-core, `quality-mgr` launches the full Rust
-reviewer set (same as codex-orchestration):
+After every dev Completion, assign QA to `quality-mgr`. Reviewer selection
+depends on which pass this is:
 
+**Every QA pass:**
 - `req-qa`
 - `arch-qa`
-- `ruthless-boundary-qa` (every round until team-lead explicitly narrows)
 - `rust-qa-agent`
-- `rust-best-practices-agent` (QA-1 only)
-- `rust-service-hardening-agent` (QA-1 only)
 - `flaky-test-qa` (when test instability risk is present)
+
+**QA-1 only** (first QA pass on a sprint node):
+- `ruthless-boundary-qa`
+- `rust-best-practices-agent`
+- `rust-service-hardening-agent`
+
+**Subsequent passes:** these three run only if they have an open finding from
+this sprint node — i.e., they need to verify their own fix was addressed.
+Do not re-run them if they filed nothing or all their findings are resolved.
 
 QA rules:
 - QA never edits existing findings. Re-assessments file a **new** finding at
