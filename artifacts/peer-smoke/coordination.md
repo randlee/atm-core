@@ -194,6 +194,24 @@ These are code/contract and operational findings, not evidence of a Windows
 daemon crash. The five messages require receiver-side ULID confirmation before
 being classified as cross-host successes.
 
+## VPN Target Reconnect Attempt
+
+- Team-lead confirmed the Mac VPN address is `10.212.36.11` on `utun10`.
+- Windows replaced the Mac trust target with enabled host `10.212.36.11`,
+  revoked `192.168.128.82`, and restarted the singleton release daemon.
+- The refreshed daemon is healthy/ready and still listens on
+  `10.10.100.98:43101`.
+- Direct `curl.exe --connect-timeout 5 --max-time 10 --insecure
+  https://10.212.36.11:43101/` timed out at TCP after 5002ms; TLS and HTTP
+  were not reached.
+- One ATM send to `arch-ctm@atm-dev.10.212.36.11` returned the known local
+  3-second response timeout (`10060`). No Windows-side evidence proves remote
+  receipt.
+- The Mac-to-Windows RDP session is from `10.212.36.11` to Windows
+  `10.10.100.98`, proving ingress over the VPN but not Windows egress back to
+  the Mac. The remaining blocker is asymmetric VPN routing/firewall policy,
+  unless Mac confirms receipt of the ATM message despite the caller timeout.
+
 ## Current implementation pass
 
 The smoke branch now adds retained daemon `peer_delivery` events around the
