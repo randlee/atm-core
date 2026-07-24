@@ -115,6 +115,18 @@ python3 scripts/smoke/run_inbound_peer_smoke.py --host \
   --config inbound-peer-smoke.json --evidence-dir artifacts/peer-smoke/inbound
 ```
 
+After copying or pulling each peer's handoff file to the Mac, run the Mac
+invocation with each exact-ID handoff. It does not search mailboxes by message
+content: it polls only the exported IDs and requires the ack-required item to
+be pending before writing the Mac pane.
+
+```bash
+python3 scripts/smoke/run_inbound_peer_smoke.py --host \
+  --config inbound-peer-smoke.json --evidence-dir artifacts/peer-smoke/inbound \
+  --handoff artifacts/peer-smoke/collected/m5-handoff.json \
+  --handoff artifacts/peer-smoke/collected/fastpc4-handoff.json
+```
+
 Each host pushes its timestamped evidence directory. After pulling the three
 current panes to one directory, the Mac combines them through the repository
 `sc-compose` template (and refuses an absent, wrongly labelled, malformed, or
