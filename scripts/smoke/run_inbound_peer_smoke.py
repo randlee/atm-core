@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -205,6 +206,108 @@ def capture_log(command: list[str] | None, timeout: float) -> dict[str, Any] | N
     return command_result(command, timeout) if command else None
 
 
+PANE_CASES = (
+    "doctor",
+    "localhost/local loopback",
+    "own-IP",
+    "remote incoming no-ack",
+    "remote incoming requires-ack",
+    "ack reply",
+    "nudge",
+)
+
+
+def doctor_summary(result: dict[str, Any] | None) -> str:
+    if not result:
+        return "not collected"
+    if result.get("exit_code") != 0:
+        return "unavailable: " + (result.get("stderr") or "doctor failed")
+    try:
+        value = json.loads(result.get("stdout", ""))
+    except json.JSONDecodeError:
+        return "doctor returned non-JSON"
+    found: dict[str, Any] = {}
+
+    def walk(item: Any) -> None:
+        if isinstance(item, dict):
+            for key, nested in item.items():
+                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version"} and key not in found:
+                    found[key] = nested
+                walk(nested)
+        elif isinstance(item, list):
+            for nested in item:
+                walk(nested)
+
+    walk(value)
+    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "pid", "daemon_pid", "readiness") if key in found]
+    return ", ".join(details) if details else "doctor ready (version/PID fields absent)"
+
+
+def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:
+    record = next((item for item in records if item.get("phase") == phase), None)
+    if record is None:
+        return "not-run", "not run by this inbound-only runner"
+    if record.get("passed"):
+        return "pass", record.get("message_id") or "completed"
+    result = record.get("result", {})
+    return "fail", result.get("parse_error") or result.get("stderr") or "failed"
+
+
+def render_host_pane(host: str, doctor: dict[str, Any] | None, rows: dict[str, tuple[str, str]], records: list[dict[str, Any]]) -> str:
+    """Render one standalone XHTML evidence pane; all dynamic content is escaped."""
+    table_rows = []
+    for case in PANE_CASES:
+        status, detail = rows.get(case, ("not-run", "not run"))
+        marker = {"pass": "✓", "fail": "✗", "not-run": "—"}[status]
+        table_rows.append(
+            f"<tr class=\"{escape(status)}\"><td>{escape(marker)}</td><td>{escape(case)}</td>"
+            f"<td>{escape(detail)}</td></tr>"
+        )
+    log_rows = "".join(
+        f"<li><strong>{escape(str(record.get('phase', 'unknown')))}</strong>: "
+        f"{escape('PASS' if record.get('passed') else 'FAIL')}</li>" for record in records
+    ) or "<li>No commands recorded.</li>"
+    failed = [record for record in records if record.get("passed") is False]
+    not_run = [case for case, value in rows.items() if value[0] == "not-run"]
+    if failed:
+        assessment = "Investigation required: " + "; ".join(str(item.get("phase")) for item in failed)
+    elif not_run:
+        assessment = "No executed failure. Remaining investigation: " + ", ".join(not_run)
+    else:
+        assessment = "No issues found by executed checks."
+    return f"""<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\"><head><title>ATM peer smoke — {escape(host)}</title>
+<style type=\"text/css\">body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:2rem;max-width:70rem}}table{{border-collapse:collapse;width:100%}}th,td{{border:1px solid #c9c9c9;padding:.45rem;text-align:left}}.pass{{background:#e8f5e9}}.fail{{background:#ffebee}}.not-run{{background:#f5f5f5;color:#555}}.assessment{{border-left:4px solid #607d8b;padding:.7rem;background:#f7f9fa}}code{{white-space:pre-wrap}}</style>
+</head><body><h1>ATM peer smoke: {escape(host)}</h1><p><strong>Version / daemon:</strong> {escape(doctor_summary(doctor))}</p>
+<table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr></thead><tbody>{''.join(table_rows)}</tbody></table>
+<h2>Session log</h2><ul>{log_rows}</ul><h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p></body></html>
+"""
+
+
+def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict[str, Any]], records: list[dict[str, Any]]) -> None:
+    local_doctor = next((item.get("result") for item in records if item.get("phase") == "local-doctor"), None)
+    local_rows = {"doctor": status_for(records, "local-doctor")}
+    for peer in peers:
+        for kind in ("noack", "ack-required"):
+            _, detail = status_for(records, f"{peer['name']}-read-{kind}")
+            send_status, _ = status_for(records, f"{peer['name']}-send-{kind}")
+            read_status, _ = status_for(records, f"{peer['name']}-read-{kind}")
+            status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
+            local_rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, detail)
+    (evidence_dir / "local.xhtml").write_text(render_host_pane("local", local_doctor, local_rows, records), encoding="utf-8")
+    for peer in peers:
+        doctor = next((item.get("result") for item in records if item.get("phase") == f"{peer['name']}-doctor"), None)
+        rows = {"doctor": status_for(records, f"{peer['name']}-doctor")}
+        for kind in ("noack", "ack-required"):
+            send_status, send_detail = status_for(records, f"{peer['name']}-send-{kind}")
+            read_status, read_detail = status_for(records, f"{peer['name']}-read-{kind}")
+            status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
+            rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, send_detail if status == "pass" else read_detail)
+        peer_records = [item for item in records if item.get("phase", "").startswith(f"{peer['name']}-")]
+        (evidence_dir / f"{peer['name']}.xhtml").write_text(render_host_pane(peer["name"], doctor, rows, peer_records), encoding="utf-8")
+
+
 def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence_dir = output_root / stamp
@@ -279,6 +382,7 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
             timeout,
         )
     (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all_passed else "fail", "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
+    write_host_panes(evidence_dir, local, config["peers"], records)
     print(f"{'PASS' if all_passed else 'FAIL'} evidence: {evidence_dir / 'results.json'}", flush=True)
     return 0 if all_passed else 1
 

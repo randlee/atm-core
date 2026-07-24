@@ -50,6 +50,24 @@ class InboundPeerSmokeTests(unittest.TestCase):
         self.assertEqual(RUNNER.message_from_read('{"message":{"message_id":"01TEST","requires_ack":true}}'), result["message"])
         self.assertIsNone(RUNNER.message_from_read("not json"))
 
+    def test_xhtml_escapes_host_and_marks_not_run(self):
+        pane = RUNNER.render_host_pane(
+            "m5 <unsafe>",
+            {"exit_code": 0, "stdout": "{}", "stderr": ""},
+            {"doctor": ("pass", "ready"), "nudge": ("not-run", "not configured")},
+            [],
+        )
+        self.assertIn("m5 &lt;unsafe&gt;", pane)
+        self.assertIn('class="not-run"', pane)
+        self.assertIn("No executed failure. Remaining investigation: nudge", pane)
+
+    def test_xhtml_marks_failed_phase_red(self):
+        pane = RUNNER.render_host_pane(
+            "local", None, {"doctor": ("fail", "daemon unavailable")}, [{"phase": "local-doctor", "passed": False}],
+        )
+        self.assertIn('class="fail"', pane)
+        self.assertIn("Investigation required: local-doctor", pane)
+
 
 if __name__ == "__main__":
     unittest.main()
