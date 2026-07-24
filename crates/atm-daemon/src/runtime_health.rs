@@ -504,6 +504,7 @@ impl DaemonRequestDispatcher {
     fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         if message.prepared.requires_post_write_route() {
+            self.emit_peer_write_persisted(&message);
             PostWriteRouter::dispatch(self, &mut message)?;
         }
         let outcome = message
@@ -599,21 +600,73 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
+        self.emit_peer_delivery_event(message, "attempt", None);
         match transport.deliver(
             message.outbound_request.clone(),
             &peer,
             HttpsRequestDeadline::default(),
         ) {
-            Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => self
-                .reconcile_after_success(host, &peer, transport.as_ref(), true)
-                .map(|_| ()),
-            Err(error) => Err(error),
+            Ok(ResponseEnvelope::Error(error)) => {
+                self.emit_peer_delivery_event(message, "unconfirmed", Some(error.code()));
+                Err(error)
+            }
+            Ok(_) => {
+                self.emit_peer_delivery_event(message, "confirmed", None);
+                self.reconcile_after_success(host, &peer, transport.as_ref(), true)
+                    .map(|_| ())
+            }
+            Err(error) => {
+                self.emit_peer_delivery_event(message, "unconfirmed", Some(error.code()));
+                Err(error)
+            }
         }
     }
 }
 
 impl DaemonRequestDispatcher {
+    fn emit_peer_write_persisted(&self, message: &MessageRecord) {
+        if message
+            .outbound_request
+            .to
+            .as_ref()
+            .and_then(|address| address.host.as_ref())
+            .is_none()
+        {
+            return;
+        }
+        self.emit_peer_delivery_event(message, "write_persisted", None);
+    }
+
+    fn emit_peer_delivery_event(
+        &self,
+        message: &MessageRecord,
+        outcome: &'static str,
+        error_code: Option<AtmErrorCode>,
+    ) {
+        let Some(address) = message.outbound_request.to.as_ref() else {
+            return;
+        };
+        let Some(host) = address.host.as_ref() else {
+            return;
+        };
+        let mut event = self
+            .runtime_health_observability
+            .event(
+                "peer_delivery",
+                outcome,
+                "peer delivery outcome for canonical persisted write",
+            )
+            .with_extra_string_field("peer_host", host.to_string())
+            .with_extra_string_field(
+                "message_id",
+                message.prepared.persisted_message_id().to_string(),
+            );
+        if let Some(error_code) = error_code {
+            event = event.with_extra_string_field("error_code", error_code.as_str());
+        }
+        self.runtime_health_observability.emit_event_or_warn(event);
+    }
+
     fn reconcile_after_success(
         &self,
         peer_host: &atm_core::types::HostName,

@@ -193,3 +193,14 @@ The complete issue set is:
 These are code/contract and operational findings, not evidence of a Windows
 daemon crash. The five messages require receiver-side ULID confirmation before
 being classified as cross-host successes.
+
+## Current implementation pass
+
+The smoke branch now adds retained daemon `peer_delivery` events around the
+one canonical peer write: `write_persisted`, `attempt`, then `confirmed` or
+`unconfirmed`. They distinguish local durable origin persistence from adapter
+outcome; they do not yet claim receiver-side evidence. The Windows rebuild and
+diagnosis procedure is `artifacts/peer-smoke/windows/rebuild-and-diagnosis.md`.
+It requires Cwin to pull, build, run gates, retain one daemon, enable the
+10-minute peer-sync window, and root-cause/fix any bounded defect directly on
+this branch.

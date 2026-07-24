@@ -67,7 +67,7 @@ fn local_write_uses_post_write_router_without_peer_delivery() {
     let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
-                atm_home,
+                atm_home.clone(),
                 workspace_dir,
                 ROLE_TEAM_LEAD.parse().expect("caller"),
                 "local-recipient@test-team",
@@ -215,7 +215,7 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
     let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
-                atm_home,
+                atm_home.clone(),
                 workspace_dir,
                 ROLE_TEAM_LEAD.parse().expect("caller"),
                 "remote-agent@remote-team.peer.example.test",
@@ -245,6 +245,22 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
     assert!(
         delivered[0].origin_timestamp.is_some(),
         "the canonical writer carries the immutable origin timestamp with the peer write"
+    );
+    let retained_log = std::fs::read_to_string(
+        atm_core::home::host_log_dir_from_home(&atm_home).join("atm.log.jsonl"),
+    )
+    .expect("read retained daemon log");
+    assert!(
+        retained_log.contains("\"action\":\"peer_delivery\",\"outcome\":\"write_persisted\""),
+        "remote writes must record persistence separately from peer delivery"
+    );
+    assert!(
+        retained_log.contains("\"action\":\"peer_delivery\",\"outcome\":\"attempt\""),
+        "remote writes must record the HTTPS attempt"
+    );
+    assert!(
+        retained_log.contains("\"action\":\"peer_delivery\",\"outcome\":\"confirmed\""),
+        "a returned peer response must record a confirmed adapter outcome"
     );
 
     let replay = delivered[0].clone();
@@ -305,7 +321,7 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
     let error = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
-                atm_home,
+                atm_home.clone(),
                 workspace_dir,
                 ROLE_TEAM_LEAD.parse().expect("caller"),
                 "remote-agent@remote-team.peer.example.test",
@@ -328,6 +344,14 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
     assert!(
         attempted[0].origin_message_id.is_some() && attempted[0].origin_timestamp.is_some(),
         "the failed route runs after canonical persistence assigned immutable origin metadata"
+    );
+    let retained_log = std::fs::read_to_string(
+        atm_core::home::host_log_dir_from_home(&atm_home).join("atm.log.jsonl"),
+    )
+    .expect("read retained daemon log");
+    assert!(
+        retained_log.contains("\"action\":\"peer_delivery\",\"outcome\":\"unconfirmed\""),
+        "failed peer delivery must be retained as unconfirmed rather than sent"
     );
 }
 
