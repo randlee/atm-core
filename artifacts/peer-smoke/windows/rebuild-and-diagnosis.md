@@ -34,6 +34,23 @@ Get-Process atm-daemon
 
 Run local CLI and graft loopback send/read/ack proof before peer traffic.
 
+### Temporary plaintext smoke mode
+
+For the connectivity/latency pass only, set
+`ATM_PEER_TRANSPORT_SECURITY=disabled` in the environment of the one release
+daemon before starting it. This selects the existing HTTP peer adapter without
+TLS, certificate pinning, or allowlist checks; it does **not** select a second
+writer, mailbox, retry queue, or local transport. Do not expose this listener
+outside the controlled VPN/LAN smoke network. Restore the unset/default
+`mutual-tls` setting and restart the same singleton before any security case.
+
+The plain HTTP read-only route can be probed with curl, while writes must use
+the public CLI so they exercise canonical persistence and post-write routing:
+
+```powershell
+python scripts/smoke/measure_peer_http.py --host <mac-ip> --peer arch-ctm@atm-dev.<mac-ip> --out artifacts/peer-smoke/windows/latency.json
+```
+
 ## 3. Reconciliation and observation
 
 Enable the smoke window for the configured Mac peer:

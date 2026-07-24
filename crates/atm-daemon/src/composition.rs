@@ -1,6 +1,8 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
-use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
+use crate::https_transport::{
+    HttpWireSecurity, HttpsListenerSet, HttpsMessageTransport, HttpsTransport,
+};
 #[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 #[cfg(windows)]
@@ -253,17 +255,50 @@ impl RuntimeComposition {
         if !interfaces.iter().any(|interface| interface.enabled) {
             return Ok(());
         }
-        let certificate = self.peer_config_store.local_certificate()?.ok_or_else(|| {
-            AtmError::validation("enabled HTTPS interfaces require a configured local certificate")
-        })?;
-        let https_transport: Arc<dyn HttpsMessageTransport> =
-            Arc::new(HttpsTransport::from_local_certificate(&certificate)?);
-        let listeners = HttpsListenerSet::bind_enabled(
-            &interfaces,
-            &certificate,
-            self.peer_config_store.list_trusted_peers()?,
-            self.request_dispatcher(),
-        )?;
+        let security = HttpWireSecurity::from_environment()?;
+        let (https_transport, listeners): (Arc<dyn HttpsMessageTransport>, HttpsListenerSet) =
+            match security {
+                HttpWireSecurity::MutualTls => {
+                    let certificate =
+                        self.peer_config_store.local_certificate()?.ok_or_else(|| {
+                            AtmError::validation(
+                                "enabled HTTPS interfaces require a configured local certificate",
+                            )
+                        })?;
+                    (
+                        Arc::new(HttpsTransport::from_local_certificate(&certificate)?),
+                        HttpsListenerSet::bind_enabled(
+                            &interfaces,
+                            &certificate,
+                            self.peer_config_store.list_trusted_peers()?,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+                HttpWireSecurity::InsecureHttpSmoke => {
+                    let source_host = interfaces
+                        .iter()
+                        .find(|interface| interface.enabled)
+                        .map(|interface| interface.advertise_host.clone())
+                        .ok_or_else(|| {
+                            AtmError::validation(
+                                "insecure peer smoke mode requires one enabled HTTP interface",
+                            )
+                        })?;
+                    tracing::warn!(
+                        subsystem = "https_transport",
+                        security = "disabled",
+                        "peer TLS, certificate pinning, and allowlist are disabled for this smoke daemon"
+                    );
+                    (
+                        Arc::new(HttpsTransport::insecure_smoke(source_host)),
+                        HttpsListenerSet::bind_insecure_smoke(
+                            &interfaces,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+            };
         let mut slot = self.https_listeners.lock().map_err(|_| {
             AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
         })?;

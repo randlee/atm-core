@@ -14,6 +14,29 @@ human intermediary.
   private-key material.
 - Every accepted peer message retains its original ULID on both hosts.
 
+## Plain HTTP reliability pass
+
+Before resuming TLS/pin/allowlist cases, both smoke daemons will run one
+controlled plaintext pass with `ATM_PEER_TRANSPORT_SECURITY=disabled` in the
+daemon environment. This is intentionally temporary and applies only at the
+peer wire adapter: the HTTP decoder, `ApiRouter`, canonical write, persistence,
+and post-write routing are unchanged. The default remains mutual TLS; no TLS
+or allowlist code/test is removed.
+
+The shared branch adds `scripts/smoke/measure_peer_http.py`. It measures:
+
+1. curl `GET /v1/atm/doctor` connect/read latency over the remote plaintext
+   peer listener; and
+2. one public `atm send` per sample, which exercises the real local daemon,
+   canonical write, and its peer post-write adapter.
+
+Each host must use the same commit, rebuild the release `atm` and
+`atm-daemon`, replace only its known singleton, run the script against the
+other host, record the JSON output, then restore the daemon with
+`ATM_PEER_TRANSPORT_SECURITY` unset before testing TLS again. This listener is
+for the controlled VPN/LAN smoke network only; it is not an unauthenticated
+production mode.
+
 ## Mac status
 
 - Commit: pending push of the candidate startup diagnostic and this record.
@@ -246,3 +269,17 @@ this branch.
   local mailbox and differ only in transport provenance metadata. This is a
   separate self-peer idempotency gap; it is not evidence about Mac/Windows
   delivery and must not be worked around with a second route.
+
+## VPN listener repair — 2026-07-24
+
+- The Mac daemon had been bound only to the changing Wi-Fi address. It is now
+  the same controlled singleton, healthy/ready, bound once to
+  `0.0.0.0:43101` and advertising the current VPN address `10.212.36.11`.
+  This permits inbound traffic after ordinary Wi-Fi/VPN rebinding without a
+  second listener or daemon.
+- Windows already pins the Mac certificate for `10.212.36.11`. Cwin's next
+  action is to pull this branch, keep its one healthy daemon, send one labelled
+  request to `arch-ctm@atm-dev.10.212.36.11`, and poll/read for receiver-side
+  ULID evidence. Record the exact CLI response and retained event chain. Do
+  not change TLS verification, add a fallback transport, or start another
+  daemon.
