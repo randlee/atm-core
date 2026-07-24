@@ -3,7 +3,7 @@ title: AI.26 receiver-proven Mac-Windows cross-host smoke
 status: proposed
 branch: feature/pAI-s26-crosshost-smoke-rerun
 target: integrate/phase-AI
-depends_on: AI.22, AI.23, AI.24, AI.25
+depends_on: AI.22, AI.23, AI.24, AI.25, AI.27
 ---
 
 # AI.26 — receiver-proven Mac↔Windows smoke
@@ -44,4 +44,5 @@ sanitized evidence bundle; runner schema validation; quality review.
 
 ## Non-closure
 
-No production feature beyond the AI.22–AI.25 fixes is added here.
+No production feature beyond the AI.22–AI.25 smoke fixes and AI.27
+compatibility contract is added here.

@@ -3,7 +3,7 @@ title: AI.27 SemVer release and HTTP compatibility
 status: proposed
 branch: feature/pAI-s27-semver-http-compatibility
 target: integrate/phase-AI
-depends_on: AI.22–AI.25
+depends_on: AI.11–AI.16
 parallel_with: AI.22–AI.25
 blocks: AI.26
 ---

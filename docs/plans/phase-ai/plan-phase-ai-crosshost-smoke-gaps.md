@@ -12,8 +12,8 @@ depends_on: AI.11–AI.16
 ## Goal
 
 Close the concrete defects found in the first Mac↔Windows smoke without
-creating a second transport path or delivery-state subsystem. A peer write has
-one canonical local write path; HTTPS is only its post-write adapter.
+creating a second transport path or delivery-state subsystem. HTTPS remains
+only the post-write adapter of the existing canonical write path.
 
 ## Findings and owners
 
@@ -34,15 +34,16 @@ unconfirmed; none is release evidence.
 ## Dependencies
 
 ```text
-AI.22 peer authority ─┐
-AI.23 deadline budget ─┼─> AI.25 bounded recovery ─> AI.26 physical rerun
-AI.24 outcome truth ───┘
+AI.22 peer authority ──────────────────────────────┐
+AI.23 deadline/error contract ─> AI.24 outcome truth ─> AI.25 recovery ─> AI.26 physical rerun
+AI.27 schema/HTTP compatibility ────────────────────┘
 ```
 
-AI.22, AI.23, and AI.24 may be implemented in parallel because they own
-separate authority, deadline, and observability seams. AI.25 depends on
-AI.23/AI.24; AI.26 starts after AI.22–AI.25 merge. AI.27 may proceed in
-parallel with AI.22–AI.25 and must land before AI.26's final smoke, so tested
+AI.22 and AI.23 may be implemented in parallel because they own separate
+authority and deadline seams. AI.24 follows AI.23 because it reports AI.23's
+typed uncertainty result. AI.25 follows AI.24. AI.26 starts only after
+AI.22–AI.25 and AI.27 merge. AI.27 may proceed in parallel with AI.22–AI.25,
+so tested
 CLI/daemon builds are not artificially blocked by release-label drift.
 
 ## Invariants

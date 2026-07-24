@@ -113,6 +113,12 @@ pub trait DaemonApiClient: Send + Sync {
 
 pub struct RequestDeadline(/* monotonic absolute deadline */);
 
+pub struct PeerAuthority {
+    pub hostname: HostName,
+    pub https_port: std::num::NonZeroU16,
+    pub pinned_fingerprint: CertificateFingerprint,
+}
+
 pub struct AuthenticatedPeer {
     host: HostName,
     fingerprint: CertificateFingerprint,
@@ -177,6 +183,7 @@ integration; they do not alter it.
 | AI.24 | `feature/pAI-s24-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |
 | AI.25 | `feature/pAI-s25-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
 | AI.26 | `feature/pAI-s26-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
+| AI.27 | `feature/pAI-s27-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).

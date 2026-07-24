@@ -21,8 +21,21 @@ completion or cancellation; no route creates a longer independent deadline.
    scope; connect/TLS/request operations consume only the remaining budget.
 3. Keep every accepted request in runtime drain accounting and cancel it on
    expiration or local connection close. Detached peer delivery is forbidden.
-4. Return `REMOTE_DELIVERY_UNCONFIRMED` when dispatch began but peer acceptance
-   cannot be established before the shared deadline; repeat uses the same ULID.
+4. Return the typed error below when dispatch began but peer acceptance cannot
+   be established before the shared deadline; repeat uses the same ULID.
+
+   ```rust
+   pub enum AtmErrorCode {
+       // ...
+       RemoteDeliveryUnconfirmed,
+   }
+
+   // Stable wire/API spelling: "REMOTE_DELIVERY_UNCONFIRMED".
+   // The error reports local persistence separately from remote acceptance.
+   ```
+
+   AI.24 emits the retained terminal event for this same error; it does not
+   create a second delivery outcome or a second error contract.
 
 ## Acceptance criteria
 

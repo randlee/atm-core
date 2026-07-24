@@ -16,9 +16,16 @@ effect in the one live daemon without a restart.
 
 ## Deliverables
 
-1. Define `PeerAuthority` as registered hostname, HTTPS port, and pinned
-   fingerprint behind the existing storage trait; delete any peer-IP-as-
-   authority lookup.
+1. Define the storage-trait-owned authority record below; delete any peer-IP-
+   as-authority lookup.
+
+   ```rust
+   pub struct PeerAuthority {
+       pub hostname: HostName,
+       pub https_port: std::num::NonZeroU16,
+       pub pinned_fingerprint: CertificateFingerprint,
+   }
+   ```
 2. Add bounded fresh DNS resolution: hostname targets exact-match a registered
    authority; literal IP targets match exactly one authority's current A/AAAA
    result. Zero or multiple matches fail closed with typed errors.

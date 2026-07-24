@@ -15,10 +15,40 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
 
 ## Deliverables
 
-1. Add the ADR-041 typed error mapping for local response-read timeout after
-   dispatch; reserve `DAEMON_UNAVAILABLE` for actual local daemon unavailability.
-2. Emit structured terminal events for connection-handler, route, and
+1. Consume AI.23's ADR-041 `RemoteDeliveryUnconfirmed` mapping for local
+   response-read timeout after dispatch; reserve `DAEMON_UNAVAILABLE` for
+   actual local daemon unavailability.
+2. Emit the retained event schema below for connection-handler, route, and
    response-write failures with request/message correlation.
+
+   ```rust
+   #[derive(Clone, Copy, serde::Serialize)]
+   #[serde(rename_all = "snake_case")]
+   pub enum PeerDeliveryEventKind {
+       WritePersisted,
+       PeerDeliveryConfirmed,
+       PeerDeliveryUnconfirmed,
+       PeerRecoveryScheduled,
+       PeerRecoveryAttempt,
+       PeerRecoveryConfirmed,
+       PeerRecoveryUnconfirmed,
+   }
+
+   pub struct PeerDeliveryEvent {
+       pub kind: PeerDeliveryEventKind,
+       pub request_id: RequestId,
+       pub message_id: Option<MessageId>,
+       pub peer: PeerAuthority,
+       pub error_code: Option<AtmErrorCode>,
+       pub candidate_count: Option<u32>,
+       pub next_attempt_at: Option<IsoTimestamp>,
+   }
+   ```
+
+   `RemoteDeliveryUnconfirmed` from AI.23 is the synchronous API error when
+   peer acceptance is unknown. `peer_delivery_unconfirmed` is this sprint's
+   retained terminal event for that same result. AI.25 uses the four
+   `peer_recovery_*` variants only for its later bounded recovery attempts.
 3. Replace pre-peer `outcome sent` with `write_persisted`; emit
    `peer_delivery_confirmed` only after peer HTTP acceptance, otherwise
    `peer_delivery_unconfirmed`.
@@ -40,4 +70,4 @@ and error-code mapping; event-schema assertion; `just lint`; `just test`.
 
 ## Non-closure
 
-Physical peer proof belongs only to AI.25.
+Physical peer proof belongs only to AI.26.

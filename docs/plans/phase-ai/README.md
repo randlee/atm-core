@@ -42,6 +42,9 @@ browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
 
 Cross-host smoke-gap closure is specified by
-[AI.22–AI.25](plan-phase-ai-crosshost-smoke-gaps.md): stable hostname/pin peer
-authority, one end-to-end peer-write deadline, truthful delivery outcomes, and
-receiver-proven physical smoke evidence.
+[AI.22–AI.27](plan-phase-ai-crosshost-smoke-gaps.md): AI.22 establishes stable
+hostname/pin peer authority; AI.23 establishes one end-to-end peer-write
+deadline; AI.24 makes persisted/confirmed/unconfirmed outcomes truthful; AI.25
+adds bounded recovery of recent canonical writes; AI.26 supplies receiver-proven
+physical smoke evidence; and AI.27 separates compatible schema/API admission
+from product-release labels.
