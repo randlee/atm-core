@@ -326,10 +326,19 @@ impl RetainedMailboxRuntime for TestRuntime {
         if let Some(message) = self.commit_error_message {
             return Err(AtmError::mailbox_write(message));
         }
-        self.persisted_records
+        let mut records = self
+            .persisted_records
             .lock()
-            .expect("persisted records lock")
-            .push(record);
+            .expect("persisted records lock");
+        if let Some(existing) = records.iter_mut().find(|existing| {
+            existing.team == record.team
+                && existing.agent == record.agent
+                && existing.message_key == record.message_key
+        }) {
+            *existing = record;
+        } else {
+            records.push(record);
+        }
         Ok(())
     }
 
@@ -581,6 +590,59 @@ fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
             .len(),
         1
     );
+}
+
+#[test]
+fn duplicate_ulid_with_only_peer_adapter_metadata_is_idempotent_and_replaces_origin_marker() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let mut origin = outbound_message();
+    origin.extra.insert(
+        "peerOutbound".to_string(),
+        serde_json::json!({"host": "localhost", "request": "origin"}),
+    );
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &origin,
+        false,
+    )
+    .expect("origin write");
+
+    let mut inbound = origin.clone();
+    inbound.extra.remove("peerOutbound");
+    inbound
+        .extra
+        .insert("sourceHost".to_string(), serde_json::json!("localhost"));
+    let result = persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &inbound,
+        false,
+    )
+    .expect("peer ingress with the same immutable ULID must be idempotent");
+
+    assert_eq!(
+        result.disposition,
+        DeliveryPersistenceDisposition::Persisted
+    );
+    assert!(!result.newly_persisted);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].envelope.extra.get("sourceHost"),
+        Some(&serde_json::json!("localhost"))
+    );
+    assert!(!records[0].envelope.extra.contains_key("peerOutbound"));
 }
 
 #[test]

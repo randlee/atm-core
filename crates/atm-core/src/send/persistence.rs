@@ -156,6 +156,19 @@ fn mirror_message_to_store(
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
+            // `sourceHost` and `peerOutbound` describe the adapter that carried
+            // this otherwise immutable message.  A host-qualified self route
+            // legitimately writes the origin record first, then re-enters the
+            // same canonical writer through peer ingress with the same ULID.
+            // Replace the origin-only transport marker with the authenticated
+            // ingress representation so future replies route through the peer
+            // contract and reconciliation does not re-send a delivered record.
+            runtime.persist_message_record(boundary::Message {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key,
+                envelope: envelope.clone(),
+            })?;
             return Ok(false);
         }
         error!(
@@ -196,8 +209,18 @@ fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool 
     left.read = false;
     left.pending_ack_at = None;
     left.acknowledged_at = None;
+    strip_transport_local_metadata(&mut left.extra);
     right.read = false;
     right.pending_ack_at = None;
     right.acknowledged_at = None;
+    strip_transport_local_metadata(&mut right.extra);
     left == right
+}
+
+fn strip_transport_local_metadata(metadata: &mut Map<String, serde_json::Value>) {
+    // These are set exclusively by the peer adapter / post-write routing. They
+    // are not sender-authored message content and therefore must not change the
+    // immutable ULID payload comparison.
+    metadata.remove("sourceHost");
+    metadata.remove("peerOutbound");
 }
