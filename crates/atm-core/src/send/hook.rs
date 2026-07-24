@@ -28,9 +28,7 @@ use crate::config::{self, AtmConfig};
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::protocol::{NotificationEvent, NotificationKind};
-use crate::schema::compatible_home_dir;
 use crate::service_runtime::{RetainedServiceRuntime, append_notification_log};
-use crate::types::{AgentName, TeamName};
 
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
 const POST_SEND_HOOK_STDOUT_JOIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -161,23 +159,6 @@ where
             }
         }
     }
-}
-
-pub(crate) fn load_post_send_config_for_sender<R>(
-    runtime: &R,
-    sender_team: &TeamName,
-    sender: &AgentName,
-) -> Result<Option<AtmConfig>, AtmError>
-where
-    R: crate::service_runtime::RetainedServiceRuntime + ?Sized,
-{
-    let Some(member) = runtime.load_roster_member(sender_team, sender)? else {
-        return Ok(None);
-    };
-    let Some(config_root) = sender_config_root(&member.metadata_json) else {
-        return Ok(None);
-    };
-    runtime.load_config(&config_root)
 }
 
 fn run_post_send_hooks_for_cli(
@@ -658,10 +639,6 @@ fn post_send_event_from_message(
     }
 }
 
-fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathBuf> {
-    compatible_home_dir(metadata).map(Into::into)
-}
-
 fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
     WarningEntry::with_code(
         error.code(),
@@ -899,14 +876,13 @@ mod tests {
     use super::{
         HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
         emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
-        hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
+        hook_matches_recipient, hook_result_log_level, parse_post_send_hook_result,
+        post_send_event_from_message,
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
         PostSendBuiltInTarget, PostSendEmissionPath, PostSendHookEmitter, RosterEntry,
-        RosterHarness, RosterMemberKind, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow,
+        TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
     };
     use crate::config::AtmConfig;
     use crate::config::types::{HookRecipient, PostSendHookRule};
@@ -916,80 +892,11 @@ mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::AckIntentFields;
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: derived compatibility field only. Hook tests intentionally exercise the retained legacy cwd compatibility seam."
-    )]
-    use crate::schema::agent_member::LEGACY_CWD_METADATA_KEY;
-    use crate::schema::{AtmMessageId, HOME_DIR_METADATA_KEY, InboxMessage};
+    use crate::schema::{AtmMessageId, InboxMessage};
     use crate::send::ResolvedRecipient;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
     use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
-
-    struct ConfigLookupRuntime {
-        roster_entry: Option<RosterEntry>,
-        config_lookup_root: PathBuf,
-        config: Option<AtmConfig>,
-    }
-
-    impl crate::boundary::sealed::Sealed for ConfigLookupRuntime {}
-
-    impl RetainedServiceRuntime for ConfigLookupRuntime {
-        fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
-            Ok((current_dir == self.config_lookup_root)
-                .then_some(self.config.clone())
-                .flatten())
-        }
-
-        fn inbox_path(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<PathBuf, AtmError> {
-            unreachable!("config lookup test does not resolve inbox paths")
-        }
-
-        fn load_seen_watermark(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<Option<IsoTimestamp>, AtmError> {
-            Ok(None)
-        }
-
-        fn save_seen_watermark(
-            &self,
-            _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
-            _timestamp: IsoTimestamp,
-        ) -> Result<(), AtmError> {
-            Ok(())
-        }
-
-        fn deliver_non_claude_payloads(
-            &self,
-            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-            _messages: &[InboxMessage],
-        ) -> Result<(), AtmError> {
-            unreachable!("config lookup test does not deliver outbound payloads")
-        }
-
-        fn load_roster_member(
-            &self,
-            _team: &TeamName,
-            _agent: &AgentName,
-        ) -> Result<Option<RosterEntry>, AtmError> {
-            Ok(self.roster_entry.clone())
-        }
-
-        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterEntry>, AtmError> {
-            Ok(Vec::new())
-        }
-    }
 
     struct HookEmissionRuntime {
         override_row: Option<TeamNudgeTemplateOverrideRow>,
@@ -1160,68 +1067,6 @@ mod tests {
     fn bounded_stdout_teardown_returns_promptly_for_completed_reader() {
         let handle = std::thread::spawn(|| Ok::<Vec<u8>, std::io::Error>(Vec::new()));
         finish_abandoned_post_send_hook_stdout_capture(Some(handle), Path::new("hook"));
-    }
-
-    #[test]
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: test fixture intentionally exercises the retained legacy cwd compatibility fallback."
-    )]
-    fn sender_config_root_prefers_home_dir_and_falls_back_to_cwd() {
-        let home_dir_metadata =
-            Map::from_iter([(HOME_DIR_METADATA_KEY.to_string(), json!("/repo/home"))]);
-        assert_eq!(
-            sender_config_root(&home_dir_metadata),
-            Some(PathBuf::from("/repo/home"))
-        );
-
-        let cwd_only_metadata =
-            Map::from_iter([(LEGACY_CWD_METADATA_KEY.to_string(), json!("/repo/cwd"))]);
-        assert_eq!(
-            sender_config_root(&cwd_only_metadata),
-            Some(PathBuf::from("/repo/cwd"))
-        );
-    }
-
-    #[test]
-    #[allow(
-        deprecated,
-        reason = "Phase AD obsolete: test fixture intentionally seeds legacy cwd metadata to verify the bounded compatibility read."
-    )]
-    fn load_post_send_config_uses_sender_roster_metadata_not_caller_cwd() {
-        let config_root = PathBuf::from("/repo/home");
-        let runtime = ConfigLookupRuntime {
-            roster_entry: Some(RosterEntry {
-                team_name: TeamName::from_validated("test-team"),
-                agent_name: AgentName::from_validated(TEST_SENDER),
-                member_kind: RosterMemberKind::Permanent,
-                harness: RosterHarness::ClaudeCode,
-                agent_type: crate::schema::AgentType::default(),
-                model: crate::types::ModelName::default(),
-                recipient_pane_id: None,
-                metadata_json: Map::from_iter([(
-                    LEGACY_CWD_METADATA_KEY.to_string(),
-                    json!(config_root.display().to_string()),
-                )]),
-            }),
-            config_lookup_root: config_root.clone(),
-            config: Some(AtmConfig {
-                config_root: config_root.clone(),
-                ..Default::default()
-            }),
-        };
-
-        let loaded = load_post_send_config_for_sender(
-            &runtime,
-            &TeamName::from_validated("test-team"),
-            &AgentName::from_validated(TEST_SENDER),
-        )
-        .expect("config lookup");
-
-        assert_eq!(
-            loaded.as_ref().map(|config| &config.config_root),
-            Some(&config_root)
-        );
     }
 
     fn logical_message(text: &str) -> LogicalMessage {

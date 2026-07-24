@@ -48,6 +48,16 @@ def main() -> int:
     parser.add_argument("--host", required=True, help="peer IP address or hostname")
     parser.add_argument("--port", type=int, default=43101)
     parser.add_argument("--peer", required=True, help="ATM peer address for the send probe")
+    parser.add_argument(
+        "--remote-home",
+        required=True,
+        help="remote daemon home directory for its doctor request",
+    )
+    parser.add_argument(
+        "--remote-current-dir",
+        required=True,
+        help="remote daemon checkout directory for its doctor request",
+    )
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--out", type=pathlib.Path, help="write JSON evidence here")
     args = parser.parse_args()
@@ -61,6 +71,12 @@ def main() -> int:
         parser.error(f"required command missing: {missing}")
 
     endpoint = f"http://{args.host}:{args.port}/v1/atm/doctor"
+    doctor_query = json.dumps(
+        {
+            "home_dir": args.remote_home,
+            "current_dir": args.remote_current_dir,
+        }
+    )
     samples: list[Sample] = []
     for sample in range(1, args.samples + 1):
         samples.append(
@@ -78,7 +94,7 @@ def main() -> int:
                     "--header",
                     "Content-Type: application/json",
                     "--data",
-                    "{}",
+                    doctor_query,
                     endpoint,
                 ],
                 "remote_doctor",
@@ -103,6 +119,8 @@ def main() -> int:
         "host": args.host,
         "port": args.port,
         "peer": args.peer,
+        "remote_home": args.remote_home,
+        "remote_current_dir": args.remote_current_dir,
         "security_mode": os.environ.get("ATM_PEER_TRANSPORT_SECURITY", "mutual-tls"),
         "samples": [asdict(sample) for sample in samples],
     }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use atm_core::api::{ApiRequest, ApiResponse, CANONICAL_REQUEST_DEADLINE, DaemonApiClient};
 use atm_core::boundary;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
@@ -41,7 +41,7 @@ use atm_runtime_test_support::{
 
 use crate::observability::CliObservability;
 
-const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = CANONICAL_REQUEST_DEADLINE;
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 #[cfg(not(test))]

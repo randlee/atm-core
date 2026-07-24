@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use atm_core::api::ApiRouter;
+use atm_core::api::{ApiRouter, CANONICAL_REQUEST_DEADLINE};
 use atm_core::error::AtmError;
 use atm_core::protocol::ResponseEnvelope;
 use interprocess::local_socket::prelude::*;
@@ -49,7 +49,7 @@ use shutdown::{
 // comfortably exceed realistic single-host caller fan-out while still bounding
 // per-connection worker threads and shutdown drain pressure.
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
-const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const REQUEST_DEADLINE: Duration = CANONICAL_REQUEST_DEADLINE;
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 // Give terminate/reload a brief grace window to deliver a typed rejection
 // before the serve loop escalates to shutdown bookkeeping.

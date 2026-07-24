@@ -19,6 +19,9 @@ use crate::send::WriteRequest;
 use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
+/// One bounded request/response budget shared by every local ATM client and
+/// daemon ingress. It covers a canonical write plus its single peer attempt.
+pub const CANONICAL_REQUEST_DEADLINE: Duration = Duration::from_secs(10);
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: u16 = 1;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;

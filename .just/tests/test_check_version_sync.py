@@ -200,6 +200,18 @@ ManifestVersion: 1.1.2
 
             self.assertTrue(validate_winget_manifests(repo_root, "1.1.2", config))
 
+    def test_validate_winget_manifests_skips_unpublished_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            config = {
+                "winget": {
+                    "enabled": True,
+                    "manifest_glob": ".winget/*.yaml",
+                }
+            }
+
+            self.assertFalse(validate_winget_manifests(repo_root, "1.3.2-beta.1", config))
+
 
 if __name__ == "__main__":
     unittest.main()

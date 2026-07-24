@@ -168,6 +168,12 @@ def validate_winget_manifests(repo_root: Path, workspace_version: str, config: d
     if not isinstance(winget, dict) or not winget.get("enabled", False):
         return False
 
+    # Winget manifests describe published, stable release artifacts. A SemVer
+    # prerelease is intentionally buildable and testable before it is
+    # published, so it must not be forced to overwrite that stable manifest.
+    if "-" in workspace_version:
+        return False
+
     manifest_glob = winget.get("manifest_glob")
     if not isinstance(manifest_glob, str) or not manifest_glob.strip():
         raise SystemExit("[version_sync.winget].manifest_glob must be a non-empty string when enabled")

@@ -279,12 +279,14 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
 
 fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEnvelope {
     let error = match execution_risk {
-        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(
-            "daemon request exceeded the 3s runtime deadline; retry the read-only ATM command after the same-host daemon catches up",
-        ),
-        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(
-            "daemon request exceeded the 3s runtime deadline after side-effecting work may have started",
-        ),
+        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(format!(
+            "daemon request exceeded the {}ms runtime deadline; retry the read-only ATM command after the same-host daemon catches up",
+            REQUEST_DEADLINE.as_millis()
+        )),
+        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(format!(
+            "daemon request exceeded the {}ms runtime deadline after side-effecting work may have started",
+            REQUEST_DEADLINE.as_millis()
+        )),
     };
     ResponseEnvelope::Error(error)
 }
@@ -301,8 +303,8 @@ pub(crate) fn install_injected_accept_error_for_test(
 #[cfg(test)]
 mod tests {
     use super::{
-        RequestExecutionRisk, classify_connection_failure, dispatch_timeout_response,
-        handle_connection, request_execution_risk,
+        REQUEST_DEADLINE, RequestExecutionRisk, classify_connection_failure,
+        dispatch_timeout_response, handle_connection, request_execution_risk,
     };
     use atm_core::api::ApiRequest;
     use atm_core::clear::ClearQuery;
@@ -446,7 +448,7 @@ mod tests {
             let _stream = connect_local_ipc_with_timeout(socket_name, Duration::from_secs(5))
                 .expect("connect wedged peer");
             client_connected_tx.send(()).expect("signal connected");
-            let _ = release_client_rx.recv_timeout(Duration::from_secs(5));
+            let _ = release_client_rx.recv_timeout(REQUEST_DEADLINE + Duration::from_secs(2));
         });
 
         let server_stream = listener.accept().expect("accept");
@@ -463,7 +465,7 @@ mod tests {
         );
 
         assert!(
-            started.elapsed() < Duration::from_secs(5),
+            started.elapsed() < REQUEST_DEADLINE + Duration::from_secs(2),
             "wedged same-host peer must not keep the connection worker blocked indefinitely"
         );
         assert!(

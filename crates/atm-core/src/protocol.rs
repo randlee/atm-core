@@ -85,19 +85,13 @@ impl ReleaseVersion {
             .trim()
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
-        let mut parts = value.split('.');
-        let valid = (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        }) && parts.next().is_none();
-        if !valid {
-            return Err(AtmError::new(
+        let parsed = semver::Version::parse(value).map_err(|_| {
+            AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
                 format!("invalid ATM release version `{value}`"),
-            ));
-        }
-        Ok(Self(value.to_string()))
+            )
+        })?;
+        Ok(Self(parsed.to_string()))
     }
 
     pub fn current() -> Self {
@@ -341,10 +335,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ReleaseVersion, RequestEnvelope,
+        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -486,6 +480,19 @@ mod tests {
         };
         assert_eq!(round_trip, error);
         assert_eq!(round_trip.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn release_version_accepts_strict_semver_prerelease() {
+        assert_eq!(
+            ReleaseVersion::parse("1.3.2-beta.1")
+                .expect("valid prerelease")
+                .to_string(),
+            "1.3.2-beta.1"
+        );
+        assert!(ReleaseVersion::parse("1.3.2-beta").is_ok());
+        assert!(ReleaseVersion::parse("1.3.2-beta..1").is_err());
+        assert!(ReleaseVersion::parse("1.3").is_err());
     }
 
     fn test_atm_home_dir() -> PathBuf {

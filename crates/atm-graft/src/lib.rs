@@ -10,7 +10,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::api::{ApiRequest, DaemonApiClient};
+use atm_core::api::{ApiRequest, CANONICAL_REQUEST_DEADLINE, DaemonApiClient};
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::AtmError;
 use atm_core::graft::AtmGraftClient;
@@ -37,7 +37,7 @@ use runtime::{
 };
 use transport::{GraftLocalIpcClientTransport, unexpected_response};
 
-const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const SAME_HOST_REQUEST_DEADLINE: Duration = CANONICAL_REQUEST_DEADLINE;
 pub(crate) const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub use atm_core::{AtmConfig, GraftConfig};

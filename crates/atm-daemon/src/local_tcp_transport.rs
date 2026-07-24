@@ -25,7 +25,8 @@ use std::os::windows::ffi::OsStrExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 
 use atm_core::api::{
-    ApiRouter, AuthenticatedIngress, RequestDeadline, read_http_request, write_http_response,
+    ApiRouter, AuthenticatedIngress, CANONICAL_REQUEST_DEADLINE, RequestDeadline,
+    read_http_request, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
@@ -43,7 +44,7 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 #[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
-const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const REQUEST_DEADLINE: Duration = CANONICAL_REQUEST_DEADLINE;
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;

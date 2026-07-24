@@ -724,26 +724,13 @@ fn prepare_send_context<
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
     let command_config = runtime.load_config(&request.current_dir)?;
-    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
-        runtime,
-        &request.caller_team,
-        &request.caller_identity,
-    ) {
-        Ok(config) => (config, Vec::new()),
-        Err(error) => (
-            None,
-            vec![WarningEntry::with_code(
-                error.code(),
-                format!(
-                    "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity,
-                    request.caller_team,
-                    error.message()
-                ),
-                Some(error.message().to_owned()),
-            )],
-        ),
-    };
+    // The daemon receives one canonical write request.  It must not reach
+    // back into a roster member's project directory before that write is
+    // persisted: the path may be unavailable or stale, and it creates a
+    // second pre-write failure path.  The caller's already-resolved config is
+    // the only optional hook configuration carried through this request.
+    let post_send_config = command_config.clone();
+    let warnings = Vec::new();
     let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")

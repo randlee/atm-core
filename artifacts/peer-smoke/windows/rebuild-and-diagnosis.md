@@ -48,7 +48,10 @@ The plain HTTP read-only route can be probed with curl, while writes must use
 the public CLI so they exercise canonical persistence and post-write routing:
 
 ```powershell
-python scripts/smoke/measure_peer_http.py --host <mac-ip> --peer arch-ctm@atm-dev.<mac-ip> --out artifacts/peer-smoke/windows/latency.json
+python scripts/smoke/measure_peer_http.py \
+  --host <mac-ip> --peer arch-ctm@atm-dev.<mac-ip> \
+  --remote-home <mac-home> --remote-current-dir <mac-checkout> \
+  --out artifacts/peer-smoke/windows/latency.json
 ```
 
 ## 3. Reconciliation and observation
