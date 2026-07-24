@@ -2,6 +2,7 @@
 # next-dev-task — Cursor resolution for graph-orchestration.
 #
 # Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR>
+# TTL_DIR: path to .sprints/<PHASE>/ on the integrate/phase-N branch
 #   PHASE_LOCAL  e.g. "F" (expanded to urn:atm:triage:PhaseF)
 #   TTL_DIR      path to directory containing structure.ttl and events.ttl
 #

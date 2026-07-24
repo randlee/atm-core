@@ -33,7 +33,7 @@ Assignments are appended to events.ttl by the orchestrator after dispatch.
 
 Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR>
   PHASE_LOCAL  e.g. "F"
-  TTL_DIR      path containing structure.ttl + events.ttl
+  TTL_DIR      path to .sprints/<PHASE>/ directory on integrate/phase-N branch
   SCRIPT_DIR   path to this script's directory (for .sparql files)
 """
 

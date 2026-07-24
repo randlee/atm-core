@@ -27,7 +27,7 @@ phase, cursor position, or whether a sprint is done.
 | Setting | Default |
 |---|---|
 | RDF runner | Python 3 + rdflib |
-| Phase TTL location | `sprints/<PHASE>/structure.ttl` + `sprints/<PHASE>/events.ttl` (relative to repo root) |
+| Phase TTL location | `.sprints/<PHASE>/structure.ttl` + `.sprints/<PHASE>/events.ttl` (relative to repo root) |
 | Findings storage | `.triage/*/findings/*.ttl` — managed by triage-findings skill |
 | Test command | `just test` |
 | Dev assignee | Set per-sprint at dispatch time (j2 variable) |
@@ -37,7 +37,7 @@ phase, cursor position, or whether a sprint is done.
 
 Before starting a phase, create two TTL files:
 
-**`sprints/<PHASE>/structure.ttl`** — phase identity and sprint list:
+**`.sprints/<PHASE>/structure.ttl`** — phase identity and sprint list:
 
 ```turtle
 @prefix triage: <urn:atm:triage:> .
@@ -50,7 +50,7 @@ triage:<PHASE>-S2 a triage:Sprint ; triage:inPhase triage:Phase<PHASE> ; triage:
 # ... one entry per sprint, orders unique and contiguous from 1
 ```
 
-**`sprints/<PHASE>/events.ttl`** — empty initially; events (Assignments, Completions)
+**`.sprints/<PHASE>/events.ttl`** — empty initially; events (Assignments, Completions)
 are appended here as sprints progress. Never edited or deleted.
 
 **`ac/<PHASE>S*.md`** — acceptance criteria documents, one per sprint. The
@@ -62,7 +62,7 @@ Run `validate-structure.sparql` at creation. It must return zero rows.
 ## Orchestrator Loop
 
 ```bash
-RESULT=$(next-dev-task F sprints/F)
+RESULT=$(next-dev-task F .sprints/F)
 PHASE=$(echo "$RESULT" | jq -r .phase)
 ```
 
@@ -80,7 +80,7 @@ After getting a `TRAVERSAL` result, the orchestrator:
 3. Picks the template: no findings → dev-task.xml.j2; blocking findings present → dev-fix.xml.j2
 
 ```
-cursor_result = next-dev-task F sprints/F
+cursor_result = next-dev-task F .sprints/F
 
 if cursor_result.phase == "DONE":
     → phase complete, merge
@@ -170,29 +170,29 @@ agent self-report.
 
 ```bash
 # Assignment — append when team-lead dispatches a sprint to a dev agent
-cat >> sprints/<PHASE>/events.ttl <<'TTL'
+cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:a<N> a triage:Assignment ;
     triage:ofSprint triage:Phase<X>-S<n> ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "<UTC>"^^xsd:dateTime .
 TTL
-git add sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-S<n>"
+git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-S<n>"
 
 # Completion — append when a sprint's dev pass is accepted
-cat >> sprints/<PHASE>/events.ttl <<'TTL'
+cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:c<N> a triage:Completion ;
     triage:ofSprint triage:Phase<X>-S<n> ;
     triage:at "<UTC>"^^xsd:dateTime .
 TTL
-git add sprints/<PHASE>/events.ttl && git commit -m "event: Completion <PHASE>-S<n>"
+git add .sprints/<PHASE>/events.ttl && git commit -m "event: Completion <PHASE>-S<n>"
 
 # Resolution — append when a non-blocking finding is actually fixed
-cat >> sprints/<PHASE>/events.ttl <<'TTL'
+cat >> .sprints/<PHASE>/events.ttl <<'TTL'
 triage:r<N> a triage:Resolution ;
     triage:resolves triage:f<N> ;
     triage:resolvedAt "<UTC>"^^xsd:dateTime .
 TTL
-git add sprints/<PHASE>/events.ttl && git commit -m "event: Resolution f<N>"
+git add .sprints/<PHASE>/events.ttl && git commit -m "event: Resolution f<N>"
 ```
 
 **Assignment uniqueness**: Each Assignment must include the dev agent name and
@@ -228,7 +228,7 @@ Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
 consulting triage-findings:
 
 ```bash
-RESULT=$(next-dev-task F sprints/F)
+RESULT=$(next-dev-task F .sprints/F)
 PHASE_VAL=$(echo "$RESULT" | jq -r .phase)
 
 if [ "$PHASE_VAL" = "DONE" ]; then
@@ -339,7 +339,7 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 Usage:
 ```bash
 # From repo root — make executable first: chmod +x .claude/skills/graph-orchestration/scripts/next-dev-task
-.claude/skills/graph-orchestration/scripts/next-dev-task F sprints/F
+.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F
 ```
 
 Output JSON (TRAVERSAL):
