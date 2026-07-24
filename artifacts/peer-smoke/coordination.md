@@ -222,3 +222,27 @@ diagnosis procedure is `artifacts/peer-smoke/windows/rebuild-and-diagnosis.md`.
 It requires Cwin to pull, build, run gates, retain one daemon, enable the
 10-minute peer-sync window, and root-cause/fix any bounded defect directly on
 this branch.
+
+## Mac daemon rerun — 2026-07-24
+
+- The Mac candidate daemon was rebuilt and restarted through the controlled
+  singleton switch. `atm doctor --json` is healthy/ready at `1.3.1`; one
+  daemon owns `192.168.128.82:43101`.
+- Local UDS send/read/ack passed: request `01KY8Y8MTQACX4K6A6XJ224SH2` and
+  reply `01KY8Y8N6SYK0ZMQYWTJ5H4ZJT`.
+- A direct Mac-to-Windows probe `01KY8YBD1RH30N45YNTENA33G5` recorded
+  `write_persisted -> attempt -> confirmed` locally. It remains only a
+  transport response observation until Windows proves the same ULID in its
+  mailbox.
+- The subsequent instruction probe `01KY8YKTSJJDA959G2W94Q10Z6` recorded
+  `write_persisted -> attempt -> unconfirmed(ATM_DAEMON_UNAVAILABLE)` after
+  the HTTPS deadline. The CLI's earlier local response-read timeout is not a
+  daemon crash: doctor remained healthy and the retained terminal event shows
+  the peer attempt did not complete in time. Windows should inspect its
+  daemon/listener and report whether either ULID exists before classifying
+  this as a network or receiver defect.
+- A same-host public-IP peer attempt correctly reached the canonical route but
+  failed `ATM_MESSAGE_ID_CONFLICT`: the origin and peer ingress share one
+  local mailbox and differ only in transport provenance metadata. This is a
+  separate self-peer idempotency gap; it is not evidence about Mac/Windows
+  delivery and must not be worked around with a second route.
