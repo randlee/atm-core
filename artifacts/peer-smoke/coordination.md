@@ -157,3 +157,39 @@ the evidence and result here. Do not add a TLS bypass or alternate transport.
   the public local request deadline is made coherently larger than that work).
   Sanitized Windows evidence:
   `artifacts/peer-smoke/windows/mac-endpoint-refresh-73835a4e/report.md`.
+
+## Consolidated Root-Cause Findings
+
+The five back-to-back Windows sends all returned CLI exit code `4` at
+`3029-3051ms`. The daemon log recorded a local `outcome sent` event for each,
+but that event is emitted during local persistence before `PostWriteRouter`
+performs peer delivery. It does not prove Mac receipt; the earlier conclusion
+that all five remote sends succeeded was incorrect.
+
+The complete issue set is:
+
+1. The public local request deadline is 3 seconds, while HTTPS permits 5
+   seconds independently for connect, TLS handshake, and request/response.
+   A single peer write can therefore outlive the caller by up to roughly 15
+   seconds.
+2. `ApiRouter::route` receives `RequestDeadline` but only checks it before
+   dispatch. `DaemonRequestDispatcher::dispatch` creates a fresh default
+   `HttpsRequestDeadline` and does not propagate the remaining outer budget.
+3. The daemon does not cancel the in-flight route when the local caller times
+   out. The worker can continue peer delivery after the CLI has disconnected,
+   leaving remote delivery state indeterminate to the caller.
+4. The CLI maps a loopback response-read timeout to `ATM_DAEMON_UNAVAILABLE`,
+   which falsely suggests daemon failure. The daemon was healthy throughout.
+5. Local worker errors from `handle_connection` are discarded, so failed
+   response writes and terminal route errors are absent from daemon logs.
+6. The daemon's `outcome sent` observability event is emitted before peer
+   delivery completes, making persistence look like end-to-end delivery.
+7. Exact-IP peer trust records become stale when a host's advertised address
+   changes. The daemon snapshots trust/interface configuration at startup, so
+   durable updates require a controlled singleton restart. The runbook also
+   referenced nonexistent `trust disable`; the supported operation is
+   `trust revoke`.
+
+These are code/contract and operational findings, not evidence of a Windows
+daemon crash. The five messages require receiver-side ULID confirmation before
+being classified as cross-host successes.
