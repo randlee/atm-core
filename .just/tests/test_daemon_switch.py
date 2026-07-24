@@ -160,6 +160,7 @@ class DaemonSwitchTests(unittest.TestCase):
         ]
         with (
             mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module.os, "getuid", return_value=501, create=True),
             mock.patch.object(self.module, "run", side_effect=results),
             mock.patch.object(self.module.time, "sleep"),
         ):
