@@ -178,7 +178,7 @@ fn add_member_via_retained_admin(
 
 #[test]
 #[serial_test::serial(env)]
-fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() {
+fn host_qualified_self_target_reaches_https_delivery_only_through_post_write_router() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -218,7 +218,7 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
                 atm_home.clone(),
                 workspace_dir,
                 ROLE_TEAM_LEAD.parse().expect("caller"),
-                "remote-agent@remote-team.peer.example.test",
+                "team-lead@test-team.peer.example.test",
                 TEST_TEAM.parse().expect("team"),
                 SendMessageSource::Inline("peer write".to_string()),
                 None,
@@ -226,7 +226,7 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
                 None,
                 false,
             )
-            .expect("remote write request"),
+            .expect("host-qualified self target"),
         )))
         .expect("post-write peer route succeeds");
     assert!(matches!(

@@ -736,7 +736,7 @@ fn prepare_send_context<
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
     let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
+    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient, target)?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot = delivery_policy.resolve_write_recipient_snapshot(
@@ -888,6 +888,7 @@ pub(crate) fn validate_non_self_recipient(
     sender: &AgentName,
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
+    target: &crate::address::AgentAddress,
 ) -> Result<(), AtmError> {
     if sender
         .as_str()
@@ -895,6 +896,7 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str())
+        && target.host.is_none()
     {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
@@ -906,6 +908,7 @@ pub(crate) fn validate_non_self_recipient(
 #[cfg(test)]
 mod self_address_tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::address::AgentAddress;
     use crate::error_codes::AtmErrorCode;
     use crate::types::{AgentName, TeamName};
 
@@ -918,10 +921,29 @@ mod self_address_tests {
                 agent: AgentName::from_validated("sender-a"),
                 team: TeamName::from_validated("test-team"),
             },
+            &"sender-a@test-team"
+                .parse::<AgentAddress>()
+                .expect("target"),
         )
         .expect_err("case-variant self target must be rejected");
 
         assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_host_qualified_self_target() {
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            &"sender-a@test-team.127.0.0.1"
+                .parse::<AgentAddress>()
+                .expect("host-qualified target"),
+        )
+        .expect("host-qualified target is an ordinary peer delivery, not self-send");
     }
 }
 

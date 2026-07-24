@@ -170,8 +170,10 @@ impl HttpsMessageTransport for HttpsTransport {
         let host = peer.host.to_string();
         let address = resolve_peer_address(&host)?;
         let mut stream =
-            TcpStream::connect_timeout(&address, deadline.connect).map_err(|_source| {
-                AtmError::daemon_unavailable(format!("failed to connect to HTTPS peer {host}"))
+            TcpStream::connect_timeout(&address, deadline.connect).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to connect to HTTPS peer {host} at {address}: {source}"
+                ))
             })?;
         let request = RequestEnvelope::Write(Box::new(request));
         match self.security {
