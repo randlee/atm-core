@@ -70,3 +70,31 @@ waits for that PID, checks the configured TCP endpoint is closed, then removes
 only explicitly listed file/socket paths beneath that marked runtime directory.
 Without the matching marker it fails closed and deletes nothing. Never list an
 ambient daemon's lock, socket, endpoint, or PID in this configuration.
+
+## Fast inbound two-peer smoke
+
+For live diagnosis against one already-running local daemon, use the inbound
+runner. It does not start, stop, switch, configure, or restart any daemon.
+It SSHes to each configured peer, runs peer doctor, then has that peer send a
+no-ack and an acknowledgement-required message to the local host. The local
+host reads each exact returned message ID; the acknowledgement-required row
+must remain pending. It writes bounded, sanitized local and remote log tails
+after every run.
+
+Copy, then keep the real configuration untracked because it contains machine
+addresses and paths:
+
+```bash
+cp scripts/smoke/inbound-peer-smoke.example.json inbound-peer-smoke.json
+python3 scripts/smoke/run_inbound_peer_smoke.py \
+  --config inbound-peer-smoke.json \
+  --evidence-dir artifacts/peer-smoke/inbound
+```
+
+The runner prints one `PASS` or `FAIL` line for local doctor, each peer doctor,
+each peer send/read pair, and the evidence path. It exits zero only when every
+row passed. `peers[].shell` is `posix` for a macOS/Linux SSH shell or
+`powershell` for Windows; all commands remain argv arrays, so no local shell
+or ad-hoc remote script is required. Set `local.advertised_host` explicitly to
+avoid interface-discovery ambiguity, or omit it to query
+`atm peer interface list --json`.

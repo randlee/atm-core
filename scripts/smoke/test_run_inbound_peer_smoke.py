@@ -1,0 +1,55 @@
+"""Unit tests for the inbound peer smoke runner; no daemon or SSH required."""
+from __future__ import annotations
+
+import importlib.util
+import unittest
+from pathlib import Path
+
+
+def load_runner():
+    path = Path(__file__).with_name("run_inbound_peer_smoke.py")
+    spec = importlib.util.spec_from_file_location("run_inbound_peer_smoke", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+RUNNER = load_runner()
+
+
+class InboundPeerSmokeTests(unittest.TestCase):
+    def test_extract_message_id_handles_nested_send_output(self):
+        self.assertEqual(RUNNER.extract_message_id('{"result":{"message_id":"01TEST"}}'), "01TEST")
+
+    def test_advertised_host_finds_enabled_interface(self):
+        raw = '{"interfaces":[{"enabled":false,"advertise_host":"old"},{"enabled":true,"advertise_host":"peer.local"}]}'
+        self.assertEqual(RUNNER.extract_advertised_host(raw), "peer.local")
+
+    def test_posix_remote_command_preserves_environment_without_local_shell(self):
+        command = RUNNER.remote_command(
+            {"ssh_command": ["ssh", "m5"], "shell": "posix"},
+            ["atm", "send", "a@b.host", "hello world", "--json"],
+            {"ATM_IDENTITY": "cm5", "ATM_TEAM": "atm-m5"},
+        )
+        self.assertEqual(command[:4], ["ssh", "m5", "sh", "-lc"])
+        self.assertIn("ATM_IDENTITY=cm5", command[-1])
+        self.assertIn("'hello world'", command[-1])
+
+    def test_powershell_remote_command_sets_environment(self):
+        command = RUNNER.remote_command(
+            {"ssh_command": ["ssh", "fastpc4"], "shell": "powershell"},
+            ["C:\\atm.exe", "doctor", "--json"],
+            {"ATM_IDENTITY": "windows-smoke"},
+        )
+        self.assertEqual(command[:6], ["ssh", "fastpc4", "powershell", "-NoProfile", "-NonInteractive", "-Command"])
+        self.assertIn("$env:ATM_IDENTITY='windows-smoke'", command[-1])
+
+    def test_read_state_requires_exact_message_and_pending_ack(self):
+        result = {"message": {"message_id": "01TEST", "requires_ack": True}}
+        self.assertEqual(RUNNER.message_from_read('{"message":{"message_id":"01TEST","requires_ack":true}}'), result["message"])
+        self.assertIsNone(RUNNER.message_from_read("not json"))
+
+
+if __name__ == "__main__":
+    unittest.main()
