@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# next-dev-task — Cursor resolution for graph-orchestration.
+#
+# Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR>
+#   PHASE_LOCAL  e.g. "F" (expanded to urn:atm:triage:PhaseF)
+#   TTL_DIR      path to directory containing structure.ttl and events.ttl
+#
+# Returns JSON on stdout:
+#   { "phase": "TRAVERSAL", "vars": { "sprint": "...", "sprint_iri": "...", "sprint_order": N, "criteria_doc": "..." } }
+#   { "phase": "DONE", "vars": {} }
+#
+# Exits non-zero on error; error details on stderr.
+
+set -euo pipefail
+
+PHASE="${1:?Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR>}"
+TTL_DIR="${2:?Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR>}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Verify Python 3 and rdflib are available
+if ! python3 -c "import rdflib" 2>/dev/null; then
+  echo >&2 "ERROR: rdflib not found. Install with: pip3 install rdflib"
+  exit 1
+fi
+
+exec python3 "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR"
