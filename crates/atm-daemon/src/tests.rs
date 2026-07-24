@@ -920,6 +920,10 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
 
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+    let caller_dir = tempdir.path().join("caller-workspace");
+    std::fs::create_dir_all(&caller_dir).expect("caller workspace");
+    std::fs::write(caller_dir.join(".atm.toml"), "this is not valid toml = [")
+        .expect("invalid caller config");
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache, db_path);
@@ -927,7 +931,9 @@ fn doctor_client_context_reflects_caller_over_daemon_launch_environment() {
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Doctor(DoctorQuery {
             home_dir: atm_home.clone(),
-            current_dir: atm_home,
+            // The daemon must not read this caller workspace. The invalid
+            // config proves its doctor projection stays runtime-scoped.
+            current_dir: caller_dir,
             team_override: None,
             caller_team: Some(test_team().clone()),
             caller_identity: Some(

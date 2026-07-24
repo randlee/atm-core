@@ -893,7 +893,11 @@ impl DaemonRequestDispatcher {
             .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
     }
 
-    fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
+    fn project_doctor_report(&self, mut query: DoctorQuery) -> Result<DoctorReport, AtmError> {
+        // The daemon must not inspect an arbitrary caller workspace. The CLI
+        // resolves caller-local configuration before it reaches this boundary;
+        // the singleton projects only its own durable runtime state.
+        query.current_dir = self.home_dir.as_path().to_path_buf();
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),
