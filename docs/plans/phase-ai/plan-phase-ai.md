@@ -31,6 +31,12 @@ the same read/write handlers. Cross-host code is transport-only.
 | Offline reconciliation | AI.16 adds an operator-bounded scan of canonical immutable outbound records; it has no cursor, queue, receipt, retry budget, or per-message delivery state |
 | Idempotency | Immutable existing message ULID; storage accepts duplicate identity idempotently |
 
+Stable registered hostname plus certificate pin is the peer authority. A direct
+IP target is permitted only when fresh DNS resolution of exactly one registered
+hostname contains it; DNS results are never persisted and reverse DNS never
+creates authority. A remote result is successful only after peer HTTP
+acceptance, never after local persistence.
+
 The detailed decisions are ADR-032 through ADR-038. ADR-028 through ADR-031
 are historical and superseded.
 
@@ -166,6 +172,11 @@ integration; they do not alter it.
 | AI.19 | `feature/pAI-s19-hermes-graft-integration` | One typed bridge maps canonical nudge source address to an isolated Hermes `atm:` chat after persistence |
 | AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
 | AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
+| AI.22 | `feature/pAI-s22-peer-authority-resolution` | DNS-backed hostname/pin peer authority and live trust refresh |
+| AI.23 | `feature/pAI-s23-peer-write-deadline` | One propagated peer-write deadline and cancellation contract |
+| AI.24 | `feature/pAI-s24-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |
+| AI.25 | `feature/pAI-s25-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
+| AI.26 | `feature/pAI-s26-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).

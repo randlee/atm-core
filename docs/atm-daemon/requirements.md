@@ -167,16 +167,19 @@ Initial crate requirement IDs:
   cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
-  deny-by-default exact peer-identity and certificate-fingerprint allowlist
-  before routing. Satisfies:
+  deny-by-default registered-hostname and certificate-fingerprint allowlist
+  before routing. It resolves direct IP targets only as ADR-040 permits and
+  never persists DNS aliases. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
 - `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
   are ordinary HTTPS peer targets; no loopback-only transport branch exists.
   Satisfies:
   `REQ-CORE-TRANSPORT-002C`.
-- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
-  policy for HTTP(S), store busy timeout, ingest batch, and doctor query
-  operations. Satisfies:
+- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the one absolute request
+  deadline budget for HTTP(S), store busy timeout, ingest batch, and doctor
+  query operations. It propagates the remaining request budget to HTTPS and
+  returns the ADR-041 typed outcome rather than misclassifying a live daemon
+  as unavailable. Satisfies:
   `REQ-CORE-TRANSPORT-005`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
   must remain tracked by runtime drain ownership until it finishes or is

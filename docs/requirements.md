@@ -3698,12 +3698,33 @@ mail correctness.
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+  hostname, HTTPS port, and pinned certificate fingerprint.
+
+  Required behavior:
+  - a hostname target exact-matches one registered authority name; its durable
+    HTTPS port selects the endpoint
+  - a literal IP target is accepted only when a bounded fresh DNS lookup of
+    exactly one registered hostname contains that address
+  - resolved addresses are not stored in SQLite or another durable alias store
+  - zero or multiple matching registered names fail closed before TLS or route
+  - reverse DNS is forbidden; an IP-only registration never authorizes a name
+  - every registered hostname must be forward-resolvable by the peers that
+    use it; a changing VPN or Wi-Fi address is updated by the host's normal
+    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+  - several account-owned daemons may use the same current host IP only when
+    each authority has a distinct `(hostname, port)` endpoint and certificate
+    pin; an OS bind collision fails closed and must not select another port
+  - trust add, replace, and revoke refresh the one live daemon's verifier
+    atomically without starting a second daemon
+
 - `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
   a durable deny-by-default exact peer allowlist before routing.
 
   Required behavior:
-  - inbound peers are rejected unless their authenticated host identity and
-    pinned certificate fingerprint match one enabled record
+  - inbound peers are rejected unless their declared stable host identity,
+    configured HTTPS port, and pinned certificate fingerprint match one
+    enabled record; the TCP source IP is routing information only
   - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
   - rejection happens before router, mailbox, acknowledgement, or roster work
   - doctor output must surface listener, certificate, and trust state without
@@ -3779,9 +3800,10 @@ mail correctness.
   capacity limits for transport/store/health operations.
 
   Required behavior:
-  - same-host daemon request deadline: `3s`
-  - per-leg HTTPS connect/read/write deadline: `5s`
-  - remote synchronous wait deadline: `10s`
+  - every request has one absolute `RequestDeadline`; local HTTP, router,
+    dispatcher, post-write router, and HTTPS consume only its remaining budget
+  - no peer connect, TLS, request, or response leg may create a longer
+    independent deadline below dispatcher scope
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
@@ -3802,6 +3824,37 @@ mail correctness.
   - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
     loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
     the one documented daemon shutdown deadline
+
+- `REQ-CORE-TRANSPORT-005A` A remote write is confirmed only after the peer
+  daemon returns canonical HTTP acceptance.
+
+  Required behavior:
+  - origin persistence is observable separately and is never labelled sent
+  - deadline, disconnect, or failed response after dispatch returns the typed
+    `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
+    local daemon accepted the request
+  - accepted work remains runtime-tracked and is cancelled on deadline expiry
+    or local disconnect; detached delivery is forbidden
+  - the possible remote side effect is resolved only by repeating the same
+    immutable ULID through ordinary idempotent write handling
+  - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
+    `peer_delivery_unconfirmed`; terminal handler/response-write failures are
+    retained structured events
+
+- `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
+  recent immutable outbound writes after connectivity loss without delivery
+  state.
+
+  Required behavior:
+  - policy selects a bounded send window and batch; zero window disables it
+  - first recovery attempt is no earlier than 60 seconds; later failures use
+    exponential backoff capped at 15 minutes
+  - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
+    cursor, receipt, payload cache, per-message attempt state, or alternate
+    write route is allowed
+  - empty window, policy disable, or peer revoke stops scheduling
+  - retained events distinguish scheduled, attempted, confirmed, and
+    unconfirmed recovery without body or certificate material
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

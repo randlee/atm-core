@@ -26,10 +26,10 @@ Interface bindings, local certificate identity, and peer trust records are
 durable configuration behind the storage trait, managed by CLI. SQLite is the
 initial backend; neither the HTTPS adapter nor daemon runtime imports SQLite
 types. Environment variables are not an operator configuration surface. Peer
-trust is exact host identity plus pinned certificate fingerprint; adding or
-replacing a trust record requires explicit operator confirmation. The initial
-certificate may be self-signed and generated on demand. Unauthenticated or
-untrusted TLS peers are rejected before routing.
+trust is a stable hostname plus pinned certificate fingerprint; ADR-040 defines
+the bounded DNS lookup that permits a direct current IP without storing an IP
+alias. The initial certificate may be self-signed and generated on demand.
+Unauthenticated or untrusted TLS peers are rejected before routing.
 
 The daemon has no cross-host outbox, replay store, retry state, receipt
 synthesis, per-host acknowledgement state, or duplicate-delivery subsystem.
@@ -40,8 +40,8 @@ the same ULID with any differing immutable field is a typed conflict, is
 logged structurally, preserves the original record, and has no side effect or
 panic.
 
-The HTTPS adapter applies bounded `5s` connect, TLS-handshake, and request
-deadlines, and rejects an over-limit body before decode. Listener startup
+The HTTPS adapter consumes the one enclosing absolute request deadline defined
+by ADR-041 and rejects an over-limit body before decode. Listener startup
 validates every enabled interface and certificate reference before publishing
 any listener; an invalid configuration or bind failure leaves no partial HTTPS
 service. On shutdown it stops accepts then drains or cancels tracked work

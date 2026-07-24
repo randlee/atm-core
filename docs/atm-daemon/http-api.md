@@ -27,16 +27,18 @@ Thus `hendrix:12345@hermes` and `hendrix:98765@hermes` are independent inbox
 and reply identities. `chat_id` is not a daemon session or a message-thread
 field.
 
-Remote HTTPS requires mTLS plus the configured exact peer identity and pinned
-certificate fingerprint. Unix UDS uses endpoint ownership/permissions.
+Remote HTTPS requires mTLS plus the configured registered peer hostname and
+pinned certificate fingerprint. A literal IP destination is accepted only when
+fresh DNS resolution of exactly one registered hostname contains it; resolver
+output is never durable and reverse-DNS inference is forbidden. Unix UDS uses endpoint ownership/permissions.
 Loopback TCP binds only a loopback address and requires the daemon-created
 owner-readable endpoint record plus `X-ATM-Local-Capability` (32-byte base64url
 capability). These checks create typed local or peer ingress context before the
 router; socket family and address never determine request semantics.
 
-All routes have a bounded request deadline and reject a body over `1_048_576`
-bytes before decode. UDS uses the `3s` same-host deadline; HTTPS uses the documented `5s`
-connect, handshake, and request legs within its `10s` synchronous wait budget.
+All routes have one bounded absolute request deadline and reject a body over
+`1_048_576` bytes before decode. HTTPS consumes the remaining request budget;
+it cannot start an independent longer connect, handshake, or request deadline.
 Both listeners stop accepting new requests during shutdown and drain or cancel
 tracked requests within the daemon shutdown deadline.
 
@@ -76,6 +78,9 @@ destination without a separate acknowledgement route.
   different immutable content returns the typed conflict error; it preserves
   the original record and performs no side effect.
 - Every failure uses ADR-032's JSON `{ "code", "message" }` error shape.
+- A remote write is successful only after peer HTTP acceptance. If dispatch
+  began but acceptance is unconfirmed, the normal error body carries
+  `REMOTE_DELIVERY_UNCONFIRMED`; local persistence alone is not success.
 - Mutation preconditions and authorization failures use ordinary HTTP status
   codes but retain the same ATM error code in the body.
 

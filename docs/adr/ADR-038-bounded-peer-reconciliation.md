@@ -21,8 +21,9 @@ pub struct PeerSyncPolicy {
 ```
 
 The policy defaults to disabled. An operator enables it with the peer CLI and
-may request a one-shot sync. After an ordinary HTTPS write succeeds, the daemon
-may run the same bounded sync for that peer. A sync queries storage for local
+may request a one-shot sync. After an ordinary HTTPS write succeeds or peer
+delivery is unconfirmed, the daemon may run the same bounded sync for that
+peer. A sync queries storage for local
 outbound canonical records addressed to that exact peer and newer than
 `now - max_message_age`, then submits each unchanged record to
 `PeerHttpTransport`.
@@ -31,8 +32,11 @@ Each scan selects at most `max_batch_messages`, oldest first. Automatic scans
 are rate-limited to once per peer per 60 seconds by a bounded in-memory
 `HostName -> Instant` cooldown map with no message IDs or payloads. The map is
 not durable delivery state and is discarded on restart. Explicit one-shot sync
-executes one bounded batch immediately. There is no automatic retry, backoff,
-or background schedule.
+executes one bounded batch immediately. After a delivery failure, one bounded
+in-memory per-peer scheduler may trigger the scan no earlier than 60 seconds,
+then with exponential backoff capped at 15 minutes while eligible records
+remain. It stores no message ID, payload, cursor, receipt, or delivery result
+and restarts with the 60-second minimum.
 
 The storage trait—not the daemon or transport—owns the backend-neutral query.
 There is no outbox, replay store, retry queue, background monitor, cursor,
@@ -43,6 +47,8 @@ conflict remains a typed error with no side effects.
 ## Consequences
 
 Reconciliation is bounded by explicit user policy and ordinary stored message
-age. It provides a small recovery window after a peer reconnects without
+age. It provides a small recovery window after Wi-Fi/VPN connectivity returns without
 creating a second write path or transport state machine. It never changes the
 message ID or immutable payload, and it cannot synthesize delivery success.
+Its retained events distinguish a scheduled/attempted scan from peer HTTP
+acceptance.

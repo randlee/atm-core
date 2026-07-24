@@ -40,3 +40,8 @@ add no message schema, CLI grammar, HTTP resource, or alternate write path.
 The checked-in OpenAPI 3.1 description is a durable interface artifact. A
 browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
+
+Cross-host smoke-gap closure is specified by
+[AI.22–AI.25](plan-phase-ai-crosshost-smoke-gaps.md): stable hostname/pin peer
+authority, one end-to-end peer-write deadline, truthful delivery outcomes, and
+receiver-proven physical smoke evidence.

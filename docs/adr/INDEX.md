@@ -47,6 +47,8 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-036 — Storage Boundary And Composition Topology](./ADR-036-storage-boundary-and-composition-topology.md)
 - [ADR-037 — Chat Address Identity](./ADR-037-chat-address-identity.md)
 - [ADR-039 — Python Graft Host Binding](./ADR-039-python-graft-host-binding.md)
+- [ADR-040 — Peer Authority Resolution](./ADR-040-peer-authority-resolution.md)
+- [ADR-041 — End-To-End Peer Write Outcome](./ADR-041-end-to-end-peer-write-outcome.md)
 
 ## Extracted Crate-Local ADRs
 
