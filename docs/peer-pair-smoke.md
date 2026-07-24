@@ -96,3 +96,9 @@ row passed. `peers[].shell` is `posix` for a macOS/Linux SSH shell or
 or ad-hoc remote script is required. Set `local.advertised_host` explicitly to
 avoid interface-discovery ambiguity, or omit it to query
 `atm peer interface list --json`.
+
+Every run also writes one valid standalone XHTML pane per computer:
+`local.xhtml`, `m5.xhtml`, and so on. Each shows doctor-derived daemon/version
+information, the full fixed smoke matrix, executed-session entries, and a
+bottom assessment. Rows not covered by this narrowly scoped inbound runner are
+explicitly `— not-run`; they are never represented as passing.
