@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -67,6 +69,17 @@ class InboundPeerSmokeTests(unittest.TestCase):
         )
         self.assertIn('class="fail"', pane)
         self.assertIn("Investigation required: local-doctor", pane)
+
+    def test_host_mode_accepts_no_ssh_peers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "host.json"
+            path.write_text(json.dumps({
+                "schema_version": 1,
+                "local": {"atm_command": ["atm"], "identity": "a", "team": "t"},
+                "host": {"name": "m5", "local_checks": {}},
+            }), encoding="utf-8")
+            config = RUNNER.load_config(path)
+        self.assertEqual(RUNNER.validate_host_config(config)["name"], "m5")
 
 
 if __name__ == "__main__":
