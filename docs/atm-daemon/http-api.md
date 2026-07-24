@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Status | Proposed — Phase AI target |
-| Version prefix | `/v1/atm` |
+| HTTP API SemVer | `1.0.0`; major is `/v1/atm` |
 | Authoritative ADR | ADR-033 |
 | Machine-readable publication | checked-in OpenAPI 3.1 and `atm api spec` |
 
@@ -91,9 +91,14 @@ OpenAPI document against route schemas and tests every documented route. The
 embedded document is published by `atm api spec --format json|yaml`; no daemon
 network endpoint is needed merely to retrieve documentation.
 
-The v1 resource paths are durable. Additive fields are allowed. Removing or
-changing a field, status meaning, authorization rule, or handler mapping needs
-a new API version and ADR review.
+The v1 resource paths are durable. Same-major additive fields, error details,
+and endpoints require a minor version: servers default omitted additive request
+fields and ignore unknown additive fields; clients tolerate additive response
+fields. Patch versions are corrective only. A new operation may require an
+explicitly advertised capability, but a minor or patch mismatch must not reject
+an existing operation. Removing or changing a field, status meaning,
+authorization rule, or handler mapping needs a new API major and ADR review.
+Product release versions are diagnostic only and are not HTTP admission input.
 
 ## Deferred scope
 

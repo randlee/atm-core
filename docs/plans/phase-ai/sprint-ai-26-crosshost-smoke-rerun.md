@@ -33,8 +33,9 @@ historical diagnostics, not passing evidence.
 - Sender local persistence or raw TCP alone fails the evidence validator.
 - Negative cases fail before receiver mailbox mutation and expose the expected
   typed error/event.
-- Both hosts use one matching CLI/daemon pair throughout and restore their
-  normal pair afterward.
+- Each host records its CLI and daemon release plus negotiated schema and HTTP
+  API version; release strings may differ only when the compatibility contract
+  succeeds. Both restore their normal pair afterward.
 
 ## Required validation
 

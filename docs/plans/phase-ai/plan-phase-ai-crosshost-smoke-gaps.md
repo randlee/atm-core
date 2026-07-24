@@ -25,6 +25,7 @@ one canonical local write path; HTTPS is only its post-write adapter.
 | persistence event claims `sent` before peer acceptance | AI.24 | truthful delivery event contract |
 | Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.25 | bounded per-peer reconciliation schedule with backoff |
 | smoke treated local `outcome sent` as receipt | AI.26 | receiver-side ULID evidence and physical rerun |
+| product releases block compatible CLI/daemon pairs | AI.27 | explicit schema and HTTP SemVer compatibility contract |
 
 The TLS trust-snapshot/restart observation is closed by AI.22's daemon-owned
 atomic configuration refresh. The five Windows sends in the first smoke remain
@@ -40,7 +41,9 @@ AI.24 outcome truth ───┘
 
 AI.22, AI.23, and AI.24 may be implemented in parallel because they own
 separate authority, deadline, and observability seams. AI.25 depends on
-AI.23/AI.24; AI.26 starts after AI.22–AI.25 merge.
+AI.23/AI.24; AI.26 starts after AI.22–AI.25 merge. AI.27 may proceed in
+parallel with AI.22–AI.25 and must land before AI.26's final smoke, so tested
+CLI/daemon builds are not artificially blocked by release-label drift.
 
 ## Invariants
 
@@ -56,10 +59,14 @@ AI.23/AI.24; AI.26 starts after AI.22–AI.25 merge.
 - Every repeated immutable ULID follows the same write path and remains
   idempotent. No finding authorizes an outbox, replay queue, receipt, retry
   worker, or parallel acknowledgement workflow.
+- Product release SemVer is diagnostic only. A separate CLI/daemon schema and
+  HTTP API SemVer contract governs admission; same-major additive HTTP changes
+  remain interoperable.
 
 ## Required validation
 
 Each sprint runs `just lint` and `just test`. AI.26 additionally requires
-receiver-side evidence for each ULID, matching client/daemon versions, doctor
-before/after, exactly one daemon per host, and sanitized logs. Raw TCP success,
-local persistence, and a sender-side `sent` event are insufficient evidence.
+receiver-side evidence for each ULID, recorded CLI/daemon release plus
+negotiated schema/HTTP API version, doctor before/after, exactly one daemon per
+host, and sanitized logs. Raw TCP success, local persistence, and a sender-side
+`sent` event are insufficient evidence.

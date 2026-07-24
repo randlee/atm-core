@@ -33,6 +33,16 @@ body with the route's HTTP status. An acknowledgement endpoint builds the same
 internal canonical write whose `acknowledges_message_id: Option<MessageId>` is
 populated. It is not a separate envelope, transport, or persistence path.
 
+The HTTP API has an independent strict SemVer identity. Its major equals the
+`/v{major}` path segment. Same-major minor additions are compatible and patch
+releases are corrective only: servers accept omitted additive request fields
+using documented defaults and ignore unknown additive fields; clients tolerate
+additive response fields and error details. A client may require an explicitly
+advertised capability for a new operation, but it must not reject an otherwise
+supported existing operation solely because the peer reports a different minor
+or patch. Product release versions are diagnostic metadata, not HTTP
+compatibility input.
+
 The canonical write request contains ADR-037's structured caller and
 destination `AgentAddress`: `agent`, optional `chat_id`, `team`, and optional
 `host`. The shared handler validates the local caller under the normal

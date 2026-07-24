@@ -381,6 +381,10 @@ Product requirement ID:
   distribution infrastructure must be made explicit in the repo-owned release
   plan before `1.0` release automation is considered complete.
 
+- `REQ-P-RELEASE-007` ATM release identifiers must be strict SemVer. The
+  project supports opt-in prerelease builds such as `1.3.2-beta.1` and
+  `1.3.2-alpha.1`; prereleases are never the default customer channel.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -410,6 +414,34 @@ Required behavior:
 - release readiness proof for `winget` must validate successful submission or
   manifest update dispatch; it cannot require same-day installability because
   Microsoft review introduces a normal 1-2 day publication lag
+- the normal Homebrew `atm` formula tracks stable releases only; prereleases
+  are published, when approved, through an explicit opt-in `atm-beta` formula
+  in the project-owned tap
+
+### 2.4 HTTP Compatibility Scope
+
+Product requirement ID:
+
+- `REQ-P-HTTP-COMPAT-001` The daemon HTTP API has a strict, independently
+  declared SemVer version. Product release versions identify builds only; they
+  are never the CLI-to-daemon compatibility gate.
+
+Required behavior:
+
+- `/v{major}/atm` and the HTTP API's declared SemVer have the same major;
+  different major versions fail before a write with a typed compatibility
+  error
+- the compatibility preflight compares the explicit CLI/daemon schema version
+  and HTTP API major, not `atm` or `atm-daemon` product release strings
+- an additive endpoint, optional JSON field, response field, or error detail
+  increments the HTTP API minor version and must preserve successful
+  communication for clients and servers sharing the same major; patch versions
+  are corrective only and do not add or remove contract elements
+- requests accept omitted additive fields with documented defaults and servers
+  ignore unknown additive fields; an operation requiring a new capability must
+  declare that requirement rather than relying on a minor-version mismatch
+- OpenAPI, generated clients, and compatibility tests are the authoritative
+  proof of this contract
 
 ## 3. External Contracts
 
