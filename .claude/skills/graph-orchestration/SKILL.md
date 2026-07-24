@@ -4,7 +4,6 @@ version: 0.4.0
 description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic query loop — cursor → triage-findings check → dispatch → await Completion → re-query. No agent ever decides phase, cursor position, or done-ness; queries answer all of it. Derived from codex-orchestration; replaces static sprint-doc assignments with a live RDF event log. Adds Assignment events (collision prevention), Completion invalidation (blocking post-Completion finding snaps cursor back), and CLEANUP phase (non-blocking findings after all sprints complete).
 repo: atm-core
 depends_on:
-  codex-orchestration: 0.x
   quality-management-gh: 1.x
   quality-mgr: 0.x
   req-qa: 0.x
