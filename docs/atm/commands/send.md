@@ -10,9 +10,14 @@ CLI ownership for `atm send`:
 
 Core send behavior remains owned by `atm-core`.
 
-`atm send` rejects self-addressed same-team targets before persistence. The
-shared `atm-core` send path owns that validation, so direct CLI, loopback, and
-daemon-backed send flows all fail the same way.
+`atm send` accepts an inline destination as
+`agent[:chat-id]@team[.host]`. The first `.` after the team begins the host;
+the remaining hostname or literal IP is preserved in the canonical request.
+The self-send guard rejects only the caller's exact `agent@team` destination
+when it has no host. Any syntactically valid host-qualified destination,
+including `localhost`, `127.0.0.1`, or an advertised IP, proceeds to the
+ordinary host-routing contract. The shared `atm-core` path owns this rule; the
+CLI adds no host flag or alternate route.
 
 Acknowledgement ownership notes:
 

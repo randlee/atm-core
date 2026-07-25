@@ -168,6 +168,29 @@ mod tests {
     }
 
     #[test]
+    fn parses_and_preserves_ipv4_host_qualified_address() {
+        let address = format!("{TEST_SENDER}@{TEST_TEAM}.192.168.128.82");
+        let parsed = AgentAddress::from_str(&address).expect("IPv4 host-qualified address");
+
+        assert_eq!(parsed.team, Some(TeamName::from_validated(TEST_TEAM)));
+        assert_eq!(
+            parsed.host,
+            Some("192.168.128.82".parse::<HostName>().expect("IPv4 host"))
+        );
+        assert_eq!(parsed.to_string(), address);
+    }
+
+    #[test]
+    fn rejects_empty_host_segment_without_team_fallback() {
+        let error = AgentAddress::from_str(&format!("{TEST_SENDER}@{TEST_TEAM}."))
+            .expect_err("empty host must be a typed address parse failure");
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::AddressParseFailed
+        );
+    }
+
+    #[test]
     fn display_round_trips_bare_and_qualified_addresses() {
         assert_eq!(
             AgentAddress::from_str(TEST_SENDER)
