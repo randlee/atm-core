@@ -1,0 +1,142 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-BLOCK-003>
+  a triage:Finding ;
+  triage:findingId "AI22-BLOCK-003" ;
+  triage:title "AuthenticatedIngress::Local does not reject a locally-supplied authenticated_source_host, allowing forged peer provenance" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs DaemonRequestDispatcher::route (~954-1006): the AuthenticatedIngress::Local match arm (~969-974) only rejects origin_message_id/origin_timestamp being set, unlike the Peer/UntrustedSmoke arms (~976-992) which additionally check authenticated_source_host. A local caller (e.g. via local_ipc_transport/request_worker.rs, which decodes wire JSON with no normalization before dispatching with AuthenticatedIngress::Local, lines ~197) can therefore supply an authenticated_source_host field with no real mTLS handshake, forging peer provenance. Downstream consumers of this field include is_same_host_peer_receipt (send/mod.rs) and resolve_acknowledgement_write (ack/mod.rs:422, which reads the persisted sourceHost field to pick the ack-reply destination host)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "security" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/integrate-phase-AI/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-003/s24/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-AI/e52fffb6> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/s24/fc9832b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/integrate-phase-AI/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 949 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AI/e52fffb6> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 959 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 969 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 969 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 949 ;
+  triage:snippet "AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { return Err(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 197 ;
+  triage:snippet "AuthenticatedIngress::Local, // decodes wire JSON without normalization" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-BLOCK-003/s24/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 422 ;
+  triage:snippet "let host = authenticated_source_host(&source.envelope)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:worktree/integrate-phase-AI/e52fffb6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
