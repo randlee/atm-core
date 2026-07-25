@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-QA-001>
+  a triage:Finding ;
+  triage:findingId "AI25-QA-001" ;
+  triage:title "Missing test coverage for the ambiguous-DNS-match (fail-closed multi-match) branch" ;
+  triage:description "resolve_peer_authority's multi-match rejection (crates/atm-daemon/src/https_transport.rs:90) is implemented correctly (fail-closed: both 0-match and multi-match are rejected before any TLS/route attempt) but has zero test coverage; only single-match and no-match paths are tested." ;
+  triage:category "test-coverage" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:reportedBy "rust-qa-agent" ;
+  triage:reportedBy "ruthless-boundary-qa" ;
+  triage:originatingBranch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:originatingOrderIndex 5 ;
+  triage:aliases "rust-qa-agent:QA-001" ;
+  triage:aliases "ruthless-boundary-qa:RBQA-F003" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 90 ;
+  triage:snippet "_ => Err(AtmError::validation(format!(\"literal peer IP {target} matches multiple trusted hostnames\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

@@ -1,0 +1,230 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "AI25-RBP-F001" ;
+  triage:title "New HTTPS/DNS error paths discard the underlying cause" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs systematically uses map_err(|_source| AtmError::daemon_unavailable(...)) instead of the existing AtmError::daemon_unavailable_with_cause, most costly at the DNS-resolver call sites where operators can't tell NXDOMAIN from timeout from empty-result." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
+  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 572 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 572 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 572 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 572 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 489 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {}\", peer.host)) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 498 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 449 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 449 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 449 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 449 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 449 ;
+  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .
