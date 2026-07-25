@@ -196,18 +196,34 @@ Initial crate requirement IDs:
   implementation unless it is proven to be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the transport-neutral application
   request/response types: `AgentAddress`, `WriteRequest`, read/query inputs,
-  and canonical message projections. Local UDS HTTP, remote HTTPS, and the
-  in-process test adapter decode to or encode from these same types. Satisfies:
+  and canonical message projections. Local UDS HTTP, normal remote HTTPS, the
+  explicit daemon-only plaintext-test peer profile, and the in-process test
+  adapter decode to or encode from these same types. The plaintext profile is
+  untrusted provenance only and cannot create a second application path.
+  Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
   and post-write routing contract. Exactly one post-write router chooses local
   nudge for an empty host or HTTPS delivery for every present host, including
-  localhost and the daemon's own advertised or bound IP. Satisfies:
+  localhost and the daemon's own advertised or bound IP. Same-host transport
+  proof uses that advertised/bound virtual-Ethernet IP over TCP; localhost is
+  grammar coverage only. Local CLI HTTP, same-host TCP HTTP, and remote peer
+  HTTP decode the same `WriteRequest` through one HTTP write resource; adapter
+  authentication/provenance cannot select another write, ACK, persistence, or
+  nudge path. When same-host peer ingress skips a duplicate origin write, a
+  later ACK derives its reply host from that retained origin destination
+  metadata and still uses the canonical write. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
-  delivery state: no replay store, outbox, retry queue, receipt, remote ack
-  state, or duplicate-delivery subsystem. Storage idempotency is by immutable
-  message ULID. Satisfies `REQ-P-RELIABILITY-001`.
+  per-message delivery state: no replay store, outbox, retry queue, receipt,
+  remote ack state, or duplicate-delivery subsystem. The sole permitted
+  non-durable state is REQ-CORE-TRANSPORT-003B's per-host lease, generation,
+  next-attempt time, and backoff for bounded canonical-record scans.
+  Storage idempotency is by immutable message ULID. An identical
+  already-delivered remote duplicate is a no-op; the narrow same-host peer
+  receipt of a retained origin record logs its skipped database write and
+  continues the ordinary inbound nudge without a second record or peer
+  re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
   canonical write. A failed remote attempt creates no remote recipient row or
   delivery state; an already-persisted local sender record remains immutable.
@@ -497,8 +513,10 @@ Required caller-context rules:
   in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
-- canonical same-team self-addressed sends must fail in the shared `atm-core`
-  send path before persistence and before any `dry-run` success result
+- canonical same-team self-addressed sends with no destination host must fail
+  in the shared `atm-core` send path before persistence and before any
+  `dry-run` success result; every syntactically valid host-qualified target
+  proceeds to the ordinary host-routing contract
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
   `command` argv
 - `recipient` must be one concrete recipient name or `*`
@@ -527,9 +545,10 @@ Required caller-context rules:
 - the hook must run after successful non-`dry-run` `atm send`
 - the hook must also run after successful `atm ack`, using the reply message as
   the hook subject when ack emitted a reply
-- if `atm ack` suppresses a historical self-addressed reply, the
-  acknowledgement still succeeds but no ack hook fires because no outbound
-  reply message exists
+- if `atm ack` suppresses an unqualified same-agent/same-team historical
+  self-addressed reply, the acknowledgement still succeeds but no ack hook
+  fires because no outbound reply message exists. A host-qualified source is
+  never suppressed and uses the ordinary canonical ACK write.
 - `is_ack` must be `false` for `atm send` and `true` for `atm ack`
 - hook configuration lookup must resolve from the sender's authoritative ATM
   roster `home_dir` metadata

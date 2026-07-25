@@ -254,9 +254,9 @@ Notes:
 ## Phase AA Runtime Composition Adjuncts
 
 Purpose:
-- Own the storage-neutral runtime contracts that concrete composition code and
-  daemon runtime code share without letting those seams become daemon-private
-  or SQLite-private.
+- Own storage-neutral runtime assembly contracts without letting concrete
+  backend knowledge become daemon-private or SQLite-private. Remote replay is
+  not an accepted shared contract.
 
 Owned shared contracts:
 - `DoctorFinding`
@@ -268,6 +268,12 @@ Notes:
 - `RuntimeAssembly` now carries the generic `StorageBackends<M, R>` seam plus
   the legacy compile-bridge `MailStore` / `RosterStore` handles used during
   AC.4 consumer cutover.
+- `AA.4` relies on these adjunct contracts to remove the direct
+  `atm-daemon -> atm-rusqlite` dependency while keeping shutdown finalization
+  storage-neutral at the daemon boundary. Any retained lifecycle operation is
+  storage-owned; it is not a `RuntimeStorageFinalizer` boundary. ADR-038's
+  canonical-record query is a narrow storage trait method, not a
+  `RemoteReplayStore` replacement.
 
 ## ConfigIngress
 

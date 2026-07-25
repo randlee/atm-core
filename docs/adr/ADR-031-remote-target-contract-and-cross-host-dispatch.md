@@ -30,10 +30,10 @@ The user-approved correction is intentionally narrow:
 
 Phase AG proposed exactly two operator-facing remote-send forms:
 
-- `atm send <agent>@<team>.<host> ...`
-- `atm send <agent>@<team> --host <host> ...`
+`atm send <agent>@<team>.<host> ...`
 
-Those two forms normalize into one typed remote-host field on the send request.
+Host qualification is part of the one typed destination-address grammar; no
+second `--host` input or alternate route exists.
 
 Illustrative contract types:
 
@@ -45,7 +45,6 @@ pub enum SendTargetParseError {
     MissingHost,
     InvalidAgentNameDot,
     InvalidTeamNameDot,
-    MixedInlineAndExplicitHost,
     MalformedInlineRemoteTarget,
 }
 
@@ -94,8 +93,6 @@ Parser and normalization rules:
     future parsers, including at minimum `*`, `?`, `[` and `]`
 - inline parsing splits at the first `.` after `@`; team names cannot contain
   `.`, while a DNS or IP host may contain later periods
-- mixed inline-host plus `--host` input is rejected instead of silently
-  preferring one source
 - each parser rejection maps to one stable error code / variant:
   - missing team => `MissingTeam`
   - missing host => `MissingHost`
@@ -103,7 +100,6 @@ Parser and normalization rules:
     failure on the agent segment
   - reserved or unsupported team charset => stable typed validation failure on
     the team segment
-  - mixed inline-host plus `--host` => `MixedInlineAndExplicitHost`
   - malformed final-dot split / otherwise invalid inline form =>
     `MalformedInlineRemoteTarget`
 - `CrossHostDelivery::deliver_remote` must not use a generic outer error type;

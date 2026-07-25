@@ -164,7 +164,7 @@ Observability release boundary rules:
 Phase R makes `atm-core` the owner of the service-layer boundaries while the
 daemon remains a runtime wrapper only.
 
-Required subsystem boundaries:
+Historical-through-AI.5 subsystem boundaries (not accepted Phase AI targets):
 - `AtmProtocol` boundary
 - `ClientTransport` boundary
 - `ServerTransport` boundary
@@ -183,6 +183,8 @@ Phase AA shared runtime-composition contracts:
   doctor handles consumed by daemon and direct-doctor callers
 - `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
   trait family
+- ADR-038's bounded canonical-record query crosses through a storage trait;
+  no replay persistence boundary exists
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -229,8 +231,9 @@ Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
   store, config ingress, post-send emission, and notification/status surfaces
-- `atm-core` owns the ATM frame schema used by both same-host local IPC and
-  cross-host daemon transport
+- `atm-core` owns the transport-neutral HTTP application schema used by both
+  same-host local IPC and cross-host daemon transport; the retired ATM frame
+  schema is historical only and must not be extended
 - `atm-core` owns the immutable public runtime roster projection
   `ProjectionRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
@@ -309,15 +312,16 @@ Config-ingress ownership rules:
   explicit TOML allowlist with owner and sunset-sprint metadata; new matches
   are lint failures rather than review-time warnings
 
-Required frame direction:
-- transport framing must not depend on EOF or socket half-close semantics
-- receivers must validate the ATM frame header before payload decode
-- transport implementations may vary, but they must share one ATM packet
-  family and one framed helper layer
-- the canonical ATM daemon wire contract is documented in
+Required HTTP direction:
+- HTTP request framing must not depend on EOF or socket half-close semantics
+- adapters validate HTTP method/resource/body limits before JSON decode and
+  call the shared `ApiRouter`
+- UDS, loopback TCP, and HTTPS implementations vary only in socket and ingress
+  authentication; they share one HTTP resource contract and `WriteRequest`
+- the canonical daemon wire contract is documented in
   [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
-- the same protocol ICD governs same-host local IPC and cross-host
-  daemon-to-daemon transport
+- the same HTTP API governs same-host local IPC and cross-host daemon-to-daemon
+  transport
 
 ## 2.2 Phase R Semantic Wrapper Policy
 
@@ -417,7 +421,9 @@ Identity-specific policy:
   canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
 - the shared send-context builder rejects canonical same-team self-addressed
-  sends before any message persistence or `dry-run` success outcome is built
+  sends only when the destination has no host, before any message persistence
+  or `dry-run` success outcome is built; host-qualified destinations proceed
+  to ordinary host routing without DNS or local-interface inspection
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
 - hook matching is recipient-scoped only
