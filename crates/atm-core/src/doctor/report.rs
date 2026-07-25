@@ -101,8 +101,12 @@ pub struct BootstrapTraceReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DaemonRuntimeDoctorReport {
     pub findings: Vec<DoctorFinding>,
+    #[serde(default)]
+    pub http_api_version: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_config: Option<PeerConfigDoctorReport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<String>,
 }
 
 /// Safe control-plane visibility for cross-host HTTPS. Private key references

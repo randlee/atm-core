@@ -60,6 +60,9 @@ def load_config(path: Path) -> dict[str, Any]:
     require_argv(local.get("atm_command"), "local.atm_command")
     require_string(local.get("identity"), "local.identity")
     require_string(local.get("team"), "local.team")
+    require_string(local.get("expected_daemon_version"), "local.expected_daemon_version")
+    if not isinstance(local.get("expected_http_api_version"), int):
+        raise SmokeError("local.expected_http_api_version must be an integer")
     if "advertised_host" in local:
         require_string(local["advertised_host"], "local.advertised_host")
     if "log_command" in local:
@@ -75,6 +78,7 @@ def load_config(path: Path) -> dict[str, Any]:
         require_argv(peer.get("atm_command"), f"peers[{index}].atm_command")
         require_string(peer.get("identity"), f"peers[{index}].identity")
         require_string(peer.get("team"), f"peers[{index}].team")
+        require_string(peer.get("expected_daemon_version"), f"peers[{index}].expected_daemon_version")
         shell = peer.get("shell", "posix")
         if shell not in {"posix", "powershell"}:
             raise SmokeError(f"peers[{index}].shell must be posix or powershell")
@@ -277,7 +281,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
     def walk(item: Any) -> None:
         if isinstance(item, dict):
             for key, nested in item.items():
-                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version"} and key not in found:
+                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "peer_wire_security", "http_api_version"} and key not in found:
                     found[key] = nested
                 walk(nested)
         elif isinstance(item, list):
@@ -285,8 +289,39 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
                 walk(nested)
 
     walk(value)
-    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "pid", "daemon_pid", "readiness") if key in found]
+    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "peer_wire_security", "pid", "daemon_pid", "readiness") if key in found]
     return ", ".join(details) if details else "doctor ready (version/PID fields absent)"
+
+
+def doctor_field(result: dict[str, Any], *path: str) -> Any:
+    """Read one stable field from the public doctor JSON response."""
+    try:
+        value: Any = json.loads(result.get("stdout", ""))
+    except json.JSONDecodeError:
+        return None
+    for part in path:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def doctor_matches_expected(local: dict[str, Any], result: dict[str, Any]) -> tuple[bool, str]:
+    """A usable daemon must report the expected release and HTTP API version."""
+    if result["exit_code"] != 0:
+        return False, result["stderr"] or "doctor failed"
+    daemon_version = doctor_field(result, "daemon_context", "version")
+    api_version = doctor_field(result, "daemon_runtime", "http_api_version")
+    wire_security = doctor_field(result, "daemon_runtime", "peer_wire_security")
+    expected_version = local["expected_daemon_version"]
+    expected_api = local["expected_http_api_version"]
+    if daemon_version != expected_version:
+        return False, f"daemon version {daemon_version!r} != expected {expected_version!r}"
+    if api_version != expected_api:
+        return False, f"HTTP API version {api_version!r} != expected {expected_api!r}"
+    if wire_security not in {"mutual_tls", "plaintext_test"}:
+        return False, f"doctor did not report a valid peer wire security profile: {wire_security!r}"
+    return True, f"daemon={daemon_version}, http_api={api_version}, wire={wire_security}"
 
 
 def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:
@@ -380,8 +415,9 @@ def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_
     evidence_dir.mkdir(parents=True, exist_ok=False)
     records: list[dict[str, Any]] = []
     doctor = command_result(local_command(local, ["doctor", "--json"]), timeout)
-    records.append({"phase": "doctor", "result": doctor, "passed": doctor["exit_code"] == 0})
-    compact("doctor", doctor["exit_code"] == 0, "ready" if doctor["exit_code"] == 0 else doctor["stderr"] or "failed")
+    doctor_ok, doctor_detail = doctor_matches_expected(local, doctor)
+    records.append({"phase": "doctor", "result": doctor, "passed": doctor_ok, "detail": doctor_detail})
+    compact("doctor", doctor_ok, doctor_detail)
     for name, command in host.get("local_checks", {}).items():
         result = command_result(command, timeout)
         passed = result["exit_code"] == 0
@@ -439,8 +475,8 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
     all_passed = True
 
     doctor = command_result(local_command(local, ["doctor", "--json"]), timeout)
-    local_ready = doctor["exit_code"] == 0
-    compact("local-doctor", local_ready, "ready" if local_ready else doctor["stderr"] or "doctor failed")
+    local_ready, doctor_detail = doctor_matches_expected(local, doctor)
+    compact("local-doctor", local_ready, doctor_detail)
     records.append({"phase": "local-doctor", "result": doctor, "passed": local_ready})
     all_passed &= local_ready
     advertised_host = local.get("advertised_host")
@@ -463,8 +499,9 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
         for peer in config["peers"]:
             target = f"{local['identity']}@{local['team']}.{advertised_host}"
             remote_doctor = command_result(remote_command(peer, peer["atm_command"] + ["doctor", "--json"]), timeout)
-            doctor_ok = remote_doctor["exit_code"] == 0
-            compact(f"{peer['name']}-doctor", doctor_ok, "ready" if doctor_ok else remote_doctor["stderr"] or "doctor failed")
+            remote_local = {**local, "expected_daemon_version": peer["expected_daemon_version"]}
+            doctor_ok, remote_doctor_detail = doctor_matches_expected(remote_local, remote_doctor)
+            compact(f"{peer['name']}-doctor", doctor_ok, remote_doctor_detail)
             records.append({"phase": f"{peer['name']}-doctor", "result": remote_doctor, "passed": doctor_ok})
             all_passed &= doctor_ok
             for kind, requires_ack in (("noack", False), ("ack-required", True)):

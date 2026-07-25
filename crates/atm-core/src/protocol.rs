@@ -85,18 +85,12 @@ impl ReleaseVersion {
             .trim()
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
-        let mut parts = value.split('.');
-        let valid = (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        }) && parts.next().is_none();
-        if !valid {
-            return Err(AtmError::new(
+        semver::Version::parse(value).map_err(|_source| {
+            AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
                 format!("invalid ATM release version `{value}`"),
-            ));
-        }
+            )
+        })?;
         Ok(Self(value.to_string()))
     }
 
@@ -341,10 +335,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ReleaseVersion, RequestEnvelope,
+        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -354,6 +348,16 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
     use serial_test::serial;
     use tempfile::TempDir;
+
+    #[test]
+    fn release_version_accepts_semver_prerelease() {
+        assert_eq!(
+            ReleaseVersion::parse("1.3.2-beta-21-pre")
+                .expect("semver prerelease")
+                .to_string(),
+            "1.3.2-beta-21-pre"
+        );
+    }
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {

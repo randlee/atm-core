@@ -33,7 +33,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, PeerWireSecurity};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -149,6 +149,7 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    peer_wire_security: PeerWireSecurity,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
@@ -393,6 +394,7 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_wire_security: PeerWireSecurity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -425,6 +427,7 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
+            peer_wire_security,
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
@@ -850,7 +853,15 @@ impl DaemonRequestDispatcher {
         peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
+            http_api_version: atm_core::api::HTTP_API_VERSION,
             peer_config: Some(peer_config),
+            peer_wire_security: Some(
+                match self.peer_wire_security {
+                    PeerWireSecurity::MutualTls => "mutual_tls",
+                    PeerWireSecurity::PlaintextTest => "plaintext_test",
+                }
+                .to_string(),
+            ),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -875,7 +886,9 @@ impl DaemonRequestDispatcher {
         } else {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
+                http_api_version: atm_core::api::HTTP_API_VERSION,
                 peer_config: None,
+                peer_wire_security: None,
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -962,7 +975,18 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
-                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+                AuthenticatedIngress::UntrustedSmoke(_)
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_none()
+                        || write.origin_timestamp.is_none() =>
+                {
+                    return Err(AtmError::validation(
+                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
+                    ));
+                }
+                AuthenticatedIngress::Local
+                | AuthenticatedIngress::Peer
+                | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
         self.dispatch(request).map(ApiResponse::new)
@@ -1093,6 +1117,7 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
+            peer_wire_security: PeerWireSecurity::MutualTls,
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),

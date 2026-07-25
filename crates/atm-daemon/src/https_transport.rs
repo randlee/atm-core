@@ -13,9 +13,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
-    read_http_request, read_http_response, write_http_request, write_http_request_with_headers,
-    write_http_response,
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, UntrustedSmokeProvenance,
+    decode_request, read_http_request, read_http_response, write_http_request,
+    write_http_request_with_headers, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -32,27 +32,26 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
-const INSECURE_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
+const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// The peer wire-security setting. Mutual TLS is the production default.
 /// Plain HTTP is deliberately available only for an explicit, temporary smoke
 /// run so connectivity can be isolated from certificate configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum HttpWireSecurity {
+pub enum PeerWireSecurity {
     MutualTls,
-    InsecureHttpSmoke,
+    PlaintextTest,
 }
 
-impl HttpWireSecurity {
-    pub(crate) fn from_environment() -> Result<Self, AtmError> {
-        match std::env::var("ATM_PEER_TRANSPORT_SECURITY").as_deref() {
-            Ok("disabled") => Ok(Self::InsecureHttpSmoke),
-            Ok("mutual-tls") | Err(std::env::VarError::NotPresent) => Ok(Self::MutualTls),
-            Ok(value) => Err(AtmError::validation(format!(
-                "ATM_PEER_TRANSPORT_SECURITY must be 'mutual-tls' or the explicit smoke value 'disabled', got '{value}'"
-            ))),
-            Err(std::env::VarError::NotUnicode(_)) => Err(AtmError::validation(
-                "ATM_PEER_TRANSPORT_SECURITY must be valid Unicode",
+impl std::str::FromStr for PeerWireSecurity {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "mutual-tls" => Ok(Self::MutualTls),
+            "plaintext-test" => Ok(Self::PlaintextTest),
+            _ => Err(AtmError::validation(
+                "--peer-wire-security must be `mutual-tls` or `plaintext-test`",
             )),
         }
     }
@@ -134,25 +133,25 @@ impl TlsIdentity {
 /// retained only as TLS material; no storage trait crosses this boundary.
 #[derive(Debug)]
 pub(crate) struct HttpsTransport {
-    security: HttpWireSecurity,
+    security: PeerWireSecurity,
     identity: Option<TlsIdentity>,
-    insecure_source_host: Option<HostName>,
+    plaintext_source_host: Option<HostName>,
 }
 
 impl HttpsTransport {
     pub(crate) fn from_local_certificate(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         Ok(Self {
-            security: HttpWireSecurity::MutualTls,
+            security: PeerWireSecurity::MutualTls,
             identity: Some(TlsIdentity::load(certificate)?),
-            insecure_source_host: None,
+            plaintext_source_host: None,
         })
     }
 
-    pub(crate) fn insecure_smoke(source_host: HostName) -> Self {
+    pub(crate) fn plaintext_test(source_host: HostName) -> Self {
         Self {
-            security: HttpWireSecurity::InsecureHttpSmoke,
+            security: PeerWireSecurity::PlaintextTest,
             identity: None,
-            insecure_source_host: Some(source_host),
+            plaintext_source_host: Some(source_host),
         }
     }
 }
@@ -175,7 +174,7 @@ impl HttpsMessageTransport for HttpsTransport {
             })?;
         let request = RequestEnvelope::Write(Box::new(request));
         match self.security {
-            HttpWireSecurity::MutualTls => {
+            PeerWireSecurity::MutualTls => {
                 apply_deadline(&stream, deadline.handshake)?;
                 let identity = self.identity.as_ref().ok_or_else(|| {
                     AtmError::daemon_unavailable(
@@ -198,14 +197,14 @@ impl HttpsMessageTransport for HttpsTransport {
                 apply_deadline(tls.get_ref(), deadline.request)?;
                 read_http_response(&mut tls, &request)
             }
-            HttpWireSecurity::InsecureHttpSmoke => {
-                let source_host = self.insecure_source_host.as_ref().ok_or_else(|| {
+            PeerWireSecurity::PlaintextTest => {
+                let source_host = self.plaintext_source_host.as_ref().ok_or_else(|| {
                     AtmError::daemon_unavailable(
-                        "insecure peer smoke transport is missing its source host",
+                        "plaintext test peer transport is missing its source host",
                     )
                 })?;
                 apply_deadline(&stream, deadline.request)?;
-                write_http_request_with_source_host(&mut stream, &request, source_host)?;
+                write_plaintext_http_request_with_source_host(&mut stream, &request, source_host)?;
                 read_http_response(&mut stream, &request)
             }
         }
@@ -231,7 +230,7 @@ enum ListenerSecurity {
         config: Arc<ServerConfig>,
         verifier: Arc<PinnedClientVerifier>,
     },
-    InsecureSmoke,
+    PlaintextTest,
 }
 
 impl HttpsListenerSet {
@@ -257,11 +256,11 @@ impl HttpsListenerSet {
     /// Binds the same HTTP peer ingress without TLS only for an explicitly
     /// configured smoke run. The HTTP decoder and router remain identical to
     /// the authenticated listener; only peer authentication is absent.
-    pub(crate) fn bind_insecure_smoke(
+    pub(crate) fn bind_plaintext_test(
         interfaces: &[HttpsInterface],
         router: Arc<dyn ApiRouter + Send + Sync>,
     ) -> Result<Self, AtmError> {
-        Self::bind(interfaces, ListenerSecurity::InsecureSmoke, router)
+        Self::bind(interfaces, ListenerSecurity::PlaintextTest, router)
     }
 
     fn bind(
@@ -456,7 +455,7 @@ fn handle_peer_connection(
             let authenticated_source_host = verifier.authenticated_host(&tls.conn)?;
             route_peer_http_request(&mut tls, router, Some(authenticated_source_host))
         }
-        ListenerSecurity::InsecureSmoke => route_peer_http_request(&mut stream, router, None),
+        ListenerSecurity::PlaintextTest => route_peer_http_request(&mut stream, router, None),
     }
 }
 
@@ -469,33 +468,45 @@ fn route_peer_http_request(
         Some(request) => request,
         None => return Ok(()),
     };
-    let insecure_source_host = request
-        .header(INSECURE_PEER_SOURCE_HOST_HEADER)
+    let plaintext_source_host = request
+        .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
         .map(str::parse)
         .transpose()
-        .map_err(|_source| AtmError::validation("invalid insecure peer source-host header"))?;
-    let source_host = authenticated_source_host.or(insecure_source_host);
+        .map_err(|_source| AtmError::validation("invalid plaintext peer source-host header"))?;
     let mut request = decode_request(request)?;
-    if matches!(request, ApiRequest::Write(_)) && source_host.is_none() {
-        return Err(AtmError::validation(
-            "peer write requests require an authenticated source or the explicit insecure smoke source-host header",
-        ));
-    }
-    if let Some(source_host) = source_host {
-        normalize_peer_write_for_local_delivery(&mut request, source_host);
-    }
+    let ingress = match (authenticated_source_host, plaintext_source_host) {
+        (Some(source_host), _) => {
+            normalize_peer_write_for_local_delivery(&mut request, source_host);
+            AuthenticatedIngress::Peer
+        }
+        (None, Some(source_host)) => {
+            normalize_untrusted_smoke_write_for_local_delivery(&mut request);
+            AuthenticatedIngress::UntrustedSmoke(UntrustedSmokeProvenance::new(source_host))
+        }
+        (None, None) if matches!(request, ApiRequest::Write(_)) => {
+            return Err(AtmError::validation(
+                "plaintext peer write requests require the explicit source-host header",
+            ));
+        }
+        (None, None) => AuthenticatedIngress::Peer,
+    };
     let response = router
-        .route(
-            request,
-            AuthenticatedIngress::Peer,
-            RequestDeadline::after(HTTPS_TIMEOUT),
-        )
+        .route(request, ingress, RequestDeadline::after(HTTPS_TIMEOUT))
         .map(|response| response.into_inner())
         .unwrap_or_else(ResponseEnvelope::Error);
     write_http_response(stream, &response)
 }
 
-fn write_http_request_with_source_host(
+fn normalize_untrusted_smoke_write_for_local_delivery(request: &mut ApiRequest) {
+    if let ApiRequest::Write(write) = request {
+        if let Some(destination) = write.to.as_mut() {
+            destination.host = None;
+        }
+        write.authenticated_source_host = None;
+    }
+}
+
+fn write_plaintext_http_request_with_source_host(
     stream: &mut TcpStream,
     request: &RequestEnvelope,
     source_host: &HostName,
@@ -503,7 +514,7 @@ fn write_http_request_with_source_host(
     write_http_request_with_headers(
         stream,
         request,
-        &[(INSECURE_PEER_SOURCE_HOST_HEADER, source_host.as_str())],
+        &[(PLAINTEXT_PEER_SOURCE_HOST_HEADER, source_host.as_str())],
     )
 }
 
@@ -780,6 +791,7 @@ mod tests {
     struct RecordingRouter {
         routed: AtomicBool,
         request: Mutex<Option<ApiRequest>>,
+        ingress: Mutex<Option<AuthenticatedIngress>>,
     }
 
     impl atm_core::boundary::sealed::Sealed for RecordingRouter {}
@@ -791,9 +803,9 @@ mod tests {
             ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
         ) -> Result<ApiResponse, AtmError> {
-            assert_eq!(ingress, AuthenticatedIngress::Peer);
             self.routed.store(true, Ordering::SeqCst);
             *self.request.lock().expect("recorded request") = Some(_request);
+            *self.ingress.lock().expect("recorded ingress") = Some(ingress);
             Ok(ApiResponse::new(ResponseEnvelope::Error(
                 AtmError::validation("test router response"),
             )))
@@ -860,9 +872,9 @@ mod tests {
     }
 
     #[test]
-    fn insecure_smoke_http_reaches_the_same_router_without_tls() {
+    fn plaintext_test_http_reaches_the_same_router_without_tls() {
         let router = Arc::new(RecordingRouter::default());
-        let listener = HttpsListenerSet::bind_insecure_smoke(
+        let listener = HttpsListenerSet::bind_plaintext_test(
             &[HttpsInterface {
                 bind_addr: "127.0.0.1:0".parse().expect("bind address"),
                 advertise_host: "localhost".parse().expect("host"),
@@ -870,7 +882,7 @@ mod tests {
             }],
             router.clone(),
         )
-        .expect("start insecure smoke listener");
+        .expect("start plaintext test listener");
         let mut stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         write_http_request(&mut stream, &request).expect("write plain shared request");
@@ -880,9 +892,9 @@ mod tests {
     }
 
     #[test]
-    fn insecure_smoke_write_uses_declared_source_host_at_shared_router() {
+    fn plaintext_test_write_uses_untrusted_smoke_provenance_at_shared_router() {
         let router = Arc::new(RecordingRouter::default());
-        let listener = HttpsListenerSet::bind_insecure_smoke(
+        let listener = HttpsListenerSet::bind_plaintext_test(
             &[HttpsInterface {
                 bind_addr: "127.0.0.1:0".parse().expect("bind address"),
                 advertise_host: "localhost".parse().expect("host"),
@@ -890,7 +902,7 @@ mod tests {
             }],
             router.clone(),
         )
-        .expect("start insecure smoke listener");
+        .expect("start plaintext test listener");
         let mut write = WriteRequest::new(
             std::env::temp_dir(),
             std::env::temp_dir(),
@@ -914,7 +926,7 @@ mod tests {
             &mut stream,
             &request,
             &[(
-                super::INSECURE_PEER_SOURCE_HOST_HEADER,
+                super::PLAINTEXT_PEER_SOURCE_HOST_HEADER,
                 "smoke-peer.invalid",
             )],
         )
@@ -929,12 +941,13 @@ mod tests {
         let ApiRequest::Write(write) = request else {
             panic!("expected canonical write request");
         };
-        assert_eq!(
-            write.authenticated_source_host,
-            Some("smoke-peer.invalid".parse().expect("source host"))
-        );
+        assert!(write.authenticated_source_host.is_none());
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert!(write.to.expect("destination").host.is_none());
+        assert!(matches!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(AuthenticatedIngress::UntrustedSmoke(_))
+        ));
         listener.shutdown().expect("shutdown listener");
     }
 

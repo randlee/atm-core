@@ -70,12 +70,22 @@ class InboundPeerSmokeTests(unittest.TestCase):
         self.assertIn('class="fail"', pane)
         self.assertIn("Investigation required: local-doctor", pane)
 
+    def test_doctor_version_or_api_mismatch_is_a_hard_failure(self):
+        local = {"expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1}
+        result = {"exit_code": 0, "stderr": "", "stdout": json.dumps({
+            "daemon_context": {"version": "1.3.1"},
+            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+        })}
+        passed, detail = RUNNER.doctor_matches_expected(local, result)
+        self.assertFalse(passed)
+        self.assertIn("daemon version", detail)
+
     def test_host_mode_accepts_no_ssh_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "host.json"
             path.write_text(json.dumps({
                 "schema_version": 1,
-                "local": {"atm_command": ["atm"], "identity": "a", "team": "t"},
+                "local": {"atm_command": ["atm"], "identity": "a", "team": "t", "expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1},
                 "host": {"name": "m5", "local_checks": {}},
             }), encoding="utf-8")
             config = RUNNER.load_config(path)
