@@ -72,6 +72,41 @@ def _find_repo_root(start: Path):
     return None
 
 
+IGNORE_FILE_NAME = ".graph-orchestration-ignore"
+
+
+def _load_ignored_phase_dirs(repo_root: Path) -> set:
+    """Read repo_root/.triage/.graph-orchestration-ignore into a set of names.
+
+    This is a purely optional, best-effort efficiency/noise-reduction layer:
+    it lets known-dead legacy phase directories (whose findings files use an
+    old pre-Turtle format and will never be migrated) be skipped entirely
+    before ever attempting to open or parse a file under them, avoiding both
+    wasted I/O and a repeated stderr `WARNING: skipping malformed findings
+    file ...` on every single invocation.
+
+    It is NOT a correctness mechanism and must never be treated as one: the
+    membership-based scoping in `load_graph()` (via `known_sprints` /
+    `triage:foundIn`) is what actually prevents cross-phase contamination,
+    for *every* findings directory, including ones not listed here. Absence
+    of a directory from this ignore list — or absence of the file itself —
+    changes nothing about correctness, only about how much redundant parsing
+    and warning noise is produced for directories known in advance to be
+    dead.
+    """
+    ignore_path = repo_root / ".triage" / IGNORE_FILE_NAME
+    if not ignore_path.exists():
+        return set()
+
+    names = set()
+    for line in ignore_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        names.add(line)
+    return names
+
+
 def load_graph(ttl_dir: str) -> Graph:
     g = Graph()
     base = Path(ttl_dir)
@@ -128,9 +163,27 @@ def load_graph(ttl_dir: str) -> Graph:
     # every phase, including ones with no relationship to the offending
     # file — hence the per-file try/except below, which remains necessary
     # defense-in-depth independent of the scoping filter.
+    #
+    # Some `.triage/<phase_id>/` directories are permanently closed/dead
+    # legacy phases whose findings files were written in an old pre-Turtle
+    # format and will never be migrated. Repeatedly globbing, opening, and
+    # failing to parse those files on every single invocation is pure,
+    # predictable waste: the outcome never changes. `.triage/.graph-
+    # orchestration-ignore` (see `_load_ignored_phase_dirs`) lets such
+    # directories be named explicitly so they're skipped before `.parse()`
+    # is ever called on them — no warning is printed for these, since the
+    # directory was deliberately and explicitly acknowledged as dead, unlike
+    # an unexpected malformed file that wasn't. This is purely an efficiency
+    # optimization layered on top of the membership-based scoping above; it
+    # does not replace it, and directories absent from the ignore list are
+    # still fully protected by the `known_sprints` membership filter.
     repo_root = _find_repo_root(base)
     if repo_root:
+        ignored_phase_dirs = _load_ignored_phase_dirs(repo_root)
         for findings_file in sorted(repo_root.glob(".triage/*/findings/*.ttl")):
+            phase_dir_name = findings_file.parent.parent.name
+            if phase_dir_name in ignored_phase_dirs:
+                continue
             file_graph = Graph()
             try:
                 file_graph.parse(str(findings_file), format="turtle")

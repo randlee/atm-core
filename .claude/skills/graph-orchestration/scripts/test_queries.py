@@ -416,6 +416,77 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
         assert not list(g.triples((URIRef(f"{TRIAGE}fcross"), None, None)))
         assert len(rows) == 0  # PhaseX fully complete; no re-dispatch triggered
 
+    def test_no_ignore_file_warns_on_all_malformed_dirs(self, tmp_path, capsys):
+        """Backward compatibility: with no ignore file present, every
+        malformed findings file (regardless of directory) still produces a
+        stderr warning and is otherwise skipped, exactly as before this
+        feature was added."""
+        query_runner = _load_query_runner()
+        repo = self._make_repo(tmp_path, "F", [(1, "S1")])
+
+        dead = repo / ".triage" / "phase-U" / "findings"
+        dead.mkdir(parents=True)
+        (dead / "LEGACY-001.ttl").write_text(
+            "finding_id: LEGACY-001\ntitle: pre-Turtle legacy finding\n"
+        )
+
+        g = query_runner.load_graph(str(repo / ".sprints" / "F"))
+        captured = capsys.readouterr()
+        assert "WARNING: skipping malformed findings file" in captured.err
+        assert "LEGACY-001.ttl" in captured.err
+
+        rows = list(
+            g.query(
+                (SCRIPTS / "cursor.sparql").read_text(),
+                initBindings={"PHASE": URIRef(f"{TRIAGE}PhaseF")},
+            )
+        )
+        assert len(rows) == 1
+        assert str(rows[0][1]) == "1"
+
+    def test_ignore_file_skips_listed_dir_without_warning(self, tmp_path, capsys):
+        """A directory listed in `.triage/.graph-orchestration-ignore` must be
+        skipped entirely (no `.parse()` call, no warning), while a
+        DIFFERENT, unignored directory with its own malformed file still
+        produces the usual warning."""
+        query_runner = _load_query_runner()
+        repo = self._make_repo(tmp_path, "F", [(1, "S1")])
+
+        (repo / ".triage" / query_runner.IGNORE_FILE_NAME).write_text(
+            "# closed/dead legacy phases, pre-Turtle findings format\n"
+            "phase-U\n"
+            "\n"
+            "phase-V\n"
+        )
+
+        ignored = repo / ".triage" / "phase-U" / "findings"
+        ignored.mkdir(parents=True)
+        (ignored / "LEGACY-001.ttl").write_text(
+            "finding_id: LEGACY-001\ntitle: pre-Turtle legacy finding\n"
+        )
+
+        unignored = repo / ".triage" / "phase-W" / "findings"
+        unignored.mkdir(parents=True)
+        (unignored / "LEGACY-002.ttl").write_text(
+            "finding_id: LEGACY-002\ntitle: unexpected malformed finding\n"
+        )
+
+        g = query_runner.load_graph(str(repo / ".sprints" / "F"))
+        captured = capsys.readouterr()
+
+        assert "LEGACY-001.ttl" not in captured.err
+        assert "LEGACY-002.ttl" in captured.err
+        assert "WARNING: skipping malformed findings file" in captured.err
+
+        rows = list(
+            g.query(
+                (SCRIPTS / "cursor.sparql").read_text(),
+                initBindings={"PHASE": URIRef(f"{TRIAGE}PhaseF")},
+            )
+        )
+        assert len(rows) == 1
+        assert str(rows[0][1]) == "1"
+
 
 if __name__ == "__main__":
     import subprocess, sys
