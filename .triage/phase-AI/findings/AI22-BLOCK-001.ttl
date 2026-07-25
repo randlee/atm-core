@@ -7,20 +7,20 @@
   triage:title "is_same_host_peer_receipt misclassifies ordinary writes via None==None" ;
   triage:description "crates/atm-core/src/send/mod.rs: fn is_same_host_peer_receipt(request) compares request.authenticated_source_host.as_ref() == request.to.as_ref().and_then(|d| d.host.as_ref()). When neither side is a host-qualified/authenticated write (the overwhelmingly common case for ordinary local sends), both sides are None and None==None evaluates true, causing every ordinary non-host-qualified write to be misclassified as a same-host peer receipt. This forces post_write_needed = true unconditionally for ordinary writes via prepare_persisted_write, and is reachable via unauthenticated UntrustedSmoke writes per rust-service-hardening-agent. Independently found by ruthless-boundary-qa (RBQA-F001, Critical) and rust-service-hardening-agent (RSH-002, Important) with the same root cause." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "correctness" ;
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-001/s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-BLOCK-001/s23/1> ;
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
-  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
-  triage:fixedOn <urn:atm:triage:worktree/s24/fc9832b3> ;
-  triage:promoteTo <urn:atm:triage:worktree/s23/b88ca016> .
+  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/af2fbb83> ;
+  triage:promoteTo <urn:atm:triage:worktree/s23/c528137c> .
 
 <urn:atm:triage:occurrence/AI22-BLOCK-001/s22/1>
   a triage:Occurrence ;
@@ -41,8 +41,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "b88ca016" ;
-  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
 
 <urn:atm:triage:worktree/s0/e52fffb6>
   a triage:WorktreeSnapshot ;
@@ -65,16 +65,16 @@
   triage:headSha "a5aa6813" ;
   triage:orderIndex 22 .
 
-<urn:atm:triage:worktree/s23/b88ca016>
+<urn:atm:triage:worktree/s23/c528137c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "b88ca016" ;
+  triage:headSha "c528137c" ;
   triage:orderIndex 23 .
 
-<urn:atm:triage:worktree/s24/fc9832b3>
+<urn:atm:triage:worktree/s24/af2fbb83>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "fc9832b3" ;
+  triage:headSha "af2fbb83" ;
   triage:orderIndex 24 .
