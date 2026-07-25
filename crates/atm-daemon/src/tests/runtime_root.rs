@@ -119,6 +119,35 @@ struct FailingHttpsDelivery {
     attempted: std::sync::Mutex<Vec<WriteRequest>>,
 }
 
+#[derive(Default)]
+struct DelayedPeerHttpsDelivery {
+    observed_budgets: std::sync::Mutex<Vec<Duration>>,
+}
+
+impl HttpsMessageTransport for DelayedPeerHttpsDelivery {
+    fn deliver(
+        &self,
+        _request: WriteRequest,
+        _peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        // A deterministic peer stall consumes the caller's one shared budget;
+        // it must not receive a fresh five-second transport allowance.
+        std::thread::sleep(Duration::from_millis(10));
+        self.observed_budgets
+            .lock()
+            .expect("peer deadline recording lock")
+            .push(
+                deadline
+                    .remaining()
+                    .expect("shared budget remains briefly live"),
+            );
+        Err(AtmError::daemon_unavailable(
+            "simulated delayed peer disconnect",
+        ))
+    }
+}
+
 impl HttpsMessageTransport for FailingHttpsDelivery {
     fn deliver(
         &self,
@@ -330,6 +359,92 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
     assert!(
         attempted[0].origin_message_id.is_some() && attempted[0].origin_timestamp.is_some(),
         "the failed route runs after canonical persistence assigned immutable origin metadata"
+    );
+    let retry_with_same_ulid = attempted[0].clone();
+    drop(attempted);
+    let retry_transport = Arc::new(RecordingHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(retry_transport.clone())
+        .expect("install retry transport");
+    let retry = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(retry_with_same_ulid)))
+        .expect("same immutable ULID is a safe receiver retry");
+    assert!(matches!(
+        retry,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+    ));
+    assert!(
+        retry_transport
+            .delivered
+            .lock()
+            .expect("retry delivery recording lock")
+            .is_empty(),
+        "duplicate ULID is retained idempotently and cannot claim a second peer acceptance"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn three_second_local_write_passes_only_its_remaining_budget_to_a_delayed_peer() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "peer.example.test".parse().expect("peer host"),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: NonZeroU16::new(43101).expect("non-zero"),
+        })
+        .expect("save trusted peer");
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let transport = Arc::new(DelayedPeerHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(transport.clone())
+        .expect("install delayed peer transport");
+
+    let error = ApiRouter::route(
+        &dispatcher,
+        ApiRequest::new(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "remote-agent@remote-team.peer.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("deadline budget".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("remote write request"),
+        ))),
+        AuthenticatedIngress::Local,
+        RequestDeadline::after(Duration::from_secs(3)),
+    )
+    .expect_err("delayed peer disconnect is not remote acceptance");
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    let budgets = transport.observed_budgets.lock().expect("recorded budgets");
+    assert_eq!(budgets.len(), 1, "one foreground peer attempt");
+    assert!(
+        budgets[0] < Duration::from_secs(3),
+        "the delayed peer receives the local request's remaining budget, never a fresh five seconds"
     );
 }
 

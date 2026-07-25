@@ -476,8 +476,10 @@ fn complete_handshake_with_deadline(
         stream
             .conn
             .complete_io(&mut stream.sock)
-            .map_err(|_source| {
-                AtmError::daemon_unavailable("HTTPS peer mutual-TLS handshake failed")
+            .map_err(|source| {
+                AtmError::remote_delivery_unconfirmed(format!(
+                    "HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}"
+                ))
             })?;
     }
     Ok(())
@@ -843,6 +845,40 @@ mod tests {
         let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
             .expect_err("an expired shared request budget must fail before peer delivery");
         assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+    }
+
+    #[test]
+    fn stalled_tls_handshake_reports_remote_delivery_unconfirmed() {
+        let certificate = test_certificate();
+        let identity = TlsIdentity::load(&certificate).expect("load test identity");
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind stalled peer");
+        let address = listener.local_addr().expect("listener address");
+        let server = std::thread::spawn(move || {
+            let (_stream, _) = listener.accept().expect("accept client hello");
+            std::thread::sleep(Duration::from_millis(100));
+        });
+        let peer = TrustedPeer {
+            host: "localhost".parse().expect("host"),
+            fingerprint: certificate.fingerprint.clone(),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        };
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let stream = TcpStream::connect(address).expect("connect stalled peer");
+        let mut tls = StreamOwned::new(connection, stream);
+
+        let error = super::complete_handshake_with_deadline(
+            &mut tls,
+            RequestDeadline::after(Duration::from_millis(25)),
+        )
+        .expect_err("stalled peer TLS handshake must time out");
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        server.join().expect("stalled peer exits");
     }
 
     #[test]
