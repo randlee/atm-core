@@ -38,10 +38,11 @@ Findings are NOT resolved here. The orchestrator checks .triage/ via
 triage-findings skill to decide between dev-task.xml.j2 and dev-fix.xml.j2.
 Assignments are appended to events.ttl by the orchestrator after dispatch.
 
-Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR>
+Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
   PHASE_LOCAL  e.g. "F"
   TTL_DIR      path to .sprints/<PHASE>/ directory on integrate/phase-N branch
   SCRIPT_DIR   path to this script's directory (for .sparql files)
+  --validate-only  validate structure.ttl/events.ttl and stop before cursor resolution
 """
 
 import sys
@@ -107,7 +108,7 @@ def _load_ignored_phase_dirs(repo_root: Path) -> set:
     return names
 
 
-def load_graph(ttl_dir: str) -> Graph:
+def load_graph(ttl_dir: str, *, include_findings: bool = True) -> Graph:
     g = Graph()
     base = Path(ttl_dir)
     structure = base / "structure.ttl"
@@ -127,6 +128,9 @@ def load_graph(ttl_dir: str) -> Graph:
     # defeated by a future phase reusing an unprefixed or colliding local
     # sprint label.
     known_sprints = set(g.subjects(RDF.type, TRIAGE.Sprint))
+
+    if not include_findings:
+        return g
 
     # Load triage findings from repo root .triage/ (relative to TTL dir's parent)
     # Walk up from ttl_dir to find repo root (contains .triage/)
@@ -216,16 +220,27 @@ def run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
 
 
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR>", file=sys.stderr)
+    if len(sys.argv) not in (4, 5) or (
+        len(sys.argv) == 5 and sys.argv[4] != "--validate-only"
+    ):
+        print(
+            "Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> "
+            "[--validate-only]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     phase_local = sys.argv[1]
     ttl_dir = sys.argv[2]
     script_dir = Path(sys.argv[3])
+    validate_only = len(sys.argv) == 5
 
     phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
-    g = load_graph(ttl_dir)
+    # Structure validation must not depend on findings being parseable. In
+    # particular, a legacy malformed finding elsewhere in the repository
+    # should never make the documented post-event validation command fail for
+    # an otherwise valid structure.
+    g = load_graph(ttl_dir, include_findings=not validate_only)
 
     # ── Validate structure before cursor ─────────────────────────────────────
     validate_rows = run_sparql(g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri})
@@ -233,6 +248,10 @@ def main():
         for row in validate_rows:
             print(f"ERROR: structure violation: {row[0]} — {row[1]}", file=sys.stderr)
         sys.exit(1)
+
+    if validate_only:
+        print(json.dumps({"phase": "VALIDATE_ONLY", "vars": {}}, indent=2))
+        return
 
     # ── Cursor ───────────────────────────────────────────────────────────────
     cursor_rows = run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})

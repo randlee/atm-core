@@ -6,6 +6,8 @@ Run from skill root: python3 -m pytest scripts/test_queries.py -v
 Requires: rdflib, pytest
 """
 import importlib.util
+import json
+import subprocess
 import sys
 
 import pytest
@@ -290,6 +292,7 @@ class TestLoadGraphFindingsIsolation:
         assert len(rows) == 1
         assert str(rows[0][1]) == "1"
 
+
     def test_wellformed_findings_in_queried_phase_still_loaded(self, tmp_path):
         """A well-formed, relevant findings file is still parsed and correctly
         drives Completion-invalidation, even with an unrelated malformed
@@ -521,6 +524,130 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
         )
         assert len(rows) == 1
         assert str(rows[0][1]) == "1"
+
+
+# ── next-dev-task CLI tests ───────────────────────────────────────────────────
+
+class TestNextDevTaskValidation:
+    def _make_repo(self, tmp_path: Path, structure_ttl: str) -> Path:
+        repo = tmp_path / "repo"
+        ttl_dir = repo / ".sprints" / "F"
+        ttl_dir.mkdir(parents=True)
+        (ttl_dir / "structure.ttl").write_text(structure_ttl)
+        (repo / ".triage").mkdir()
+        return repo
+
+    def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(SCRIPTS / "next-dev-task"), *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_validate_only_returns_success_json_without_loading_findings(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        malformed = repo / ".triage" / "phase-U" / "findings"
+        malformed.mkdir(parents=True)
+        (malformed / "LEGACY.ttl").write_text("finding_id: LEGACY-001\n")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"phase": "VALIDATE_ONLY", "vars": {}}
+        assert "malformed findings file" not in result.stderr
+
+    def test_validate_only_reports_structure_errors(self, tmp_path):
+        invalid = PREFIX + """
+triage:PhaseF a triage:Phase .
+triage:S1 a triage:Sprint ; triage:inPhase triage:PhaseF ;
+    triage:order 1 ; triage:criteria "ac/S1.md" .
+triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
+    triage:order 1 ; triage:criteria "ac/S2.md" .
+"""
+        repo = self._make_repo(tmp_path, invalid)
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
+
+        assert result.returncode == 1
+        assert "ERROR: structure violation" in result.stderr
+        assert result.stdout == ""
+
+    def test_unknown_optional_argument_is_rejected(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--bogus")
+
+        assert result.returncode == 1
+        assert "Usage: next-dev-task" in result.stderr
+
+
+# ── assignee-busy CLI tests ───────────────────────────────────────────────────
+
+class TestAssigneeBusy:
+    def _make_repo(self, tmp_path: Path, events_ttl: str | None = None) -> Path:
+        repo = tmp_path / "repo"
+        ttl_dir = repo / ".sprints" / "F"
+        ttl_dir.mkdir(parents=True)
+        (ttl_dir / "structure.ttl").write_text(structure([(1, "S1")]))
+        if events_ttl is not None:
+            (ttl_dir / "events.ttl").write_text(events_ttl)
+        (repo / ".triage").mkdir()
+        return repo
+
+    def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(SCRIPTS / "assignee-busy"), *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_reports_only_truly_in_flight_assignments(self, tmp_path):
+        events = PREFIX + """
+triage:a1 a triage:Assignment ; triage:ofSprint triage:S1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-01T10:00:00Z"^^xsd:dateTime .
+triage:c1 a triage:Completion ; triage:ofSprint triage:S1 ;
+    triage:at "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, events)
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {
+            "busy": False,
+            "assignee": "arch-ctm",
+            "open_assignments": [],
+        }
+
+    def test_rejects_extra_arguments(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+
+        result = self._run(
+            repo,
+            "F",
+            str(repo / ".sprints" / "F"),
+            "arch-ctm",
+            "unexpected",
+        )
+
+        assert result.returncode == 1
+        assert "Usage: assignee-busy" in result.stderr
+
+    def test_reports_malformed_structure_as_cli_error(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        (repo / ".sprints" / "F" / "structure.ttl").write_text("not valid turtle [")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "ERROR:" in result.stderr
 
 
 if __name__ == "__main__":

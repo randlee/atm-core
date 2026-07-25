@@ -76,6 +76,13 @@ command; missing `triage:findingId`, `triage:severity`, or
 restrict an audit to a known sprint range and `--max-results N` to truncate
 repetitive output while preserving the failure status.
 
+The validator API and JSON CLI use a discriminated result contract:
+`validation:pass` means execution completed with no `#error` diagnostics,
+`validation:fail` means execution completed and the data failed its gate, and
+`error` means the validator itself could not run (for example malformed Turtle,
+missing input, invalid regex, or a broken query). The CLI exits 0, 1, and 2 for
+those outcomes respectively; `--json` emits the tagged result for callers.
+
 ## Orchestrator Loop
 
 ```bash

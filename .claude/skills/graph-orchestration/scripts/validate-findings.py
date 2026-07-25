@@ -19,13 +19,14 @@ not fail the command.  ``--max-results`` truncates printed detail without
 changing validation or the exit status.
 """
 
-from __future__ import annotations
-
 import argparse
+import json
 import re
 import sys
 from collections import Counter
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal, Union
 
 try:
     from rdflib import Graph, URIRef, Namespace
@@ -38,6 +39,56 @@ except ImportError:
 TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
 SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+@dataclass(frozen=True)
+class ValidationSummary:
+    """Counts produced by a validation run.
+
+    The counts describe the input that was actually selected.  In particular,
+    ``findings`` is the count after ``--finding-id-regex`` filtering.
+    """
+
+    files: int = 0
+    findings: int = 0
+    errors: int = 0
+    warnings: int = 0
+    scoped: bool = False
+
+
+@dataclass(frozen=True)
+class ValidationPass:
+    """The validator ran successfully and found no error-level diagnostics."""
+
+    kind: Literal["validation:pass"] = field(
+        default="validation:pass", init=False
+    )
+    diagnostics: tuple[str, ...] = ()
+    summary: ValidationSummary = field(default_factory=ValidationSummary)
+
+
+@dataclass(frozen=True)
+class ValidationFail:
+    """The validator ran successfully, but the data failed validation."""
+
+    kind: Literal["validation:fail"] = field(
+        default="validation:fail", init=False
+    )
+    diagnostics: tuple[str, ...] = ()
+    summary: ValidationSummary = field(default_factory=ValidationSummary)
+
+
+@dataclass(frozen=True)
+class ValidationError:
+    """The validator could not complete (bad input, query, or configuration)."""
+
+    kind: Literal["error"] = field(default="error", init=False)
+    message: str = ""
+    diagnostics: tuple[str, ...] = ()
+    summary: ValidationSummary | None = None
+
+
+ValidationResult = Union[ValidationPass, ValidationFail, ValidationError]
 
 
 def _parse_file(path: Path, graph: Graph, *, errors: list[str]) -> dict:
@@ -81,10 +132,10 @@ def _load_graph(
 
     if not findings_dir.exists():
         diagnostics.append(f"#error: {findings_dir}: findings directory does not exist")
-        return graph, finding_files, known_sprints, diagnostics
+        return graph, finding_files, known_sprints, diagnostics, 0
     if not findings_dir.is_dir():
         diagnostics.append(f"#error: {findings_dir}: findings path is not a directory")
-        return graph, finding_files, known_sprints, diagnostics
+        return graph, finding_files, known_sprints, diagnostics, 0
 
     parsed_files = 0
     finding_graph = Graph()
@@ -121,15 +172,178 @@ def _run_query(graph: Graph, script_dir: Path) -> list:
     try:
         return list(graph.query(query_path.read_text()))
     except Exception as exc:  # noqa: BLE001 - present an actionable diagnostic
-        print(f"#error: {query_path}: SPARQL query failed ({exc})", file=sys.stderr)
-        raise SystemExit(1)
+        raise RuntimeError(f"{query_path}: SPARQL query failed ({exc})") from exc
 
 
-def _diagnostic_line(row, finding_files: dict[str, Path], known_sprints: set[URIRef]) -> str:
+def _diagnostic_line(row, finding_files: dict[str, Path]) -> str:
     level, finding, field, detail = (str(value) for value in row)
     source = finding_files.get(finding)
     location = f"{source}: " if source else ""
-    return f"{level}: {location}{finding} missing {field} — {detail}"
+    # Most query rows represent an absent predicate.  The wrapper also adds a
+    # row when ``foundIn`` is present but points at an undeclared sprint; call
+    # that invalid rather than claiming the field is missing.
+    verb = "invalid" if "undeclared sprint" in detail else "missing"
+    return f"{level}: {location}{finding} {verb} {field} — {detail}"
+
+
+def _summary(
+    files: int,
+    findings: int,
+    diagnostics: list[str] | tuple[str, ...],
+    *,
+    scoped: bool = False,
+) -> ValidationSummary:
+    counts = Counter(line.split(":", 1)[0] for line in diagnostics)
+    return ValidationSummary(
+        files=files,
+        findings=findings,
+        errors=counts.get("#error", 0),
+        warnings=counts.get("#warning", 0),
+        scoped=scoped,
+    )
+
+
+def run_validation(
+    *,
+    findings_dir: Path,
+    structure: Path | None = None,
+    events: Path | None = None,
+    finding_id_regex: str | None = None,
+    script_dir: Path = SCRIPT_DIR,
+) -> ValidationResult:
+    """Run the validator and return a discriminated result.
+
+    ``ValidationPass`` and ``ValidationFail`` both mean the command completed
+    normally.  A ``ValidationFail`` is the expected result when finding data
+    has ``#error`` diagnostics; it is not an exception.  ``ValidationError``
+    is reserved for operational failures such as malformed Turtle, missing
+    paths, an invalid regex, or a broken SPARQL query.
+    """
+
+    try:
+        if not isinstance(findings_dir, Path):
+            findings_dir = Path(findings_dir)
+        if structure is not None and not isinstance(structure, Path):
+            structure = Path(structure)
+        if events is not None and not isinstance(events, Path):
+            events = Path(events)
+        if not isinstance(script_dir, Path):
+            script_dir = Path(script_dir)
+
+        finding_id_pattern = (
+            re.compile(finding_id_regex) if finding_id_regex else None
+        )
+    except (OSError, re.error, TypeError, ValueError) as exc:
+        return ValidationError(message=f"invalid validator configuration: {exc}")
+
+    try:
+        graph, finding_files, known_sprints, input_diagnostics, parsed_files = (
+            _load_graph(findings_dir, structure, events, finding_id_pattern)
+        )
+        # Input diagnostics are operational errors, not validation findings:
+        # returning an Error keeps malformed files from being mistaken for a
+        # successful run that merely found invalid records.
+        if input_diagnostics:
+            return ValidationError(
+                message="validator input could not be loaded",
+                diagnostics=tuple(input_diagnostics),
+                summary=_summary(
+                    parsed_files,
+                    len(finding_files),
+                    input_diagnostics,
+                    scoped=bool(finding_id_pattern),
+                ),
+            )
+
+        rows = _run_query(graph, script_dir)
+
+        # A foundIn value that points outside the supplied phase graph is an
+        # error, not merely an out-of-scope finding.  Without this check, a
+        # typo would look identical to an intentionally unscoped record.
+        # When a structure/events graph was supplied, every foundIn target
+        # must resolve to a declared sprint.  Do not guard this on
+        # ``known_sprints`` being non-empty: an empty (but valid) phase graph
+        # is still authoritative, and otherwise every finding would silently
+        # pass as if no scope had been requested.
+        if structure is not None or events is not None:
+            for finding in sorted(graph.subjects(RDF.type, TRIAGE.Finding), key=str):
+                for sprint in graph.objects(finding, TRIAGE.foundIn):
+                    if sprint not in known_sprints:
+                        rows.append(
+                            (
+                                "#error",
+                                finding,
+                                "triage:foundIn",
+                                "finding references an undeclared sprint",
+                            )
+                        )
+
+        diagnostics = tuple(
+            _diagnostic_line(row, finding_files) for row in rows
+        )
+        summary = _summary(
+            parsed_files,
+            len(finding_files),
+            diagnostics,
+            scoped=bool(finding_id_pattern),
+        )
+        if summary.errors:
+            return ValidationFail(diagnostics=diagnostics, summary=summary)
+        return ValidationPass(diagnostics=diagnostics, summary=summary)
+    except Exception as exc:  # noqa: BLE001 - API boundary must not leak errors
+        return ValidationError(
+            message=f"validator execution failed: {type(exc).__name__}: {exc}"
+        )
+
+
+def _result_payload(result: ValidationResult) -> dict:
+    """Convert a result union member to a stable JSON-compatible object."""
+
+    payload = asdict(result)
+    payload["diagnostics"] = list(result.diagnostics)
+    if result.summary is not None:
+        payload["summary"] = asdict(result.summary)
+    return payload
+
+
+def _print_result(
+    result: ValidationResult,
+    *,
+    max_results: int = 0,
+    as_json: bool = False,
+) -> None:
+    # ``main`` turns a negative value into an Error result.  Clamp it here so
+    # error rendering never accidentally uses Python's negative slicing.
+    if max_results < 0:
+        max_results = 0
+    diagnostics = list(result.diagnostics)
+    limit = max_results or len(diagnostics)
+    shown = diagnostics[:limit]
+    suppressed = len(diagnostics) - len(shown)
+
+    if as_json:
+        payload = _result_payload(result)
+        payload["diagnostics"] = shown
+        payload["suppressed"] = suppressed
+        print(json.dumps(payload, sort_keys=True))
+        return
+
+    if isinstance(result, ValidationError):
+        print(f"error: {result.message}")
+    else:
+        summary = result.summary
+        scope = "selected " if summary.scoped else ""
+        print(
+            f"validated {summary.files} file(s), {scope}{summary.findings} finding(s): "
+            f"{summary.errors} error(s), {summary.warnings} warning(s)"
+        )
+    for line in shown:
+        print(line)
+    if suppressed:
+        print(
+            f"… {suppressed} diagnostic line(s) truncated; "
+            "use --max-results 0 for all"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -153,61 +367,32 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="print at most N detail lines (0 means all; exit status is unaffected)",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the discriminated result as one JSON object",
+    )
     args = parser.parse_args(argv)
     if args.max_results < 0:
-        parser.error("--max-results must be >= 0")
-
-    try:
-        finding_id_pattern = (
-            re.compile(args.finding_id_regex) if args.finding_id_regex else None
+        # Keep this an Error result instead of argparse's SystemExit so callers
+        # using the API and callers using the CLI observe the same contract.
+        result: ValidationResult = ValidationError(
+            message="invalid validator configuration: --max-results must be >= 0"
         )
-    except re.error as exc:
-        parser.error(f"invalid --finding-id-regex: {exc}")
-
-    graph, finding_files, known_sprints, diagnostics, parsed_files = _load_graph(
-        args.findings_dir, args.structure, args.events, finding_id_pattern
-    )
-    rows = _run_query(graph, args.script_dir)
-
-    # A foundIn value that points outside the supplied phase graph is an error,
-    # not merely an out-of-scope finding.  Without this check, a typo would
-    # look identical to an intentionally unscoped record.
-    if known_sprints:
-        for finding in sorted(graph.subjects(RDF.type, TRIAGE.Finding), key=str):
-            for sprint in graph.objects(finding, TRIAGE.foundIn):
-                if sprint not in known_sprints:
-                    rows.append(
-                        (
-                            "#error",
-                            finding,
-                            "triage:foundIn",
-                            "finding references an undeclared sprint",
-                        )
-                    )
-
-    detail_lines = [
-        _diagnostic_line(row, finding_files, known_sprints)
-        for row in rows
-    ]
-    diagnostics.extend(detail_lines)
-
-    counts = Counter(line.split(":", 1)[0] for line in diagnostics)
-    files = parsed_files
-    findings = len(finding_files)
-    scope = "selected " if finding_id_pattern else ""
-    print(
-        f"validated {files} file(s), {scope}{findings} finding(s): "
-        f"{counts.get('#error', 0)} error(s), {counts.get('#warning', 0)} warning(s)"
-    )
-
-    limit = args.max_results or len(diagnostics)
-    for line in diagnostics[:limit]:
-        print(line)
-    suppressed = len(diagnostics) - min(limit, len(diagnostics))
-    if suppressed:
-        print(f"… {suppressed} diagnostic line(s) truncated; use --max-results 0 for all")
-
-    return 1 if counts.get("#error", 0) else 0
+    else:
+        result = run_validation(
+            findings_dir=args.findings_dir,
+            structure=args.structure,
+            events=args.events,
+            finding_id_regex=args.finding_id_regex,
+            script_dir=args.script_dir,
+        )
+    _print_result(result, max_results=args.max_results, as_json=args.json)
+    if result.kind == "validation:pass":
+        return 0
+    if result.kind == "validation:fail":
+        return 1
+    return 2
 
 
 if __name__ == "__main__":
