@@ -47,6 +47,7 @@ class DaemonSwitchTests(unittest.TestCase):
             save_default_pair=mock.DEFAULT,
             replace_link=mock.DEFAULT,
             run_service=mock.DEFAULT,
+            live_pair_matches=mock.DEFAULT,
         )
 
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
@@ -58,6 +59,7 @@ class DaemonSwitchTests(unittest.TestCase):
                 self.new_cli,
                 self.new_daemon,
             ]
+            patched["live_pair_matches"].return_value = (True, "matched")
 
             self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
 
@@ -87,6 +89,7 @@ class DaemonSwitchTests(unittest.TestCase):
                 self.new_cli,
                 self.new_daemon,
             ]
+            patched["live_pair_matches"].return_value = (True, "matched")
             patched["replace_link"].side_effect = [None, OSError("simulated replace failure"), None, None]
 
             with self.assertRaises(OSError):
@@ -119,6 +122,30 @@ class DaemonSwitchTests(unittest.TestCase):
 
         patched["run_service"].assert_not_called()
         patched["replace_link"].assert_not_called()
+
+    def test_switch_pair_rolls_back_when_live_doctor_reports_the_old_daemon(self) -> None:
+        with self.patch_switch_inputs() as patched:
+            patched["selected_links"].return_value = (self.cli_link, self.daemon_link)
+            patched["require_executable"].side_effect = [
+                self.old_cli,
+                self.old_daemon,
+                self.new_cli,
+                self.new_daemon,
+            ]
+            patched["live_pair_matches"].return_value = (False, "selected beta.29, daemon beta.24")
+
+            with self.assertRaisesRegex(self.module.SwitchError, "split CLI/daemon pair"):
+                self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+
+        self.assertEqual(
+            patched["replace_link"].call_args_list,
+            [
+                mock.call(self.cli_link, self.new_cli),
+                mock.call(self.daemon_link, self.new_daemon),
+                mock.call(self.cli_link, self.old_cli),
+                mock.call(self.daemon_link, self.old_daemon),
+            ],
+        )
 
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")

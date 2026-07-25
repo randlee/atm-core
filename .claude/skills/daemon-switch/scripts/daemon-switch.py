@@ -193,6 +193,9 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
         run_service(args, "start")
+        matched, detail = live_pair_matches(cli_target)
+        if not matched:
+            raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
         replace_link(cli_link, old_cli)
         replace_link(daemon_link, old_daemon)
@@ -233,6 +236,39 @@ def doctor(cli: Path) -> dict[str, object]:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
         return {"error": "doctor returned non-JSON output"}
+
+
+def context_version(payload: object, context: str) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get(context)
+    if not isinstance(value, dict):
+        return None
+    version_value = value.get("version")
+    return version_value if isinstance(version_value, str) else None
+
+
+def selected_release_version(cli: Path) -> str:
+    value = version(cli)
+    if not value:
+        raise SwitchError(f"cannot determine selected ATM CLI version: {cli}")
+    return value.rsplit(maxsplit=1)[-1]
+
+
+def live_pair_matches(cli: Path) -> tuple[bool, str]:
+    """Prove the running daemon changed together with both selectors."""
+    expected = selected_release_version(cli)
+    payload = doctor(cli)
+    if "error" in payload:
+        return False, f"live daemon is unavailable after switch: {payload['error']}"
+    client = context_version(payload, "client_context")
+    daemon = context_version(payload, "daemon_context")
+    if client != expected or daemon != expected:
+        return False, (
+            f"selected {expected}, but doctor reports client={client or '<missing>'} "
+            f"daemon={daemon or '<missing>'}"
+        )
+    return True, f"CLI and daemon both report {expected}"
 
 
 def status(args: argparse.Namespace) -> None:

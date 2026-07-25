@@ -30,18 +30,24 @@ their existing service name.
 # Inspect selected CLI/daemon binaries and the live daemon version.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py status --doctor
 
+# Discover the actual managed label and its plist. Never substitute an
+# invented `com.atm.daemon` label: the current installed release may use a
+# versioned label.
+launchctl list | rg 'com\.atm\.daemon'
+find ~/Library/LaunchAgents -maxdepth 1 -name 'com.atm.daemon*.plist' -print
+
 # Switch both Homebrew links to a branch build, controlled-restart one daemon.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
   --cli target/release/atm --daemon target/release/atm-daemon --yes \
-  --service com.atm.daemon --launch-agent-plist ~/Library/LaunchAgents/com.atm.daemon.plist
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # Restore the latest Homebrew formula targets, not a Cellar path.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
-  --service com.atm.daemon --launch-agent-plist ~/Library/LaunchAgents/com.atm.daemon.plist
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
 # Reload changed peer configuration without switching the selected pair.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restart --yes \
-  --service com.atm.daemon --launch-agent-plist ~/Library/LaunchAgents/com.atm.daemon.plist
+  --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 ```
 
 On systems without Homebrew, provide `--default-cli` and `--default-daemon` to
