@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-ATMQA-001>
   a triage:Finding ;
   triage:findingId "AI25-ATMQA-001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Required integration test for live trust refresh is absent" ;
   triage:description "The sprint doc's own Required Validation section (docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md:101-103) explicitly requires an integration test proving 'one daemon remains' / trust state is live-refreshed correctly after a trust mutation. A repo-wide grep for refresh_https_trust / refresh_trusted_peers finds only their definitions and single internal call sites -- zero test references anywhere. The acceptance criterion is therefore unverifiable from repository evidence." ;
   triage:phaseId "phase-AI" ;
@@ -12,7 +14,11 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-25T19:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified: regression test 'live_trust_refresh_keeps_one_listener_reachable' exists at crates/atm-daemon/src/https_transport.rs:934 and exercises the required scenario: sets up HTTPS listener, calls refresh_trusted_peers (live trust refresh), and validates the listener remains reachable." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-001/s25/1> ;
@@ -24,8 +30,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
   triage:line 101 ;
   triage:snippet "integration test for live trust refresh" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s25/b49f08407b8f5b150ae9210f64f34aa6beb152> .

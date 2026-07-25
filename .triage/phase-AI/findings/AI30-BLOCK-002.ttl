@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI30-BLOCK-002>
   a triage:Finding ;
   triage:findingId "AI30-BLOCK-002" ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
   triage:title "Missing Homebrew formula-selection test for atm-beta prerelease channel — CLOSED" ;
   triage:description "Sprint doc's 'Required validation' section explicitly required a Homebrew formula-selection test proving prerelease=='true' selects atm-beta.rb and never touches the stable formula path, and vice versa. Fix commit 77252eca adds test_stable_release_selects_only_stable_formulas and test_prerelease_release_selects_only_atm_beta at .just/tests/test_release_homebrew_workflow.py:22-40. Independently verified CLOSED by two reviewers: req-qa (direct source read against .github/workflows/release.yml:423-475) and rust-qa-agent (ran pytest, confirmed both tests pass)." ;
   triage:triageMode "followup_pass" ;

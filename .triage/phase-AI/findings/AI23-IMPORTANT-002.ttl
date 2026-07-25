@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "Peer HTTPS listener spawns unbounded per-connection threads with no concurrency cap or handle reaping" ;
   triage:description "crates/atm-daemon/src/https_transport.rs accept_loop (around line 339-402) spawns a new OS thread per accepted TCP connection via spawn_request_worker with no concurrency limit, unlike the local loopback listener in the same crate (local_tcp_transport.rs) which enforces MAX_CONCURRENT_CONNECTIONS = 64. Resulting JoinHandles accumulate in HttpsListenerSet.requests: Arc<Mutex<Vec<JoinHandle<()>>>> and are only drained at full listener shutdown -- nothing reaps completed handles during normal uptime. This listener is untrusted-by-default per ADR-034 (peer authentication happens inside the spawned worker, after accept), so a remote peer can open connections faster than they complete, growing live thread count and the tracking Vec unboundedly for the life of the process." ;
   triage:phaseId "phase-AI" ;

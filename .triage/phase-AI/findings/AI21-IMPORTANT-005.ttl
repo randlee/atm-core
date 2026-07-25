@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-005>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-005" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "combine_inbound_peer_smoke.py has zero test coverage" ;
   triage:description "scripts/smoke/combine_inbound_peer_smoke.py — the pane combiner explicitly required to reject stale/missing/malformed/wrong-host panes has zero test coverage anywhere in the repo. Confirmed directly: no test_*.py file references it. Reported by req-qa (QA1-IMPORTANT-02)." ;
   triage:phaseId "phase-AI" ;

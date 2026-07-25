@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI30-MINOR-001>
   a triage:Finding ;
   triage:findingId "AI30-MINOR-001" ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
   triage:title "compile_fail doctest trailing comma masking typestate lesson — CLOSED" ;
   triage:description "crates/atm-daemon-client/src/compatibility.rs:22-39 -- compile_fail doctest had a stray trailing comma masking the intended typestate-violation lesson. Fixed by commit 77252eca: trailing comma removed, doctest now correctly fails when attempting dispatch_write on unverified Connection. Independently verified by req-qa (direct read, no trailing comma remains) and rust-qa-agent (cargo test --workspace, compile_fail doctest passed)." ;
   triage:phaseId "phase-AI" ;

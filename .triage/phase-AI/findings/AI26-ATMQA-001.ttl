@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI26-ATMQA-001>
   a triage:Finding ;
   triage:findingId "AI26-ATMQA-001" ;
+  triage:foundAt "2026-07-25T15:12:03Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
   triage:title "Handshake-phase timeout/disconnect still maps to DAEMON_UNAVAILABLE, violating AI.26 acceptance criterion 2" ;
   triage:description "crates/atm-daemon/src/https_transport.rs lines 470-482, function complete_handshake_with_deadline, unconditionally maps io::Error from stream.conn.complete_io() to AtmError::daemon_unavailable(\"HTTPS peer mutual-TLS handshake failed\"). However, when apply_deadline sets the socket's read/write timeout to the remaining shared budget just before this call, a timeout or disconnect occurring mid-handshake (exactly the scenario AI.26 exists to fix) surfaces as an io::Error and is unconditionally mapped to daemon_unavailable, not remote_delivery_unconfirmed. This violates sprint-ai-26 Deliverable 4 / acceptance criterion 2 (\"Timeout/disconnect never reports DAEMON_UNAVAILABLE while local daemon health is intact\"). All other outbound legs (DNS resolve, TCP connect) were correctly changed to map failures to AtmErrorCode::RemoteDeliveryUnconfirmed via remaining_budget(deadline). No test exercises this path — the only handshake-adjacent tests (e.g. expired_peer_budget_reports_remote_delivery_unconfirmed at line ~841) test the remaining_budget helper in isolation, not an actual expired-mid-handshake scenario through complete_handshake_with_deadline." ;
   triage:phaseId "phase-AI" ;

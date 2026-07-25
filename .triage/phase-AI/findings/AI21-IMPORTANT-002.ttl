@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "peer_wire_security is a raw Option<String> hand-matched at disconnected call sites" ;
   triage:description "crates/atm-core/src/doctor/report.rs:104-109 — peer_wire_security is a raw Option<String> hand-matched at two disconnected call sites (runtime_health.rs:858-865, atm/src/commands/doctor.rs:110), risking literal-spelling drift between the CLI flag, doctor report, and any consumer keying off the exact string." ;
   triage:phaseId "phase-AI" ;

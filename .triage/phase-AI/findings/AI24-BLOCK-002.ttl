@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI24-BLOCK-002>
   a triage:Finding ;
   triage:findingId "AI24-BLOCK-002" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
   triage:title "AICH-S4-FIX-1 batch breaks AI.23 single-write-resource-ingress invariant" ;
   triage:description "Test ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects passes at c528137c (s23) but fails at 7bb63e01 (s24). The test performs a literal string match for RequestEnvelope::Write(_) => (\"POST\", \"/v1/atm/messages\".to_string()). In s24, this was refactored to use a MESSAGES_PATH constant, breaking the assertion. The new PeerSync route was added in the same batch, suggesting routing infrastructure changes triggered the refactor." ;
   triage:category "architecture" ;

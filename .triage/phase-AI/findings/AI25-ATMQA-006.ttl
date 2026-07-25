@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-ATMQA-006>
   a triage:Finding ;
   triage:findingId "AI25-ATMQA-006" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Sprint doc's own version string uses wrong separator (hyphen vs dot)" ;
   triage:description "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md writes the version as 1.3.2-beta-25 (hyphen) but the shipped/parser-accepted form is 1.3.2-beta.25 (dot). Doc-only fix." ;
   triage:phaseId "phase-AI" ;

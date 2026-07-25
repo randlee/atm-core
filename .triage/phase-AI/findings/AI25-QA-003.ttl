@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-QA-003>
   a triage:Finding ;
   triage:findingId "AI25-QA-003" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "just lint still fails — winget manifest ManifestVersion field left stale after PackageVersion fix" ;
   triage:description "After PackageVersion in .winget/randlee.agent-team-mail.yaml was correctly updated to 1.3.2-beta.25 (resolving AI25-QA-002), the ManifestVersion field on line 27 was left at 1.3.1. The version mismatch causes just lint to fail its consistency check. arch-ctm's FINAL PASS self-report for FIX-1 claimed all validation gates passed; this is inaccurate for just lint due to this stale field." ;
   triage:phaseId "phase-AI" ;
