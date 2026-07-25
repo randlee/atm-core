@@ -10,3 +10,7 @@ triage:a2 a triage:Assignment ;
     triage:ofSprint triage:AICH-S9 ;
     triage:assignedTo "cwin" ;
     triage:assignedAt "2026-07-25T04:30:08Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AICH-S9 ;
+    triage:at "2026-07-25T04:38:16Z"^^xsd:dateTime .
