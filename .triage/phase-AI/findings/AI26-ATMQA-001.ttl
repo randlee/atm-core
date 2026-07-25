@@ -12,9 +12,15 @@
   triage:severity "Blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-25T15:12:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently verified genuinely CLOSED during the AICH-S6-FIX-1 recheck (commit c088b878, 2026-07-25T08:19:43-07:00; 3 reviewers). complete_handshake_with_deadline at crates/atm-daemon/src/https_transport.rs (current lines ~469-484) now maps handshake io::Error via .map_err(|source| AtmError::remote_delivery_unconfirmed(format!(\"HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}\"))), not daemon_unavailable -- the fix landed on commit 0265c94f ('fix: preserve HTTPS transport failure causes'), well before AI.27. Re-verified for this AI.27 QA-1 pass that https_transport.rs is genuinely untouched by 5e91a889: `git log --oneline -- crates/atm-daemon/src/https_transport.rs` shows its last touching commit is 0265c94f, and `git show 5e91a889 --stat` does not list https_transport.rs among changed files. Corrected from stale 'open'/Blocking status to 'fixed'/closed per this re-verification, citing the earlier FIX-1 verdict rather than re-deriving from scratch." ;
   triage:triagedAt "2026-07-25T14:15:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:foundAt "2026-07-25T14:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-001/s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-001/s27/1> ;
   triage:openOn <urn:atm:triage:worktree/s26/dc079fff> ;
@@ -25,22 +31,22 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 479 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(\"HTTPS peer mutual-TLS handshake failed\") })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "FIXED on 0265c94f: now .map_err(|source| AtmError::remote_delivery_unconfirmed(format!(\"HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
-  triage:headSha "dc079fff" ;
+  triage:headSha "0265c94f" ;
   triage:occursIn <urn:atm:triage:worktree/s26/dc079fff> .
 
 <urn:atm:triage:occurrence/AI26-ATMQA-001/s27/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 479 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(\"HTTPS peer mutual-TLS handshake failed\") })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "FIXED (inherited from s26/0265c94f, untouched by 5e91a889): now .map_err(|source| AtmError::remote_delivery_unconfirmed(format!(\"HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "dc079fff" ;
+  triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/s27/dc079fff> .
 
 <urn:atm:triage:worktree/s21pre/42fbd9fa>

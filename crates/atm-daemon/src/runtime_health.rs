@@ -9,7 +9,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerWireSecurityStatus,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -32,7 +32,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::HttpsMessageTransport;
+use crate::https_transport::{HttpsMessageTransport, PeerWireSecurity};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
 #[cfg(test)]
@@ -154,6 +154,7 @@ pub(crate) struct DaemonRequestDispatcher {
     https_transport: Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
+    peer_wire_security: PeerWireSecurity,
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
@@ -398,6 +399,7 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_wire_security: PeerWireSecurity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -446,6 +448,7 @@ impl DaemonRequestDispatcher {
             https_transport,
             peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
+            peer_wire_security,
             peer_delivery_projection,
         }
     }
@@ -783,6 +786,10 @@ impl DaemonRequestDispatcher {
             findings: peer_findings,
             peer_config: Some(peer_config),
             peer_links: self.peer_link_statuses(),
+            peer_wire_security: Some(match self.peer_wire_security {
+                PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls,
+                PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest,
+            }),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -809,6 +816,7 @@ impl DaemonRequestDispatcher {
                 findings: vec![runtime_status_finding],
                 peer_config: None,
                 peer_links: Vec::new(),
+                peer_wire_security: None,
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -895,7 +903,23 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
-                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+                AuthenticatedIngress::UntrustedSmoke(_)
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_none()
+                        || write.origin_timestamp.is_none() =>
+                {
+                    return Err(AtmError::validation(
+                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
+                    ));
+                }
+                AuthenticatedIngress::AnonymousSmoke => {
+                    return Err(AtmError::validation(
+                        "anonymous plaintext diagnostics cannot submit writes",
+                    ));
+                }
+                AuthenticatedIngress::Local
+                | AuthenticatedIngress::Peer
+                | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
         if matches!(request, RequestEnvelope::ReloadRuntimeView)
@@ -1052,6 +1076,7 @@ impl DaemonRequestDispatcher {
             https_transport,
             peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
+            peer_wire_security: PeerWireSecurity::MutualTls,
             peer_delivery_projection,
         }
     }

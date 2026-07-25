@@ -254,7 +254,9 @@ Historical Phase R boundary direction (retired by Phase AI):
   - `ApiRequest` / `ApiResponse` application contract
   - `DaemonApiClient` for CLI, graft, and tests
   - `ApiRouter` reached by every HTTP transport adapter
-  - `PostWriteRouter` invoked after canonical persistence
+  - `DaemonRequestDispatcher::route_write`, which persists the one
+    `POST /v1/atm/messages` `WriteRequest` before `PostWriteRouter`; an ACK is
+    the same resource with `acknowledges_message_id`
 - Phase AA target ownership:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root

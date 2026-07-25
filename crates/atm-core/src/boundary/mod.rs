@@ -58,12 +58,13 @@ pub struct PostSendHookEvent {
 impl PostSendHookEvent {
     /// The canonical source address carried by every post-write nudge.
     pub fn source_address(&self) -> AgentAddress {
-        AgentAddress {
-            agent: self.sender.clone(),
-            chat_id: self.sender_chat_id.clone(),
-            team: Some(self.sender_team.clone()),
-            host: None,
-        }
+        AgentAddress::new(
+            self.sender.clone(),
+            self.sender_chat_id.clone(),
+            Some(self.sender_team.clone()),
+            None,
+        )
+        .expect("post-send event sender always has a team")
     }
 }
 

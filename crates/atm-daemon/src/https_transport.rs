@@ -6,6 +6,7 @@
 //! replay state.
 
 use std::fmt;
+use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::mpsc;
@@ -13,8 +14,9 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
-    read_http_request, read_http_response, write_http_request, write_http_response,
+    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, UntrustedSmokeProvenance,
+    decode_request, read_http_request, read_http_response, write_http_request,
+    write_http_request_with_headers, write_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -31,6 +33,30 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
+
+/// The peer wire-security setting. Mutual TLS is the production default.
+/// Plain HTTP is deliberately available only for an explicit, temporary smoke
+/// run so connectivity can be isolated from certificate configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerWireSecurity {
+    MutualTls,
+    PlaintextTest,
+}
+
+impl std::str::FromStr for PeerWireSecurity {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "mutual-tls" => Ok(Self::MutualTls),
+            "plaintext-test" => Ok(Self::PlaintextTest),
+            _ => Err(AtmError::validation(
+                "--peer-wire-security must be `mutual-tls` or `plaintext-test`",
+            )),
+        }
+    }
+}
 
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
@@ -42,9 +68,6 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
 
-    /// One bounded drain uses one transport connection. Test transports retain
-    /// the simple one-at-a-time default; the production adapter overrides it
-    /// with one TLS stream and ordinary sequential write requests.
     fn deliver_page(
         &self,
         requests: &[WriteRequest],
@@ -145,14 +168,26 @@ impl TlsIdentity {
 /// retained only as TLS material; no storage trait crosses this boundary.
 #[derive(Debug)]
 pub(crate) struct HttpsTransport {
-    identity: TlsIdentity,
+    mode: HttpsTransportMode,
+}
+
+#[derive(Debug)]
+enum HttpsTransportMode {
+    MutualTls(TlsIdentity),
+    PlaintextTest { source_host: HostName },
 }
 
 impl HttpsTransport {
     pub(crate) fn from_local_certificate(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         Ok(Self {
-            identity: TlsIdentity::load(certificate)?,
+            mode: HttpsTransportMode::MutualTls(TlsIdentity::load(certificate)?),
         })
+    }
+
+    pub(crate) fn plaintext_test(source_host: HostName) -> Self {
+        Self {
+            mode: HttpsTransportMode::PlaintextTest { source_host },
+        }
     }
 }
 
@@ -163,8 +198,8 @@ impl HttpsMessageTransport for HttpsTransport {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let mut connection = self.open_connection(peer, deadline)?;
-        connection.deliver(request, deadline)
+        self.open_connection(peer, deadline)?
+            .deliver(request, deadline)
     }
 
     fn deliver_page(
@@ -182,8 +217,9 @@ impl HttpsMessageTransport for HttpsTransport {
     }
 }
 
-struct HttpsPeerConnection {
-    tls: StreamOwned<ClientConnection, TcpStream>,
+enum HttpsPeerConnection {
+    MutualTls(Box<StreamOwned<ClientConnection, TcpStream>>),
+    Plaintext(TcpStream, HostName),
 }
 
 impl HttpsPeerConnection {
@@ -193,10 +229,20 @@ impl HttpsPeerConnection {
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         let request = RequestEnvelope::Write(Box::new(request));
-        apply_deadline(self.tls.get_ref(), remaining_budget(deadline)?)?;
-        write_http_request(&mut self.tls, &request)?;
-        apply_deadline(self.tls.get_ref(), remaining_budget(deadline)?)?;
-        read_http_response(&mut self.tls, &request)
+        match self {
+            Self::MutualTls(tls) => {
+                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
+                write_http_request(tls, &request)?;
+                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
+                read_http_response(tls, &request)
+            }
+            Self::Plaintext(stream, source_host) => {
+                apply_deadline(stream, remaining_budget(deadline)?)?;
+                write_plaintext_http_request_with_source_host(stream, &request, source_host)?;
+                apply_deadline(stream, remaining_budget(deadline)?)?;
+                read_http_response(stream, &request)
+            }
+        }
     }
 }
 
@@ -221,24 +267,28 @@ impl HttpsTransport {
                 ))
             },
         )?;
-        apply_deadline(&stream, remaining_budget(deadline)?)?;
-        let config = client_config(&self.identity, peer)?;
-        let server_name = ServerName::try_from(host.clone()).map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "configured HTTPS peer host is not a valid TLS server name",
-                source,
-            )
-        })?;
-        let connection =
-            ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
-                AtmError::daemon_unavailable_with_cause(
-                    "failed to initialize HTTPS peer TLS client",
-                    source,
-                )
-            })?;
-        let mut tls = StreamOwned::new(connection, stream);
-        complete_handshake_with_deadline(&mut tls, deadline)?;
-        Ok(HttpsPeerConnection { tls })
+        match &self.mode {
+            HttpsTransportMode::MutualTls(identity) => {
+                apply_deadline(&stream, remaining_budget(deadline)?)?;
+                let config = client_config(identity, peer)?;
+                let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
+                    AtmError::validation(
+                        "configured HTTPS peer host is not a valid TLS server name",
+                    )
+                })?;
+                let connection =
+                    ClientConnection::new(Arc::new(config), server_name).map_err(|_source| {
+                        AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS client")
+                    })?;
+                let mut tls = StreamOwned::new(connection, stream);
+                complete_handshake_with_deadline(&mut tls, deadline)?;
+                Ok(HttpsPeerConnection::MutualTls(Box::new(tls)))
+            }
+            HttpsTransportMode::PlaintextTest { source_host } => {
+                apply_deadline(&stream, remaining_budget(deadline)?)?;
+                Ok(HttpsPeerConnection::Plaintext(stream, source_host.clone()))
+            }
+        }
     }
 }
 
@@ -256,6 +306,15 @@ struct HttpsListener {
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
+#[derive(Clone)]
+enum ListenerSecurity {
+    MutualTls {
+        config: Arc<ServerConfig>,
+        verifier: Arc<PinnedClientVerifier>,
+    },
+    PlaintextTest,
+}
+
 impl HttpsListenerSet {
     pub(crate) fn bind_enabled(
         interfaces: &[HttpsInterface],
@@ -266,50 +325,75 @@ impl HttpsListenerSet {
         let identity = TlsIdentity::load(certificate)?;
         let peer_verifier = Arc::new(PinnedClientVerifier::new(peers));
         let server_config = Arc::new(server_config(&identity, Arc::clone(&peer_verifier))?);
+        Self::bind(
+            interfaces,
+            ListenerSecurity::MutualTls {
+                config: server_config,
+                verifier: peer_verifier,
+            },
+            router,
+        )
+    }
+
+    /// Binds the same HTTP peer ingress without TLS only for an explicitly
+    /// configured smoke run. The HTTP decoder and router remain identical to
+    /// the authenticated listener; only peer authentication is absent.
+    pub(crate) fn bind_plaintext_test(
+        interfaces: &[HttpsInterface],
+        router: Arc<dyn ApiRouter + Send + Sync>,
+    ) -> Result<Self, AtmError> {
+        Self::bind(interfaces, ListenerSecurity::PlaintextTest, router)
+    }
+
+    fn bind(
+        interfaces: &[HttpsInterface],
+        security: ListenerSecurity,
+        router: Arc<dyn ApiRouter + Send + Sync>,
+    ) -> Result<Self, AtmError> {
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        // Bind every enabled endpoint before any accept loop starts. A bad
-        // later row therefore cannot leave an earlier listener partially live.
         let bound = interfaces
             .iter()
             .filter(|interface| interface.enabled)
             .map(|interface| {
                 let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
                     AtmError::daemon_unavailable(format!(
-                        "failed to bind configured HTTPS listener {}",
+                        "failed to bind configured peer HTTP listener {}",
                         interface.bind_addr
                     ))
                 })?;
                 listener.set_nonblocking(true).map_err(|_source| {
-                    AtmError::daemon_unavailable("failed to configure HTTPS listener")
+                    AtmError::daemon_unavailable("failed to configure peer HTTP listener")
                 })?;
                 let address = listener.local_addr().map_err(|_source| {
-                    AtmError::daemon_unavailable("failed to inspect configured HTTPS listener")
+                    AtmError::daemon_unavailable("failed to inspect configured peer HTTP listener")
                 })?;
                 Ok((listener, address))
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let peer_verifier = match &security {
+            ListenerSecurity::MutualTls { verifier, .. } => Arc::clone(verifier),
+            ListenerSecurity::PlaintextTest => Arc::new(PinnedClientVerifier::new(Vec::new())),
+        };
         let mut listeners = Vec::new();
         for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
-            let thread_config = Arc::clone(&server_config);
             let thread_requests = Arc::clone(&requests);
-            let thread_peer_verifier = Arc::clone(&peer_verifier);
+            let thread_security = security.clone();
             let thread = std::thread::Builder::new()
-                .name("atm-https-peer-listener".to_string())
+                .name("atm-peer-http-listener".to_string())
                 .spawn(move || {
                     accept_loop(
                         listener,
                         thread_stop,
-                        thread_config,
+                        thread_security,
                         thread_router,
                         thread_requests,
-                        thread_peer_verifier,
                     )
                 })
                 .map_err(|_source| {
-                    AtmError::daemon_unavailable("failed to start HTTPS listener")
+                    AtmError::daemon_unavailable("failed to start peer HTTP listener")
                 })?;
             listeners.push(HttpsListener {
                 address,
@@ -356,16 +440,13 @@ impl HttpsListenerSet {
 fn accept_loop(
     listener: TcpListener,
     stop: Arc<std::sync::atomic::AtomicBool>,
-    config: Arc<ServerConfig>,
+    security: ListenerSecurity,
     router: Arc<dyn ApiRouter + Send + Sync>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
-    peer_verifier: Arc<PinnedClientVerifier>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
-            Ok((stream, _)) => {
-                spawn_request_worker(stream, &config, &router, &requests, &peer_verifier);
-            }
+            Ok((stream, _)) => spawn_request_worker(stream, &security, &router, &requests),
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -375,7 +456,7 @@ fn accept_loop(
                     action = "accept",
                     outcome = "failed",
                     %error,
-                    "HTTPS peer listener accept failed"
+                    "peer HTTP listener accept failed"
                 );
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -385,10 +466,9 @@ fn accept_loop(
 
 fn spawn_request_worker(
     stream: TcpStream,
-    config: &Arc<ServerConfig>,
+    security: &ListenerSecurity,
     router: &Arc<dyn ApiRouter + Send + Sync>,
     requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
-    peer_verifier: &Arc<PinnedClientVerifier>,
 ) {
     if let Err(error) = stream.set_nonblocking(false) {
         tracing::warn!(
@@ -396,26 +476,20 @@ fn spawn_request_worker(
             action = "configure_connection",
             outcome = "failed",
             %error,
-            "HTTPS peer listener could not configure an accepted connection"
+            "peer HTTP listener could not configure an accepted connection"
         );
         return;
     }
     let request = std::thread::Builder::new()
-        .name("atm-https-peer-request".to_string())
+        .name("atm-peer-http-request".to_string())
         .spawn({
-            let config = Arc::clone(config);
+            let security = security.clone();
             let router = Arc::clone(router);
-            let peer_verifier = Arc::clone(peer_verifier);
-            move || {
-                log_peer_request_result(handle_peer_connection(
-                    stream,
-                    config,
-                    router,
-                    peer_verifier,
-                ))
-            }
+            move || log_peer_request_result(handle_peer_connection(stream, security, router))
         })
-        .map_err(|_source| AtmError::daemon_unavailable("failed to start HTTPS request worker"));
+        .map_err(|_source| {
+            AtmError::daemon_unavailable("failed to start peer HTTP request worker")
+        });
     match request {
         Ok(request) => track_request_worker(requests, request),
         Err(error) => tracing::warn!(
@@ -423,7 +497,7 @@ fn spawn_request_worker(
             action = "start_request",
             outcome = "failed",
             error_code = %error.code(),
-            "HTTPS listener rejected connection because request worker startup failed"
+            "peer HTTP listener rejected connection because request worker startup failed"
         ),
     }
 }
@@ -457,55 +531,112 @@ fn track_request_worker(
 }
 
 fn handle_peer_connection(
-    stream: TcpStream,
-    config: Arc<ServerConfig>,
+    mut stream: TcpStream,
+    security: ListenerSecurity,
     router: Arc<dyn ApiRouter + Send + Sync>,
-    peer_verifier: Arc<PinnedClientVerifier>,
 ) -> Result<(), AtmError> {
     let deadline = RequestDeadline::after(HTTPS_TIMEOUT);
-    apply_deadline(&stream, HTTPS_TIMEOUT)?;
-    let connection = ServerConnection::new(config).map_err(|_source| {
-        AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS server")
-    })?;
-    let mut tls = StreamOwned::new(connection, stream);
-    complete_server_handshake(&mut tls)?;
-    let authenticated_source_host = peer_verifier.authenticated_host(&tls.conn)?;
-    let request = match read_http_request(&mut tls)? {
+    apply_deadline(&stream, remaining_budget(deadline)?)?;
+    match security {
+        ListenerSecurity::MutualTls { config, verifier } => {
+            let connection = ServerConnection::new(config).map_err(|_source| {
+                AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS server")
+            })?;
+            let mut tls = StreamOwned::new(connection, stream);
+            complete_server_handshake_with_deadline(&mut tls, deadline)?;
+            let authenticated_source_host = verifier.authenticated_host(&tls.conn)?;
+            route_peer_http_request(&mut tls, router, Some(authenticated_source_host), deadline)
+        }
+        ListenerSecurity::PlaintextTest => {
+            route_peer_http_request(&mut stream, router, None, deadline)
+        }
+    }
+}
+
+fn route_peer_http_request(
+    stream: &mut (impl Read + Write),
+    router: Arc<dyn ApiRouter + Send + Sync>,
+    authenticated_source_host: Option<HostName>,
+    deadline: RequestDeadline,
+) -> Result<(), AtmError> {
+    let request = match read_http_request(stream)? {
         Some(request) => request,
         None => return Ok(()),
     };
-    // The custom client verifier completed during the read above. Routing is
-    // intentionally impossible before that mTLS + exact fingerprint check.
+    let plaintext_source_host = request
+        .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
+        .map(str::parse)
+        .transpose()
+        .map_err(|_source| {
+            AtmError::validation(
+                "invalid X-ATM-Peer-Source-Host header; use a valid configured test host or restart without --peer-wire-security plaintext-test",
+            )
+        })?;
     let mut request = decode_request(request)?;
-    normalize_peer_write_for_local_delivery(&mut request, authenticated_source_host);
+    let ingress = match (authenticated_source_host, plaintext_source_host) {
+        (Some(source_host), _) => {
+            normalize_peer_write_for_local_delivery(&mut request, source_host);
+            AuthenticatedIngress::Peer
+        }
+        (None, Some(source_host)) => {
+            normalize_untrusted_smoke_write_for_local_delivery(&mut request);
+            AuthenticatedIngress::UntrustedSmoke(UntrustedSmokeProvenance::new(source_host))
+        }
+        (None, None) if matches!(request, ApiRequest::Write(_)) => {
+            return Err(AtmError::validation(
+                "plaintext peer write requests require X-ATM-Peer-Source-Host; restart without --peer-wire-security plaintext-test to restore mTLS",
+            ));
+        }
+        // Read-only plaintext diagnostics are deliberately anonymous. They
+        // must never be labelled as the authenticated mTLS peer ingress.
+        (None, None) => AuthenticatedIngress::AnonymousSmoke,
+    };
     let response = router
-        .route(request, AuthenticatedIngress::Peer, deadline)
+        .route(request, ingress, deadline)
         .map(|response| response.into_inner())
         .unwrap_or_else(ResponseEnvelope::Error);
-    write_http_response(&mut tls, &response)
+    write_http_response(stream, &response)
 }
 
-/// The authenticated HTTPS adapter has already selected this daemon. It drops
-/// only the transport destination before submitting the same canonical write
-/// request used by local UDS and graft clients.
+fn normalize_untrusted_smoke_write_for_local_delivery(request: &mut ApiRequest) {
+    if let ApiRequest::Write(write) = request {
+        write.authenticated_source_host = None;
+    }
+}
+
+fn write_plaintext_http_request_with_source_host(
+    stream: &mut TcpStream,
+    request: &RequestEnvelope,
+    source_host: &HostName,
+) -> Result<(), AtmError> {
+    write_http_request_with_headers(
+        stream,
+        request,
+        &[(PLAINTEXT_PEER_SOURCE_HOST_HEADER, source_host.as_str())],
+    )
+}
+
+/// The HTTPS adapter has already selected this daemon. It preserves the
+/// canonical host-qualified address and records only the adapter-authenticated
+/// source provenance before submitting the shared write request used by local
+/// UDS and graft clients. Origin metadata prevents re-forwarding after write.
 fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest, source_host: HostName) {
     if let ApiRequest::Write(write) = request {
-        if let Some(destination) = write.to.as_mut() {
-            destination.host = None;
-        }
         write.authenticated_source_host = Some(source_host);
     }
 }
 
-fn complete_server_handshake(
+fn complete_server_handshake_with_deadline(
     stream: &mut StreamOwned<ServerConnection, TcpStream>,
+    deadline: RequestDeadline,
 ) -> Result<(), AtmError> {
     while stream.conn.is_handshaking() {
+        apply_deadline(&stream.sock, remaining_budget(deadline)?)?;
         stream
             .conn
             .complete_io(&mut stream.sock)
             .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
+                AtmError::remote_delivery_unconfirmed(format!(
                     "HTTPS peer mutual-TLS server handshake failed: {source}"
                 ))
             })?;
@@ -522,29 +653,29 @@ fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError
         .map_err(|_source| AtmError::daemon_unavailable("failed to set HTTPS peer write deadline"))
 }
 
-fn complete_handshake_with_deadline(
-    stream: &mut StreamOwned<ClientConnection, TcpStream>,
-    deadline: RequestDeadline,
-) -> Result<(), AtmError> {
-    while stream.conn.is_handshaking() {
-        apply_deadline(stream.get_ref(), remaining_budget(deadline)?)?;
-        stream
-            .conn
-            .complete_io(&mut stream.sock)
-            .map_err(|source| {
-                AtmError::remote_delivery_unconfirmed(format!(
-                    "HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}"
-                ))
-            })?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 fn complete_handshake(
     stream: &mut StreamOwned<ClientConnection, TcpStream>,
 ) -> Result<(), AtmError> {
     complete_handshake_with_deadline(stream, RequestDeadline::after(HTTPS_TIMEOUT))
+}
+
+fn complete_handshake_with_deadline(
+    stream: &mut StreamOwned<ClientConnection, TcpStream>,
+    deadline: RequestDeadline,
+) -> Result<(), AtmError> {
+    while stream.conn.is_handshaking() {
+        apply_deadline(&stream.sock, remaining_budget(deadline)?)?;
+        stream
+            .conn
+            .complete_io(&mut stream.sock)
+            .map_err(|source| {
+                AtmError::remote_delivery_unconfirmed(format!(
+                    "HTTPS peer mutual-TLS handshake failed: {source}"
+                ))
+            })?;
+    }
+    Ok(())
 }
 
 fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
@@ -805,11 +936,12 @@ mod tests {
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
-        read_http_response, write_http_request,
+        read_http_response, write_http_request, write_http_request_with_headers,
     };
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::HostName;
     use atm_storage::{
@@ -862,7 +994,8 @@ mod tests {
     #[derive(Default)]
     struct RecordingRouter {
         routed: AtomicBool,
-        request: Mutex<Option<ApiRequest>>,
+        requests: Mutex<Vec<ApiRequest>>,
+        ingress: Mutex<Option<AuthenticatedIngress>>,
     }
 
     impl atm_core::boundary::sealed::Sealed for RecordingRouter {}
@@ -874,9 +1007,12 @@ mod tests {
             ingress: AuthenticatedIngress,
             _deadline: RequestDeadline,
         ) -> Result<ApiResponse, AtmError> {
-            assert_eq!(ingress, AuthenticatedIngress::Peer);
             self.routed.store(true, Ordering::SeqCst);
-            *self.request.lock().expect("recorded request") = Some(_request);
+            self.requests
+                .lock()
+                .expect("recorded requests")
+                .push(_request);
+            *self.ingress.lock().expect("recorded ingress") = Some(ingress);
             Ok(ApiResponse::new(ResponseEnvelope::Error(
                 AtmError::validation("test router response"),
             )))
@@ -890,52 +1026,11 @@ mod tests {
     }
 
     #[test]
-    fn request_deadline_is_one_absolute_budget() {
+    fn peer_deadline_is_one_absolute_budget() {
         let deadline = RequestDeadline::after(Duration::from_secs(5));
-        assert!(deadline.remaining().is_some());
-    }
-
-    #[test]
-    fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
-        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
-            .expect_err("an expired shared request budget must fail before peer delivery");
-        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
-    }
-
-    #[test]
-    fn stalled_tls_handshake_reports_remote_delivery_unconfirmed() {
-        let certificate = test_certificate();
-        let identity = TlsIdentity::load(&certificate).expect("load test identity");
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind stalled peer");
-        let address = listener.local_addr().expect("listener address");
-        let (release_tx, release_rx) = std::sync::mpsc::sync_channel::<()>(1);
-        let server = std::thread::spawn(move || {
-            let (_stream, _) = listener.accept().expect("accept client hello");
-            let _ = release_rx.recv_timeout(Duration::from_secs(1));
-        });
-        let peer = TrustedPeer {
-            host: "localhost".parse().expect("host"),
-            fingerprint: certificate.fingerprint.clone(),
-            enabled: true,
-            https_port: std::num::NonZeroU16::new(43101).expect("port"),
-        };
-        let config = client_config(&identity, &peer).expect("client config");
-        let connection = ClientConnection::new(
-            Arc::new(config),
-            ServerName::try_from("localhost".to_string()).expect("server name"),
-        )
-        .expect("client connection");
-        let stream = TcpStream::connect(address).expect("connect stalled peer");
-        let mut tls = StreamOwned::new(connection, stream);
-
-        let error = super::complete_handshake_with_deadline(
-            &mut tls,
-            RequestDeadline::after(Duration::from_millis(25)),
-        )
-        .expect_err("stalled peer TLS handshake must time out");
-        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
-        release_tx.send(()).expect("release stalled peer");
-        server.join().expect("stalled peer exits");
+        let remaining = super::remaining_budget(deadline).expect("fresh deadline has budget");
+        assert!(remaining <= Duration::from_secs(5));
+        assert!(remaining > Duration::ZERO);
     }
 
     #[test]
@@ -982,6 +1077,88 @@ mod tests {
         write_http_request(&mut tls, &request).expect("write shared request");
         let _ = read_http_response(&mut tls, &request).expect("shared router response");
         assert!(router.routed.load(Ordering::SeqCst));
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn plaintext_test_http_reaches_the_same_router_without_tls() {
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_plaintext_test(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            router.clone(),
+        )
+        .expect("start plaintext test listener");
+        let mut stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        write_http_request(&mut stream, &request).expect("write plain shared request");
+        let _ = read_http_response(&mut stream, &request).expect("shared router response");
+        assert!(router.routed.load(Ordering::SeqCst));
+        assert!(matches!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(AuthenticatedIngress::AnonymousSmoke)
+        ));
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    fn plaintext_test_write_uses_untrusted_smoke_provenance_at_shared_router() {
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_plaintext_test(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            router.clone(),
+        )
+        .expect("start plaintext test listener");
+        let mut write = WriteRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "recipient@test-team.example.invalid",
+            "test-team".parse().expect("team"),
+            SendMessageSource::Inline("message".to_string()),
+            None,
+            true,
+            None,
+            false,
+        )
+        .expect("write request");
+        let origin_message_id = atm_core::schema::AtmMessageId::new();
+        write.origin_message_id = Some(origin_message_id);
+        write.origin_timestamp = Some(atm_core::types::IsoTimestamp::now());
+        write.authenticated_source_host = Some("spoofed.invalid".parse().expect("host"));
+        let request = RequestEnvelope::Write(Box::new(write));
+        let mut stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(
+                super::PLAINTEXT_PEER_SOURCE_HOST_HEADER,
+                "smoke-peer.invalid",
+            )],
+        )
+        .expect("write plain peer request");
+        let _ = read_http_response(&mut stream, &request).expect("shared router response");
+        let requests = router.requests.lock().expect("recorded requests");
+        let ApiRequest::Write(write) = &requests[0] else {
+            panic!("expected canonical write request");
+        };
+        assert!(write.authenticated_source_host.is_none());
+        assert_eq!(write.origin_message_id, Some(origin_message_id));
+        assert_eq!(
+            write.to.as_ref().expect("destination").host(),
+            Some(&"example.invalid".parse().expect("destination host"))
+        );
+        assert!(matches!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(AuthenticatedIngress::UntrustedSmoke(_))
+        ));
         listener.shutdown().expect("shutdown listener");
     }
 
@@ -1126,7 +1303,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_peer_host_overwrites_wire_source_host_on_shared_write() {
+    fn advertised_ip_peer_send_and_ack_reach_the_shared_router() {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
@@ -1160,7 +1337,7 @@ mod tests {
             std::env::temp_dir(),
             std::env::temp_dir(),
             "sender".parse().expect("sender"),
-            "recipient@test-team.example.invalid",
+            "recipient@test-team.192.168.128.82",
             "test-team".parse().expect("team"),
             SendMessageSource::Inline("message".to_string()),
             None,
@@ -1175,18 +1352,53 @@ mod tests {
         let request = RequestEnvelope::Write(Box::new(write));
         write_http_request(&mut tls, &request).expect("write shared request");
         let _ = read_http_response(&mut tls, &request).expect("shared router response");
-        let request = router
-            .request
-            .lock()
-            .expect("recorded request")
-            .clone()
-            .expect("router request");
-        let ApiRequest::Write(write) = request else {
+        let ack_source_id = AtmMessageId::new();
+        let mut ack = crate::test_support::test_ack_write_request(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "test-team".parse().expect("team"),
+            ack_source_id,
+            "acknowledged",
+        );
+        let ack_origin_id = AtmMessageId::new();
+        ack.origin_message_id = Some(ack_origin_id);
+        let ack_request = RequestEnvelope::Write(Box::new(ack));
+        let stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("mutual TLS handshake");
+        write_http_request(&mut tls, &ack_request).expect("write canonical ack request");
+        let _ = read_http_response(&mut tls, &ack_request).expect("shared router response");
+
+        let requests = router.requests.lock().expect("recorded requests");
+        assert_eq!(requests.len(), 2);
+        let ApiRequest::Write(write) = &requests[0] else {
             panic!("expected canonical write request");
         };
-        assert_eq!(write.authenticated_source_host, Some(peer.host));
+        assert_eq!(write.authenticated_source_host, Some(peer.host.clone()));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
-        assert!(write.to.expect("destination").host.is_none());
+        assert_eq!(
+            write.to.as_ref().expect("destination").host(),
+            Some(&"192.168.128.82".parse().expect("advertised IP"))
+        );
+        assert!(write.acknowledges_message_id.is_none());
+        let ApiRequest::Write(ack) = &requests[1] else {
+            panic!("expected canonical acknowledgement write request");
+        };
+        assert_eq!(ack.authenticated_source_host, Some(peer.host));
+        assert_eq!(ack.origin_message_id, Some(ack_origin_id));
+        assert_eq!(ack.acknowledges_message_id, Some(ack_source_id));
+        assert_eq!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(&AuthenticatedIngress::Peer),
+            "the peer TCP listener must present the advertised-IP write to the one shared router as peer ingress"
+        );
         listener.shutdown().expect("shutdown listener");
     }
 

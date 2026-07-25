@@ -17,11 +17,29 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         message: &mut MessageRecord,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
+        if message.prepared.is_peer_receipt() {
+            if message.prepared.is_same_store_peer_receipt() {
+                let mut event = self.runtime_health_observability.event(
+                    "peer_duplicate_write_skipped",
+                    "ok",
+                    "peer duplicate write skipped; continuing the ordinary local post-write action",
+                );
+                event.message_id = Some(message.prepared.persisted_message_id());
+                self.runtime_health_observability.emit_event_or_warn(event);
+            }
+            let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+            let emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_port));
+            message
+                .prepared
+                .emit_local_post_write(&self.service_runtime, &emitter);
+            return Ok(());
+        }
         let Some(host) = message
             .outbound_request
             .to
             .as_ref()
-            .and_then(|address| address.host.as_ref())
+            .and_then(|address| address.host())
         else {
             let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));

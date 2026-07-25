@@ -52,13 +52,11 @@ pub(crate) fn resolve_target(
     };
 
     let team = target_address
-        .team
-        .as_deref()
-        .and_then(|team| team.parse().ok())
-        .or_else(|| Some(caller_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
+        .team()
+        .cloned()
+        .unwrap_or_else(|| caller_team.clone());
     Ok(ResolvedTarget {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
+        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
         team,
         explicit: true,
     })

@@ -3635,6 +3635,9 @@ mail correctness.
     `plaintext-test` smoke profile is governed by
     `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
   - all production adapters call one HTTP router and the same application handlers
+  - `POST /v1/atm/messages` is the one HTTP write resource for both send and
+    acknowledgement writes; `acknowledges_message_id` is request data, not a
+    route selector
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
     `/v1/atm/doctor`; their typed route-specific schemas and methods are the
@@ -3725,8 +3728,10 @@ mail correctness.
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
   - when a host-qualified same-host peer receipt encounters that daemon's own
-    identical retained origin ULID, storage logs the duplicate attempt and
-    skips the second database write without altering origin destination-host
+    identical retained origin ULID, storage logs
+    `peer_duplicate_write_skipped` with the ULID, both hosts,
+    `same_store_peer_receipt=true`, `database_write=skipped`, and
+    `delivery=continued`; it skips the second database write without altering origin destination-host
     metadata; ordinary inbound recipient delivery continues to its post-write
     local nudge and must not re-enter peer delivery. A later ACK to that
     retained record derives its host-qualified reply target from the preserved
