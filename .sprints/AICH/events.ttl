@@ -14,3 +14,7 @@ triage:a2 a triage:Assignment ;
 triage:c2 a triage:Completion ;
     triage:ofSprint triage:AICH-S9 ;
     triage:at "2026-07-25T04:38:16Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AICH-S1 ;
+    triage:at "2026-07-25T04:44:02Z"^^xsd:dateTime .
