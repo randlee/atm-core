@@ -101,6 +101,9 @@ impl DaemonApiClient for LoopbackClientTransport {
             RequestEnvelope::PeerSync(_) => Err(AtmError::daemon_unavailable(
                 "peer sync requires the daemon HTTPS transport",
             )),
+            RequestEnvelope::ReloadRuntimeView => Err(AtmError::daemon_unavailable(
+                "runtime reload requires the running daemon control plane",
+            )),
         };
         response.map(ApiResponse::new)
     }

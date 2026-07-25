@@ -65,19 +65,64 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 fn ai25_live_trust_refresh_reuses_startup_validation() {
     let root = workspace_root();
     let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
-    let refresh = source
-        .split("fn refresh_https_trust")
-        .nth(1)
-        .and_then(|rest| rest.split("fn begin_startup").next())
-        .expect("AI.25 live trust refresh must remain a dedicated composition method");
+    let syntax = syn::parse_file(&source).expect("daemon composition source must parse");
+    let mut visitor = LiveTrustRefreshVisitor::default();
+    visitor.visit_file(&syntax);
     assert!(
-        refresh.contains("validate_enabled_peer_configuration"),
+        visitor.installs_refresh_hook,
+        "AI.25 must install the runtime trust refresh hook during daemon composition"
+    );
+    assert!(
+        visitor.calls_reload_validator,
         "AI.25 forbids installing reload-time trust without the startup validator"
     );
     assert!(
-        refresh.contains("refresh_trusted_peers"),
+        visitor.calls_verifier_refresh,
         "AI.25 live reload must replace the retained verifier snapshot"
     );
+
+    let fixture = syn::parse_file(
+        "fn bad() { dispatcher.install_runtime_reload_hook(Arc::new(move || { listeners.refresh_trusted_peers(peers)?; Ok(()) })); }",
+    )
+    .expect("negative fixture must parse");
+    let mut negative = LiveTrustRefreshVisitor::default();
+    negative.visit_file(&fixture);
+    assert!(negative.installs_refresh_hook);
+    assert!(negative.calls_verifier_refresh);
+    assert!(
+        !negative.calls_reload_validator,
+        "negative fixture proves the AST gate rejects verifier refresh without reload validation"
+    );
+}
+
+#[derive(Default)]
+struct LiveTrustRefreshVisitor {
+    installs_refresh_hook: bool,
+    calls_reload_validator: bool,
+    calls_verifier_refresh: bool,
+}
+
+impl<'ast> Visit<'ast> for LiveTrustRefreshVisitor {
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "install_runtime_reload_hook" {
+            self.installs_refresh_hook = true;
+        }
+        if node.method == "refresh_trusted_peers" {
+            self.calls_verifier_refresh = true;
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = node.func.as_ref()
+            && path.path.segments.last().is_some_and(|segment| {
+                segment.ident == "validate_enabled_peer_configuration_for_reload"
+            })
+        {
+            self.calls_reload_validator = true;
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
 }
 
 #[test]

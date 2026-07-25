@@ -133,7 +133,7 @@ pub(crate) struct RuntimeComposition {
     // chooses when to call it; this composition root never passes storage or
     // post-write state into the HTTPS adapter.
     https_transport: Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    https_listeners: Mutex<Option<HttpsListenerSet>>,
+    https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
@@ -202,6 +202,23 @@ impl RuntimeComposition {
             &observability,
             runtime_assembly.clone(),
         );
+        let https_listeners: Arc<Mutex<Option<HttpsListenerSet>>> = Arc::new(Mutex::new(None));
+        let reload_peer_store = Arc::clone(&peer_config_store);
+        let reload_listener_slot = Arc::clone(&https_listeners);
+        request_dispatcher.install_runtime_reload_hook(Arc::new(move || {
+            validate_enabled_peer_configuration_for_reload(reload_peer_store.as_ref())?;
+            let peers = reload_peer_store.list_trusted_peers()?;
+            if let Some(listeners) = reload_listener_slot
+                .lock()
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+                })?
+                .as_ref()
+            {
+                listeners.refresh_trusted_peers(peers)?;
+            }
+            Ok(())
+        }))?;
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
@@ -211,7 +228,7 @@ impl RuntimeComposition {
             request_dispatcher,
             peer_config_store,
             https_transport: Mutex::new(None),
-            https_listeners: Mutex::new(None),
+            https_listeners,
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
@@ -298,22 +315,6 @@ impl RuntimeComposition {
         self.request_dispatcher.clear_https_transport()
     }
 
-    fn refresh_https_trust(&self) -> Result<(), AtmError> {
-        validate_enabled_peer_configuration_for_reload(self.peer_config_store.as_ref())?;
-        let peers = self.peer_config_store.list_trusted_peers()?;
-        if let Some(listeners) = self
-            .https_listeners
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
-            })?
-            .as_ref()
-        {
-            listeners.refresh_trusted_peers(peers)?;
-        }
-        Ok(())
-    }
-
     fn begin_startup(&self) -> Result<(), AtmError> {
         self.composition_observability.emit_or_warn(
             "start_requested",
@@ -371,10 +372,7 @@ impl RuntimeComposition {
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
                 force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
                 begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: || {
-                    self.request_dispatcher.reload_runtime_view()?;
-                    self.refresh_https_trust()
-                },
+                reload_runtime_view: || self.request_dispatcher.reload_runtime_view(),
                 publish_ready,
             },
         );

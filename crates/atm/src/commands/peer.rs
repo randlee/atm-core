@@ -142,9 +142,17 @@ enum TrustSubcommand {
 }
 
 impl PeerCommand {
-    pub fn run(self, _observability: &CliObservability) -> Result<()> {
+    pub fn run(self, observability: &CliObservability) -> Result<()> {
         match self.command {
-            PeerSubcommand::Sync { peer, json } => Self::run_sync(peer, json, _observability),
+            PeerSubcommand::Sync { peer, json } => Self::run_sync(peer, json, observability),
+            PeerSubcommand::Trust(command) => {
+                let changed =
+                    with_default_peer_config_store(|store| command.run_with_store(store))?;
+                if changed {
+                    Self::reload_runtime_view(observability)?;
+                }
+                Ok(())
+            }
             command => {
                 with_default_peer_config_store(|store| Self { command }.run_with_store(store))?;
                 Ok(())
@@ -156,7 +164,7 @@ impl PeerCommand {
         match self.command {
             PeerSubcommand::Interface(command) => command.run_with_store(store),
             PeerSubcommand::Certificate(command) => command.run_with_store(store),
-            PeerSubcommand::Trust(command) => command.run_with_store(store),
+            PeerSubcommand::Trust(command) => command.run_with_store(store).map(|_| ()),
             PeerSubcommand::SyncPolicy(command) => command.run_with_store(store),
             PeerSubcommand::Sync { .. } => Err(AtmError::validation(
                 "peer sync must be routed through the running daemon",
@@ -177,6 +185,17 @@ impl PeerCommand {
             &composition.peer_sync(PeerSyncRequest { peer })?,
             json,
         )?)
+    }
+
+    fn reload_runtime_view(observability: &CliObservability) -> Result<()> {
+        let (home_dir, current_dir) = resolve_command_runtime_context("peer trust reload")?;
+        let composition = CliComposition::bootstrap(
+            "peer trust reload",
+            observability,
+            InvocationDir::new(&current_dir),
+            AtmHomePath::new(&home_dir),
+        )?;
+        Ok(composition.reload_runtime_view()?)
     }
 }
 
@@ -297,11 +316,12 @@ impl CertificateCommand {
 }
 
 impl TrustCommand {
-    fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<(), AtmError> {
+    fn run_with_store(self, store: &(dyn PeerConfigStore + Send + Sync)) -> Result<bool, AtmError> {
         match self.command {
             TrustSubcommand::List { json } => {
                 let peers = store.list_trusted_peers()?;
-                print_output(&peers, json)
+                print_output(&peers, json)?;
+                Ok(false)
             }
             TrustSubcommand::Add {
                 host,
@@ -318,7 +338,7 @@ impl TrustCommand {
                 }
                 store.save_trusted_peer(&peer)?;
                 println!("added trusted peer {}", peer.host);
-                Ok(())
+                Ok(true)
             }
             TrustSubcommand::Replace {
                 host,
@@ -335,7 +355,7 @@ impl TrustCommand {
                 }
                 store.save_trusted_peer(&peer)?;
                 println!("replaced trusted peer {}", peer.host);
-                Ok(())
+                Ok(true)
             }
             TrustSubcommand::Revoke { host, yes } => {
                 require_confirmation(yes, "revoking a trusted peer")?;
@@ -348,7 +368,7 @@ impl TrustCommand {
                     if removed { "revoked" } else { "no" },
                     host
                 );
-                Ok(())
+                Ok(removed)
             }
         }
     }

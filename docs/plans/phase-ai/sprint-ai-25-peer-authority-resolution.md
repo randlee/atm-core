@@ -60,10 +60,11 @@ effect in the one live daemon without a restart.
    reject reverse-DNS inference and never persist resolver output. Document
    that the peer operator maintains the hostname's forward DNS/DDNS record as
    its VPN/Wi-Fi address changes.
-4. CLI trust add/replace/revoke changes durable configuration. The existing
-   daemon reload control atomically refreshes live trust verification after the
-   operator signals reload. No second daemon, listener fallback, or direct
-   SQLite access outside storage traits.
+4. CLI trust add/replace/revoke changes durable configuration, then invokes one
+   authenticated local `POST /v1/atm/runtime/reload` daemon control operation.
+   That operation atomically refreshes live trust verification. No second
+   daemon, listener fallback, signal-only dependency, or direct SQLite access
+   outside storage traits.
 
 ## Implementation map
 
@@ -91,8 +92,9 @@ effect in the one live daemon without a restart.
 - A literal IP has no standalone authority record; it authorizes only when it
   resolves to exactly one registered hostname, and no resolver result is
   written to SQLite.
-- A live trust mutation followed by the existing daemon reload control changes
-  the current verifier without process replacement; tests prove one daemon remains.
+- A live `atm peer trust add`, `replace`, or `revoke` invokes the authenticated
+  local reload operation and changes the current verifier without process
+  replacement; tests prove one daemon remains.
 - Two account daemons whose endpoint names resolve to one IP can be trusted
   independently on distinct configured ports; an occupied port fails closed
   rather than falling back to another listener.

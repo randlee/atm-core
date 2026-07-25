@@ -44,6 +44,8 @@ pub enum RequestEnvelope {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     PeerSync(PeerSyncRequest),
+    /// Authenticated local control request that reloads the daemon's durable runtime view.
+    ReloadRuntimeView,
 }
 
 /// Shared protocol response envelope.
@@ -58,6 +60,7 @@ pub enum ResponseEnvelope {
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
     PeerSync(PeerSyncOutcome),
+    RuntimeViewReloaded,
     Error(AtmError),
 }
 
