@@ -25,6 +25,7 @@ use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
+const MAX_VERSION_LENGTH: usize = 256;
 
 /// Shared protocol send-shaped response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,13 +85,7 @@ pub struct ReleaseVersion(Version);
 
 impl ReleaseVersion {
     pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
-        let value = value.as_ref().trim();
-        Version::parse(value).map(Self).map_err(|_| {
-            AtmError::new(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM release version `{value}`"),
-            )
-        })
+        parse_semver(value.as_ref(), "ATM release version").map(Self)
     }
 
     pub fn current() -> Self {
@@ -110,13 +105,7 @@ pub struct HttpApiVersion(Version);
 
 impl HttpApiVersion {
     pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
-        let value = value.as_ref().trim();
-        Version::parse(value).map(Self).map_err(|_| {
-            AtmError::new(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM HTTP API version `{value}`"),
-            )
-        })
+        parse_semver(value.as_ref(), "ATM HTTP API version").map(Self)
     }
 
     pub fn current() -> Self {
@@ -126,6 +115,22 @@ impl HttpApiVersion {
     pub const fn major(&self) -> u64 {
         self.0.major
     }
+}
+
+fn parse_semver(value: &str, label: &str) -> Result<Version, AtmError> {
+    let value = value.trim();
+    if value.len() > MAX_VERSION_LENGTH {
+        return Err(AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!("{label} exceeds the {MAX_VERSION_LENGTH}-byte limit"),
+        ));
+    }
+    Version::parse(value).map_err(|_| {
+        AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!("invalid {label} `{value}`"),
+        )
+    })
 }
 
 impl fmt::Display for HttpApiVersion {
@@ -152,6 +157,13 @@ mod compatibility_version_tests {
         assert_eq!(version.major(), 1);
         assert_eq!(version.to_string(), "1.4.0");
         assert!(HttpApiVersion::parse("1.4").is_err());
+    }
+
+    #[test]
+    fn semver_parsing_rejects_oversized_values_before_parser() {
+        let oversized = format!("1.2.3-{}", "a".repeat(super::MAX_VERSION_LENGTH));
+        assert!(ReleaseVersion::parse(&oversized).is_err());
+        assert!(HttpApiVersion::parse(&oversized).is_err());
     }
 }
 
@@ -520,7 +532,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn daemon_socket_path_rejects_override() {
-        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
+        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("alternate.sock"))]);
         assert!(daemon_socket_path().is_err());
     }
 

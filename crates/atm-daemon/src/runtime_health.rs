@@ -529,7 +529,7 @@ impl DaemonRequestDispatcher {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
             RequestEnvelope::CompatibilityPreflight(preflight) => Ok(
-                ResponseEnvelope::CompatibilityVerdict(self.compatibility_verdict(preflight)?),
+                ResponseEnvelope::CompatibilityVerdict(Self::compatibility_verdict(preflight)?),
             ),
             RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
                 query,
@@ -741,7 +741,6 @@ impl DaemonRequestDispatcher {
 
 impl DaemonRequestDispatcher {
     fn compatibility_verdict(
-        &self,
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
@@ -1119,6 +1118,75 @@ mod tests {
     };
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
+
+    fn preflight(
+        client_release: &str,
+        cli_schema_version: u16,
+        http_api_version: &str,
+    ) -> atm_core::protocol::CompatibilityPreflight {
+        atm_core::protocol::CompatibilityPreflight {
+            client_release: atm_core::protocol::ReleaseVersion::parse(client_release)
+                .expect("client release"),
+            cli_schema_version,
+            http_api_version: atm_core::protocol::HttpApiVersion::parse(http_api_version)
+                .expect("HTTP API version"),
+        }
+    }
+
+    #[test]
+    fn compatibility_admission_matrix_ignores_release_and_checks_schema_and_http_major() {
+        let release_mismatch = DaemonRequestDispatcher::compatibility_verdict(preflight(
+            "9.9.9-beta.1",
+            atm_core::protocol::CLI_SCHEMA_VERSION,
+            "1.9.7",
+        ))
+        .expect("release mismatch remains compatible");
+        assert!(matches!(
+            release_mismatch,
+            atm_core::protocol::CompatibilityVerdict::Compatible { .. }
+        ));
+
+        let same_major_minor_patch = DaemonRequestDispatcher::compatibility_verdict(preflight(
+            "0.1.0",
+            atm_core::protocol::CLI_SCHEMA_VERSION,
+            "1.99.7",
+        ))
+        .expect("same HTTP major remains compatible");
+        assert!(matches!(
+            same_major_minor_patch,
+            atm_core::protocol::CompatibilityVerdict::Compatible { .. }
+        ));
+
+        let schema_mismatch = DaemonRequestDispatcher::compatibility_verdict(preflight(
+            "0.1.0",
+            atm_core::protocol::CLI_SCHEMA_VERSION + 1,
+            atm_core::protocol::HTTP_API_VERSION,
+        ))
+        .expect("schema mismatch returns a verdict");
+        assert!(matches!(
+            schema_mismatch,
+            atm_core::protocol::CompatibilityVerdict::Incompatible {
+                client_schema_version,
+                daemon_schema_version,
+                ..
+            } if client_schema_version != daemon_schema_version
+        ));
+
+        let http_major_mismatch = DaemonRequestDispatcher::compatibility_verdict(preflight(
+            "0.1.0",
+            atm_core::protocol::CLI_SCHEMA_VERSION,
+            "2.0.0",
+        ))
+        .expect("HTTP major mismatch returns a verdict");
+        assert!(matches!(
+            http_major_mismatch,
+            atm_core::protocol::CompatibilityVerdict::Incompatible {
+                client_http_api_version,
+                daemon_http_api_version,
+                ..
+            } if client_http_api_version.major() != daemon_http_api_version.major()
+        ));
+    }
 
     struct ShutdownFinalizerDrainGuard;
 

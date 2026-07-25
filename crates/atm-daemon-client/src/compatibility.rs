@@ -34,7 +34,7 @@ pub struct VersionVerified {
 ///         client_release: ReleaseVersion::parse("1.3.1").unwrap(),
 ///         cli_schema_version: 1,
 ///         http_api_version: HttpApiVersion::parse("1.0.0").unwrap(),
-///     }),
+///     });
 /// let _ = connection.dispatch_write(&endpoint, request, std::time::Duration::from_secs(3));
 /// ```
 pub struct Connection<State> {
