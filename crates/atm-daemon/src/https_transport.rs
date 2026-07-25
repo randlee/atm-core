@@ -115,8 +115,11 @@ impl fmt::Debug for TlsIdentity {
 impl TlsIdentity {
     fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
-        let pem = std::fs::read(path).map_err(|_source| {
-            AtmError::daemon_unavailable("failed to open configured TLS certificate/key PEM bundle")
+        let pem = std::fs::read(path).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to open configured TLS certificate/key PEM bundle",
+                source,
+            )
         })?;
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
@@ -169,17 +172,26 @@ impl HttpsMessageTransport for HttpsTransport {
         // Resolve anew for every connection. The registered hostname remains
         // the TLS authority; resolver output is never stored.
         let address = resolve_peer_address(&host, peer.https_port.get())?;
-        let stream = TcpStream::connect_timeout(&address, deadline.connect).map_err(|_source| {
-            AtmError::daemon_unavailable(format!("failed to connect to HTTPS peer {host}"))
+        let stream = TcpStream::connect_timeout(&address, deadline.connect).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                format!("failed to connect to HTTPS peer {host}"),
+                source,
+            )
         })?;
         apply_deadline(&stream, deadline.handshake)?;
         let config = client_config(&self.identity, peer)?;
-        let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
-            AtmError::validation("configured HTTPS peer host is not a valid TLS server name")
+        let server_name = ServerName::try_from(host.clone()).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "configured HTTPS peer host is not a valid TLS server name",
+                source,
+            )
         })?;
         let connection =
-            ClientConnection::new(Arc::new(config), server_name).map_err(|_source| {
-                AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS client")
+            ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    "failed to initialize HTTPS peer TLS client",
+                    source,
+                )
             })?;
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake(&mut tls)?;
