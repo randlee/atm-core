@@ -202,9 +202,11 @@ mod tests {
             json: false,
         };
         let error = command.build_message_source().expect_err("invalid sources");
-        assert!(error
-            .to_string()
-            .contains("Choose exactly one message source"));
+        assert!(
+            error
+                .to_string()
+                .contains("Choose exactly one message source")
+        );
     }
 
     #[test]

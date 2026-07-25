@@ -135,14 +135,12 @@ fn openapi_routes_match_live_router_surface() {
     let documented = object(&document["paths"])
         .iter()
         .flat_map(|(path, item)| {
-            ["get", "post", "delete"].into_iter().filter_map(move |method| {
-                item.get(method).map(|_| {
-                    (
-                        method.to_ascii_uppercase(),
-                        format!("/v1/atm{path}"),
-                    )
+            ["get", "post", "delete"]
+                .into_iter()
+                .filter_map(move |method| {
+                    item.get(method)
+                        .map(|_| (method.to_ascii_uppercase(), format!("/v1/atm{path}")))
                 })
-            })
         })
         .collect::<BTreeSet<_>>();
     let live = atm_core::api::http_route_surface()
@@ -150,7 +148,10 @@ fn openapi_routes_match_live_router_surface() {
         .map(|route| (route.method.to_owned(), route.path_template.to_owned()))
         .collect::<BTreeSet<_>>();
 
-    assert_eq!(documented, live, "OpenAPI routes must exactly match live routing");
+    assert_eq!(
+        documented, live,
+        "OpenAPI routes must exactly match live routing"
+    );
 }
 
 fn compare_value(

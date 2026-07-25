@@ -83,8 +83,7 @@ impl Serialize for AgentAddress {
 impl<'de> Deserialize<'de> for AgentAddress {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let wire = AgentAddressWire::deserialize(deserializer)?;
-        Self::new(wire.agent, wire.chat_id, wire.team, wire.host)
-            .map_err(serde::de::Error::custom)
+        Self::new(wire.agent, wire.chat_id, wire.team, wire.host).map_err(serde::de::Error::custom)
     }
 }
 
@@ -191,10 +190,12 @@ mod tests {
         let agent = AgentName::from_validated(TEST_SENDER);
         let host = "peer.example.test".parse::<HostName>().expect("host");
         assert!(AgentAddress::new(agent, None, None, Some(host)).is_err());
-        assert!(serde_json::from_str::<AgentAddress>(
-            r#"{"agent":"sender","host":"peer.example.test"}"#
-        )
-        .is_err());
+        assert!(
+            serde_json::from_str::<AgentAddress>(
+                r#"{"agent":"sender","host":"peer.example.test"}"#
+            )
+            .is_err()
+        );
     }
 
     #[test]

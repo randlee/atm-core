@@ -48,8 +48,7 @@ impl PyAgentAddress {
     fn to_typed(&self) -> PyResult<AgentAddress> {
         AgentAddress::new(
             self.agent.parse::<AgentName>().map_err(atm_error)?,
-            self
-                .chat_id
+            self.chat_id
                 .as_deref()
                 .map(str::parse::<ChatId>)
                 .transpose()

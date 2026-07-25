@@ -40,15 +40,42 @@ pub struct HttpRoute {
 }
 
 const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[
-    HttpRoute { method: "GET", path_template: MESSAGES_PATH },
-    HttpRoute { method: "POST", path_template: MESSAGES_PATH },
-    HttpRoute { method: "DELETE", path_template: MESSAGES_PATH },
-    HttpRoute { method: "POST", path_template: INSPECT_PATH },
-    HttpRoute { method: "POST", path_template: READ_PATH },
-    HttpRoute { method: "GET", path_template: DOCTOR_PATH },
-    HttpRoute { method: "POST", path_template: "/v1/atm/peers/{peer}/sync" },
-    HttpRoute { method: "POST", path_template: COMPATIBILITY_PATH },
-    HttpRoute { method: "POST", path_template: HEARTBEAT_PATH },
+    HttpRoute {
+        method: "GET",
+        path_template: MESSAGES_PATH,
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: MESSAGES_PATH,
+    },
+    HttpRoute {
+        method: "DELETE",
+        path_template: MESSAGES_PATH,
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: INSPECT_PATH,
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: READ_PATH,
+    },
+    HttpRoute {
+        method: "GET",
+        path_template: DOCTOR_PATH,
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: "/v1/atm/peers/{peer}/sync",
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: COMPATIBILITY_PATH,
+    },
+    HttpRoute {
+        method: "POST",
+        path_template: HEARTBEAT_PATH,
+    },
 ];
 
 /// Registered HTTP route inventory for documentation conformance tests.

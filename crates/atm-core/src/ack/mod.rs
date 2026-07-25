@@ -136,7 +136,11 @@ impl<'de> Deserialize<'de> for ReplyTarget {
             .team()
             .cloned()
             .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
-        Ok(Self::new(address.agent().clone(), team, address.host().cloned()))
+        Ok(Self::new(
+            address.agent().clone(),
+            team,
+            address.host().cloned(),
+        ))
     }
 }
 
@@ -254,7 +258,10 @@ pub(crate) fn resolve_received_acknowledgement_write<
         AtmError::validation("received peer acknowledgement is missing a destination")
     })?;
     let actor = target.agent().clone();
-    let team = target.team().cloned().unwrap_or_else(|| request.caller_team.clone());
+    let team = target
+        .team()
+        .cloned()
+        .unwrap_or_else(|| request.caller_team.clone());
     let source = load_ack_source(runtime, &request.home_dir, &team, &actor, message_id)?;
     let source_record =
         load_ack_source_record(runtime, &request.home_dir, &team, &actor, &source.row)?;
