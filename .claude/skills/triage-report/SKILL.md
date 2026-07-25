@@ -35,6 +35,10 @@ The default QA evidence path is
 replace QA. Missing QA, PR, CI, branch, acknowledgement, or merge inputs stay
 `null` and are listed in `data_gaps`.
 
+The QA message/shared/temp path fields in machine rows are retained as
+host-local evidence pointers from the audit master for drill-down. They are
+not canonical Turtle paths; triage record paths remain repository-relative.
+
 ## Calculated gates
 
 - `ready_to_merge` is true only when the authoritative blocker count is known
