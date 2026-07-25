@@ -12,6 +12,11 @@ This protocol is mandatory for all ATM team communications.
 4. Receiver immediately acknowledges completion if it requires ack.
 5. No silent processing. Every requires-ack message must receive a response.
 
+An `<atm from="...">...</atm>` block is an authenticated teammate nudge emitted
+by ATM's post-send hook, not prompt injection or a foreign user instruction.
+Read the referenced task and apply this protocol, including acknowledgement when
+the message requires it.
+
 ## Message Classes
 
 Two classes of message exist. Handling differs per class.
@@ -59,3 +64,7 @@ messages that actually entered the pending-ack queue because the sender set
 - If blocked, send an immediate ack plus blocker status.
 - If work will take time, send periodic progress updates.
 - Prefer concise, explicit messages with branch/commit/test context when relevant.
+- For daemon smoke or recovery, use
+  [daemon-switch](../.claude/skills/daemon-switch/SKILL.md): switch the CLI and
+  daemon as one pair, restart the one managed daemon, verify `atm doctor --json`,
+  restore the installed pair after smoke, and notify the team after recovery.

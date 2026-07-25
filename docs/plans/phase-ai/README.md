@@ -54,3 +54,12 @@ of recent canonical writes; AI.29 supplies receiver-proven physical smoke
 evidence; and AI.30 separates compatible schema/API admission from
 product-release labels. Each remaining sprint begins with matching
 `1.3.2-beta-<sprint-number>` CLI/daemon release metadata.
+
+## Physical peer smoke
+
+Before peer smoke, use the
+[daemon-switch skill](../../../.claude/skills/daemon-switch/SKILL.md) to select
+one matching CLI/daemon candidate pair, restart its one managed daemon, and
+verify native `atm doctor --json`. After smoke completes or aborts, restore the
+latest installed pair with the same skill, restart once, and verify doctor
+again. Do not leave a worktree daemon selected for other teams.
