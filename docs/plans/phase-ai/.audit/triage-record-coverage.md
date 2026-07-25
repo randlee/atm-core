@@ -84,6 +84,31 @@ warnings: every scoped record lacks `triage:foundIn`, and every record except
 `AI21-BLOCK-001` also lacks `triage:foundAt`. Thus “record present” above does
 not mean the record is graph-complete or usable for cursor invalidation.
 
+## Current post-remediation state
+
+The latest audit merge (`c40c689c`, integrating `aa0916e5`) imported 17 TTL
+files. Re-running the scoped validator now sees **77 findings, 125 errors, and
+0 warnings**: the 17 new records validate, while the legacy records retain the
+same missing-field errors.
+
+| Area | Current state |
+|---|---|
+| AICH-S1 | `AI21-QA2-001` exact record now present and field-complete |
+| AICH-S2 | `AI22-RBP-F002` exact record now present; status remains unknown because the original detail was irretrievable |
+| AICH-S5 | `AI25-ATMQA-105` exact record now present and field-complete |
+| AICH-S8 | 14/14 canonical AI28 records now present and field-complete; aliases are grouped in canonical records |
+| AICH-S7 | 0/13 records present on audit/integrate; candidate files exist only in unmerged commit `be2387cc` on another branch |
+| Legacy AICH records | `foundIn` remains missing on all legacy records; `foundAt` remains missing on 62 legacy records |
+
+### New timestamp defect
+
+The newly imported records contain `foundAt` literals that appear to be local
+PDT wall-clock values mislabeled with a `Z` UTC suffix. For example,
+`AI21-QA2-001` is `2026-07-24T22:48:06Z`, approximately seven hours before
+its QA result at `2026-07-25T05:48:10Z`; the same pattern occurs on the S2,
+S5, and S8 records. Presence validation passes, but temporal validation must
+correct these values from the UTC `result_time_utc` field in the master index.
+
 ## Recommended remediation order
 
 1. Create canonical triage records for all AICH-S7 and AICH-S8 verdict items,
