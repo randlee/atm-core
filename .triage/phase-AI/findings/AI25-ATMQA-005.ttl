@@ -53,5 +53,20 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "0265c94f" ;
   triage:orderIndex 2 .
-</content>
-</invoke>
+
+<urn:atm:triage:occurrence/AI25-ATMQA-005/s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/local_ipc_depth.rs" ;
+  triage:snippet "FIX-3 (b520061e) added local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket: binds a real local IPC socket via LocalIpcServerTransportAdapter, drives a real client round-trip via send_reload_request, and asserts the installed trust-refresh hook fired through the actual wire path. Verified by quality-mgr to trace the same hook slot DaemonRequestDispatcher::dispatch drives in production (runtime_health.rs:560-563, 781, 802-812)." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b520061e" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b520061e> .
+
+<urn:atm:triage:worktree/s25/b520061e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b520061e" ;
+  triage:orderIndex 3 .
