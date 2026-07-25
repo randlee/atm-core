@@ -1107,7 +1107,9 @@ Retired from the current implementation:
   persist the canonical sender identity in SQLite-owned state and use it for
   validation, self-send checks, routing, and audit behavior
 - reject canonical same-team self-addressed sends before any persistence or
-  `--dry-run` success reporting
+  `--dry-run` success reporting only when the resolved destination has no
+  host; every syntactically valid host-qualified destination continues to the
+  ordinary host-routing contract
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -1652,15 +1654,18 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - remove `pendingAckAt`
   - set `acknowledgedAt`
   - append a reply message to the original sender's inbox unless the
-    acknowledged pending-ack message is already self-addressed to the current actor
+    acknowledged pending-ack message is an unqualified same-agent/same-team
+    historical self-addressed message
 - preserve `acknowledgesMessageId` on the emitted reply
 - hardcode `requires_ack = false` on the emitted reply
 - do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
-- when the pending-ack message is self-addressed to the current actor, mark it
-  acknowledged, suppress reply emission, and report the suppression explicitly
-  in the ack output contract
+- when the pending-ack message is an unqualified same-agent/same-team
+  historical self-addressed message, mark it acknowledged, suppress reply
+  emission, and report the suppression explicitly in the ack output contract.
+  A host-qualified source is never this suppression case: it produces the
+  ordinary canonical ACK reply write.
 
 Phase R continuation semantics:
 - one successful acknowledgement clears the chain-level acknowledgement
@@ -1761,8 +1766,8 @@ JSON output must include:
 - `reply_disposition`
   - `kind = "sent"` with `reply_message_id` and `reply_target` when a reply
     message was emitted
-  - `kind = "suppressed_self_ack"` when the historical pending-ack message was
-    self-addressed and no reply message was emitted
+  - `kind = "suppressed_self_ack"` only when the historical pending-ack
+    message was unqualified same-agent/same-team and no reply was emitted
 - `reply_text` (validated reply body; retained even when self-ack suppression
   prevents reply emission)
 - `task_id` (optional String, present when the source message has `taskId`)
@@ -3695,19 +3700,19 @@ mail correctness.
     - whitespace
     - wildcard or pattern characters that could be interpreted by current or
       future parsers, including at minimum `*`, `?`, `[` and `]`
-  - the supported remote-send CLI forms are exactly:
-    - `atm send <agent>@<team>.<host> ...`
-    - `atm send <agent>@<team> --host <host> ...`
-  - those two forms are logically equivalent and must normalize into one typed
-    request field for the remote host
+  - the supported remote-send CLI form is exactly
+    `atm send <agent>@<team>.<host> ...`; host qualification is part of the
+    typed address grammar, not a second flag or alternate route
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
-  - mixed inline-host plus `--host` input is rejected instead of silently
-    preferring one source
   - one post-write router selects local nudge for an empty destination host and
     the HTTPS adapter for every present destination host, including `localhost`
     and the daemon's own advertised or bound IP address
+  - local CLI HTTP, host-qualified same-host HTTP, and remote peer HTTP submit
+    the same canonical write resource and request schema; TLS/authentication
+    is adapter work before that resource, never a second write endpoint,
+    persistence path, ACK path, or nudge path
   - every canonical write orders idempotent persistence, optional receiver-side
     acknowledgement mutation, and exactly one post-write router dispatch;
     nudge or peer delivery must never occur before persistence
@@ -3717,6 +3722,14 @@ mail correctness.
   - the canonical local write may persist the sender's immutable outbound
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
+  - when a host-qualified same-host peer receipt encounters that daemon's own
+    identical retained origin ULID, storage logs the duplicate attempt and
+    skips the second database write without altering origin destination-host
+    metadata; ordinary inbound recipient delivery continues to its post-write
+    local nudge and must not re-enter peer delivery. A later ACK to that
+    retained record derives its host-qualified reply target from the preserved
+    origin destination metadata and still creates the ordinary canonical ACK
+    write
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
   peer-trust configuration must use durable storage-backed state rather than
@@ -3770,6 +3783,9 @@ mail correctness.
     any other remote host proof
   - `localhost` and the host's own advertised or bound IP address are valid
     ordinary remote-host targets
+  - the required same-host transport proof targets the daemon's advertised or
+    bound virtual-Ethernet IP over TCP; a `localhost` row is address-grammar
+    coverage only and cannot substitute for that proof
   - same-host proof must not require a dedicated wire field, request flag, or
     special-case routing branch outside the normal remote-host classifier
   - successful same-host rows do not by themselves authorize second-host
@@ -3782,7 +3798,11 @@ mail correctness.
     acknowledgement state, or duplicate-delivery subsystem may exist
   - an unavailable peer returns one normal transport error for the attempted
     write; retry is an ordinary repeat of the immutable message identity
-  - duplicate arrival is idempotent at storage by the existing message ULID
+  - duplicate arrival is idempotent at storage by the existing message ULID;
+    an identical already-delivered remote duplicate has no side effect, while
+    the narrow same-host retained-origin receipt defined by
+    `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
+    inbound recipient nudge without a second database write
   - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
     reconciliation scan; it creates no delivery state
 
@@ -3802,9 +3822,12 @@ mail correctness.
     receiver-specific replay path exists
   - no outbox, replay store, retry queue, background monitor, checkpoint,
     cursor, receipt, retry budget, or per-message delivery state is allowed
-  - an exact duplicate ULID/payload is a no-op; same ULID with different
-    immutable data returns a typed conflict, logs the discrepancy, preserves
-    the original record, and has no side effect or panic
+  - an exact duplicate ULID/payload is a no-op except for the
+    same-host-retained-origin receipt defined by `REQ-CORE-TRANSPORT-002`,
+    which logs a skipped write and continues its inbound nudge without a
+    database write; same ULID with different immutable data returns a typed
+    conflict, logs the discrepancy, preserves the original record, and has no
+    side effect or panic
   - automatic sync is limited to one peer batch per 60 seconds using a bounded
     in-memory peer cooldown with no payload or message-ID state; explicit sync
     runs one batch immediately and neither path retries or backs off
@@ -3825,8 +3848,12 @@ mail correctness.
     `acknowledges_message_id` populated; its state transition occurs only in
     the receiver's shared write handler
   - the origin-created message ULID and all immutable fields are preserved on
-    the receiver; exact duplicates do not repeat a nudge or acknowledgement
-    transition, while a conflicting payload for the same ULID is a typed error
+    the receiver; exact already-delivered remote duplicates do not repeat a
+    nudge or acknowledgement transition. The same-host retained-origin
+    receipt is the narrow exception defined by `REQ-CORE-TRANSPORT-002`: it
+    logs the skipped database write and continues the inbound nudge without a
+    second record or peer re-delivery. A conflicting payload for the same ULID
+    is a typed error
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.

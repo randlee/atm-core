@@ -1,12 +1,17 @@
 ---
-title: AI.22 DNS-backed peer authority
+title: AI.25 DNS-backed peer authority
 status: proposed
-branch: feature/pAI-s22-peer-authority-resolution
+branch: feature/pAI-s25-peer-authority-resolution
 target: integrate/phase-AI
-depends_on: AI.11–AI.16
+depends_on: AI.22, AI.23, AI.11–AI.16
 ---
 
-# AI.22 — DNS-backed peer authority
+# AI.25 — DNS-backed peer authority
+
+## Release candidate
+
+- First commit: set every releasable ATM assembly to `1.3.2-beta-25`; record
+  matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
 
@@ -63,4 +68,8 @@ import SQLite; `just lint`; `just test`.
 ## Non-closure
 
 This sprint does not change write deadlines, delivery outcomes, or physical
-peer evidence.
+peer evidence. Any inbound peer listener built in this sprint must decode
+requests into the existing `RequestEnvelope` and dispatch them through the
+daemon's single `Arc<dyn RequestDispatcher>` (`composition.rs`'s
+`request_dispatcher()` accessor), per `AI.23` — it must not persist or nudge
+through a second implementation.

@@ -178,16 +178,25 @@ integration; they do not alter it.
 | AI.19 | `feature/pAI-s19-hermes-graft-integration` | One typed bridge maps canonical nudge source address to an isolated Hermes `atm:` chat after persistence |
 | AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
 | AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
-| AI.22 | `feature/pAI-s22-peer-authority-resolution` | DNS-backed hostname/pin peer authority and live trust refresh |
-| AI.23 | `feature/pAI-s23-peer-write-deadline` | One propagated peer-write deadline and cancellation contract |
-| AI.24 | `feature/pAI-s24-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |
-| AI.25 | `feature/pAI-s25-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
-| AI.26 | `feature/pAI-s26-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
-| AI.27 | `feature/pAI-s27-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
+| AI.22 | `feature/pAI-s22-loopback-self-send-exemption` | Host-qualified destinations bypass only the unqualified identity self-send guard; advertised-IP is the required same-host TCP proof |
+| AI.23 | `feature/pAI-s23-crosshost-shared-write-path` | Local CLI, own-IP, and peer traffic converge at one HTTP `WriteRequest` endpoint, dispatcher, persistence method, and post-write router |
+| AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route |
+| AI.25 | `feature/pAI-s25-peer-authority-resolution` | DNS-backed hostname/pin peer authority and live trust refresh |
+| AI.26 | `feature/pAI-s26-peer-write-deadline` | One propagated peer-write deadline and cancellation contract |
+| AI.27 | `feature/pAI-s27-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |
+| AI.28 | `feature/pAI-s28-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
+| AI.29 | `feature/pAI-s29-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
+| AI.30 | `feature/pAI-s30-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
 Findings are fixed on their owning sprint before forward merge.
+
+For every remaining Phase AI implementation sprint, the first commit sets the
+workspace release for every releasable ATM assembly to
+`1.3.2-beta-<sprint-number>` (for example, AI.22 is `1.3.2-beta-22`). Runtime
+evidence starts only after `atm doctor --json` reports matching CLI and daemon
+release values; release labels are diagnostic, not protocol admission.
 
 ## Verification matrix
 

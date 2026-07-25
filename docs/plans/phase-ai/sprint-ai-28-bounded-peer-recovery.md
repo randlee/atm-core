@@ -1,12 +1,17 @@
 ---
-title: AI.25 bounded peer recovery after connectivity loss
+title: AI.28 bounded peer recovery after connectivity loss
 status: proposed
-branch: feature/pAI-s25-bounded-peer-recovery
+branch: feature/pAI-s28-bounded-peer-recovery
 target: integrate/phase-AI
-depends_on: AI.23, AI.24
+depends_on: AI.26, AI.27
 ---
 
-# AI.25 — bounded peer recovery after connectivity loss
+# AI.28 — bounded peer recovery after connectivity loss
+
+## Release candidate
+
+- First commit: set every releasable ATM assembly to `1.3.2-beta-28`; record
+  matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
 

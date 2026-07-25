@@ -1,14 +1,19 @@
 ---
-title: AI.27 SemVer release and HTTP compatibility
+title: AI.30 SemVer release and HTTP compatibility
 status: proposed
-branch: feature/pAI-s27-semver-http-compatibility
+branch: feature/pAI-s30-semver-http-compatibility
 target: integrate/phase-AI
 depends_on: AI.11–AI.16
-parallel_with: AI.22–AI.25
-blocks: AI.26
+parallel_with: AI.25–AI.28
+blocks: AI.29
 ---
 
-# AI.27 — SemVer release and HTTP compatibility
+# AI.30 — SemVer release and HTTP compatibility
+
+## Release candidate
+
+- First commit: set every releasable ATM assembly to `1.3.2-beta-30`; record
+  matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
 

@@ -1,12 +1,17 @@
 ---
-title: AI.26 receiver-proven Mac-Windows cross-host smoke
+title: AI.29 receiver-proven Mac-Windows cross-host smoke
 status: proposed
-branch: feature/pAI-s26-crosshost-smoke-rerun
+branch: feature/pAI-s29-crosshost-smoke-rerun
 target: integrate/phase-AI
-depends_on: AI.22, AI.23, AI.24, AI.25, AI.27
+depends_on: AI.25, AI.26, AI.27, AI.28, AI.30
 ---
 
-# AI.26 — receiver-proven Mac↔Windows smoke
+# AI.29 — receiver-proven Mac↔Windows smoke
+
+## Release candidate
+
+- First commit: set every releasable ATM assembly to `1.3.2-beta-29`; record
+  matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
 
@@ -44,5 +49,5 @@ sanitized evidence bundle; runner schema validation; quality review.
 
 ## Non-closure
 
-No production feature beyond the AI.22–AI.25 smoke fixes and AI.27
+No production feature beyond the AI.25–AI.28 smoke fixes and AI.30
 compatibility contract is added here.

@@ -45,12 +45,18 @@ handling. This prevents an inbound peer write from selecting another peer path
 without adding an inbound special handler.
 
 The origin creates the ULID once. Repeating the same ULID with an identical
-immutable payload is a no-op after the original result; reusing it with a
-different immutable payload returns a typed conflict, logs the discrepancy,
-preserves the original, and emits no nudge, acknowledgement transition, or
-peer delivery. The origin never preflights the remote roster: the receiving
-daemon validates its own roster in this same handler and returns its ordinary
-error response.
+immutable payload logs a skipped database write. An already-delivered remote
+duplicate is otherwise a no-op. The narrow same-host peer receipt that finds
+this daemon's retained host-qualified origin record continues the ordinary
+inbound local nudge after the skipped write, without mutating the origin
+record or re-entering peer delivery. A later ACK reads that retained origin
+destination host as its reply-routing target and creates the same canonical
+write with `acknowledges_message_id`; it does not fabricate source provenance
+or add an ACK transport branch. Reusing a ULID with different immutable
+payload returns a typed conflict, logs the discrepancy, preserves the
+original, and emits no nudge, acknowledgement transition, or peer delivery.
+The origin never preflights the remote roster: the receiving daemon validates
+its own roster in this same handler and returns its ordinary error response.
 
 Source and destination chat IDs are stable address metadata under ADR-037. The
 write handler persists them unchanged; the post-write router ignores them when

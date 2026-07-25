@@ -1,12 +1,17 @@
 ---
-title: AI.24 truthful peer delivery outcomes
+title: AI.27 truthful peer delivery outcomes
 status: proposed
-branch: feature/pAI-s24-peer-delivery-observability
+branch: feature/pAI-s27-peer-delivery-observability
 target: integrate/phase-AI
-depends_on: AI.23
+depends_on: AI.23, AI.26
 ---
 
-# AI.24 — truthful peer delivery outcomes
+# AI.27 — truthful peer delivery outcomes
+
+## Release candidate
+
+- First commit: set every releasable ATM assembly to `1.3.2-beta-27`; record
+  matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
 
@@ -15,7 +20,7 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
 
 ## Deliverables
 
-1. Consume AI.23's ADR-041 `RemoteDeliveryUnconfirmed` mapping for local
+1. Consume AI.26's ADR-041 `RemoteDeliveryUnconfirmed` mapping for local
    response-read timeout after dispatch; reserve `DAEMON_UNAVAILABLE` for
    actual local daemon unavailability.
 2. Emit the retained event schema below for connection-handler, route, and
@@ -45,9 +50,9 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
    }
    ```
 
-   `RemoteDeliveryUnconfirmed` from AI.23 is the synchronous API error when
+   `RemoteDeliveryUnconfirmed` from AI.26 is the synchronous API error when
    peer acceptance is unknown. `peer_delivery_unconfirmed` is this sprint's
-   retained terminal event for that same result. AI.25 uses the four
+   retained terminal event for that same result. AI.28 uses the four
    `peer_recovery_*` variants only for its later bounded recovery attempts.
 3. Replace pre-peer `outcome sent` with `write_persisted`; emit
    `peer_delivery_confirmed` only after peer HTTP acceptance, otherwise
@@ -70,4 +75,8 @@ and error-code mapping; event-schema assertion; `just lint`; `just test`.
 
 ## Non-closure
 
-Physical peer proof belongs only to AI.26.
+Physical peer proof belongs only to AI.29. Delivery-event emission must occur
+within the same shared dispatch/write path AI.23 establishes
+(`Arc<dyn RequestDispatcher>` via `composition.rs`'s `request_dispatcher()`
+accessor) — this sprint does not introduce a second event-emission or
+write/nudge implementation for peer-originated messages.

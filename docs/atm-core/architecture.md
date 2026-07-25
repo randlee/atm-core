@@ -421,7 +421,9 @@ Identity-specific policy:
   canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
 - the shared send-context builder rejects canonical same-team self-addressed
-  sends before any message persistence or `dry-run` success outcome is built
+  sends only when the destination has no host, before any message persistence
+  or `dry-run` success outcome is built; host-qualified destinations proceed
+  to ordinary host routing without DNS or local-interface inspection
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
 - hook matching is recipient-scoped only

@@ -19,32 +19,37 @@ only the post-write adapter of the existing canonical write path.
 
 | Finding | Owner sprint | Closure |
 | --- | --- | --- |
-| IP-keyed trust becomes stale; hostname input does not authorize current IP | AI.22 | DNS-backed hostname authority with certificate pin |
-| local 3s deadline conflicts with independent 5s peer legs | AI.23 | one propagated absolute deadline and cancellation ownership |
-| local timeout is falsely `DAEMON_UNAVAILABLE`; handler errors disappear | AI.24 | typed uncertainty result and retained terminal events |
-| persistence event claims `sent` before peer acceptance | AI.24 | truthful delivery event contract |
-| Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.25 | bounded per-peer reconciliation schedule with backoff |
-| smoke treated local `outcome sent` as receipt | AI.26 | receiver-side ULID evidence and physical rerun |
-| product releases block compatible CLI/daemon pairs | AI.27 | explicit schema and HTTP SemVer compatibility contract |
+| host-qualified same identity is rejected before remote routing | AI.22 | identity-only self-send guard; host-preserving address parser |
+| peer/local write and nudge convergence is not mechanically proven | AI.23 | one HTTP `WriteRequest` endpoint and structural enforcement |
+| host-qualified ACK reply has no receiver-inbox/nudge proof | AI.24 | advertised-IP TCP ACK receipt and nudge proof |
+| IP-keyed trust becomes stale; hostname input does not authorize current IP | AI.25 | DNS-backed hostname authority with certificate pin |
+| local 3s deadline conflicts with independent 5s peer legs | AI.26 | one propagated absolute deadline and cancellation ownership |
+| local timeout is falsely `DAEMON_UNAVAILABLE`; handler errors disappear | AI.27 | typed uncertainty result and retained terminal events |
+| persistence event claims `sent` before peer acceptance | AI.27 | truthful delivery event contract |
+| Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.28 | bounded per-peer reconciliation schedule with backoff |
+| smoke treated local `outcome sent` as receipt | AI.29 | receiver-side ULID evidence and physical rerun |
+| product releases block compatible CLI/daemon pairs | AI.30 | explicit schema and HTTP SemVer compatibility contract |
 
-The TLS trust-snapshot/restart observation is closed by AI.22's daemon-owned
+The TLS trust-snapshot/restart observation is closed by AI.25's daemon-owned
 atomic configuration refresh. The five Windows sends in the first smoke remain
 unconfirmed; none is release evidence.
 
 ## Dependencies
 
 ```text
-AI.22 peer authority ──────────────────────────────┐
-AI.23 deadline/error contract ─> AI.24 outcome truth ─> AI.25 recovery ─> AI.26 physical rerun
-AI.27 schema/HTTP compatibility ────────────────────┘
+AI.22 self-send guard ─> AI.23 shared write endpoint ─> AI.24 ACK receipt proof
+                                      │
+AI.25 peer authority ──────────────────────────────┐
+AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery ─> AI.29 physical rerun
+AI.30 schema/HTTP compatibility ────────────────────┘
 ```
 
-AI.22 and AI.23 may be implemented in parallel because they own separate
-authority and deadline seams. AI.24 follows AI.23 because it reports AI.23's
-typed uncertainty result. AI.25 follows AI.24. AI.26 starts only after
-AI.22–AI.25 and AI.27 merge. AI.27 may proceed in parallel with AI.22–AI.25,
-so tested
-CLI/daemon builds are not artificially blocked by release-label drift.
+AI.22, AI.23, and AI.24 are strictly ordered. AI.25 and AI.26 may be
+implemented in parallel after AI.23 because they own separate authority and
+deadline seams. AI.27 follows AI.26 because it reports AI.26's typed
+uncertainty result. AI.28 follows AI.27. AI.29 starts only after AI.24,
+AI.25–AI.28, and AI.30 merge. AI.30 may proceed in parallel with AI.25–AI.28,
+so tested CLI/daemon builds are not artificially blocked by release-label drift.
 
 ## Invariants
 
@@ -63,10 +68,13 @@ CLI/daemon builds are not artificially blocked by release-label drift.
 - Product release SemVer is diagnostic only. A separate CLI/daemon schema and
   HTTP API SemVer contract governs admission; same-major additive HTTP changes
   remain interoperable.
+- Each sprint's first commit sets matching workspace CLI/daemon release
+  metadata to `1.3.2-beta-<sprint-number>` and verifies it with
+  `atm doctor --json` before runtime evidence.
 
 ## Required validation
 
-Each sprint runs `just lint` and `just test`. AI.26 additionally requires
+Each sprint runs `just lint` and `just test`. AI.29 additionally requires
 receiver-side evidence for each ULID, recorded CLI/daemon release plus
 negotiated schema/HTTP API version, doctor before/after, exactly one daemon per
 host, and sanitized logs. Raw TCP success, local persistence, and a sender-side

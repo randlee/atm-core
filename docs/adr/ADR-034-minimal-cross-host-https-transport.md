@@ -15,6 +15,10 @@ listener for allowed peers and an HTTPS client when its post-write router
 selects a remote host.
 There is no second daemon and no cross-host application service.
 
+TLS and local connection authentication are adapter responsibilities before the
+one HTTP router. They cannot select a different HTTP write resource, request
+schema, persistence method, acknowledgement path, or nudge implementation.
+
 The only cross-host transport responsibilities are:
 
 1. bind enabled HTTPS interfaces;
@@ -34,11 +38,14 @@ Unauthenticated or untrusted TLS peers are rejected before routing.
 The daemon has no cross-host outbox, replay store, retry state, receipt
 synthesis, per-host acknowledgement state, or duplicate-delivery subsystem.
 Messages are immutable and carry their origin-created ULID identity. The exact
-ULID and immutable payload are persisted on both hosts. Storage treats an
-exact duplicate as idempotent with no new nudge or acknowledgement transition;
-the same ULID with any differing immutable field is a typed conflict, is
-logged structurally, preserves the original record, and has no side effect or
-panic.
+ULID and immutable payload are persisted on both hosts. Storage logs an exact
+duplicate and skips its database write. An already-delivered remote duplicate
+has no new nudge or acknowledgement transition. The narrow same-host case
+where peer ingress reaches this daemon's retained host-qualified origin record
+continues the ordinary inbound recipient nudge after logging the skipped write;
+it neither rewrites the origin record nor re-enters peer delivery. The same
+ULID with any differing immutable field is a typed conflict, is logged
+structurally, preserves the original record, and has no side effect or panic.
 
 The HTTPS adapter consumes the one enclosing absolute request deadline defined
 by ADR-041 and rejects an over-limit body before decode. Listener startup

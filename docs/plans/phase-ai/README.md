@@ -42,9 +42,13 @@ browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
 
 Cross-host smoke-gap closure is specified by
-[AI.22–AI.27](plan-phase-ai-crosshost-smoke-gaps.md): AI.22 establishes stable
-hostname/pin peer authority; AI.23 establishes one end-to-end peer-write
-deadline; AI.24 makes persisted/confirmed/unconfirmed outcomes truthful; AI.25
-adds bounded recovery of recent canonical writes; AI.26 supplies receiver-proven
-physical smoke evidence; and AI.27 separates compatible schema/API admission
-from product-release labels.
+[AI.22–AI.30](plan-phase-ai-crosshost-smoke-gaps.md): AI.22 fixes the
+host-qualified self-send guard; AI.23 proves one shared HTTP write endpoint;
+AI.24 proves host-qualified ACK receipt/nudge through the advertised-IP TCP
+path; AI.25 establishes stable hostname/pin peer authority; AI.26 establishes
+one end-to-end peer-write deadline; AI.27 makes
+persisted/confirmed/unconfirmed outcomes truthful; AI.28 adds bounded recovery
+of recent canonical writes; AI.29 supplies receiver-proven physical smoke
+evidence; and AI.30 separates compatible schema/API admission from
+product-release labels. Each remaining sprint begins with matching
+`1.3.2-beta-<sprint-number>` CLI/daemon release metadata.
