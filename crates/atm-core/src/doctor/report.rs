@@ -106,7 +106,16 @@ pub struct DaemonRuntimeDoctorReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_config: Option<PeerConfigDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub peer_wire_security: Option<String>,
+    pub peer_wire_security: Option<PeerWireSecurityStatus>,
+}
+
+/// Active peer-wire security profile reported by the daemon control plane.
+/// This type avoids drift between daemon state, doctor JSON, and smoke tools.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerWireSecurityStatus {
+    MutualTls,
+    PlaintextTest,
 }
 
 /// Safe control-plane visibility for cross-host HTTPS. Private key references

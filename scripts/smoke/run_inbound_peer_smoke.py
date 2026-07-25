@@ -386,6 +386,8 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
     generated_at = datetime.now(timezone.utc).isoformat()
     local_doctor = next((item.get("result") for item in records if item.get("phase") == "local-doctor"), None)
     local_rows = {"doctor": status_for(records, "local-doctor")}
+    for case in ("localhost/local loopback", "own-IP", "nudge", "ack reply"):
+        local_rows[case] = status_for(records, case)
     for peer in peers:
         for kind in ("noack", "ack-required"):
             _, detail = status_for(records, f"{peer['name']}-read-{kind}")
@@ -479,6 +481,14 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
     compact("local-doctor", local_ready, doctor_detail)
     records.append({"phase": "local-doctor", "result": doctor, "passed": local_ready})
     all_passed &= local_ready
+    host = config.get("host")
+    if isinstance(host, dict):
+        for name, command in validate_host_config(config).get("local_checks", {}).items():
+            result = command_result(command, timeout)
+            passed = result["exit_code"] == 0
+            records.append({"phase": name, "result": result, "passed": passed})
+            compact(name, passed, "completed" if passed else result["stderr"] or "failed")
+            all_passed &= passed
     advertised_host = local.get("advertised_host")
     if not advertised_host:
         interface = command_result(local_command(local, ["peer", "interface", "list", "--json"]), timeout)

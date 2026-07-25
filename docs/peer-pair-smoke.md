@@ -89,6 +89,12 @@ python3 scripts/smoke/run_inbound_peer_smoke.py \
   --evidence-dir artifacts/peer-smoke/inbound
 ```
 
+When diagnosing the explicit `plaintext-test` profile, bind every enabled peer
+interface only to the private test overlay address used by the participating
+hosts. The profile disables TLS, certificate pinning, and the peer allowlist;
+it is never safe to bind it to a public or shared network interface. Restart
+without `--peer-wire-security plaintext-test` before any non-diagnostic use.
+
 The runner prints one `PASS` or `FAIL` line for local doctor, each peer doctor,
 each peer send/read pair, and the evidence path. It exits zero only when every
 row passed. `peers[].shell` is `posix` for a macOS/Linux SSH shell or

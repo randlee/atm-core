@@ -579,6 +579,9 @@ pub enum AuthenticatedIngress {
     Peer,
     /// Explicit plaintext-test provenance. This is not peer authentication.
     UntrustedSmoke(UntrustedSmokeProvenance),
+    /// A plaintext diagnostic request without declared source provenance.
+    /// It is never peer authentication and cannot carry a write.
+    AnonymousSmoke,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

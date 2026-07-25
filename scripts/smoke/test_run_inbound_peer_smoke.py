@@ -5,6 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -102,6 +103,40 @@ class InboundPeerSmokeTests(unittest.TestCase):
                 {"kind": "remote incoming no-ack", "message_id": "01NOACK"},
                 {"kind": "remote incoming requires-ack", "message_id": "01ACK"},
             ]))
+
+    def test_default_run_executes_declared_local_preflight_rows(self):
+        config = {
+            "schema_version": 1,
+            "local": {
+                "atm_command": ["atm"], "identity": "a", "team": "t",
+                "expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1,
+                "advertised_host": "127.0.0.1",
+            },
+            "host": {
+                "name": "local",
+                "local_checks": {
+                    "localhost/local loopback": ["check-loopback"],
+                    "own-IP": ["check-own-ip"],
+                    "nudge": ["check-nudge"],
+                },
+            },
+            "peers": [],
+        }
+        doctor = json.dumps({
+            "daemon_context": {"version": "1.3.2-beta-21-pre"},
+            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+        })
+
+        def command_result(command, _timeout):
+            return {"command": command, "exit_code": 0, "stdout": doctor if command[-2:] == ["doctor", "--json"] else "", "stderr": ""}
+
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.object(RUNNER, "command_result", side_effect=command_result), \
+             mock.patch.object(RUNNER, "compose"):
+            self.assertEqual(RUNNER.run(config, Path(directory), 1, 1), 0)
+            results = next(Path(directory).glob("*/results.json"))
+            phases = {item["phase"] for item in json.loads(results.read_text(encoding="utf-8"))["records"]}
+        self.assertTrue({"localhost/local loopback", "own-IP", "nudge"}.issubset(phases))
 
 
 if __name__ == "__main__":

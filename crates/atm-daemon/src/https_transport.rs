@@ -133,25 +133,25 @@ impl TlsIdentity {
 /// retained only as TLS material; no storage trait crosses this boundary.
 #[derive(Debug)]
 pub(crate) struct HttpsTransport {
-    security: PeerWireSecurity,
-    identity: Option<TlsIdentity>,
-    plaintext_source_host: Option<HostName>,
+    mode: HttpsTransportMode,
+}
+
+#[derive(Debug)]
+enum HttpsTransportMode {
+    MutualTls(TlsIdentity),
+    PlaintextTest { source_host: HostName },
 }
 
 impl HttpsTransport {
     pub(crate) fn from_local_certificate(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         Ok(Self {
-            security: PeerWireSecurity::MutualTls,
-            identity: Some(TlsIdentity::load(certificate)?),
-            plaintext_source_host: None,
+            mode: HttpsTransportMode::MutualTls(TlsIdentity::load(certificate)?),
         })
     }
 
     pub(crate) fn plaintext_test(source_host: HostName) -> Self {
         Self {
-            security: PeerWireSecurity::PlaintextTest,
-            identity: None,
-            plaintext_source_host: Some(source_host),
+            mode: HttpsTransportMode::PlaintextTest { source_host },
         }
     }
 }
@@ -173,14 +173,9 @@ impl HttpsMessageTransport for HttpsTransport {
                 AtmError::daemon_unavailable(format!("failed to connect to HTTPS peer {host}"))
             })?;
         let request = RequestEnvelope::Write(Box::new(request));
-        match self.security {
-            PeerWireSecurity::MutualTls => {
+        match &self.mode {
+            HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, deadline.handshake)?;
-                let identity = self.identity.as_ref().ok_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "HTTPS transport is missing its local TLS identity",
-                    )
-                })?;
                 let config = client_config(identity, peer)?;
                 let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
                     AtmError::validation(
@@ -197,12 +192,7 @@ impl HttpsMessageTransport for HttpsTransport {
                 apply_deadline(tls.get_ref(), deadline.request)?;
                 read_http_response(&mut tls, &request)
             }
-            PeerWireSecurity::PlaintextTest => {
-                let source_host = self.plaintext_source_host.as_ref().ok_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "plaintext test peer transport is missing its source host",
-                    )
-                })?;
+            HttpsTransportMode::PlaintextTest { source_host } => {
                 apply_deadline(&stream, deadline.request)?;
                 write_plaintext_http_request_with_source_host(&mut stream, &request, source_host)?;
                 read_http_response(&mut stream, &request)
@@ -472,7 +462,11 @@ fn route_peer_http_request(
         .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
         .map(str::parse)
         .transpose()
-        .map_err(|_source| AtmError::validation("invalid plaintext peer source-host header"))?;
+        .map_err(|_source| {
+            AtmError::validation(
+                "invalid X-ATM-Peer-Source-Host header; use a valid configured test host or restart without --peer-wire-security plaintext-test",
+            )
+        })?;
     let mut request = decode_request(request)?;
     let ingress = match (authenticated_source_host, plaintext_source_host) {
         (Some(source_host), _) => {
@@ -485,10 +479,12 @@ fn route_peer_http_request(
         }
         (None, None) if matches!(request, ApiRequest::Write(_)) => {
             return Err(AtmError::validation(
-                "plaintext peer write requests require the explicit source-host header",
+                "plaintext peer write requests require X-ATM-Peer-Source-Host; restart without --peer-wire-security plaintext-test to restore mTLS",
             ));
         }
-        (None, None) => AuthenticatedIngress::Peer,
+        // Read-only plaintext diagnostics are deliberately anonymous. They
+        // must never be labelled as the authenticated mTLS peer ingress.
+        (None, None) => AuthenticatedIngress::AnonymousSmoke,
     };
     let response = router
         .route(request, ingress, RequestDeadline::after(HTTPS_TIMEOUT))
@@ -888,6 +884,10 @@ mod tests {
         write_http_request(&mut stream, &request).expect("write plain shared request");
         let _ = read_http_response(&mut stream, &request).expect("shared router response");
         assert!(router.routed.load(Ordering::SeqCst));
+        assert!(matches!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(AuthenticatedIngress::AnonymousSmoke)
+        ));
         listener.shutdown().expect("shutdown listener");
     }
 

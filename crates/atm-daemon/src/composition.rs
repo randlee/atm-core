@@ -296,7 +296,7 @@ impl RuntimeComposition {
                         .map(|interface| interface.advertise_host.clone())
                         .ok_or_else(|| {
                             AtmError::validation(
-                                "plaintext-test peer mode requires one enabled HTTP interface",
+                                "plaintext-test peer mode requires one enabled HTTP interface; configure a private test interface or restart without --peer-wire-security plaintext-test",
                             )
                         })?;
                     tracing::warn!(

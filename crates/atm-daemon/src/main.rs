@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    fn environment_cannot_select_plaintext_test() {
+    fn no_cli_argument_defaults_to_mutual_tls() {
         assert_eq!(
             parse_peer_wire_security(Vec::<String>::new()).expect("default"),
             PeerWireSecurity::MutualTls,

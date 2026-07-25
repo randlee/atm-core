@@ -10,7 +10,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerWireSecurityStatus,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -855,13 +855,10 @@ impl DaemonRequestDispatcher {
             findings: peer_findings,
             http_api_version: atm_core::api::HTTP_API_VERSION,
             peer_config: Some(peer_config),
-            peer_wire_security: Some(
-                match self.peer_wire_security {
-                    PeerWireSecurity::MutualTls => "mutual_tls",
-                    PeerWireSecurity::PlaintextTest => "plaintext_test",
-                }
-                .to_string(),
-            ),
+            peer_wire_security: Some(match self.peer_wire_security {
+                PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls,
+                PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest,
+            }),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -982,6 +979,11 @@ impl ApiRouter for DaemonRequestDispatcher {
                 {
                     return Err(AtmError::validation(
                         "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
+                    ));
+                }
+                AuthenticatedIngress::AnonymousSmoke => {
+                    return Err(AtmError::validation(
+                        "anonymous plaintext diagnostics cannot submit writes; include the X-ATM-Peer-Source-Host header only for an explicit smoke write",
                     ));
                 }
                 AuthenticatedIngress::Local
