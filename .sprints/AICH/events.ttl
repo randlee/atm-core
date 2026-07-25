@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:a1 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-25T04:15:13.000000+00:00"^^xsd:dateTime .
+
+triage:a2 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S9 ;
+    triage:assignedTo "cwin" ;
+    triage:assignedAt "2026-07-25T04:30:08Z"^^xsd:dateTime .
+
+triage:c2 a triage:Completion ;
+    triage:ofSprint triage:AICH-S9 ;
+    triage:at "2026-07-25T04:38:16Z"^^xsd:dateTime .
+
+triage:c1 a triage:Completion ;
+    triage:ofSprint triage:AICH-S1 ;
+    triage:at "2026-07-25T04:44:02Z"^^xsd:dateTime .
+
+triage:a3 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S2 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-25T04:45:03Z"^^xsd:dateTime .
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S9 ;
+    triage:assignedTo "cwin" ;
+    triage:assignedAt "2026-07-25T04:58:51Z"^^xsd:dateTime .
+triage:a5 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S3 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-25T05:00:42Z"^^xsd:dateTime .

@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AI30-BLOCK-002" ;
+  triage:title "Missing Homebrew formula-selection test for atm-beta prerelease channel" ;
+  triage:description "Sprint doc's 'Required validation' section explicitly requires a Homebrew formula-selection test or deterministic release-script fixture proving prerelease=='true' selects atm-beta.rb and never touches the stable formula path, and vice versa. .just/tests/test_release_homebrew_workflow.py is byte-identical to the parent commit -- no atm-beta/prerelease assertions anywhere." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI30" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-BLOCK-002/pAI-s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:occurrence/AI30-BLOCK-002/pAI-s30/1>
+  a triage:Occurrence ;
+  triage:file ".just/tests/test_release_homebrew_workflow.py" ;
+  triage:snippet "Missing atm-beta prerelease formula-selection assertions" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:worktree/pAI-s30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 9 .
