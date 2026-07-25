@@ -12,15 +12,15 @@
   triage:severity "Blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T10:54:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/4> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/0265c94f> .
 
 <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/1>
   a triage:Occurrence ;
@@ -50,8 +50,8 @@
   triage:line 526 ;
   triage:snippet ".to_socket_addrs()" ;
   triage:description "resolve_peer_address (singular) still calls to_socket_addrs() directly with no timeout — the bounded fix (FIX-1, a9e61fb0) was applied only to resolve_peer_addresses (plural)." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> .
@@ -62,11 +62,23 @@
   triage:line 171 ;
   triage:snippet "let address = resolve_peer_address(&host, peer.https_port.get())?" ;
   triage:description "HttpsTransport::deliver() hot-path call site to the unbounded resolve_peer_address; also reached via reconciliation replay at runtime_health.rs:681." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 534 ;
+  triage:snippet "resolve_peer_address now builds a resolver-only TrustedPeer and delegates to resolve_peer_addresses(&peer, HTTPS_TIMEOUT), inheriting the bounded thread+mpsc::sync_channel+recv_timeout pattern" ;
+  triage:description "FIX-2 (0265c94f) closed the actual root cause: resolve_peer_address (singular, the deliver()/reconciliation hot-path resolver at line 171/runtime_health.rs:681) delegates entirely to the already-bounded resolve_peer_addresses instead of calling to_socket_addrs() unbounded. Verified via git diff a9e61fb0..b520061e on crates/atm-daemon/src/https_transport.rs; same commit also converted 4 adjacent map_err(|_source| ...) discard sites (PEM load, TcpStream::connect_timeout, ServerName::try_from, ClientConnection::new) to daemon_unavailable_with_cause, closing AI25-RBP-F001 on this branch too." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/0265c94f> .
 
 <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265>
   a triage:WorktreeSnapshot ;

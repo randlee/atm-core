@@ -16,6 +16,7 @@
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T10:54:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s25/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s27/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-002/s28/1> ;
@@ -34,11 +35,21 @@
   triage:file "crates/atm/src/commands/peer.rs" ;
   triage:line 319 ;
   triage:snippet "store.save_trusted_peer(&peer)?; println!(\"added trusted peer {}\", peer.host); Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f0840" ;
   triage:occursIn <urn:atm:triage:worktree/s25/b49f0840> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-002/s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:snippet "FIX-2 (d6f7993a) wired PeerCommand::run's Trust arm to call Self::reload_runtime_view(observability) whenever TrustCommand::run_with_store returns changed=true (Add/Replace/Revoke), which bootstraps CliComposition and calls composition.reload_runtime_view() -- a genuine CLI-mutation-to-daemon-reload trigger, not a doc rescope. Verified via git diff a9e61fb0..b520061e on crates/atm/src/commands/peer.rs." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "d6f7993a" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/0265c94f> .
 
 <urn:atm:triage:occurrence/AI25-ATMQA-002/s26/1>
   a triage:Occurrence ;
