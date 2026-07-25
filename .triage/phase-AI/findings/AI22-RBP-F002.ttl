@@ -15,7 +15,7 @@
   triage:status "unknown" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T12:00:00Z"^^xsd:dateTime ;
-  triage:foundAt "2026-07-24T23:42:11Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S2 ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-RBP-F002/pAI-s22/1> ;
   triage:relatedFinding "AI22-IMPORTANT-004" ;
