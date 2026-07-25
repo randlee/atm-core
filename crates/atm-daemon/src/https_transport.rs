@@ -7,9 +7,10 @@
 
 use std::fmt;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -86,6 +87,42 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
     ) -> Result<ResponseEnvelope, AtmError>;
 }
 
+/// Resolves a delivery target to one configured hostname authority. Literal
+/// addresses are only aliases of exactly one fresh forward-DNS result; they
+/// never become durable peer records and reverse DNS is deliberately absent.
+pub(crate) fn resolve_peer_authority(
+    target: &atm_core::types::HostName,
+    peers: &[TrustedPeer],
+) -> Result<TrustedPeer, AtmError> {
+    if let Some(peer) = peers
+        .iter()
+        .find(|peer| peer.enabled && peer.host == *target)
+    {
+        return Ok(peer.clone());
+    }
+    let ip: IpAddr = target.as_str().parse().map_err(|_| {
+        AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {target}"))
+    })?;
+    let matches = peers
+        .iter()
+        .filter(|peer| peer.enabled)
+        .filter(|peer| {
+            resolve_peer_addresses(peer, HTTPS_TIMEOUT)
+                .is_ok_and(|addresses| addresses.contains(&ip))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [peer] => Ok(peer.clone()),
+        [] => Err(AtmError::daemon_unavailable(format!(
+            "literal peer IP {target} matches no trusted hostname"
+        ))),
+        _ => Err(AtmError::validation(format!(
+            "literal peer IP {target} matches multiple trusted hostnames"
+        ))),
+    }
+}
+
 struct TlsIdentity {
     certificates: Vec<CertificateDer<'static>>,
     private_key: PrivateKeyDer<'static>,
@@ -104,8 +141,11 @@ impl fmt::Debug for TlsIdentity {
 impl TlsIdentity {
     fn load(certificate: &LocalCertificate) -> Result<Self, AtmError> {
         let path = Path::new(certificate.private_key_ref.as_str());
-        let pem = std::fs::read(path).map_err(|_source| {
-            AtmError::daemon_unavailable("failed to open configured TLS certificate/key PEM bundle")
+        let pem = std::fs::read(path).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to open configured TLS certificate/key PEM bundle",
+                source,
+            )
         })?;
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
@@ -167,10 +207,15 @@ impl HttpsMessageTransport for HttpsTransport {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
         }
         let host = peer.host.to_string();
-        let address = resolve_peer_address(&host)?;
+        // Resolve anew for every connection. The registered hostname remains
+        // the TLS authority; resolver output is never stored.
+        let address = resolve_peer_address(&host, peer.https_port.get())?;
         let mut stream =
-            TcpStream::connect_timeout(&address, deadline.connect).map_err(|_source| {
-                AtmError::daemon_unavailable(format!("failed to connect to HTTPS peer {host}"))
+            TcpStream::connect_timeout(&address, deadline.connect).map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    format!("failed to connect to HTTPS peer {host}"),
+                    source,
+                )
             })?;
         let request = RequestEnvelope::Write(Box::new(request));
         match &self.mode {
@@ -207,6 +252,7 @@ pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    peer_verifier: Arc<PinnedClientVerifier>,
 }
 
 struct HttpsListener {
@@ -279,6 +325,10 @@ impl HttpsListenerSet {
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let peer_verifier = match &security {
+            ListenerSecurity::MutualTls { verifier, .. } => Arc::clone(verifier),
+            ListenerSecurity::PlaintextTest => Arc::new(PinnedClientVerifier::new(Vec::new())),
+        };
         let mut listeners = Vec::new();
         for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
@@ -308,7 +358,12 @@ impl HttpsListenerSet {
             stop,
             listeners,
             requests,
+            peer_verifier,
         })
+    }
+
+    pub(crate) fn refresh_trusted_peers(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
+        self.peer_verifier.replace(peers)
     }
 
     pub(crate) fn shutdown(mut self) -> Result<(), AtmError> {
@@ -560,16 +615,57 @@ fn complete_handshake(
     Ok(())
 }
 
-fn resolve_peer_address(host: &str) -> Result<SocketAddr, AtmError> {
-    use std::net::ToSocketAddrs;
-    let mut addresses = format!("{host}:43101")
-        .to_socket_addrs()
-        .map_err(|_source| {
-            AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}"))
+fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<IpAddr>, AtmError> {
+    let authority = format!("{}:{}", peer.host, peer.https_port);
+    let (sender, receiver) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("atm-peer-dns".to_string())
+        .spawn(move || {
+            let _ = sender.send(
+                authority
+                    .to_socket_addrs()
+                    .map(|a| a.map(|address| address.ip()).collect::<Vec<_>>()),
+            );
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to start bounded HTTPS DNS resolution",
+                source,
+            )
         })?;
-    addresses.next().ok_or_else(|| {
-        AtmError::daemon_unavailable(format!("HTTPS peer {host} resolved to no addresses"))
-    })
+    receiver
+        .recv_timeout(timeout)
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "HTTPS DNS resolution timed out; verify peer forward DNS or retry",
+                source,
+            )
+        })?
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to resolve configured HTTPS peer; verify forward DNS",
+                source,
+            )
+        })
+}
+
+fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
+    let peer = TrustedPeer {
+        host: host.parse().map_err(|source| {
+            AtmError::daemon_unavailable_with_cause("invalid configured HTTPS peer host", source)
+        })?,
+        fingerprint: "resolver-only".parse().map_err(|source| {
+            AtmError::daemon_unavailable_with_cause("invalid resolver authority", source)
+        })?,
+        enabled: true,
+        https_port: std::num::NonZeroU16::new(port)
+            .ok_or_else(|| AtmError::validation("configured HTTPS peer port was zero"))?,
+    };
+    resolve_peer_addresses(&peer, HTTPS_TIMEOUT)?
+        .into_iter()
+        .next()
+        .map(|ip| SocketAddr::new(ip, port))
+        .ok_or_else(|| AtmError::daemon_unavailable("HTTPS peer resolved to no addresses"))
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
@@ -661,14 +757,14 @@ impl ServerCertVerifier for PinnedServerVerifier {
 
 #[derive(Debug)]
 struct PinnedClientVerifier {
-    peers: Vec<TrustedPeer>,
+    peers: RwLock<Vec<TrustedPeer>>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
 impl PinnedClientVerifier {
     fn new(peers: Vec<TrustedPeer>) -> Self {
         Self {
-            peers: peers.into_iter().filter(|peer| peer.enabled).collect(),
+            peers: RwLock::new(peers.into_iter().filter(|peer| peer.enabled).collect()),
             algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
         }
     }
@@ -716,6 +812,14 @@ impl ClientCertVerifier for PinnedClientVerifier {
 }
 
 impl PinnedClientVerifier {
+    fn replace(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
+        let mut current = self
+            .peers
+            .write()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned"))?;
+        *current = peers.into_iter().filter(|peer| peer.enabled).collect();
+        Ok(())
+    }
     fn authenticated_host(&self, connection: &ServerConnection) -> Result<HostName, AtmError> {
         let certificate = connection
             .peer_certificates()
@@ -731,6 +835,8 @@ impl PinnedClientVerifier {
     fn host_for_certificate(&self, certificate: &CertificateDer<'_>) -> Option<HostName> {
         let fingerprint = certificate_fingerprint(certificate);
         self.peers
+            .read()
+            .ok()?
             .iter()
             .find(|peer| normalize_fingerprint(peer.fingerprint.as_str()) == fingerprint)
             .map(|peer| peer.host.clone())
@@ -770,6 +876,42 @@ mod tests {
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
     };
+
+    fn trusted(host: &str) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse().expect("host"),
+            fingerprint: "00".repeat(32).parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+        }
+    }
+
+    #[test]
+    fn literal_ip_selects_its_single_forward_dns_authority() {
+        let target = "127.0.0.1".parse().expect("target");
+        assert_eq!(
+            super::resolve_peer_authority(&target, &[trusted("localhost")])
+                .expect("authority")
+                .host
+                .as_str(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn literal_ip_without_authority_fails_closed() {
+        let target = "192.0.2.1".parse().expect("target");
+        assert!(super::resolve_peer_authority(&target, &[trusted("localhost")]).is_err());
+    }
+
+    #[test]
+    fn literal_ip_with_ambiguous_authority_fails_closed() {
+        let target = "127.0.0.1".parse().expect("target");
+        assert!(
+            super::resolve_peer_authority(&target, &[trusted("localhost"), trusted("localhost")])
+                .is_err()
+        );
+    }
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
@@ -837,6 +979,7 @@ mod tests {
                 host: "localhost".parse().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             }],
             router.clone(),
         )
@@ -849,6 +992,7 @@ mod tests {
                 host: "localhost".parse().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             },
         )
         .expect("client config");
@@ -949,6 +1093,60 @@ mod tests {
     }
 
     #[test]
+    fn live_trust_refresh_keeps_one_listener_reachable() {
+        let certificate = test_certificate();
+        let identity = TlsIdentity::load(&certificate).expect("load test identity");
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![trusted("localhost")],
+            router.clone(),
+        )
+        .expect("one listener");
+        let address = listener.listeners[0].address;
+        listener
+            .refresh_trusted_peers(vec![TrustedPeer {
+                host: "localhost".parse().expect("host"),
+                fingerprint: certificate.fingerprint.clone(),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("port"),
+            }])
+            .expect("refresh verifier");
+        assert_eq!(
+            listener.listeners[0].address, address,
+            "refresh must retain the one daemon listener"
+        );
+        let config = client_config(
+            &identity,
+            &TrustedPeer {
+                host: "localhost".parse().expect("host"),
+                fingerprint: certificate.fingerprint.clone(),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("port"),
+            },
+        )
+        .expect("client config");
+        let stream = TcpStream::connect(address).expect("same listener reachable");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("refreshed trust handshake");
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        write_http_request(&mut tls, &request).expect("write request");
+        let _ = read_http_response(&mut tls, &request).expect("shared response");
+        assert!(router.routed.load(Ordering::SeqCst));
+        listener.shutdown().expect("shutdown");
+    }
+
+    #[test]
     fn shutdown_joins_an_incomplete_peer_request_within_its_deadline() {
         let certificate = test_certificate();
         let listener = HttpsListenerSet::bind_enabled(
@@ -1003,6 +1201,7 @@ mod tests {
                 fingerprint: CertificateFingerprint::from_str(&"00".repeat(32))
                     .expect("fingerprint"),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             }],
             router.clone(),
         )
@@ -1014,6 +1213,7 @@ mod tests {
                 host: "localhost".parse::<HostName>().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             },
         )
         .expect("client config");
@@ -1041,6 +1241,7 @@ mod tests {
             host: "localhost".parse().expect("host"),
             fingerprint: certificate.fingerprint.clone(),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         };
         let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {

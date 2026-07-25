@@ -16,7 +16,10 @@ use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
-use atm_runtime::{RuntimeAssembly, validate_enabled_peer_configuration};
+use atm_runtime::{
+    RuntimeAssembly, validate_enabled_peer_configuration,
+    validate_enabled_peer_configuration_for_reload,
+};
 use atm_storage::PeerConfigStore;
 use std::fs::OpenOptions;
 #[cfg(test)]
@@ -133,7 +136,7 @@ pub(crate) struct RuntimeComposition {
     // chooses when to call it; this composition root never passes storage or
     // post-write state into the HTTPS adapter.
     https_transport: Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    https_listeners: Mutex<Option<HttpsListenerSet>>,
+    https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
@@ -209,6 +212,23 @@ impl RuntimeComposition {
             runtime_assembly.clone(),
             peer_wire_security,
         );
+        let https_listeners: Arc<Mutex<Option<HttpsListenerSet>>> = Arc::new(Mutex::new(None));
+        let reload_peer_store = Arc::clone(&peer_config_store);
+        let reload_listener_slot = Arc::clone(&https_listeners);
+        request_dispatcher.install_runtime_reload_hook(Arc::new(move || {
+            validate_enabled_peer_configuration_for_reload(reload_peer_store.as_ref())?;
+            let peers = reload_peer_store.list_trusted_peers()?;
+            if let Some(listeners) = reload_listener_slot
+                .lock()
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+                })?
+                .as_ref()
+            {
+                listeners.refresh_trusted_peers(peers)?;
+            }
+            Ok(())
+        }))?;
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
         Ok(Self {
             peer_wire_security,
@@ -219,7 +239,7 @@ impl RuntimeComposition {
             request_dispatcher,
             peer_config_store,
             https_transport: Mutex::new(None),
-            https_listeners: Mutex::new(None),
+            https_listeners,
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
@@ -393,7 +413,6 @@ impl RuntimeComposition {
     where
         P: Fn() -> Result<(), AtmError>,
     {
-        let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -402,7 +421,7 @@ impl RuntimeComposition {
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
                 force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
                 begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
+                reload_runtime_view: || self.request_dispatcher.reload_runtime_view(),
                 publish_ready,
             },
         );

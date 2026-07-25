@@ -128,8 +128,18 @@ pub struct PeerConfigDoctorReport {
     pub certificate_fingerprint: Option<String>,
     pub trusted_peer_count: usize,
     pub enabled_trusted_peer_count: usize,
+    #[serde(default)]
+    pub trusted_peers: Vec<PeerAuthorityDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_failure: Option<DoctorFinding>,
+}
+
+/// Safe durable peer authority projection. Never includes DNS output or secrets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerAuthorityDoctorReport {
+    pub host: String,
+    pub https_port: u16,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

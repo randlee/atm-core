@@ -273,7 +273,8 @@ fn request_execution_risk(request: &ApiRequest) -> RequestExecutionRisk {
         ApiRequest::Write(_)
         | ApiRequest::Heartbeat(_)
         | ApiRequest::Clear(_)
-        | ApiRequest::PeerSync(_) => RequestExecutionRisk::SideEffecting,
+        | ApiRequest::PeerSync(_)
+        | ApiRequest::ReloadRuntimeView => RequestExecutionRisk::SideEffecting,
     }
 }
 

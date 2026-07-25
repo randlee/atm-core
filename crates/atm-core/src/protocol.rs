@@ -44,6 +44,8 @@ pub enum RequestEnvelope {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     PeerSync(PeerSyncRequest),
+    /// Authenticated local control request that reloads the daemon's durable runtime view.
+    ReloadRuntimeView,
 }
 
 /// Shared protocol response envelope.
@@ -58,6 +60,7 @@ pub enum ResponseEnvelope {
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
     PeerSync(PeerSyncOutcome),
+    RuntimeViewReloaded,
     Error(AtmError),
 }
 
@@ -85,12 +88,29 @@ impl ReleaseVersion {
             .trim()
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
-        semver::Version::parse(value).map_err(|source| {
-            AtmError::new(
+        let (core, prerelease) = value.split_once('-').unwrap_or((value, ""));
+        if !prerelease.is_empty()
+            && (!prerelease.starts_with("beta.")
+                || prerelease[5..].is_empty()
+                || !prerelease[5..].bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM release version `{value}`: {source}"),
-            )
-        })?;
+                format!("invalid ATM release version `{value}`"),
+            ));
+        }
+        let mut parts = core.split('.');
+        let valid = (0..3).all(|_| {
+            parts.next().is_some_and(|part| {
+                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        }) && parts.next().is_none();
+        if !valid {
+            return Err(AtmError::new(
+                AtmErrorCode::ClientDaemonVersionIncompatible,
+                format!("invalid ATM release version `{value}`"),
+            ));
+        }
         Ok(Self(value.to_string()))
     }
 

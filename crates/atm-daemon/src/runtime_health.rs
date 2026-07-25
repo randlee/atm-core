@@ -33,7 +33,9 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, PeerWireSecurity};
+use crate::https_transport::{
+    HttpsMessageTransport, HttpsRequestDeadline, PeerWireSecurity, resolve_peer_authority,
+};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -153,6 +155,7 @@ pub(crate) struct DaemonRequestDispatcher {
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     peer_sync_progress: std::sync::Mutex<HashMap<atm_core::types::HostName, PeerSyncProgress>>,
+    runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
 }
 
 /// Transient per-daemon guard for explicit sync requests. It is intentionally
@@ -162,6 +165,8 @@ struct PeerSyncProgress {
     next_allowed_at: Option<std::time::Instant>,
     delivered_request_json: BTreeSet<String>,
 }
+
+type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -174,6 +179,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
+            .field("runtime_reload_hook", &"runtime reload callback")
             .finish()
     }
 }
@@ -439,6 +445,7 @@ impl DaemonRequestDispatcher {
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
             peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
+            runtime_reload_hook: std::sync::Mutex::new(None),
         }
     }
 
@@ -563,6 +570,10 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::PeerSync(request) => {
                 Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
             }
+            RequestEnvelope::ReloadRuntimeView => {
+                self.reload_runtime_view()?;
+                Ok(ResponseEnvelope::RuntimeViewReloaded)
+            }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
@@ -618,9 +629,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 .emit_local_post_write(&self.service_runtime, &post_send_emitter);
             return Ok(());
         };
-        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
-            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
-        })?;
+        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
         let transport = self
             .https_transport
             .lock()
@@ -776,12 +785,36 @@ impl DaemonRequestDispatcher {
         let current_state = self.status_cache.clone_state();
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
+        self.refresh_https_trust()?;
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
         );
+        Ok(())
+    }
+
+    pub(crate) fn install_runtime_reload_hook(
+        &self,
+        hook: RuntimeReloadHook,
+    ) -> Result<(), AtmError> {
+        let mut slot = self.runtime_reload_hook.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned")
+        })?;
+        *slot = Some(hook);
+        Ok(())
+    }
+
+    fn refresh_https_trust(&self) -> Result<(), AtmError> {
+        let hook = self
+            .runtime_reload_hook
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned"))?
+            .clone();
+        if let Some(hook) = hook {
+            hook()?;
+        }
         Ok(())
     }
 
@@ -995,6 +1028,13 @@ impl ApiRouter for DaemonRequestDispatcher {
                 | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
+        if matches!(request, RequestEnvelope::ReloadRuntimeView)
+            && ingress != AuthenticatedIngress::Local
+        {
+            return Err(AtmError::validation(
+                "runtime reload is available only through authenticated local IPC",
+            ));
+        }
         self.dispatch(request).map(ApiResponse::new)
     }
 }
@@ -1127,6 +1167,7 @@ impl DaemonRequestDispatcher {
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
             peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
+            runtime_reload_hook: std::sync::Mutex::new(None),
         }
     }
 }
@@ -1136,8 +1177,48 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
+    use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+        let refreshed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let refresh_flag = Arc::clone(&refreshed);
+        dispatcher
+            .install_runtime_reload_hook(Arc::new(move || {
+                refresh_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }))
+            .expect("install reload hook");
+
+        let response = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("authenticated local reload routes")
+            .into_inner();
+        assert!(matches!(response, ResponseEnvelope::RuntimeViewReloaded));
+        assert!(refreshed.load(std::sync::atomic::Ordering::SeqCst));
+
+        let error = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect_err("peer ingress must not control daemon reload");
+        assert!(error.is_validation());
+    }
 
     struct ShutdownFinalizerDrainGuard;
 

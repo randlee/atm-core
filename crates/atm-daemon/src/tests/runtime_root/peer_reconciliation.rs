@@ -25,6 +25,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -133,6 +134,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
             host: peer.clone(),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -251,12 +253,14 @@ fn successful_peer_write_does_not_start_automatic_reconciliation() {
     let peer_store = open_sqlite_boundary(&db_path)
         .expect("sqlite boundary")
         .peer_config_store();
+    let trusted_peer = TrustedPeer {
+        host: peer.clone(),
+        fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+        enabled: true,
+        https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+    };
     peer_store
-        .save_trusted_peer(&TrustedPeer {
-            host: peer.clone(),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-        })
+        .save_trusted_peer(&trusted_peer)
         .expect("save trusted peer");
     peer_store
         .save_peer_sync_policy(
