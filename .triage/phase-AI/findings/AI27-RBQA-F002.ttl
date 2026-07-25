@@ -17,7 +17,7 @@
   triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
-  triage:foundAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBQA-F002/pAI-s27/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;

@@ -17,7 +17,7 @@
   triage:closureNote "QA-1 gate was 0-Blocking-only; deferred to phase-end CLEANUP. Pre-existing decomposition debt, not introduced by 5e91a889 -- this commit reduces the file by 32 net lines. No duplicate canonical record found elsewhere in .triage/phase-AI/findings/ for this file/rule; if a duplicate is later found upstream (e.g. under a different phase or a generic ARCH-001.ttl), merge and note this commit's improvement as an occurrence rather than opening a second finding. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
-  triage:foundAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-ARCH-001/pAI-s27/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
