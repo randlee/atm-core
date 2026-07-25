@@ -601,6 +601,14 @@ impl RequestDeadline {
     pub fn expired(self) -> bool {
         Instant::now() >= self.0
     }
+
+    /// Returns the budget left for the next operation in this request.
+    ///
+    /// Adapters must consume this value rather than minting a fresh timeout:
+    /// one ingress request has one absolute completion deadline.
+    pub fn remaining(self) -> Option<Duration> {
+        self.0.checked_duration_since(Instant::now())
+    }
 }
 
 /// The one application routing boundary for every daemon ingress.

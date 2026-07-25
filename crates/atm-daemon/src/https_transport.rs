@@ -32,24 +32,6 @@ use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The independently bounded network stages for one peer request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct HttpsRequestDeadline {
-    pub(crate) connect: Duration,
-    pub(crate) handshake: Duration,
-    pub(crate) request: Duration,
-}
-
-impl Default for HttpsRequestDeadline {
-    fn default() -> Self {
-        Self {
-            connect: HTTPS_TIMEOUT,
-            handshake: HTTPS_TIMEOUT,
-            request: HTTPS_TIMEOUT,
-        }
-    }
-}
-
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
 pub(crate) trait HttpsMessageTransport: Send + Sync {
@@ -57,7 +39,7 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         &self,
         request: WriteRequest,
         peer: &TrustedPeer,
-        deadline: HttpsRequestDeadline,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
 }
 
@@ -163,7 +145,7 @@ impl HttpsMessageTransport for HttpsTransport {
         &self,
         request: WriteRequest,
         peer: &TrustedPeer,
-        deadline: HttpsRequestDeadline,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         if !peer.enabled {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
@@ -171,14 +153,16 @@ impl HttpsMessageTransport for HttpsTransport {
         let host = peer.host.to_string();
         // Resolve anew for every connection. The registered hostname remains
         // the TLS authority; resolver output is never stored.
-        let address = resolve_peer_address(&host, peer.https_port.get())?;
-        let stream = TcpStream::connect_timeout(&address, deadline.connect).map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                format!("failed to connect to HTTPS peer {host}"),
-                source,
-            )
-        })?;
-        apply_deadline(&stream, deadline.handshake)?;
+        let address =
+            resolve_peer_address(&host, peer.https_port.get(), remaining_budget(deadline)?)?;
+        let stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?).map_err(
+            |source| {
+                AtmError::remote_delivery_unconfirmed(format!(
+                    "failed to connect to HTTPS peer {host}: {source}"
+                ))
+            },
+        )?;
+        apply_deadline(&stream, remaining_budget(deadline)?)?;
         let config = client_config(&self.identity, peer)?;
         let server_name = ServerName::try_from(host.clone()).map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -194,10 +178,11 @@ impl HttpsMessageTransport for HttpsTransport {
                 )
             })?;
         let mut tls = StreamOwned::new(connection, stream);
-        complete_handshake(&mut tls)?;
+        complete_handshake_with_deadline(&mut tls, deadline)?;
         let request = RequestEnvelope::Write(Box::new(request));
+        apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
         write_http_request(&mut tls, &request)?;
-        apply_deadline(tls.get_ref(), deadline.request)?;
+        apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
         read_http_response(&mut tls, &request)
     }
 }
@@ -422,6 +407,7 @@ fn handle_peer_connection(
     router: Arc<dyn ApiRouter + Send + Sync>,
     peer_verifier: Arc<PinnedClientVerifier>,
 ) -> Result<(), AtmError> {
+    let deadline = RequestDeadline::after(HTTPS_TIMEOUT);
     apply_deadline(&stream, HTTPS_TIMEOUT)?;
     let connection = ServerConnection::new(config).map_err(|_source| {
         AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS server")
@@ -438,11 +424,7 @@ fn handle_peer_connection(
     let mut request = decode_request(request)?;
     normalize_peer_write_for_local_delivery(&mut request, authenticated_source_host);
     let response = router
-        .route(
-            request,
-            AuthenticatedIngress::Peer,
-            RequestDeadline::after(HTTPS_TIMEOUT),
-        )
+        .route(request, AuthenticatedIngress::Peer, deadline)
         .map(|response| response.into_inner())
         .unwrap_or_else(ResponseEnvelope::Error);
     write_http_response(&mut tls, &response)
@@ -485,10 +467,12 @@ fn apply_deadline(stream: &TcpStream, deadline: Duration) -> Result<(), AtmError
         .map_err(|_source| AtmError::daemon_unavailable("failed to set HTTPS peer write deadline"))
 }
 
-fn complete_handshake(
+fn complete_handshake_with_deadline(
     stream: &mut StreamOwned<ClientConnection, TcpStream>,
+    deadline: RequestDeadline,
 ) -> Result<(), AtmError> {
     while stream.conn.is_handshaking() {
+        apply_deadline(stream.get_ref(), remaining_budget(deadline)?)?;
         stream
             .conn
             .complete_io(&mut stream.sock)
@@ -497,6 +481,21 @@ fn complete_handshake(
             })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn complete_handshake(
+    stream: &mut StreamOwned<ClientConnection, TcpStream>,
+) -> Result<(), AtmError> {
+    complete_handshake_with_deadline(stream, RequestDeadline::after(HTTPS_TIMEOUT))
+}
+
+fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
+    deadline.remaining().ok_or_else(|| {
+        AtmError::remote_delivery_unconfirmed(
+            "local persistence completed before the peer accepted the write deadline expired",
+        )
+    })
 }
 
 fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<IpAddr>, AtmError> {
@@ -533,7 +532,7 @@ fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<I
         })
 }
 
-fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
+fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<SocketAddr, AtmError> {
     let peer = TrustedPeer {
         host: host.parse().map_err(|source| {
             AtmError::daemon_unavailable_with_cause("invalid configured HTTPS peer host", source)
@@ -545,7 +544,7 @@ fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
         https_port: std::num::NonZeroU16::new(port)
             .ok_or_else(|| AtmError::validation("configured HTTPS peer port was zero"))?,
     };
-    resolve_peer_addresses(&peer, HTTPS_TIMEOUT)?
+    resolve_peer_addresses(&peer, timeout)?
         .into_iter()
         .next()
         .map(|ip| SocketAddr::new(ip, port))
@@ -800,8 +799,7 @@ mod tests {
     use rustls::{ClientConnection, StreamOwned};
 
     use super::{
-        HttpsListenerSet, HttpsRequestDeadline, TlsIdentity, client_config, complete_handshake,
-        normalize_fingerprint,
+        HttpsListenerSet, TlsIdentity, client_config, complete_handshake, normalize_fingerprint,
     };
 
     #[derive(Default)]
@@ -835,11 +833,16 @@ mod tests {
     }
 
     #[test]
-    fn peer_deadline_defaults_bound_every_network_leg() {
-        let deadline = HttpsRequestDeadline::default();
-        assert_eq!(deadline.connect.as_secs(), 5);
-        assert_eq!(deadline.handshake.as_secs(), 5);
-        assert_eq!(deadline.request.as_secs(), 5);
+    fn request_deadline_is_one_absolute_budget() {
+        let deadline = RequestDeadline::after(Duration::from_secs(5));
+        assert!(deadline.remaining().is_some());
+    }
+
+    #[test]
+    fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
+        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
+            .expect_err("an expired shared request budget must fail before peer delivery");
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
     }
 
     #[test]

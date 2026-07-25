@@ -19,7 +19,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::HttpsMessageTransport;
 mod peer_reconciliation;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
@@ -100,7 +100,7 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.delivered
             .lock()
@@ -124,7 +124,7 @@ impl HttpsMessageTransport for FailingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.attempted
             .lock()
@@ -143,7 +143,7 @@ impl HttpsMessageTransport for RejectingHttpsDelivery {
         &self,
         _request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         Ok(ResponseEnvelope::Error(AtmError::validation(
             "remote roster rejected the recipient",
@@ -321,7 +321,7 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
             .expect("remote write request"),
         )))
         .expect_err("peer transport failure must be returned from the post-write router");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     let attempted = transport
         .attempted
         .lock()

@@ -313,6 +313,7 @@ fn handle_connection(
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
+    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -344,11 +345,7 @@ fn handle_connection(
     } else {
         match atm_core::api::decode_request(request) {
             Ok(request) => router
-                .route(
-                    request,
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(REQUEST_DEADLINE),
-                )
+                .route(request, AuthenticatedIngress::Local, deadline)
                 .map(|response| response.into_inner())
                 .unwrap_or_else(atm_core::ResponseEnvelope::Error),
             Err(error) => atm_core::ResponseEnvelope::Error(error),

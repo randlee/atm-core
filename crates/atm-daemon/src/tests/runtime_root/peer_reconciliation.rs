@@ -77,7 +77,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
             ack.clone().into_write_request(),
         )))
         .expect_err("failed remote acknowledgement must return the transport error");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing
             .attempted

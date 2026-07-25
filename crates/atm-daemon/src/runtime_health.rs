@@ -33,7 +33,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, resolve_peer_authority};
+use crate::https_transport::{HttpsMessageTransport, resolve_peer_authority};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -495,21 +495,38 @@ trait MessageWriter: Send + Sync {
 }
 
 trait PostWriteRouter: Send + Sync {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
+    #[cfg(test)]
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        self.dispatch_with_deadline(request, RequestDeadline::after(Duration::from_secs(5)))
+    }
+
+    fn dispatch_with_deadline(
+        &self,
+        request: RequestEnvelope,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Write(request) => self.route_write(*request),
+            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
             request => self.dispatch_non_write(request),
         }
     }
 
-    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(
+        &self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         if message.prepared.requires_post_write_route() {
-            PostWriteRouter::dispatch(self, &mut message)?;
+            PostWriteRouter::dispatch(self, &mut message, deadline)?;
         }
         let outcome = message
             .prepared
@@ -581,7 +598,11 @@ impl MessageWriter for DaemonRequestDispatcher {
 }
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
         let Some(host) = message
             .outbound_request
             .to
@@ -606,15 +627,18 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        match transport.deliver(
-            message.outbound_request.clone(),
-            &peer,
-            HttpsRequestDeadline::default(),
-        ) {
+        match transport.deliver(message.outbound_request.clone(), &peer, deadline) {
             Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => self
-                .reconcile_after_success(host, &peer, transport.as_ref(), true)
-                .map(|_| ()),
+            // This foreground request is complete once the peer accepts the
+            // canonical write. A later recovery drain is a separate bounded
+            // operation; it must not mint a second deadline here.
+            Ok(_) => Ok(()),
+            Err(error) if error.is_daemon_unavailable() => {
+                Err(AtmError::remote_delivery_unconfirmed(format!(
+                    "local persistence completed but peer delivery was not confirmed: {}",
+                    error.message()
+                )))
+            }
             Err(error) => Err(error),
         }
     }
@@ -687,7 +711,11 @@ impl DaemonRequestDispatcher {
                 serde_json::from_str(&stored.request_json).map_err(|_source| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })?;
-            transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+            transport.deliver(
+                request,
+                peer,
+                RequestDeadline::after(Duration::from_secs(5)),
+            )?;
         }
         Ok(delivered)
     }
@@ -1003,7 +1031,8 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "runtime reload is available only through authenticated local IPC",
             ));
         }
-        self.dispatch(request).map(ApiResponse::new)
+        self.dispatch_with_deadline(request, deadline)
+            .map(ApiResponse::new)
     }
 }
 
