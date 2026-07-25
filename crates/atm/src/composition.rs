@@ -18,8 +18,8 @@ use atm_core::home;
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
-    CompatibilityPreflight, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
-    SendResponseEnvelope,
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, PeerSyncOutcome, PeerSyncRequest,
+    RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
 };
 use atm_core::read::{PeekQuery, ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
@@ -152,7 +152,8 @@ impl LocalIpcClientTransportAdapter {
                 &self.endpoint,
                 CompatibilityPreflight {
                     client_release: atm_daemon_client::ReleaseVersion::current(),
-                    wire_version: 1,
+                    cli_schema_version: CLI_SCHEMA_VERSION,
+                    http_api_version: HttpApiVersion::current(),
                 },
                 SAME_HOST_REQUEST_DEADLINE,
             )?;

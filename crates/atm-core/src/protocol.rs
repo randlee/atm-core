@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 use crate::ack::AckOutcome;
@@ -74,30 +75,22 @@ pub struct PeerSyncOutcome {
     pub delivered: u16,
 }
 
+pub const CLI_SCHEMA_VERSION: u16 = 1;
+pub const HTTP_API_VERSION: &str = "1.0.0";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct ReleaseVersion(String);
+pub struct ReleaseVersion(Version);
 
 impl ReleaseVersion {
     pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
-        let value = value
-            .as_ref()
-            .trim()
-            .strip_prefix('v')
-            .unwrap_or(value.as_ref().trim());
-        let mut parts = value.split('.');
-        let valid = (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        }) && parts.next().is_none();
-        if !valid {
-            return Err(AtmError::new(
+        let value = value.as_ref().trim();
+        Version::parse(value).map(Self).map_err(|_| {
+            AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
                 format!("invalid ATM release version `{value}`"),
-            ));
-        }
-        Ok(Self(value.to_string()))
+            )
+        })
     }
 
     pub fn current() -> Self {
@@ -107,24 +100,82 @@ impl ReleaseVersion {
 
 impl fmt::Display for ReleaseVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(self.0.to_string().as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct HttpApiVersion(Version);
+
+impl HttpApiVersion {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
+        let value = value.as_ref().trim();
+        Version::parse(value).map(Self).map_err(|_| {
+            AtmError::new(
+                AtmErrorCode::ClientDaemonVersionIncompatible,
+                format!("invalid ATM HTTP API version `{value}`"),
+            )
+        })
+    }
+
+    pub fn current() -> Self {
+        Self::parse(HTTP_API_VERSION).expect("HTTP API version must be semver")
+    }
+
+    pub const fn major(&self) -> u64 {
+        self.0.major
+    }
+}
+
+impl fmt::Display for HttpApiVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.to_string().as_str())
+    }
+}
+
+#[cfg(test)]
+mod compatibility_version_tests {
+    use super::{HttpApiVersion, ReleaseVersion};
+
+    #[test]
+    fn release_versions_accept_prereleases_and_reject_non_semver() {
+        assert!(ReleaseVersion::parse("1.3.2-alpha.1").is_ok());
+        assert!(ReleaseVersion::parse("1.3.2-beta.1").is_ok());
+        assert!(ReleaseVersion::parse("1.3").is_err());
+        assert!(ReleaseVersion::parse("1.3.2-").is_err());
+    }
+
+    #[test]
+    fn http_api_version_exposes_independent_major() {
+        let version = HttpApiVersion::parse("1.4.0").expect("HTTP API version");
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.to_string(), "1.4.0");
+        assert!(HttpApiVersion::parse("1.4").is_err());
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CompatibilityPreflight {
     pub client_release: ReleaseVersion,
-    pub wire_version: u16,
+    pub cli_schema_version: u16,
+    pub http_api_version: HttpApiVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CompatibilityVerdict {
     Compatible {
         daemon_release: ReleaseVersion,
+        daemon_schema_version: u16,
+        daemon_http_api_version: HttpApiVersion,
     },
     Incompatible {
         client_release: ReleaseVersion,
         daemon_release: ReleaseVersion,
+        client_schema_version: u16,
+        daemon_schema_version: u16,
+        client_http_api_version: HttpApiVersion,
+        daemon_http_api_version: HttpApiVersion,
         code: AtmErrorCode,
     },
 }

@@ -745,14 +745,24 @@ impl DaemonRequestDispatcher {
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
-            && preflight.client_release == daemon_release
+        let daemon_schema_version = atm_core::protocol::CLI_SCHEMA_VERSION;
+        let daemon_http_api_version = atm_core::protocol::HttpApiVersion::current();
+        if preflight.cli_schema_version == daemon_schema_version
+            && preflight.http_api_version.major() == daemon_http_api_version.major()
         {
-            return Ok(CompatibilityVerdict::Compatible { daemon_release });
+            return Ok(CompatibilityVerdict::Compatible {
+                daemon_release,
+                daemon_schema_version,
+                daemon_http_api_version,
+            });
         }
         Ok(CompatibilityVerdict::Incompatible {
             client_release: preflight.client_release,
             daemon_release,
+            client_schema_version: preflight.cli_schema_version,
+            daemon_schema_version,
+            client_http_api_version: preflight.http_api_version,
+            daemon_http_api_version,
             code: AtmErrorCode::ClientDaemonVersionIncompatible,
         })
     }
@@ -889,6 +899,8 @@ impl DaemonRequestDispatcher {
                 "atm_daemon::runtime_health::daemon_context",
             ),
             version: Some(ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
         });
         finalize_doctor_report(&mut report);
         Ok(report)

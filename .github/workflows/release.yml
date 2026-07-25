@@ -21,6 +21,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.meta.outputs.release_tag }}
       release_version: ${{ steps.meta.outputs.release_version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,13 +35,18 @@ jobs:
           raw='${{ github.event.inputs.version }}'
           tag="$raw"
           [[ "$tag" == v* ]] || tag="v${tag}"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version: '$raw' (expected X.Y.Z or vX.Y.Z)" >&2
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "Invalid version: '$raw' (expected strict SemVer X.Y.Z[-prerelease][+build] or v-prefixed)" >&2
             exit 1
           fi
           version="${tag#v}"
           echo "release_tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release_version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run release gate
         run: scripts/release_gate.sh origin/main origin/develop '${{ github.ref }}'
@@ -414,7 +420,8 @@ jobs:
         working-directory: release
         run: sha256sum * > checksums.txt
 
-      - name: Update Homebrew formulas
+      - name: Update stable Homebrew formulas
+        if: needs.gate-and-tag.outputs.prerelease == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -427,7 +434,21 @@ jobs:
             --formula homebrew-tap/Formula/agent-team-mail.rb \
             --formula homebrew-tap/Formula/atm.rb
 
-      - name: Validate Homebrew formulas
+      - name: Update opt-in Homebrew prerelease formula
+        if: needs.gate-and-tag.outputs.prerelease == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          python3 scripts/release_artifacts.py update-homebrew-formulas \
+            --release-dir release \
+            --version "${version}" \
+            --tag "${tag}" \
+            --formula homebrew-tap/Formula/atm-beta.rb
+
+      - name: Validate stable Homebrew formulas
+        if: needs.gate-and-tag.outputs.prerelease == 'false'
         shell: bash
         run: |
           set -euo pipefail
@@ -440,6 +461,19 @@ jobs:
             --formula homebrew-tap/Formula/agent-team-mail.rb \
             --formula homebrew-tap/Formula/atm.rb
 
+      - name: Validate opt-in Homebrew prerelease formula
+        if: needs.gate-and-tag.outputs.prerelease == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.gate-and-tag.outputs.release_version }}'
+          tag='${{ needs.gate-and-tag.outputs.release_tag }}'
+          python3 scripts/release_artifacts.py validate-homebrew-formulas \
+            --release-dir release \
+            --version "${version}" \
+            --tag "${tag}" \
+            --formula homebrew-tap/Formula/atm-beta.rb
+
       - name: Commit and push to homebrew-tap
         shell: bash
         run: |
@@ -448,7 +482,11 @@ jobs:
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/agent-team-mail.rb Formula/atm.rb
+          if [[ '${{ needs.gate-and-tag.outputs.prerelease }}' == 'true' ]]; then
+            git add Formula/atm-beta.rb
+          else
+            git add Formula/agent-team-mail.rb Formula/atm.rb
+          fi
           git diff --cached --quiet && echo "No changes to commit" && exit 0
           git commit -m "chore: bump agent-team-mail to v${version}"
           git push

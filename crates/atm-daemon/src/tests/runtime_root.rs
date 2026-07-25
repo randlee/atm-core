@@ -109,6 +109,8 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         Ok(ResponseEnvelope::CompatibilityVerdict(
             atm_core::protocol::CompatibilityVerdict::Compatible {
                 daemon_release: atm_core::protocol::ReleaseVersion::current(),
+                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
             },
         ))
     }
@@ -892,7 +894,8 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         &endpoint,
         atm_daemon_client::CompatibilityPreflight {
             client_release: atm_daemon_client::ReleaseVersion::current(),
-            wire_version: 1,
+            cli_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+            http_api_version: atm_core::protocol::HttpApiVersion::current(),
         },
         Duration::from_secs(3),
     )

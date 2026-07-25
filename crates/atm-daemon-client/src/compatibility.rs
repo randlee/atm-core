@@ -2,33 +2,38 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use atm_core::protocol::{
-    CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion, RequestEnvelope, ResponseEnvelope,
+    CompatibilityPreflight, CompatibilityVerdict, HttpApiVersion, ReleaseVersion, RequestEnvelope,
+    ResponseEnvelope,
 };
-use atm_storage::{AtmError, AtmErrorCode};
+use atm_storage::AtmError;
 
 use crate::{DaemonLocalIpcEndpoint, exchange_request};
 
 pub struct Unverified;
 pub struct VersionVerified {
     daemon_release: ReleaseVersion,
+    daemon_schema_version: u16,
+    daemon_http_api_version: HttpApiVersion,
 }
 
 /// A typestate guard for same-host write dispatch. Transport integration owns
 /// construction; only a verified connection can be used for writes.
 ///
 /// ```compile_fail
-/// use atm_core::protocol::{CompatibilityPreflight, ReleaseVersion};
+/// use atm_core::protocol::{CompatibilityPreflight, HttpApiVersion, ReleaseVersion};
 /// use atm_daemon_client::Connection;
 ///
 /// let mut connection = Connection::new(CompatibilityPreflight {
 ///     client_release: ReleaseVersion::parse("1.3.1").unwrap(),
-///     wire_version: 1,
+///     cli_schema_version: 1,
+///     http_api_version: HttpApiVersion::parse("1.0.0").unwrap(),
 /// });
 /// let endpoint_path = std::env::temp_dir().join("atm-daemon.sock");
 /// let endpoint = atm_daemon_client::DaemonLocalIpcEndpoint::new(endpoint_path).unwrap();
 /// let request = atm_core::protocol::RequestEnvelope::CompatibilityPreflight(CompatibilityPreflight {
 ///         client_release: ReleaseVersion::parse("1.3.1").unwrap(),
-///         wire_version: 1,
+///         cli_schema_version: 1,
+///         http_api_version: HttpApiVersion::parse("1.0.0").unwrap(),
 ///     }),
 /// let _ = connection.dispatch_write(&endpoint, request, std::time::Duration::from_secs(3));
 /// ```
@@ -50,19 +55,16 @@ impl Connection<Unverified> {
     pub fn verify_compatibility(
         self,
         daemon_release: ReleaseVersion,
+        daemon_schema_version: u16,
+        daemon_http_api_version: HttpApiVersion,
     ) -> Result<Connection<VersionVerified>, AtmError> {
-        if self.preflight.client_release != daemon_release {
-            return Err(AtmError::new(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!(
-                    "ATM client release {} is incompatible with daemon release {}",
-                    self.preflight.client_release, daemon_release
-                ),
-            ));
-        }
         Ok(Connection {
             preflight: self.preflight,
-            state: VersionVerified { daemon_release },
+            state: VersionVerified {
+                daemon_release,
+                daemon_schema_version,
+                daemon_http_api_version,
+            },
             _marker: PhantomData,
         })
     }
@@ -71,6 +73,14 @@ impl Connection<Unverified> {
 impl Connection<VersionVerified> {
     pub fn daemon_release(&self) -> &ReleaseVersion {
         &self.state.daemon_release
+    }
+
+    pub fn daemon_schema_version(&self) -> u16 {
+        self.state.daemon_schema_version
+    }
+
+    pub fn daemon_http_api_version(&self) -> &HttpApiVersion {
+        &self.state.daemon_http_api_version
     }
 
     pub fn dispatch_write(
@@ -103,17 +113,27 @@ pub fn verify_connection_compatibility(
     };
     let connection = Connection::<Unverified>::new(preflight.clone());
     match verdict {
-        CompatibilityVerdict::Compatible { daemon_release } => {
-            connection.verify_compatibility(daemon_release)
-        }
+        CompatibilityVerdict::Compatible {
+            daemon_release,
+            daemon_schema_version,
+            daemon_http_api_version,
+        } => connection.verify_compatibility(
+            daemon_release,
+            daemon_schema_version,
+            daemon_http_api_version,
+        ),
         CompatibilityVerdict::Incompatible {
             client_release,
             daemon_release,
+            client_schema_version,
+            daemon_schema_version,
+            client_http_api_version,
+            daemon_http_api_version,
             code,
         } => Err(AtmError::new(
             code,
             format!(
-                "ATM client release {client_release} is incompatible with daemon release {daemon_release}"
+                "ATM compatibility mismatch: client release {client_release}, daemon release {daemon_release}; schema {client_schema_version}/{daemon_schema_version}; HTTP API {client_http_api_version}/{daemon_http_api_version}"
             ),
         )),
     }
@@ -121,16 +141,18 @@ pub fn verify_connection_compatibility(
 
 #[cfg(test)]
 mod tests {
-    use super::{CompatibilityPreflight, Connection, ReleaseVersion, Unverified};
+    use super::{CompatibilityPreflight, Connection, HttpApiVersion, ReleaseVersion, Unverified};
+    use atm_core::protocol::CLI_SCHEMA_VERSION;
 
     #[test]
     fn matching_versions_transition_to_verified_connection() {
         let version = ReleaseVersion::parse("1.3.1").expect("version");
         let connection = Connection::<Unverified>::new(CompatibilityPreflight {
             client_release: version.clone(),
-            wire_version: 1,
+            cli_schema_version: CLI_SCHEMA_VERSION,
+            http_api_version: HttpApiVersion::current(),
         })
-        .verify_compatibility(version)
+        .verify_compatibility(version, CLI_SCHEMA_VERSION, HttpApiVersion::current())
         .expect("compatible");
         assert_eq!(connection.daemon_release().to_string(), "1.3.1");
     }
@@ -139,7 +161,8 @@ mod tests {
     fn compatibility_preflight_retains_canonical_request_shape() {
         let preflight = CompatibilityPreflight {
             client_release: ReleaseVersion::parse("1.3.1").expect("version"),
-            wire_version: 1,
+            cli_schema_version: CLI_SCHEMA_VERSION,
+            http_api_version: HttpApiVersion::current(),
         };
         let request =
             atm_core::protocol::RequestEnvelope::CompatibilityPreflight(preflight.clone());
