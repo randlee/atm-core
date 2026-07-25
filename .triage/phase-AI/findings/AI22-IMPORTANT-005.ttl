@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-005>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-005" ;
-  triage:title "SendCommand::message_validation_error discards its recovery-text argument, tailored guidance never reaches the user" ;
-  triage:description "SendCommand::message_validation_error takes a _recovery parameter that is never used. All three call sites construct specific, actionable recovery text that is written in the source but never reaches the resulting AtmError/anyhow::Error. The error only carries the generic fallback recovery string via error_catalog::request_guidance - the tailored guidance authored at each call site is silently replaced by boilerplate." ;
+  triage:title "SendCommand::message_validation_error discards tailored recovery guidance in favor of a generic fallback" ;
+  triage:description "SendCommand::message_validation_error (crates/atm/src/commands/send.rs, lines 62-67) takes a _recovery: impl Into<String> parameter but never uses it. Three call sites in build_message_source (lines 114-117, 121-124, 139-142) each pass tailored recovery guidance that gets silently discarded — the resulting error only carries the message, and recovery resolves through error_catalog::request_guidance to a generic fallback ('Correct the invalid ATM request or state before retrying.') instead of the tailored text passed at each call site." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
   triage:category "error-handling" ;
@@ -15,9 +15,26 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s21pre/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/f3fa3cac> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/f3fa3cac> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, _recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation(message.into()).into() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
 
 <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s22/1>
   a triage:Occurrence ;
@@ -30,9 +47,52 @@
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
 
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, _recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation(message.into()).into() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, _recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation(message.into()).into() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "f3fa3cac" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/f3fa3cac> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
 <urn:atm:triage:worktree/pAI-s22/a5aa6813>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
-  triage:orderIndex 8 .
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/f3fa3cac>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "f3fa3cac" ;
+  triage:orderIndex 4 .
