@@ -4,35 +4,35 @@
 <urn:atm:triage:finding/AI30-MINOR-002>
   a triage:Finding ;
   triage:findingId "AI30-MINOR-002" ;
-  triage:title "Hardcoded /tmp/alternate.sock in unit test" ;
-  triage:description "crates/atm-core/src/protocol.rs:523 -- hardcoded `/tmp/alternate.sock` in a unit test. Pre-existing (not introduced by this sprint) but present in a file this sprint heavily modified." ;
+  triage:title "Hardcoded /tmp/alternate.sock in unit test — CLOSED" ;
+  triage:description "crates/atm-core/src/protocol.rs:523 — hardcoded `/tmp/alternate.sock` in unit test. Closed by commit 77252eca: replaced with tempfile::TempDir::new() and relative path override. Independently verified by req-qa (code inspection: daemon_socket_path_ignores_atm_home and daemon_socket_path_rejects_override now use TempDir) and rust-qa-agent (cargo test --workspace passes, cross-platform compliance verified)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "AI30" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "portability" ;
   triage:severity "Minor" ;
   triage:repeatable false ;
-  triage:sweepScope "this-branch-only" ;
-  triage:status "open" ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-002/pAI-s30/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s30/77252eca> .
 
 <urn:atm:triage:occurrence/AI30-MINOR-002/pAI-s30/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 523 ;
   triage:snippet "let _env = EnvGuard::set_many([(\"ATM_DAEMON_SOCKET\", Some(\"/tmp/alternate.sock\"))]);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:headSha "7ad54d25" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+  triage:headSha "77252eca" ;
+  triage:priorHeadSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/77252eca> .
 
-<urn:atm:triage:worktree/pAI-s30/7ad54d25>
+<urn:atm:triage:worktree/pAI-s30/77252eca>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
-  triage:headSha "7ad54d25" ;
+  triage:headSha "77252eca" ;
   triage:orderIndex 9 .
