@@ -18,7 +18,7 @@
   triage:closedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:closedBy "qa-triage" ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
-  triage:foundIn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:foundIn triage:AICH-S7 ;
   triage:foundAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-ARCH-002/pAI-s27/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;

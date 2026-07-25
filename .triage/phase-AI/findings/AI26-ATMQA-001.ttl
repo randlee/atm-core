@@ -21,7 +21,7 @@
   triage:closedBy "quality-mgr" ;
   triage:closureNote "Independently verified genuinely CLOSED during the AICH-S6-FIX-1 recheck (commit c088b878, 2026-07-25T08:19:43-07:00; 3 reviewers). complete_handshake_with_deadline at crates/atm-daemon/src/https_transport.rs (current lines ~469-484) now maps handshake io::Error via .map_err(|source| AtmError::remote_delivery_unconfirmed(format!(\"HTTPS peer mutual-TLS handshake was not confirmed before the shared deadline: {source}\"))), not daemon_unavailable -- the fix landed on commit 0265c94f ('fix: preserve HTTPS transport failure causes'), well before AI.27. Re-verified for this AI.27 QA-1 pass that https_transport.rs is genuinely untouched by 5e91a889: `git log --oneline -- crates/atm-daemon/src/https_transport.rs` shows its last touching commit is 0265c94f, and `git show 5e91a889 --stat` does not list https_transport.rs among changed files. Corrected from stale 'open'/Blocking status to 'fixed'/closed per this re-verification, citing the earlier FIX-1 verdict rather than re-deriving from scratch." ;
   triage:triagedAt "2026-07-25T14:15:00Z"^^xsd:dateTime ;
-  triage:foundIn <urn:atm:triage:worktree/s26/dc079fff> ;
+  triage:foundIn triage:AICH-S6 ;
   triage:foundAt "2026-07-25T14:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-001/s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-001/s27/1> ;
