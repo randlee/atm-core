@@ -95,6 +95,7 @@ call it cannot select a different write, persistence, ACK, or nudge handler.
 ## Hard Dependencies
 
 - AI.11–AI.16
+- AI.21-pre
 - AI.22
 
 ## Release candidate
@@ -113,12 +114,17 @@ call it cannot select a different write, persistence, ACK, or nudge handler.
 ## Sub-Tasks
 
 1. **Make one write representation the only send/ACK application request.**
-   - Development work: in `crates/atm-core/src/api/` and
-     `crates/atm-core/src/protocol.rs`, define/use
+   - **Current state:** `ApiRequest::Write`, shared dispatcher routing, and
+     `normalize_peer_write_for_local_delivery` already exist on
+     `origin/integrate/phase-AI@cb3af95188c1ba685ed93cec0512e7d38fa7f655`.
+     The HTTPS adapter is already wired through
+     `DaemonRequestDispatcher` in `runtime_health.rs`.
+   - **Target state / remaining work:** verify and add regression coverage that
+     those existing seams are the only send/ACK representation:
      `ApiRequest::Write(Box<WriteRequest>)` and
-     `RequestEnvelope::Write(Box<WriteRequest>)` for both send and ACK. Move
-     ACK-specific information into `WriteRequest.acknowledges_message_id`.
-     Delete or deprecate any peer-facing `SendRequestEnvelope::Compose` /
+     `RequestEnvelope::Write(Box<WriteRequest>)`, with ACK data only in
+     `WriteRequest.acknowledges_message_id`. Delete or deprecate any remaining
+     peer-facing `SendRequestEnvelope::Compose` /
      `SendRequestEnvelope::Acknowledge` write dispatch rather than wrapping it.
    - Required tests: serialize a normal send and ACK; assert they differ only
      by the ACK reference and ordinary message fields, then decode to the same

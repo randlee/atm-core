@@ -21,7 +21,8 @@ derived link-quality projection without a second delivery-state store.
 
 ## Deliverables
 
-1. Consume AI.26's ADR-041 `RemoteDeliveryUnconfirmed` mapping for local
+1. Consume ADR-041's `RemoteDeliveryUnconfirmed` mapping, implemented by
+   AI.26, for local
    response-read timeout after dispatch; reserve `DAEMON_UNAVAILABLE` for
    actual local daemon unavailability.
 2. Emit the retained event schema below for connection-handler, route, and
@@ -76,6 +77,12 @@ derived link-quality projection without a second delivery-state store.
    }
    ```
 
+   `DaemonRequestDispatcher::record_peer_delivery_event` in
+   `crates/atm-daemon/src/runtime_health.rs` is the sole projection writer:
+   it receives the retained event and updates `PeerLinkStatus`/
+   `PeerDrainState`. AI.28 emits recovery facts to that function; it never
+   writes the projection directly.
+
    `PeerLinkStatus` is a lossy observability snapshot. It stores no message
    IDs, payloads, cursors, delivery receipts, or authority material; restart
    resets it to `Misconfigured` or `Degraded` until an ordinary attempt
@@ -90,9 +97,11 @@ derived link-quality projection without a second delivery-state store.
 
 - `crates/atm-core/src/error_codes.rs` and `error.rs`: own the one typed
   `RemoteDeliveryUnconfirmed` catalog entry and safe recovery text.
-- `crates/atm-daemon/src/runtime_health.rs`: emit the specified events from the
-  canonical route/post-write outcome and maintain the bounded projection; do
-  not add transport-local status state.
+- `crates/atm-daemon/src/runtime_health.rs`:
+  `DaemonRequestDispatcher::record_peer_delivery_event` is the sole event-to-
+  projection writer. It emits the specified events from the canonical
+  route/post-write outcome and maintains the bounded projection; do not add
+  transport-local status state.
 - `crates/atm-core/src/doctor/report.rs` and `doctor/mod.rs`: add the
   secret-free `PeerLinkStatus` projection to `DoctorReport`.
 - `scripts/smoke/analyze_logs.py`: consume event names only; it must not infer

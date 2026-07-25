@@ -25,6 +25,7 @@ target: integrate/phase-AI
 
 ## Hard Dependencies
 
+- AI.21-pre
 - AI.11–AI.16
 
 ## Release candidate
@@ -53,8 +54,9 @@ silently dropped or partially deferred.
   IP authority belongs to AI.25. Team-name parsing must reject an embedded `.`
   and hand the remainder to host parsing; it must never silently coerce a
   malformed team segment into `None`.
-- Fix the silent-fallback bug in `resolve_recipient`
-  (`crates/atm-core/src/send/mod.rs:623-639`): today
+- Fix the silent-fallback bug in `resolve_recipient` (verified against
+  `origin/integrate/phase-AI@cb3af95188c1ba685ed93cec0512e7d38fa7f655`; cite
+  the function name rather than a volatile line number): today
   `target_address.team.as_deref().and_then(|team| team.parse().ok()).or_else(|| Some(caller_team.clone()))`
   swallows a team-parse failure and silently substitutes the caller's own
   team instead of returning `AddressParseFailed`. This is the mechanism that
@@ -62,8 +64,9 @@ silently dropped or partially deferred.
   `team-lead@atm-dev` (self) instead of failing to parse or resolving a host.
   A malformed or unrecognized team/host segment must be a typed parse error,
   never a silent identity substitution.
-- Extend `validate_non_self_recipient`
-  (`crates/atm-core/src/send/mod.rs:581-597`) to reject only an exact same
+- Extend `validate_non_self_recipient` (verified against
+  `origin/integrate/phase-AI@cb3af95188c1ba685ed93cec0512e7d38fa7f655`; cite
+  the function name rather than a volatile line number) to reject only an exact same
   agent/team recipient whose `host` is `None`. The function receives the
   already parsed host; it must not import DNS, peer trust, interface, or
   transport code. Any present host, including an unrecognized remote host,
@@ -88,7 +91,11 @@ silently dropped or partially deferred.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentAddress {
     pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<ChatId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<TeamName>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<HostName>,
 }
 
@@ -145,6 +152,9 @@ pub(crate) fn validate_non_self_recipient(
   silently substitutes the caller's own team.
 - Existing non-host-qualified self-send behavior (`<agent>@<team>` with no
   host, sending to itself) is unchanged and still rejected.
+- `agent:<chat-id>@team.<host>` parses and renders with the same `chat_id` and
+  `host`; both values pass unchanged through `validate_non_self_recipient` and
+  `resolve_recipient` into the canonical request.
 - Release-built CLI and daemon both report `1.3.2-beta-22` through
   `atm doctor --json` before the proof runs.
 - An independent quality review runs the release-built branch daemon through

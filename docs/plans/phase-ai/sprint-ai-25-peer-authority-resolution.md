@@ -25,11 +25,25 @@ effect in the one live daemon without a restart.
    record below; do **not** introduce a second `PeerAuthority` type or any
    peer-IP-as-authority lookup.
 
+   Current shape on `origin/integrate/phase-AI@cb3af95188c1ba685ed93cec0512e7d38fa7f655`:
+
    ```rust
    pub struct TrustedPeer {
        pub host: HostName,
-       pub https_port: std::num::NonZeroU16,
        pub fingerprint: CertificateFingerprint,
+       pub enabled: bool,
+   }
+   ```
+
+   Target shape (the new `https_port` is intentional; `enabled` is retained as
+   the operator's explicit allow/revoke control and is not folded into TLS):
+
+   ```rust
+   pub struct TrustedPeer {
+       pub host: HostName,
+       pub fingerprint: CertificateFingerprint,
+       pub enabled: bool,
+       pub https_port: std::num::NonZeroU16,
    }
    ```
 
@@ -53,7 +67,8 @@ effect in the one live daemon without a restart.
 ## Implementation map
 
 - `crates/atm-storage/src/contract.rs`: evolve `TrustedPeer` and
-  `PeerConfigStore`; define no resolver cache/persistence method.
+  `PeerConfigStore`; add `https_port`, retain `enabled`, and define no resolver
+  cache/persistence method.
 - `crates/atm-daemon/src/https_transport.rs`: resolve a hostname for each new
   peer connection, select exactly one existing `TrustedPeer`, and retain that
   record's hostname/port for TLS SNI and fingerprint verification.

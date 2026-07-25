@@ -3,7 +3,7 @@ title: AI.26 end-to-end peer write deadline
 status: proposed
 branch: feature/pAI-s26-peer-write-deadline
 target: integrate/phase-AI
-depends_on: AI.21-pre, AI.23, AI.25, AI.11–AI.16
+depends_on: AI.21-pre, AI.23, AI.11–AI.16
 ---
 
 # AI.26 — end-to-end peer write deadline
@@ -17,6 +17,15 @@ depends_on: AI.21-pre, AI.23, AI.25, AI.11–AI.16
 
 One absolute `RequestDeadline` governs local HTTP admission through peer HTTPS
 completion or cancellation; no route creates a longer independent deadline.
+
+## Governing decision
+
+`docs/adr/ADR-041-end-to-end-peer-write-outcome.md` owns the
+`RemoteDeliveryUnconfirmed` mapping: after local persistence, deadline,
+disconnect, or response-write failure before peer HTTP acceptance maps to
+`REMOTE_DELIVERY_UNCONFIRMED`; only an unavailable local daemon maps to
+`ATM_DAEMON_UNAVAILABLE`. This sprint implements that already-defined mapping;
+AI.27 consumes it for events and doctor output.
 
 ## Deliverables
 

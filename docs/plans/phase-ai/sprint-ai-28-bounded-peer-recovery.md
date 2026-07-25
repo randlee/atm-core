@@ -66,8 +66,22 @@ receipt, or per-message delivery state.
    It must contain no message ULID, payload, cursor, receipt, or attempt
    history. A per-host single-flight lease covers scan, connection, ordered
    sends, and final rescan; different hosts may drain independently.
-3. Add the backend-neutral `OutboundMessageQuery::page_for_peer` cursorless
-   page contract in `atm-core`/`atm-storage`. It selects only the exact-peer,
+3. Replace `OutboundMessageQuery::recent_outbound_for_peer` with the following
+   backend-neutral paged contract in `atm-core`/`atm-storage`; remove the old
+   method and its implementations/tests in this sprint so the two queries do
+   not coexist:
+
+   ```rust
+   fn page_for_peer(
+       &self,
+       peer: &HostName,
+       not_before: IsoTimestamp,
+       after: Option<(IsoTimestamp, MessageId)>,
+       limit: NonZeroU16,
+   ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+   ```
+
+   It selects only the exact-peer,
    locally-originated immutable records within `max_message_age`, ordered by
    `(created_at, message_ulid)` ascending. The query accepts a transient
    exclusive `(created_at, message_ulid)` lower bound and returns at most
@@ -95,8 +109,9 @@ receipt, or per-message delivery state.
 7. Emit AI.27's retained `peer_recovery_scheduled`, `peer_recovery_attempt`,
    `peer_recovery_confirmed`, and `peer_recovery_unconfirmed` events, including
    hostname, bounded candidate count, delay, and typed error but never body,
-   certificate material, or message payload. Update the AI.27 `PeerLinkStatus`
-   projection from those events.
+   certificate material, or message payload. Deliver each event to
+   AI.27's `DaemonRequestDispatcher::record_peer_delivery_event`; that function
+   alone updates the `PeerLinkStatus` projection.
 8. Stop and discard the in-memory slot when the window is empty, policy is
    disabled, peer is revoked, or daemon shuts down. `atm peer sync <peer>` is
    one immediate use of the same coordinator/connection/endpoint, never a
@@ -113,9 +128,10 @@ receipt, or per-message delivery state.
 - `crates/atm-daemon/src/runtime_health.rs`: after the canonical write handler
   persists a host-qualified origin record, signal the coordinator; never call a
   second remote write implementation.
-- `crates/atm-storage/src/contract.rs`: add only
-  `OutboundMessageQuery::page_for_peer`; its SQLite implementation belongs in
-  the storage crate and daemon/transport imports no SQLite type.
+- `crates/atm-storage/src/contract.rs`: replace
+  `OutboundMessageQuery::recent_outbound_for_peer` with `page_for_peer`; its
+  SQLite implementation belongs in the storage crate and daemon/transport
+  imports no SQLite type.
 - `crates/atm-daemon/src/https_transport.rs`: expose one connection-scoped
   sequential canonical-write operation used by both foreground and drain work;
   it owns no scheduling or storage query.

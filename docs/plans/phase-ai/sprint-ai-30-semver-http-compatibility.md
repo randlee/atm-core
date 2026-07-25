@@ -47,6 +47,33 @@ interoperable.
 
 ## Required signatures
 
+Current state on `origin/integrate/phase-AI@cb3af95188c1ba685ed93cec0512e7d38fa7f655`:
+
+```rust
+// Migrated previously from api.rs to protocol.rs; this sprint keeps protocol.rs
+// as its sole owner.
+pub struct CompatibilityPreflight {
+    pub client_release: ReleaseVersion,
+    pub wire_version: u16,
+}
+
+pub enum CompatibilityVerdict {
+    Compatible { daemon_release: ReleaseVersion },
+    Incompatible {
+        client_release: ReleaseVersion,
+        daemon_release: ReleaseVersion,
+        code: AtmErrorCode,
+    },
+}
+```
+
+Target state: evolve (do not add a second preflight/verdict) the existing
+`protocol.rs` types. `wire_version` is renamed to `cli_schema_version`; the
+new `http_api_version` field is added. `client_release` remains diagnostic
+only. `CompatibilityVerdict::Incompatible.code` is retained and carries the
+typed schema- or HTTP-major mismatch code; no release-string mismatch is an
+admission failure.
+
 ```rust
 pub struct CompatibilityPreflight {
     pub client_release: ReleaseVersion,
@@ -59,9 +86,9 @@ pub struct HttpApiVersion(semver::Version);
 //         && http_api_version.major == daemon_http_api_version.major
 ```
 
-`ReleaseVersion` and `HttpApiVersion` parse strict SemVer. The compatibility
-verdict returns both daemon versions for diagnostics. It must not compare
-product release strings for admission.
+`ReleaseVersion` and `HttpApiVersion` parse strict SemVer. The evolved
+compatibility verdict returns both daemon versions for diagnostics and retains
+its typed `code`. It must not compare product release strings for admission.
 
 ## Acceptance criteria
 

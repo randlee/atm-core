@@ -60,8 +60,9 @@ so tested CLI/daemon builds are not artificially blocked by release-label drift.
 
 - A registered hostname plus certificate pin is the peer authority; resolved
   IPs are transient DNS facts, never SQLite aliases.
-- The existing `TrustedPeer { host, https_port, fingerprint }` is that one
-  authority record; a second `PeerAuthority` DTO is prohibited.
+- The existing `TrustedPeer { host, fingerprint, enabled }` evolves in AI.25
+  by adding `https_port` while retaining `enabled` as the operator's allow/
+  revoke control; a second `PeerAuthority` DTO is prohibited.
 - An IP target is accepted only when it currently resolves from exactly one
   registered hostname. No reverse-DNS inference exists.
 - A single absolute request deadline governs every local and remote leg.
