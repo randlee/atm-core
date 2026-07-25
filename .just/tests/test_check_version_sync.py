@@ -200,6 +200,34 @@ ManifestVersion: 1.1.2
 
             self.assertTrue(validate_winget_manifests(repo_root, "1.1.2", config))
 
+    def test_validate_winget_manifests_accepts_prerelease_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            (repo_root / ".winget").mkdir(parents=True)
+            (repo_root / ".winget/randlee.agent-team-mail.yaml").write_text(
+                """\\
+PackageIdentifier: randlee.agent-team-mail
+PackageVersion: 1.3.2-beta-21-pre
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.3.2-beta-21-pre/atm_1.3.2-beta-21-pre_x86_64-pc-windows-msvc.zip
+ManifestType: installer
+ManifestVersion: 1.3.2-beta-21-pre
+""",
+                encoding="utf-8",
+            )
+            config = {
+                "winget": {
+                    "enabled": True,
+                    "manifest_glob": ".winget/*.yaml",
+                    "package_version_field": "PackageVersion",
+                    "manifest_version_field": "ManifestVersion",
+                    "installer_url_field": "InstallerUrl",
+                }
+            }
+            self.assertTrue(validate_winget_manifests(repo_root, "1.3.2-beta-21-pre", config))
+
 
 if __name__ == "__main__":
     unittest.main()
