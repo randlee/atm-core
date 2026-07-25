@@ -90,3 +90,7 @@ triage:a13 a triage:Assignment ;
 triage:c11 a triage:Completion ;
     triage:ofSprint triage:AICH-S5 ;
     triage:at "2026-07-25T14:14:00Z"^^xsd:dateTime .
+triage:a14 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S6 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-25T14:22:45Z"^^xsd:dateTime .
