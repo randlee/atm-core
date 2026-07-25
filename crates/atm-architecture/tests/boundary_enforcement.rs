@@ -62,6 +62,25 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
+fn ai25_live_trust_refresh_reuses_startup_validation() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
+    let refresh = source
+        .split("fn refresh_https_trust")
+        .nth(1)
+        .and_then(|rest| rest.split("fn begin_startup").next())
+        .expect("AI.25 live trust refresh must remain a dedicated composition method");
+    assert!(
+        refresh.contains("validate_enabled_peer_configuration"),
+        "AI.25 forbids installing reload-time trust without the startup validator"
+    );
+    assert!(
+        refresh.contains("refresh_trusted_peers"),
+        "AI.25 live reload must replace the retained verifier snapshot"
+    );
+}
+
+#[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))

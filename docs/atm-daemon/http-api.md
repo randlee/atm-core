@@ -114,6 +114,9 @@ pin. The daemon resolves the hostname freshly for each new connection; resolved
 addresses are neither returned by doctor nor persisted. A literal-IP delivery
 target is accepted only when it currently resolves from exactly one configured
 hostname authority. The configured hostname and port remain the TLS authority.
+After an `atm peer trust add`, `replace`, or `revoke`, operators use the
+existing daemon reload control to atomically install the updated trust snapshot;
+they do not start a second daemon.
 
 ## Deferred scope
 
