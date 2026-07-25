@@ -117,6 +117,30 @@ For comparison, querying the same records by
 and by `feature/pAI-s27-peer-delivery-observability` returns 9. This is
 branch-specific behavior, not a complete phase finding inventory.
 
+### Provenance investigation
+
+The history pass used `git log --all --diff-filter=A` and commit subjects/bodies
+for the 63 scoped files. It did not treat the branch currently containing a
+file as its origin.
+
+| Finding batch | First-add commit (author time) | Commit-message evidence |
+|---|---|---|
+| AI.30 / AICH-S9 | `14ba081f` (2026-07-24 21:58:10) | `triage: AI.30 QA-1 findings`; source snapshot `7ad54d25`; closure `77252eca` |
+| AI.21-pre / AICH-S1 | `542a8082` (22:02:28) | `triage: AI.21-pre QA-1 findings`; occurrence heads `5678337c`, `42fbd9fa` |
+| AI.23 / AICH-S3 | `c4200ec2` (23:26:57) | `triage: AI.23 QA-1 findings`; recheck `9fdf1dfe` added IMPORTANT-008 |
+| AI.22 / AICH-S2 | `0daaee17` (23:43:13) | `triage: AI.22 QA-1 findings`; recheck `71583c86` added IMPORTANT-004/005 with explicit lost-original uncertainty |
+| AI.24 / AICH-S4 | `af400208` (01:13:43) | `AI.24 QA-FAIL` on `feature/pAI-s24... @ 7bb63e01`; source fix `af2fbb83` |
+| AI.25 / AICH-S5 | `cb962d82` (02:32:19) | `AICH-S5 (AI.25) QA-1 findings`; rechecks `0fa160cf`, `664c6358` |
+| AI.26 / AICH-S6 | `365255ce` (07:54:44) | AI26-ATMQA-001/002; follow-up `c088b878` added ATMQA-003 |
+
+All 63 records retain occurrence `triage:branch` and `triage:headSha`; 60 have
+`triage:occursIn` and 59 have `hasOccurrence`. These identify reproducible
+snapshots, not necessarily the introducing commit. Only AI21-BLOCK-001 has a
+`triage:foundAt`, and many `triage:triagedAt` values are placeholders. The
+actual QA evidence should therefore supply the authoritative `foundIn` sprint
+and `foundAt` observation time; do not derive either from current branch
+location or commit-author time.
+
 ## Issues found
 
 1. **High — graph cannot see the AICH findings.** The 63 scoped AICH finding
