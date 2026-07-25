@@ -16,6 +16,7 @@ Run from the current `integrate/phase-*` worktree, or pass the worktree
 explicitly:
 
 ```bash
+python3 -m pip install --upgrade rdflib
 python3 .claude/skills/triage-report/scripts/triage_report.py \
   --phase AICH --format table
 python3 .claude/skills/triage-report/scripts/triage_report.py \
