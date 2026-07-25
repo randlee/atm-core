@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-ARCH-003>
+  a triage:Finding ;
+  triage:findingId "AI28-ARCH-003" ;
+  triage:title "Duplicated coordinator-construction wiring between prod and test paths" ;
+  triage:description "The bounded peer recovery coordinator is instantiated and wired into the runtime via similar (but slightly inconsistent) code paths in production vs. test initialization. The duplicated logic makes future refactoring harder and risks divergence between how the coordinator is configured in real deployments vs. tests. This is a code-smell issue, not a functional bug, but duplication should be eliminated through a shared factory or builder pattern. Fix recommended: extract the coordinator construction logic into a single factory function that both prod and test paths call, parametrized by the small differences needed (e.g., test-specific mock transport vs. real transport). This reduces maintenance risk and ensures consistency." ;
+  triage:category "Architecture" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "Production coordinator initialization logic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 1 ;
+  triage:snippet "Test-path coordinator initialization logic (similar but inconsistently duplicated)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

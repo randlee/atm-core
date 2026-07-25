@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-QA1-F002>
+  a triage:Finding ;
+  triage:findingId "AI28-QA1-F002" ;
+  triage:aliasIds "AI28-RBQA-F001,AI28-ARCH-002,RBQA-AI28-2" ;
+  triage:title "Sprint-doc-mandated concurrency/race tests entirely absent" ;
+  triage:description "crates/atm-daemon/src/peer_drain_coordinator.rs (515 new lines, the component owning the worker thread, slot leasing, generation-based missed-write detection, and exponential backoff) has zero #[cfg(test)] coverage of its own. The sprint acceptance criteria explicitly require: fake-clock tests for backoff min/cap/reset/revoke/empty-window/restart; a single-flight same-host contention test; and tests forcing both generation-change race windows. None of these exist. The component's only coverage is indirect through integration tests exercising the happy path. Additionally, AI.27's prior cooldown-map test (automatic_peer_sync_cooldown_is_bounded_and_expires) was deleted with no bounded-capacity replacement for the new per-host slot map, violating the no-test-deletion-during-coupling-moves policy. This is classified as Blocking because it is an explicitly-named, sprint-scoped acceptance criterion, not an optional follow-up. Independently corroborated by 4 of 6 reviewers (req-qa, rust-best-practices-agent, arch-qa, ruthless-boundary-qa) as the same underlying gap, though severity classifications differ." ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing: no #[cfg(test)] module for backoff/contention/race-window tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F002/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing: test-time generation of PeerDeliveryEvent with real coordinator path (only hand-constructed objects with next_attempt_at: None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

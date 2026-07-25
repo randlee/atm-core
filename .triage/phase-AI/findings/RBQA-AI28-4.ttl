@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI28-4>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI28-4" ;
+  triage:title "Missing documentation cross-reference between retry scheduling and router classification" ;
+  triage:description "The relationship between the bounded peer recovery coordinator's retry scheduling logic and the router's terminal/unconfirmed delivery classification is not documented in code comments or in the sprint's design documentation. This gap makes it harder for future maintainers to understand the interaction model and risks introducing bugs when either system is refactored. Additionally, the retry scheduling behavior (backoff intervals, retry counts, termination conditions) should be documented alongside the router's delivery classification logic so readers of one system can find references to the other. Fix recommended: add cross-references and documentation explaining: (1) how the coordinator's retry schedule influences routing decisions, (2) which component owns the decision to mark a peer as unrecoverable, and (3) what the coordinator should do when the router marks a delivery as terminal. Consider adding comments in both peer_drain_coordinator.rs and the router module pointing to the complementary design." ;
+  triage:category "Documentation" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing cross-reference to router's terminal/unconfirmed classification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/post_write_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing cross-reference to bounded recovery coordinator's retry logic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

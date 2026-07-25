@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "AI28-ARCH-001" ;
+  triage:title "runtime_health.rs RULE-003 threshold still exceeded (line count reduced but not resolved)" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs line count is now 1271 lines, improved from the previous 1356 lines recorded in AI27-ARCH-001, but still exceeds the RULE-003 hard limit of 1250 lines. This finding carries forward the unresolved RULE-003 violation from the prior sprint. The component adds new health-check logic for peer recovery coordinator coordination, which contributes to the continued line-count pressure. While the absolute line count improved, the file remains out of compliance. Fix required: refactor runtime_health.rs to extract distinct responsibilities (e.g., peer recovery health checks, overall host health aggregation, external reporting) into separate modules to bring line count under 1250." ;
+  triage:category "Architecture" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:carriesForward "AI27-ARCH-001" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-001/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-001/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "Total line count: 1271 (RULE-003 limit: 1250)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .
