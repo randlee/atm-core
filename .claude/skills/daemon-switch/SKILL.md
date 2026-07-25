@@ -41,6 +41,12 @@ python3 .claude/skills/daemon-switch/scripts/daemon-switch.py switch \
   --cli target/release/atm --daemon target/release/atm-daemon --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist
 
+# If the checked label was unloaded but `status --doctor` still reaches an old
+# daemon, the selector has not changed the live process. Do not continue with
+# a split pair. After verifying the label/plist above, rerun the same command
+# with `--repair-orphan`; it SIGTERMs exactly one proven `atm-daemon` owner of
+# the ATM socket, then starts the selected managed service.
+
 # Restore the latest Homebrew formula targets, not a Cellar path.
 python3 .claude/skills/daemon-switch/scripts/daemon-switch.py restore --yes \
   --service <actual-label> --launch-agent-plist ~/Library/LaunchAgents/<actual-label>.plist

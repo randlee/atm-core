@@ -36,6 +36,7 @@ class DaemonSwitchTests(unittest.TestCase):
             dry_run=False,
             service="atm-daemon",
             launch_agent_plist="/tmp/atm-daemon.plist",
+            repair_orphan=False,
         )
 
     def patch_switch_inputs(self):
@@ -48,6 +49,7 @@ class DaemonSwitchTests(unittest.TestCase):
             replace_link=mock.DEFAULT,
             run_service=mock.DEFAULT,
             live_pair_matches=mock.DEFAULT,
+            require_stopped_daemon=mock.DEFAULT,
         )
 
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
@@ -72,6 +74,7 @@ class DaemonSwitchTests(unittest.TestCase):
                 mock.call(self.args, "start"),
             ],
         )
+        patched["require_stopped_daemon"].assert_called_once_with(self.args, self.old_cli)
         self.assertEqual(
             patched["replace_link"].call_args_list,
             [
@@ -146,6 +149,15 @@ class DaemonSwitchTests(unittest.TestCase):
                 mock.call(self.daemon_link, self.old_daemon),
             ],
         )
+
+    def test_reachable_daemon_requires_explicit_orphan_repair(self) -> None:
+        args = argparse.Namespace(repair_orphan=False)
+        with (
+            mock.patch.object(self.module, "daemon_still_reachable", return_value=True),
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "refuse a split pair"):
+                self.module.require_stopped_daemon(args, self.old_cli)
 
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -144,6 +145,46 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
 
 
+def daemon_still_reachable(cli: Path) -> bool:
+    return "error" not in doctor(cli)
+
+
+def repair_macos_orphan() -> None:
+    """Terminate only a verified stale daemon after its LaunchAgent is unloaded."""
+    socket_path = Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
+    result = run(["lsof", "-t", str(socket_path)], timeout=5.0)
+    raw_pids = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
+    if len(raw_pids) != 1:
+        raise SwitchError(
+            "managed stop left an ATM socket owner, but it is not exactly one repairable daemon PID"
+        )
+    pid = int(raw_pids[0])
+    command = run(["ps", "-p", str(pid), "-o", "command="], timeout=5.0).stdout.strip()
+    if "atm-daemon" not in command:
+        raise SwitchError(f"refusing to terminate non-ATM socket owner pid {pid}: {command}")
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    raise SwitchError(f"verified stale ATM daemon pid {pid} did not stop after SIGTERM")
+
+
+def require_stopped_daemon(args: argparse.Namespace, cli: Path) -> None:
+    if not daemon_still_reachable(cli):
+        return
+    if platform.system() != "Darwin" or not args.repair_orphan:
+        raise SwitchError(
+            "controlled service stop left a reachable daemon; refuse a split pair. "
+            "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
+        )
+    repair_macos_orphan()
+    if daemon_still_reachable(cli):
+        raise SwitchError("ATM daemon remained reachable after explicit orphan repair")
+
+
 def replace_link(link: Path, target: Path) -> None:
     with tempfile.NamedTemporaryFile(dir=link.parent, prefix=f".{link.name}.", delete=False) as handle:
         temporary = Path(handle.name)
@@ -189,6 +230,7 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         raise SwitchError("switch changes the system-wide pair; re-run with --yes")
     save_default_pair(old_cli, old_daemon)
     run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, old_cli)
     try:
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
@@ -294,6 +336,11 @@ def parser() -> argparse.ArgumentParser:
     selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
     selectors.add_argument("--service", help="LaunchAgent label or system service name")
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
+    selectors.add_argument(
+        "--repair-orphan",
+        action="store_true",
+        help="macOS only: SIGTERM one verified stale ATM socket owner after controlled service stop",
+    )
     sub = result.add_subparsers(dest="command", required=True)
     status_parser = sub.add_parser("status", parents=[selectors])
     status_parser.add_argument("--doctor", action="store_true", help="query the live daemon through the selected CLI")
