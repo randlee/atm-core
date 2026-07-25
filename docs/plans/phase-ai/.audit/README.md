@@ -15,22 +15,39 @@
 
 ## Scope
 
-This audit covers only the sprint rows supplied for AICH:
+This audit covers only the sprint rows supplied for AICH. The status table is
+the user-provided snapshot; its snapshot timestamp should be recorded when it
+changes.
 
-| AICH sprint | Phase sprint |
-|---|---|
-| AICH-S1 | AI.21-pre |
-| AICH-S2 | AI.22 |
-| AICH-S3 | AI.23 |
-| AICH-S4 | AI.24 |
-| AICH-S5 | AI.25 |
-| AICH-S6 | AI.26 |
-| AICH-S7 | AI.27 |
-| AICH-S8 | AI.28 |
-| AICH-S9 | AI.30 |
-| AICH-S10 | AI.29 |
+| AICH sprint | Phase sprint | DEV | QA | CI | PR |
+|---|---|---:|---:|---:|---|
+| AICH-S1 | AI.21-pre | ✅ | ✅ | ✅ | [#624](https://github.com/randlee/atm-core/pull/624) |
+| AICH-S2 | AI.22 | ✅ | ✅ | — | — |
+| AICH-S3 | AI.23 | ✅ | ✅ | — | — |
+| AICH-S4 | AI.24 | ✅ | ✅ | — | — |
+| AICH-S5 | AI.25 | ✅ | ✅ | — | — |
+| AICH-S6 | AI.26 | ✅ | ✅ | ✅ | — |
+| AICH-S7 | AI.27 | 🌀 in progress | — | — | — |
+| AICH-S8 | AI.28 | not started | — | — | — |
+| AICH-S9 | AI.30 | ✅ | — | ✅ | [#623](https://github.com/randlee/atm-core/pull/623) |
+| AICH-S10 | AI.29 | — | — | 🚧 failing | [#620](https://github.com/randlee/atm-core/pull/620) |
 
 Exclude unrelated Phase AI sprints, findings, branches, and ATM messages.
+
+## Recommended inputs to add
+
+- Timestamp, author, and source ref for each status-table snapshot.
+- Dev completion commit, QA verdict artifact, and CI run URL for every sprint.
+- Explicit branch/worktree and merge-forward commit for each sprint, including
+  rows currently showing no PR.
+- The intended meaning of `DEV`, `QA`, and `CI` when a sprint has a completion
+  event but its QA gate is still pending.
+- A mapping from each finding to `AICH-S1` through `AICH-S10`, including the
+  finding timestamp and whether it is open, fixed, deferred, or closed.
+- The rule for treating the supplied table versus `.sprints/AICH/events.ttl`
+  when their status snapshots disagree.
+- CI failure URLs/logs for AICH-S10 and the acceptance criterion or owner for
+  resolving them.
 
 ## Evidence rules
 
@@ -55,4 +72,3 @@ Exclude unrelated Phase AI sprints, findings, branches, and ATM messages.
 - Integration HEAD at setup: `8627d5f3628e5ebd3bf271b3ac5b7ccf345dc652`
 - Local `develop`: `643fe719ac5265e4b58d6628c771aad850ba156f`
 - `origin/develop`: `e31af4f8107902464ab00c48eab8e2bfa37fffe3`
-
