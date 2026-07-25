@@ -58,7 +58,6 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
-pub use https_transport::PeerWireSecurity;
 #[cfg(not(windows))]
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
 #[cfg(windows)]
@@ -135,14 +134,7 @@ impl AtmHomeDir {
 pub fn run_daemon_with_observability(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<(), AtmError> {
-    run_daemon_with_observability_and_wire_security(observability, PeerWireSecurity::MutualTls)
-}
-
-pub fn run_daemon_with_observability_and_wire_security(
-    observability: Arc<dyn DaemonRuntimeObservability>,
-    wire_security: PeerWireSecurity,
-) -> Result<(), AtmError> {
-    composition::compose_runtime(observability, wire_security)?.start()
+    composition::compose_runtime(observability)?.start()
 }
 
 #[cfg(test)]

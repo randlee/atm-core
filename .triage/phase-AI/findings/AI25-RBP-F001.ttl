@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RBP-F001>
   a triage:Finding ;
   triage:findingId "AI25-RBP-F001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "New HTTPS/DNS error paths discard the underlying cause" ;
   triage:description "crates/atm-daemon/src/https_transport.rs systematically uses map_err(|_source| AtmError::daemon_unavailable(...)) instead of the existing AtmError::daemon_unavailable_with_cause, most costly at the DNS-resolver call sites where operators can't tell NXDOMAIN from timeout from empty-result. FOLLOWUP (AICH-S5-FIX-1 recheck, a9e61fb0): partially fixed only. resolve_peer_addresses (plural) now uses daemon_unavailable_with_cause. resolve_peer_address (singular, the hot-path function called by deliver() at ~line 527, see AI25-RSH-001) and adjacent non-DNS sites are unchanged and still discard cause: TcpStream::connect_timeout (~172), ServerName::try_from (~177), ClientConnection::new (~181), TLS PEM load (~118). Confirmed by rust-best-practices-agent and req-qa (ATM-QA-104) during the recheck." ;
   triage:phaseId "phase-AI" ;

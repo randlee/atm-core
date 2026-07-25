@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-006>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-006" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "Three required initial-table rows are silently not-run by default" ;
   triage:description "scripts/smoke/run_inbound_peer_smoke.py code-path fix is correct: run() now properly populates host.local_checks rows when present in config. However, the shipped scripts/smoke/inbound-peer-smoke.example.json (the sprint's documented 'sole supported smoke surface') only declares 2 of 3 required keys: localhost/local loopback and own-IP are present, but 'nudge' is absent. Therefore, under the actual documented two-peer workflow with the actual shipped example config, the nudge row remains silently NOT-RUN. validate_host_config only validates that present keys are in the allowed set; it does not require all three keys, so the gap does not fail loudly." ;
   triage:phaseId "phase-AI" ;

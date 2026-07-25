@@ -396,7 +396,6 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
         RequestEnvelope::PeerSync(value) => serde_json::to_vec(value),
-        RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
 }
@@ -491,9 +490,6 @@ fn decode_success_response(
         RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
             .map(ResponseEnvelope::PeerSync)
             .map_err(AtmError::from),
-        RequestEnvelope::ReloadRuntimeView => serde_json::from_slice::<()>(body)
-            .map(|()| ResponseEnvelope::RuntimeViewReloaded)
-            .map_err(AtmError::from),
     }
 }
 
@@ -521,7 +517,6 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
         ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::PeerSync(value) => (200, "OK", None, serde_json::to_vec(value)),
-        ResponseEnvelope::RuntimeViewReloaded => (200, "OK", None, serde_json::to_vec(&())),
         ResponseEnvelope::Error(value) => {
             let status = if value.is_validation() { 400 } else { 503 };
             (
@@ -632,7 +627,6 @@ pub enum ApiRequest {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     PeerSync(PeerSyncRequest),
-    ReloadRuntimeView,
 }
 
 #[derive(Debug, Clone)]
@@ -662,7 +656,6 @@ impl ApiRequest {
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
             Self::PeerSync(request) => RequestEnvelope::PeerSync(request),
-            Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
         }
     }
 }
@@ -687,7 +680,6 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
             RequestEnvelope::PeerSync(request) => Self::PeerSync(request),
-            RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
         }
     }
 }
@@ -747,14 +739,6 @@ impl RequestDeadline {
 
     pub fn expired(self) -> bool {
         Instant::now() >= self.0
-    }
-
-    /// Returns the budget left for the next operation in this request.
-    ///
-    /// Adapters must consume this value rather than minting a fresh timeout:
-    /// one ingress request has one absolute completion deadline.
-    pub fn remaining(self) -> Option<Duration> {
-        self.0.checked_duration_since(Instant::now())
     }
 }
 

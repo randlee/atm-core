@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI30-MINOR-003>
   a triage:Finding ;
   triage:findingId "AI30-MINOR-003" ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
   triage:title "No max-length precheck before semver::Version::parse — CLOSED" ;
   triage:description "crates/atm-core/src/protocol.rs: ReleaseVersion and HttpApiVersion parsing. Fix commit 77252eca added MAX_VERSION_LENGTH = 256 constant at protocol.rs:28 and shared parse_semver helper at protocol.rs:120-134 that rejects input over 256 bytes with ClientDaemonVersionIncompatible before calling Version::parse. Both ReleaseVersion::parse and HttpApiVersion::parse route through this helper. Test semver_parsing_rejects_oversized_values_before_parser at protocol.rs:162-167 confirms closure." ;
   triage:phaseId "phase-AI" ;
