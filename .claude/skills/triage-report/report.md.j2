@@ -1,0 +1,22 @@
+---
+name: triage-report
+version: 1.0.0
+description: Deterministic triage status report for an integration phase.
+format: markdown
+required_variables:
+  - mode
+  - phase
+  - sprint_rows
+  - integration_row
+  - detailed_rows
+---
+{% if mode == "detailed" %}
+{{ detailed_rows }}
+────────────────────────────────────────
+{{ integration_row }}
+{% else %}
+| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |
+|--------|-----|----|----|----|---|---|---|-------|----|
+{{ sprint_rows }}
+{{ integration_row }}
+{% endif %}
