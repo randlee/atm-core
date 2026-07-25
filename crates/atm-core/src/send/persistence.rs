@@ -1,17 +1,22 @@
 use std::path::Path;
 
 use serde_json::Map;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, clear_transport_delivery_metadata,
+    peer_outbound_host,
+};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
-use super::{DeliveryPersistenceResult, WarningEntry, prepare_threaded_message};
+use super::{
+    DeliveryPersistenceResult, DuplicateWriteDisposition, WarningEntry, prepare_threaded_message,
+};
 
 pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
@@ -20,6 +25,7 @@ pub(crate) fn persist_message(
     inbox_path: &Path,
     envelope: &InboxMessage,
     require_existing_inbox: bool,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
         return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
@@ -36,9 +42,17 @@ pub(crate) fn persist_message(
         &recipient.team,
         &recipient.agent,
         &prepared,
+        same_store_peer_receipt,
     ) {
-        Ok(true) => Ok(DeliveryPersistenceResult::persisted(prepared)),
-        Ok(false) => Ok(DeliveryPersistenceResult::already_persisted(prepared)),
+        Ok(DuplicateWriteDisposition::NotDuplicate) => {
+            Ok(DeliveryPersistenceResult::persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
+            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
+            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
+        }
         Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
@@ -149,20 +163,36 @@ fn mirror_message_to_store(
     team: &TeamName,
     agent: &AgentName,
     envelope: &InboxMessage,
-) -> Result<bool, AtmError> {
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(true);
+        return Ok(DuplicateWriteDisposition::NotDuplicate);
     };
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
-            tracing::info!(
+            if let Some((source_host, destination_host)) = same_store_peer_receipt
+                && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
+            {
+                info!(
+                    event = "peer_duplicate_write_skipped",
+                    message_id = %message_id,
+                    source_host = %source_host,
+                    destination_host = %destination_host,
+                    same_store_peer_receipt = true,
+                    database_write = "skipped",
+                    delivery = "continued",
+                    "peer_duplicate_write_skipped"
+                );
+                return Ok(DuplicateWriteDisposition::SameStorePeerReceipt);
+            }
+            info!(
                 message_id = %message_id,
                 team = %team,
                 agent = %agent,
-                "duplicate message ULID matched immutable data; retaining original record"
+                "duplicate message ULID write matched immutable data; retaining existing record"
             );
-            return Ok(false);
+            return Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote);
         }
         error!(
             code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
@@ -193,7 +223,7 @@ fn mirror_message_to_store(
         deleted_at: None,
         updated_at: Some(IsoTimestamp::now()),
     })?;
-    Ok(true)
+    Ok(DuplicateWriteDisposition::NotDuplicate)
 }
 
 fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {
@@ -205,14 +235,7 @@ fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool 
     right.read = false;
     right.pending_ack_at = None;
     right.acknowledged_at = None;
-    // These values describe the adapter that carried an otherwise immutable
-    // message. The origin keeps the outbound request for later peer delivery;
-    // the receiving HTTPS adapter records its authenticated source. Neither
-    // changes the message identity, and comparing either would turn a normal
-    // same-ULID receipt into a false immutable-payload conflict.
-    left.extra.remove("sourceHost");
-    left.extra.remove("peerOutbound");
-    right.extra.remove("sourceHost");
-    right.extra.remove("peerOutbound");
+    clear_transport_delivery_metadata(&mut left);
+    clear_transport_delivery_metadata(&mut right);
     left == right
 }

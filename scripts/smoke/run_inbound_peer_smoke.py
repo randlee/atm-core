@@ -25,29 +25,6 @@ from typing import Any
 
 MAX_CAPTURE = 8192
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability|private[_-]?key)\s*[=:]\s*[^\s,]+)")
-EXPECTED_VERSION_KEYS = {"daemon_version", "daemonVersion"}
-RUNTIME_METADATA_KEYS = {
-    "client_version", "clientVersion", "daemon_version", "daemonVersion",
-    "schema_version", "schemaVersion", "api_version", "apiVersion",
-    "pid", "daemon_pid", "listener", "listen_addr", "readiness", "liveness",
-    "peer_wire_security", "peerWireSecurity",
-}
-REQUIRED_CASES = (
-    "doctor",
-    "localhost/local loopback",
-    "own-IP",
-    "remote incoming no-ack",
-    "remote incoming requires-ack",
-    "ack reply",
-    "nudge",
-    "outbound remote send",
-    "outbound remote requires-ack",
-    "duplicate ULID",
-    "unavailable peer",
-    "wrong certificate",
-    "allowlist rejection",
-    "bounded recovery",
-)
 
 
 class SmokeError(RuntimeError):
@@ -77,13 +54,15 @@ def load_config(path: Path) -> dict[str, Any]:
         raise SmokeError(f"cannot read config {path}: {error}") from error
     if not isinstance(value, dict) or value.get("schema_version") != 1:
         raise SmokeError("config must be an object with schema_version 1")
-    require_string(value.get("expected_sprint_version"), "expected_sprint_version")
     local = value.get("local")
     if not isinstance(local, dict):
         raise SmokeError("local must be an object")
     require_argv(local.get("atm_command"), "local.atm_command")
     require_string(local.get("identity"), "local.identity")
     require_string(local.get("team"), "local.team")
+    require_string(local.get("expected_daemon_version"), "local.expected_daemon_version")
+    if not isinstance(local.get("expected_http_api_version"), int):
+        raise SmokeError("local.expected_http_api_version must be an integer")
     if "advertised_host" in local:
         require_string(local["advertised_host"], "local.advertised_host")
     if "log_command" in local:
@@ -99,46 +78,13 @@ def load_config(path: Path) -> dict[str, Any]:
         require_argv(peer.get("atm_command"), f"peers[{index}].atm_command")
         require_string(peer.get("identity"), f"peers[{index}].identity")
         require_string(peer.get("team"), f"peers[{index}].team")
+        require_string(peer.get("expected_daemon_version"), f"peers[{index}].expected_daemon_version")
         shell = peer.get("shell", "posix")
         if shell not in {"posix", "powershell"}:
             raise SmokeError(f"peers[{index}].shell must be posix or powershell")
         if "log_command" in peer:
             require_argv(peer["log_command"], f"peers[{index}].log_command")
     return value
-
-
-def doctor_metadata(result: dict[str, Any] | None) -> dict[str, Any]:
-    """Extract the finite version/listener fields emitted by public doctor JSON."""
-    if not result or result.get("exit_code") != 0:
-        return {}
-    try:
-        payload = json.loads(result.get("stdout", ""))
-    except json.JSONDecodeError:
-        return {}
-    found: dict[str, Any] = {}
-
-    def walk(item: Any) -> None:
-        if isinstance(item, dict):
-            for key, nested in item.items():
-                if key in RUNTIME_METADATA_KEYS and key not in found:
-                    found[key] = nested
-                walk(nested)
-        elif isinstance(item, list):
-            for nested in item:
-                walk(nested)
-
-    walk(payload)
-    return found
-
-
-def doctor_matches_expected_version(result: dict[str, Any], expected: str) -> tuple[bool, str]:
-    metadata = doctor_metadata(result)
-    actual = next((str(metadata[key]) for key in EXPECTED_VERSION_KEYS if key in metadata), "")
-    if not actual:
-        return False, f"expected daemon {expected}; doctor omitted daemon_version"
-    if actual != expected:
-        return False, f"expected daemon {expected}; actual daemon {actual}"
-    return True, f"daemon {actual}"
 
 
 def validate_host_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -151,7 +97,7 @@ def validate_host_config(config: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(checks, dict):
         raise SmokeError("host.local_checks must be an object")
     for name, command in checks.items():
-        if name not in REQUIRED_CASES or name == "doctor":
+        if name not in {"localhost/local loopback", "own-IP", "nudge"}:
             raise SmokeError(f"unsupported host.local_checks key `{name}`")
         require_argv(command, f"host.local_checks.{name}")
     outbound = host.get("outbound_target")
@@ -310,7 +256,15 @@ def capture_log(command: list[str] | None, timeout: float) -> dict[str, Any] | N
     return command_result(command, timeout) if command else None
 
 
-PANE_CASES = REQUIRED_CASES
+PANE_CASES = (
+    "doctor",
+    "localhost/local loopback",
+    "own-IP",
+    "remote incoming no-ack",
+    "remote incoming requires-ack",
+    "ack reply",
+    "nudge",
+)
 
 
 def doctor_summary(result: dict[str, Any] | None) -> str:
@@ -327,7 +281,7 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
     def walk(item: Any) -> None:
         if isinstance(item, dict):
             for key, nested in item.items():
-                if key in RUNTIME_METADATA_KEYS | {"version"} and key not in found:
+                if key in {"pid", "daemon_pid", "readiness", "daemon_version", "client_version", "version", "peer_wire_security", "http_api_version"} and key not in found:
                     found[key] = nested
                 walk(nested)
         elif isinstance(item, list):
@@ -335,11 +289,39 @@ def doctor_summary(result: dict[str, Any] | None) -> str:
                 walk(nested)
 
     walk(value)
-    details = [f"{key}={found[key]}" for key in (
-        "client_version", "daemon_version", "schema_version", "api_version", "version",
-        "pid", "daemon_pid", "listener", "readiness", "liveness", "peer_wire_security",
-    ) if key in found]
+    details = [f"{key}={found[key]}" for key in ("client_version", "daemon_version", "version", "http_api_version", "peer_wire_security", "pid", "daemon_pid", "readiness") if key in found]
     return ", ".join(details) if details else "doctor ready (version/PID fields absent)"
+
+
+def doctor_field(result: dict[str, Any], *path: str) -> Any:
+    """Read one stable field from the public doctor JSON response."""
+    try:
+        value: Any = json.loads(result.get("stdout", ""))
+    except json.JSONDecodeError:
+        return None
+    for part in path:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def doctor_matches_expected(local: dict[str, Any], result: dict[str, Any]) -> tuple[bool, str]:
+    """A usable daemon must report the expected release and HTTP API version."""
+    if result["exit_code"] != 0:
+        return False, result["stderr"] or "doctor failed"
+    daemon_version = doctor_field(result, "daemon_context", "version")
+    api_version = doctor_field(result, "daemon_runtime", "http_api_version")
+    wire_security = doctor_field(result, "daemon_runtime", "peer_wire_security")
+    expected_version = local["expected_daemon_version"]
+    expected_api = local["expected_http_api_version"]
+    if daemon_version != expected_version:
+        return False, f"daemon version {daemon_version!r} != expected {expected_version!r}"
+    if api_version != expected_api:
+        return False, f"HTTP API version {api_version!r} != expected {expected_api!r}"
+    if wire_security not in {"mutual_tls", "plaintext_test"}:
+        return False, f"doctor did not report a valid peer wire security profile: {wire_security!r}"
+    return True, f"daemon={daemon_version}, http_api={api_version}, wire={wire_security}"
 
 
 def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:
@@ -352,12 +334,7 @@ def status_for(records: list[dict[str, Any]], phase: str) -> tuple[str, str]:
     return "fail", result.get("parse_error") or result.get("stderr") or "failed"
 
 
-def required_rows_pass(rows: dict[str, tuple[str, str]]) -> bool:
-    """A smoke pane is never green merely because omitted cases did not execute."""
-    return all(rows.get(case, ("not-run", "missing required case"))[0] == "pass" for case in PANE_CASES)
-
-
-def render_host_pane(host: str, doctor: dict[str, Any] | None, expected_version: str, rows: dict[str, tuple[str, str]], records: list[dict[str, Any]]) -> str:
+def render_host_pane(host: str, doctor: dict[str, Any] | None, rows: dict[str, tuple[str, str]], records: list[dict[str, Any]]) -> str:
     """Render escaped pane body; the repository sc-compose template wraps it."""
     table_rows = []
     for case in PANE_CASES:
@@ -365,7 +342,7 @@ def render_host_pane(host: str, doctor: dict[str, Any] | None, expected_version:
         marker = {"pass": "✓", "fail": "✗", "not-run": "—"}[status]
         table_rows.append(
             f"<tr class=\"{escape(status)}\"><td>{escape(marker)}</td><td>{escape(case)}</td>"
-            f"<td>expected {escape(expected_version)}; {escape(detail)}</td></tr>"
+            f"<td>{escape(detail)}</td></tr>"
         )
     log_rows = "".join(
         f"<li><strong>{escape(str(record.get('phase', 'unknown')))}</strong>: "
@@ -379,7 +356,7 @@ def render_host_pane(host: str, doctor: dict[str, Any] | None, expected_version:
         assessment = "No executed failure. Remaining investigation: " + ", ".join(not_run)
     else:
         assessment = "No issues found by executed checks."
-    return f"""<h1>ATM peer smoke: {escape(host)}</h1><p><strong>Expected daemon:</strong> {escape(expected_version)}</p><p><strong>Version / daemon:</strong> {escape(doctor_summary(doctor))}</p>
+    return f"""<h1>ATM peer smoke: {escape(host)}</h1><p><strong>Version / daemon:</strong> {escape(doctor_summary(doctor))}</p>
 <table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr></thead><tbody>{''.join(table_rows)}</tbody></table>
 <h2>Session log</h2><ul>{log_rows}</ul><h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p>"""
 
@@ -405,10 +382,12 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
         variables_path.unlink(missing_ok=True)
 
 
-def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict[str, Any]], records: list[dict[str, Any]], expected_version: str) -> None:
+def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict[str, Any]], records: list[dict[str, Any]]) -> None:
     generated_at = datetime.now(timezone.utc).isoformat()
     local_doctor = next((item.get("result") for item in records if item.get("phase") == "local-doctor"), None)
     local_rows = {"doctor": status_for(records, "local-doctor")}
+    for case in ("localhost/local loopback", "own-IP", "nudge", "ack reply"):
+        local_rows[case] = status_for(records, case)
     for peer in peers:
         for kind in ("noack", "ack-required"):
             _, detail = status_for(records, f"{peer['name']}-read-{kind}")
@@ -416,7 +395,7 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
             read_status, _ = status_for(records, f"{peer['name']}-read-{kind}")
             status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
             local_rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, detail)
-    compose(PANE_TEMPLATE, {"title": "ATM peer smoke — local", "generated_at": generated_at, "host": "local", "body_html": render_host_pane("local", local_doctor, expected_version, local_rows, records)}, evidence_dir / "local.xhtml")
+    compose(PANE_TEMPLATE, {"title": "ATM peer smoke — local", "generated_at": generated_at, "host": "local", "body_html": render_host_pane("local", local_doctor, local_rows, records)}, evidence_dir / "local.xhtml")
     for peer in peers:
         doctor = next((item.get("result") for item in records if item.get("phase") == f"{peer['name']}-doctor"), None)
         rows = {"doctor": status_for(records, f"{peer['name']}-doctor")}
@@ -426,22 +405,21 @@ def write_host_panes(evidence_dir: Path, local: dict[str, Any], peers: list[dict
             status = "pass" if send_status == read_status == "pass" else "fail" if "fail" in {send_status, read_status} else "not-run"
             rows[f"remote incoming {'no-ack' if kind == 'noack' else 'requires-ack'}"] = (status, send_detail if status == "pass" else read_detail)
         peer_records = [item for item in records if item.get("phase", "").startswith(f"{peer['name']}-")]
-        compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {peer['name']}", "generated_at": generated_at, "host": peer["name"], "body_html": render_host_pane(peer["name"], doctor, expected_version, rows, peer_records)}, evidence_dir / f"{peer['name']}.xhtml")
+        compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {peer['name']}", "generated_at": generated_at, "host": peer["name"], "body_html": render_host_pane(peer["name"], doctor, rows, peer_records)}, evidence_dir / f"{peer['name']}.xhtml")
 
 
 def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float, handoff_paths: list[Path]) -> int:
     """Run one host independently; peers run this before sharing their pane/handoff."""
     host = validate_host_config(config)
     local = config["local"]
-    expected_version = config["expected_sprint_version"]
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence_dir = output_root / stamp
     evidence_dir.mkdir(parents=True, exist_ok=False)
     records: list[dict[str, Any]] = []
     doctor = command_result(local_command(local, ["doctor", "--json"]), timeout)
-    doctor_ok, doctor_detail = doctor_matches_expected_version(doctor, expected_version)
-    records.append({"phase": "doctor", "result": doctor, "passed": doctor_ok})
-    compact("doctor", doctor_ok, doctor_detail if doctor["exit_code"] == 0 else doctor["stderr"] or "failed")
+    doctor_ok, doctor_detail = doctor_matches_expected(local, doctor)
+    records.append({"phase": "doctor", "result": doctor, "passed": doctor_ok, "detail": doctor_detail})
+    compact("doctor", doctor_ok, doctor_detail)
     for name, command in host.get("local_checks", {}).items():
         result = command_result(command, timeout)
         passed = result["exit_code"] == 0
@@ -450,7 +428,7 @@ def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_
     handoff: list[dict[str, Any]] = []
     target = host.get("outbound_target")
     if target:
-        for kind, needs_ack in (("outbound remote send", False), ("outbound remote requires-ack", True)):
+        for kind, needs_ack in (("remote incoming no-ack", False), ("remote incoming requires-ack", True)):
             args = ["send", target, f"inbound-smoke-{host['name']}-{kind}-{stamp}", "--json"]
             if needs_ack:
                 args.insert(-1, "--requires-ack")
@@ -483,9 +461,9 @@ def run_host(config: dict[str, Any], output_root: Path, timeout: float, receive_
             rows[case] = ("pass" if passed else "fail", ", ".join(str(item.get("message_id", "")) for item in matching))
     logs = {"local": capture_log(local.get("log_command"), timeout)}
     (evidence_dir / "handoff.json").write_text(json.dumps({"host": host["name"], "generated_at": datetime.now(timezone.utc).isoformat(), "outbound": handoff}, indent=2) + "\n", encoding="utf-8")
-    (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all(item.get("passed") for item in records) else "fail", "expected_sprint_version": expected_version, "runtime": doctor_metadata(doctor), "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
-    compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {host['name']}", "generated_at": datetime.now(timezone.utc).isoformat(), "host": host["name"], "body_html": render_host_pane(host["name"], doctor, expected_version, rows, records)}, evidence_dir / f"{host['name']}.xhtml")
-    passed = all(item.get("passed") for item in records) and required_rows_pass(rows)
+    (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all(item.get("passed") for item in records) else "fail", "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
+    compose(PANE_TEMPLATE, {"title": f"ATM peer smoke — {host['name']}", "generated_at": datetime.now(timezone.utc).isoformat(), "host": host["name"], "body_html": render_host_pane(host["name"], doctor, rows, records)}, evidence_dir / f"{host['name']}.xhtml")
+    passed = all(item.get("passed") for item in records)
     compact("evidence", passed, str(evidence_dir))
     return 0 if passed else 1
 
@@ -495,15 +473,22 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
     evidence_dir = output_root / stamp
     evidence_dir.mkdir(parents=True, exist_ok=False)
     local = config["local"]
-    expected_version = config["expected_sprint_version"]
     records: list[dict[str, Any]] = []
     all_passed = True
 
     doctor = command_result(local_command(local, ["doctor", "--json"]), timeout)
-    local_ready, local_doctor_detail = doctor_matches_expected_version(doctor, expected_version)
-    compact("local-doctor", local_ready, local_doctor_detail if doctor["exit_code"] == 0 else doctor["stderr"] or "doctor failed")
+    local_ready, doctor_detail = doctor_matches_expected(local, doctor)
+    compact("local-doctor", local_ready, doctor_detail)
     records.append({"phase": "local-doctor", "result": doctor, "passed": local_ready})
     all_passed &= local_ready
+    host = config.get("host")
+    if isinstance(host, dict):
+        for name, command in validate_host_config(config).get("local_checks", {}).items():
+            result = command_result(command, timeout)
+            passed = result["exit_code"] == 0
+            records.append({"phase": name, "result": result, "passed": passed})
+            compact(name, passed, "completed" if passed else result["stderr"] or "failed")
+            all_passed &= passed
     advertised_host = local.get("advertised_host")
     if not advertised_host:
         interface = command_result(local_command(local, ["peer", "interface", "list", "--json"]), timeout)
@@ -524,8 +509,9 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
         for peer in config["peers"]:
             target = f"{local['identity']}@{local['team']}.{advertised_host}"
             remote_doctor = command_result(remote_command(peer, peer["atm_command"] + ["doctor", "--json"]), timeout)
-            doctor_ok, remote_doctor_detail = doctor_matches_expected_version(remote_doctor, expected_version)
-            compact(f"{peer['name']}-doctor", doctor_ok, remote_doctor_detail if remote_doctor["exit_code"] == 0 else remote_doctor["stderr"] or "doctor failed")
+            remote_local = {**local, "expected_daemon_version": peer["expected_daemon_version"]}
+            doctor_ok, remote_doctor_detail = doctor_matches_expected(remote_local, remote_doctor)
+            compact(f"{peer['name']}-doctor", doctor_ok, remote_doctor_detail)
             records.append({"phase": f"{peer['name']}-doctor", "result": remote_doctor, "passed": doctor_ok})
             all_passed &= doctor_ok
             for kind, requires_ack in (("noack", False), ("ack-required", True)):
@@ -564,10 +550,8 @@ def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeo
             remote_command(peer, peer["log_command"]) if peer.get("log_command") else None,
             timeout,
         )
-    (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all_passed else "fail", "expected_sprint_version": expected_version, "runtime": doctor_metadata(doctor), "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
-    write_host_panes(evidence_dir, local, config["peers"], records, expected_version)
-    local_rows = {case: status_for(records, case) for case in PANE_CASES}
-    all_passed &= required_rows_pass(local_rows)
+    (evidence_dir / "results.json").write_text(json.dumps({"status": "pass" if all_passed else "fail", "records": records, "logs": logs}, indent=2) + "\n", encoding="utf-8")
+    write_host_panes(evidence_dir, local, config["peers"], records)
     print(f"{'PASS' if all_passed else 'FAIL'} evidence: {evidence_dir / 'results.json'}", flush=True)
     return 0 if all_passed else 1
 

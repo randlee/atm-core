@@ -474,7 +474,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
                             path.ends_with(Path::new(
                                 "crates/atm-daemon/src/peer_drain_coordinator.rs",
                             ))
-                        }) && function.name == "drain_pages")
+                        }) && function.name == "drain")
                 })
             });
         let peer_delivery = reconciliation_delivery

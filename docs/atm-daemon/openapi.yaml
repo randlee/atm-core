@@ -20,7 +20,7 @@ paths:
       operationId: writeMessage
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
       responses:
-        '201': { description: Created message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        '201': { description: Created send or acknowledgement write, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
         default: { $ref: '#/components/responses/AtmError' }
     delete:
       operationId: clearMessages
@@ -47,19 +47,23 @@ paths:
       responses:
         '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
         default: { $ref: '#/components/responses/AtmError' }
-  /message/{messageId}/ack:
-    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
-    post:
-      operationId: acknowledgeMessage
-      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
-      responses:
-        '201': { description: Ack message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
   /doctor:
     get:
       operationId: doctor
       responses:
         '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /peers/{peer}/sync:
+    post:
+      operationId: syncPeer
+      parameters:
+        - name: peer
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncRequest' } } } }
+      responses:
+        '200': { description: Bounded explicit peer reconciliation result, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncOutcome' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /compatibility:
     post:
@@ -75,9 +79,15 @@ paths:
       responses:
         '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /runtime/reload:
+    post:
+      operationId: reloadRuntimeView
+      requestBody: { required: true, content: { application/json: { schema: { type: 'null' } } } }
+      responses:
+        '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
 components:
   parameters:
-    MessageId: { name: messageId, in: path, required: true, schema: { type: string } }
     Agent: { name: agent, in: query, schema: { type: string } }
     ChatId: { name: chat_id, in: query, schema: { type: string } }
   responses:
@@ -127,6 +137,17 @@ components:
     HeartbeatResponse:
       type: object
       description: Team-member heartbeat result.
+    PeerSyncRequest:
+      type: object
+      required: [peer]
+      properties:
+        peer: { type: string }
+    PeerSyncOutcome:
+      type: object
+      required: [peer, delivered]
+      properties:
+        peer: { type: string }
+        delivered: { type: integer, minimum: 0 }
     Message:
       type: object
       required: [message_id, from, to, body]

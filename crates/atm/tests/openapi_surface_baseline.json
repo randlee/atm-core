@@ -48,22 +48,6 @@
         }
       }
     },
-    "/message/{messageId}/ack": {
-      "post": {
-        "operation_id": "acknowledgeMessage",
-        "request_required": false,
-        "responses": {
-          "201": {
-            "error": false,
-            "schema": "#/components/schemas/Message"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
-    },
     "/messages": {
       "delete": {
         "operation_id": "clearMessages",
@@ -132,6 +116,38 @@
           "200": {
             "error": false,
             "schema": "#/components/schemas/MessageList"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/peers/{peer}/sync": {
+      "post": {
+        "operation_id": "syncPeer",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/PeerSyncOutcome"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/runtime/reload": {
+      "post": {
+        "operation_id": "reloadRuntimeView",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
           },
           "default": {
             "error": true,
@@ -216,6 +232,24 @@
     "PeekQuery": {
       "properties": [],
       "required": []
+    },
+    "PeerSyncOutcome": {
+      "properties": [
+        "delivered",
+        "peer"
+      ],
+      "required": [
+        "delivered",
+        "peer"
+      ]
+    },
+    "PeerSyncRequest": {
+      "properties": [
+        "peer"
+      ],
+      "required": [
+        "peer"
+      ]
     },
     "ReadQuery": {
       "properties": [],

@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(windows)]
+use std::time::Instant;
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt as _;
@@ -30,15 +33,19 @@ use ulid::Ulid;
 
 #[cfg(windows)]
 use crate::SubsystemObservability;
+#[cfg(windows)]
 use crate::active_connection_registry::ActiveConnectionRegistry;
+#[cfg(windows)]
 use crate::active_connection_registry::TrackedDispatchHandle;
 #[cfg(windows)]
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+#[cfg(windows)]
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+#[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
 /// Secondary Unix local ingress used for UDS/TCP parity. It owns only the
@@ -88,52 +95,21 @@ impl LocalTcpLoopbackServer {
         lifecycle: &LifecycleControlSourceAdapter,
         stop: &AtomicBool,
     ) -> Result<(), AtmError> {
-        // Unix owns a UDS ingress as well, but this loopback-TCP endpoint is a
-        // real local client surface. A peer drain can consume the request's
-        // remaining deadline, so one slow host-qualified write must never
-        // prevent doctor/read/other local clients from being accepted.
-        let registry = Arc::new(ActiveConnectionRegistry::default());
-        let force_shutdown = Arc::new(AtomicBool::new(false));
         loop {
             if stop.load(Ordering::SeqCst) || lifecycle.terminate_requested() {
-                drain_active_connections_for_shutdown(
-                    registry.as_ref(),
-                    force_shutdown.as_ref(),
-                    REQUEST_DEADLINE,
-                    REQUEST_DEADLINE.saturating_mul(2),
-                    Instant::now(),
-                    REQUEST_DEADLINE,
-                )?;
                 return Ok(());
             }
             match self.listener.accept() {
                 Ok((stream, peer)) if peer.ip().is_loopback() => {
-                    registry.reap_finished_dispatches()?;
-                    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
-                    else {
-                        continue;
-                    };
-                    let router = Arc::clone(&router);
-                    let capability = self.capability.clone();
-                    let force_shutdown = Arc::clone(&force_shutdown);
-                    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-                    let join_handle = thread::spawn(move || {
-                        let _active = active_connection;
-                        let _ =
-                            handle_connection(stream, router, &capability, force_shutdown.as_ref());
-                        let _ = completion_tx.send(());
-                    });
-                    registry.push_dispatch_handle(
-                        TrackedDispatchHandle {
-                            completion_rx,
-                            join_handle,
-                        },
-                        MAX_CONCURRENT_CONNECTIONS,
+                    handle_connection(
+                        stream,
+                        Arc::clone(&router),
+                        &self.capability,
+                        &AtomicBool::new(false),
                     )?;
                 }
                 Ok(_) => {}
                 Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
-                    registry.reap_finished_dispatches()?;
                     thread::sleep(ACCEPT_POLL_INTERVAL);
                 }
                 Err(source) => {
@@ -594,11 +570,11 @@ impl LocalIpcServerTransportAdapter {
 mod tests {
     use std::io::Write as _;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex, mpsc};
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
+    use atm_core::ack::AckRequest;
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
         read_http_response, write_http_request_with_headers,
@@ -606,40 +582,35 @@ mod tests {
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::schema::AtmMessageId;
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use ulid::Ulid;
 
-    use super::{
-        LOCAL_CAPABILITY_HEADER, LocalCapability, LocalTcpLoopbackServer, handle_connection,
-    };
+    use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
     use crate::test_support::DoctorOnlyDispatcher;
 
-    #[cfg(unix)]
-    struct BlockingFirstDispatcher {
-        calls: AtomicUsize,
-        first_started: mpsc::SyncSender<()>,
-        release_first: Mutex<mpsc::Receiver<()>>,
+    #[derive(Default)]
+    struct RecordingWriteRouter {
+        requests: Mutex<Vec<(AuthenticatedIngress, ApiRequest)>>,
     }
 
-    #[cfg(unix)]
-    impl atm_core::boundary::sealed::Sealed for BlockingFirstDispatcher {}
+    impl atm_core::boundary::sealed::Sealed for RecordingWriteRouter {}
 
-    #[cfg(unix)]
-    impl ApiRouter for BlockingFirstDispatcher {
+    impl ApiRouter for RecordingWriteRouter {
         fn route(
             &self,
             request: ApiRequest,
             ingress: AuthenticatedIngress,
-            deadline: RequestDeadline,
+            _deadline: RequestDeadline,
         ) -> Result<ApiResponse, AtmError> {
-            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
-                self.first_started.send(()).expect("signal first request");
-                self.release_first
-                    .lock()
-                    .expect("release lock")
-                    .recv()
-                    .expect("release first request");
-            }
-            DoctorOnlyDispatcher.route(request, ingress, deadline)
+            self.requests
+                .lock()
+                .expect("recorded local write")
+                .push((ingress, request));
+            Ok(ApiResponse::new(ResponseEnvelope::Error(
+                AtmError::validation("recorded write"),
+            )))
         }
     }
 
@@ -701,74 +672,80 @@ mod tests {
         server.join().expect("server join");
     }
 
-    #[cfg(unix)]
     #[test]
-    fn loopback_tcp_accepts_a_second_request_while_peer_delivery_is_in_flight() {
-        let tempdir = tempfile::tempdir().expect("tempdir");
-        let server = LocalTcpLoopbackServer::bind_in_runtime_dir(tempdir.path(), Ulid::new())
-            .expect("bind loopback server");
-        let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
-            &std::fs::read(
-                tempdir
-                    .path()
-                    .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+    fn loopback_tcp_send_and_ack_use_the_same_write_router() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let router = Arc::new(RecordingWriteRouter::default());
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server_router: Arc<dyn ApiRouter + Send + Sync> = router.clone();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (stream, peer) = listener.accept().expect("accept client");
+                assert!(peer.ip().is_loopback());
+                handle_connection(
+                    stream,
+                    Arc::clone(&server_router),
+                    &capability,
+                    &std::sync::atomic::AtomicBool::new(false),
+                )
+                .expect("serve local write");
+            }
+        });
+        let send = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                TEST_SENDER.parse().expect("sender"),
+                "receiver",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("message".to_string()),
+                None,
+                false,
+                None,
+                false,
             )
-            .expect("read endpoint record"),
-        )
-        .expect("parse endpoint record");
-        let endpoint = record.ipv4_loopback.expect("loopback endpoint");
-        let capability = record.capability().expect("capability").to_base64url();
-        let (first_started_tx, first_started_rx) = mpsc::sync_channel(1);
-        let (release_first_tx, release_first_rx) = mpsc::sync_channel(1);
-        let router: Arc<dyn ApiRouter + Send + Sync> = Arc::new(BlockingFirstDispatcher {
-            calls: AtomicUsize::new(0),
-            first_started: first_started_tx,
-            release_first: Mutex::new(release_first_rx),
-        });
-        let stop = Arc::new(AtomicBool::new(false));
-        let worker_stop = Arc::clone(&stop);
-        let lifecycle = crate::lifecycle_control::LifecycleControlSourceAdapter::new_for_test();
-        let worker = thread::spawn(move || {
-            server.serve_until_terminated(router, &lifecycle, worker_stop.as_ref())
-        });
+            .expect("send write"),
+        ));
+        let ack = RequestEnvelope::Write(Box::new(
+            AckRequest {
+                home_dir: std::env::temp_dir(),
+                current_dir: std::env::temp_dir(),
+                caller_identity: TEST_SENDER.parse().expect("sender"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id: AtmMessageId::new(),
+                reply_body: "acknowledged".to_string(),
+            }
+            .into_write_request(),
+        ));
 
-        let request = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut first = TcpStream::connect(endpoint).expect("connect first request");
-        write_http_request_with_headers(
-            &mut first,
-            &request,
-            &[(LOCAL_CAPABILITY_HEADER, capability.as_str())],
-        )
-        .expect("write first request");
-        first.flush().expect("flush first request");
-        first_started_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("first request entered blocking peer delivery");
-
-        let mut second = TcpStream::connect(endpoint).expect("connect second request");
-        second
-            .set_read_timeout(Some(Duration::from_secs(1)))
-            .expect("second read deadline");
-        write_http_request_with_headers(
-            &mut second,
-            &request,
-            &[(LOCAL_CAPABILITY_HEADER, capability.as_str())],
-        )
-        .expect("write second request");
-        second.flush().expect("flush second request");
-        let second_response = read_http_response(&mut second, &request)
-            .expect("second local request must not wait for peer delivery");
-        assert!(matches!(second_response, ResponseEnvelope::Doctor(_)));
-
-        release_first_tx.send(()).expect("release first request");
-        let first_response =
-            read_http_response(&mut first, &request).expect("read released first response");
-        assert!(matches!(first_response, ResponseEnvelope::Doctor(_)));
-        stop.store(true, Ordering::SeqCst);
-        worker
-            .join()
-            .expect("loopback worker join")
-            .expect("loopback worker result");
+        for request in [&send, &ack] {
+            let mut stream = TcpStream::connect(address).expect("connect");
+            write_http_request_with_headers(
+                &mut stream,
+                request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("write request");
+            stream.flush().expect("flush request");
+            assert!(matches!(
+                read_http_response(&mut stream, request).expect("read response"),
+                ResponseEnvelope::Error(error) if error.is_validation()
+            ));
+        }
+        server.join().expect("server join");
+        let requests = router.requests.lock().expect("recorded local writes");
+        assert_eq!(requests.len(), 2);
+        assert!(matches!(
+            &requests[0],
+            (AuthenticatedIngress::Local, ApiRequest::Write(write)) if write.acknowledges_message_id.is_none()
+        ));
+        assert!(matches!(
+            &requests[1],
+            (AuthenticatedIngress::Local, ApiRequest::Write(write)) if write.acknowledges_message_id.is_some()
+        ));
     }
 
     #[cfg(unix)]

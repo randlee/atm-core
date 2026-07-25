@@ -18,6 +18,8 @@ There is no second daemon and no cross-host application service.
 TLS and local connection authentication are adapter responsibilities before the
 one HTTP router. They cannot select a different HTTP write resource, request
 schema, persistence method, acknowledgement path, or nudge implementation.
+That resource is `POST /v1/atm/messages` for both sends and acknowledgements;
+an acknowledgement differs only by `WriteRequest.acknowledges_message_id`.
 
 The only cross-host transport responsibilities are:
 

@@ -5,6 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -56,7 +57,6 @@ class InboundPeerSmokeTests(unittest.TestCase):
         pane = RUNNER.render_host_pane(
             "m5 <unsafe>",
             {"exit_code": 0, "stdout": "{}", "stderr": ""},
-            "1.3.2-beta.29",
             {"doctor": ("pass", "ready"), "nudge": ("not-run", "not configured")},
             [],
         )
@@ -66,18 +66,27 @@ class InboundPeerSmokeTests(unittest.TestCase):
 
     def test_xhtml_marks_failed_phase_red(self):
         pane = RUNNER.render_host_pane(
-            "local", None, "1.3.2-beta.29", {"doctor": ("fail", "daemon unavailable")}, [{"phase": "local-doctor", "passed": False}],
+            "local", None, {"doctor": ("fail", "daemon unavailable")}, [{"phase": "local-doctor", "passed": False}],
         )
         self.assertIn('class="fail"', pane)
         self.assertIn("Investigation required: local-doctor", pane)
+
+    def test_doctor_version_or_api_mismatch_is_a_hard_failure(self):
+        local = {"expected_daemon_version": "1.3.2-beta-22", "expected_http_api_version": 1}
+        result = {"exit_code": 0, "stderr": "", "stdout": json.dumps({
+            "daemon_context": {"version": "1.3.1"},
+            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+        })}
+        passed, detail = RUNNER.doctor_matches_expected(local, result)
+        self.assertFalse(passed)
+        self.assertIn("daemon version", detail)
 
     def test_host_mode_accepts_no_ssh_peers(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "host.json"
             path.write_text(json.dumps({
                 "schema_version": 1,
-                "expected_sprint_version": "1.3.2-beta.29",
-                "local": {"atm_command": ["atm"], "identity": "a", "team": "t"},
+                "local": {"atm_command": ["atm"], "identity": "a", "team": "t", "expected_daemon_version": "1.3.2-beta-22", "expected_http_api_version": 1},
                 "host": {"name": "m5", "local_checks": {}},
             }), encoding="utf-8")
             config = RUNNER.load_config(path)
@@ -95,11 +104,39 @@ class InboundPeerSmokeTests(unittest.TestCase):
                 {"kind": "remote incoming requires-ack", "message_id": "01ACK"},
             ]))
 
-    def test_doctor_requires_the_expected_daemon_release(self):
-        ready = {"exit_code": 0, "stdout": '{"daemon_version":"1.3.2-beta.29"}', "stderr": ""}
-        stale = {"exit_code": 0, "stdout": '{"daemon_version":"1.3.2-beta.28"}', "stderr": ""}
-        self.assertEqual(RUNNER.doctor_matches_expected_version(ready, "1.3.2-beta.29"), (True, "daemon 1.3.2-beta.29"))
-        self.assertIn("actual daemon 1.3.2-beta.28", RUNNER.doctor_matches_expected_version(stale, "1.3.2-beta.29")[1])
+    def test_default_run_executes_declared_local_preflight_rows(self):
+        config = {
+            "schema_version": 1,
+            "local": {
+                "atm_command": ["atm"], "identity": "a", "team": "t",
+                "expected_daemon_version": "1.3.2-beta-22", "expected_http_api_version": 1,
+                "advertised_host": "127.0.0.1",
+            },
+            "host": {
+                "name": "local",
+                "local_checks": {
+                    "localhost/local loopback": ["check-loopback"],
+                    "own-IP": ["check-own-ip"],
+                    "nudge": ["check-nudge"],
+                },
+            },
+            "peers": [],
+        }
+        doctor = json.dumps({
+            "daemon_context": {"version": "1.3.2-beta-22"},
+            "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
+        })
+
+        def command_result(command, _timeout):
+            return {"command": command, "exit_code": 0, "stdout": doctor if command[-2:] == ["doctor", "--json"] else "", "stderr": ""}
+
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.object(RUNNER, "command_result", side_effect=command_result), \
+             mock.patch.object(RUNNER, "compose"):
+            self.assertEqual(RUNNER.run(config, Path(directory), 1, 1), 0)
+            results = next(Path(directory).glob("*/results.json"))
+            phases = {item["phase"] for item in json.loads(results.read_text(encoding="utf-8"))["records"]}
+        self.assertTrue({"localhost/local loopback", "own-IP", "nudge"}.issubset(phases))
 
 
 if __name__ == "__main__":

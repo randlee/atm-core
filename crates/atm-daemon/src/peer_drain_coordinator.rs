@@ -14,7 +14,7 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, next_request_id};
 use atm_core::send::WriteRequest;
 use atm_core::types::{HostName, IsoTimestamp};
-use atm_storage::{OutboundMessageQuery, PeerConfigStore, PeerSyncPolicy, TrustedPeer};
+use atm_storage::{OutboundMessageQuery, PeerConfigStore, TrustedPeer};
 
 use crate::https_transport::{HttpsMessageTransport, resolve_peer_authority};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
@@ -190,21 +190,8 @@ impl PeerDrainCoordinator {
     fn drain(&self, host: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
         let peer = self.configured_peer(host)?;
         let policy = self.peers.peer_sync_policy(host)?.validate()?;
-        let transport = self.https_sender()?;
-        let not_before = Self::sync_not_before(policy)?;
-        self.record(
-            PeerDeliveryEventKind::PeerRecoveryAttempt,
-            host.clone(),
-            None,
-            None,
-            None,
-        );
-        self.mark_generation_observed(host);
-        self.drain_pages(host, deadline, &peer, policy, transport, not_before)
-    }
-
-    fn https_sender(&self) -> Result<Arc<dyn HttpsMessageTransport>, AtmError> {
-        self.transport
+        let transport = self
+            .transport
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
             .clone()
@@ -212,26 +199,23 @@ impl PeerDrainCoordinator {
                 AtmError::remote_delivery_unconfirmed(
                     "HTTPS peer transport is not enabled in this daemon",
                 )
-            })
-    }
-
-    fn sync_not_before(policy: PeerSyncPolicy) -> Result<IsoTimestamp, AtmError> {
-        let age = chrono::Duration::from_std(policy.max_message_age)
-            .map_err(|_| AtmError::validation("peer sync maximum message age is out of range"))?;
-        Ok(IsoTimestamp::from_datetime(chrono::Utc::now() - age))
-    }
-
-    fn drain_pages(
-        &self,
-        host: &HostName,
-        deadline: RequestDeadline,
-        peer: &TrustedPeer,
-        policy: PeerSyncPolicy,
-        transport: Arc<dyn HttpsMessageTransport>,
-        not_before: IsoTimestamp,
-    ) -> Result<u16, AtmError> {
+            })?;
+        let not_before = IsoTimestamp::from_datetime(
+            chrono::Utc::now()
+                - chrono::Duration::from_std(policy.max_message_age).map_err(|_| {
+                    AtmError::validation("peer sync maximum message age is out of range")
+                })?,
+        );
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryAttempt,
+            host.clone(),
+            None,
+            None,
+            None,
+        );
         let mut after = None;
         let mut delivered = 0_u16;
+        self.mark_generation_observed(host);
         loop {
             let page =
                 self.outbound
@@ -242,18 +226,10 @@ impl PeerDrainCoordinator {
                     after = None;
                     continue;
                 }
-                self.record(
-                    PeerDeliveryEventKind::PeerRecoveryConfirmed,
-                    host.clone(),
-                    None,
-                    Some(u32::from(delivered)),
-                    None,
-                );
-                self.reset_backoff(host);
-                return Ok(delivered);
+                return Ok(self.finish_drain(host, delivered));
             }
-            let requests = Self::decode_page(&page)?;
-            let responses = match transport.deliver_page(&requests, peer, deadline) {
+            let requests = Self::decode_page_requests(&page)?;
+            let responses = match transport.deliver_page(&requests, &peer, deadline) {
                 Ok(responses) => responses,
                 Err(error) => {
                     return self
@@ -276,27 +252,33 @@ impl PeerDrainCoordinator {
                 after = Some((stored.created_at, stored.message_id));
             }
             if page.len() < usize::from(policy.max_batch_messages.get()) {
-                self.record(
-                    PeerDeliveryEventKind::PeerRecoveryConfirmed,
-                    host.clone(),
-                    None,
-                    Some(u32::from(delivered)),
-                    None,
-                );
-                self.reset_backoff(host);
-                return Ok(delivered);
+                return Ok(self.finish_drain(host, delivered));
             }
         }
     }
 
-    fn decode_page(page: &[atm_storage::StoredPeerWrite]) -> Result<Vec<WriteRequest>, AtmError> {
+    fn decode_page_requests(
+        page: &[atm_storage::StoredPeerWrite],
+    ) -> Result<Vec<WriteRequest>, AtmError> {
         page.iter()
             .map(|stored| {
-                serde_json::from_str::<WriteRequest>(&stored.request_json).map_err(|_| {
+                serde_json::from_str(&stored.request_json).map_err(|_| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })
             })
             .collect()
+    }
+
+    fn finish_drain(&self, host: &HostName, delivered: u16) -> u16 {
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryConfirmed,
+            host.clone(),
+            None,
+            Some(u32::from(delivered)),
+            None,
+        );
+        self.reset_backoff(host);
+        delivered
     }
 
     fn failed<T>(&self, host: &HostName, error: AtmError) -> Result<T, AtmError> {
@@ -447,7 +429,7 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
         let host = request
             .to
             .as_ref()
-            .and_then(|address| address.host.as_ref())
+            .and_then(|address| address.host())
             .ok_or_else(|| {
                 AtmError::validation("peer delivery coordinator requires a host-qualified write")
             })?

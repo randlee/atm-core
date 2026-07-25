@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
@@ -77,7 +77,7 @@ pub struct PeerSyncOutcome {
     pub delivered: u16,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ReleaseVersion(String);
 
@@ -116,6 +116,16 @@ impl ReleaseVersion {
 
     pub fn current() -> Self {
         Self::parse(env!("CARGO_PKG_VERSION")).expect("package version must be semver")
+    }
+}
+
+impl<'de> Deserialize<'de> for ReleaseVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -355,10 +365,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
-        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
-        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
-        daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ReleaseVersion, RequestEnvelope,
+        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
+        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
+        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -368,6 +378,24 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
     use serial_test::serial;
     use tempfile::TempDir;
+
+    #[test]
+    fn release_version_accepts_semver_prereleases_and_rejects_non_semver() {
+        assert_eq!(
+            ReleaseVersion::parse("v1.3.2-beta.24")
+                .expect("prerelease version")
+                .to_string(),
+            "1.3.2-beta.24"
+        );
+        assert!(ReleaseVersion::parse("1.3").is_err());
+    }
+
+    #[test]
+    fn release_version_rejects_invalid_wire_deserialization() {
+        let error = serde_json::from_str::<ReleaseVersion>("\"not-semver\"")
+            .expect_err("wire versions must use the same semver validation");
+        assert!(error.to_string().contains("invalid ATM release version"));
+    }
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {

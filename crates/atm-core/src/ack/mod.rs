@@ -32,7 +32,6 @@ impl AckRequest {
             caller_chat_id: self.caller_chat_id,
             caller_team: self.caller_team,
             authenticated_source_host: None,
-            same_host_peer_delivery: false,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
@@ -134,9 +133,14 @@ impl<'de> Deserialize<'de> for ReplyTarget {
         let address: crate::address::AgentAddress =
             value.parse().map_err(serde::de::Error::custom)?;
         let team = address
-            .team
+            .team()
+            .cloned()
             .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
-        Ok(Self::new(address.agent, team, address.host))
+        Ok(Self::new(
+            address.agent().clone(),
+            team,
+            address.host().cloned(),
+        ))
     }
 }
 
@@ -237,6 +241,44 @@ pub(crate) fn resolve_acknowledgement_write<
     })
 }
 
+/// Resolve an acknowledgement that already arrived through authenticated peer
+/// ingress. Its destination is canonical wire data, not a client-supplied
+/// local-CLI destination, so this reloads only the local source state that
+/// must transition after the received immutable reply persists.
+pub(crate) fn resolve_received_acknowledgement_write<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: SendRequest,
+    runtime: &R,
+) -> Result<ResolvedAcknowledgement, AtmError> {
+    let message_id = request.acknowledges_message_id.ok_or_else(|| {
+        AtmError::validation("acknowledgement write is missing acknowledges_message_id")
+    })?;
+    let target = request.to.clone().ok_or_else(|| {
+        AtmError::validation("received peer acknowledgement is missing a destination")
+    })?;
+    let actor = target.agent().clone();
+    let team = target
+        .team()
+        .cloned()
+        .unwrap_or_else(|| request.caller_team.clone());
+    let source = load_ack_source(runtime, &request.home_dir, &team, &actor, message_id)?;
+    let source_record =
+        load_ack_source_record(runtime, &request.home_dir, &team, &actor, &source.row)?;
+    ensure_ack_is_pending(message_id, &source_record.envelope)?;
+    let reply_target = ReplyTarget::new(actor.clone(), team.clone(), target.host().cloned());
+    Ok(ResolvedAcknowledgement {
+        canonical_request: request,
+        source,
+        source_record,
+        actor,
+        team,
+        reply_target,
+        reply_text: String::new(),
+        acknowledged_message_id: message_id,
+    })
+}
+
 impl ResolvedAcknowledgement {
     pub(crate) fn request(&self) -> SendRequest {
         self.canonical_request.clone()
@@ -296,15 +338,14 @@ fn canonical_ack_write_request(
         caller_chat_id: request.caller_chat_id.clone(),
         caller_team: team.clone(),
         authenticated_source_host: None,
-        same_host_peer_delivery: false,
         origin_message_id: None,
         origin_timestamp: None,
-        to: Some(crate::address::AgentAddress {
-            agent: target.agent.clone(),
-            chat_id: source.envelope.source_chat_id.clone(),
-            team: Some(target.team.clone()),
-            host: target.host.clone(),
-        }),
+        to: Some(crate::address::AgentAddress::new(
+            target.agent.clone(),
+            source.envelope.source_chat_id.clone(),
+            Some(target.team.clone()),
+            target.host.clone(),
+        )?),
         message_source: SendMessageSource::Inline(request.reply_body.clone()),
         summary_override: None,
         requires_ack: false,
@@ -421,8 +462,11 @@ fn validate_reply_target<R: RetainedServiceRuntime>(
         .clone()
         .unwrap_or_else(|| current_team.clone());
     let agent = crate::threading::canonical_sender_identity(&source.envelope);
-    let host =
-        authenticated_source_host(&source.envelope)?.or(peer_outbound_host(&source.envelope)?);
+    // A normal peer receipt carries authenticated provenance. A same-store
+    // peer receipt deliberately retains the origin row instead of writing a
+    // duplicate, so its reply target comes from that row's retained outbound
+    // host. Neither case recreates a hostless reply address.
+    let host = reply_target_host(&source.envelope)?;
     if host.is_none() {
         ensure_roster_member_exists(
             runtime,
@@ -432,6 +476,15 @@ fn validate_reply_target<R: RetainedServiceRuntime>(
         )?;
     }
     Ok(ReplyTarget::new(agent, team, host))
+}
+
+fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostName>, AtmError> {
+    let authenticated = authenticated_source_host(source)?;
+    if authenticated.is_some() {
+        Ok(authenticated)
+    } else {
+        peer_outbound_host(source)
+    }
 }
 
 fn record_ack_telemetry(
@@ -465,11 +518,11 @@ mod tests {
 
     use serde_json::Map;
 
-    use super::{AckRequest, ReplyTarget, canonical_ack_write_request};
+    use super::{AckRequest, ReplyTarget, canonical_ack_write_request, reply_target_host};
     use crate::boundary::{Message, MessageKey};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
-        set_authenticated_source_host,
+        set_authenticated_source_host, set_peer_outbound_write,
     };
     use crate::types::{AgentName, ChatId, HostName, IsoTimestamp, TeamName};
 
@@ -531,7 +584,7 @@ mod tests {
             &source,
         )
         .expect("canonical ack write");
-        assert_eq!(write.to.expect("destination").host, Some(host));
+        assert_eq!(write.to.expect("destination").host(), Some(&host));
         assert_eq!(write.acknowledges_message_id, Some(message_id));
         assert_eq!(
             write.caller_chat_id.as_ref().map(ChatId::as_str),
@@ -540,6 +593,37 @@ mod tests {
         assert_eq!(
             target.to_string(),
             "remote-agent@remote-team.peer.example.test"
+        );
+    }
+
+    #[test]
+    fn same_store_receipt_uses_retained_origin_host_for_ack_reply() {
+        let host: HostName = "192.168.128.82".parse().expect("host");
+        let mut envelope = InboxMessage {
+            from: "remote-agent".parse().expect("agent"),
+            source_chat_id: None,
+            text: "request acknowledgement".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some("remote-team".parse().expect("team")),
+            destination_chat_id: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            requires_ack: true,
+            pending_ack_at: Some(IsoTimestamp::now()),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+        set_peer_outbound_write(&mut envelope, &host, "{}".to_string());
+
+        assert_eq!(
+            reply_target_host(&envelope).expect("reply host"),
+            Some(host)
         );
     }
 }
