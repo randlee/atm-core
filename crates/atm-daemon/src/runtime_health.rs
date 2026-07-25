@@ -33,8 +33,8 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, resolve_peer_authority};
-use crate::post_send_emitter::DaemonPostSendHookEmitter;
+use crate::https_transport::HttpsMessageTransport;
+use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -42,6 +42,8 @@ use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_stat
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
 use atm_storage::{OutboundMessageQuery, PeerConfigStore};
+
+mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -153,6 +155,7 @@ pub(crate) struct DaemonRequestDispatcher {
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
+    peer_delivery_projection: PeerDeliveryProjection,
 }
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
@@ -433,6 +436,7 @@ impl DaemonRequestDispatcher {
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }
 
@@ -485,7 +489,7 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-struct MessageRecord {
+pub(super) struct MessageRecord {
     prepared: PreparedWrite,
     outbound_request: WriteRequest,
 }
@@ -494,7 +498,7 @@ trait MessageWriter: Send + Sync {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
 }
 
-trait PostWriteRouter: Send + Sync {
+pub(super) trait PostWriteRouter: Send + Sync {
     fn dispatch(
         &self,
         message: &mut MessageRecord,
@@ -597,50 +601,17 @@ impl MessageWriter for DaemonRequestDispatcher {
     }
 }
 
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(
-        &self,
-        message: &mut MessageRecord,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let Some(host) = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host.as_ref())
-        else {
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        };
-        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
-            })?;
-        match transport.deliver(message.outbound_request.clone(), &peer, deadline) {
-            Ok(ResponseEnvelope::Error(error)) => Err(error),
-            // This foreground request is complete once the peer accepts the
-            // canonical write. A later recovery drain is a separate bounded
-            // operation; it must not mint a second deadline here.
-            Ok(_) => Ok(()),
-            Err(error) if error.is_daemon_unavailable() => {
-                Err(AtmError::remote_delivery_unconfirmed(format!(
-                    "local persistence completed but peer delivery was not confirmed: {}",
-                    error.message()
-                )))
-            }
-            Err(error) => Err(error),
-        }
+impl DaemonRequestDispatcher {
+    /// The canonical route and future recovery coordination use this sole
+    /// event-to-projection writer; no transport adapter owns delivery state.
+    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
+        self.peer_delivery_projection
+            .record(event, &self.runtime_health_observability);
+    }
+
+    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
+        self.peer_delivery_projection
+            .statuses(self.peer_config_store.as_ref())
     }
 }
 
@@ -910,6 +881,7 @@ impl DaemonRequestDispatcher {
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
             peer_config: Some(peer_config),
+            peer_links: self.peer_link_statuses(),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -935,6 +907,7 @@ impl DaemonRequestDispatcher {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
                 peer_config: None,
+                peer_links: Vec::new(),
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -1164,6 +1137,7 @@ impl DaemonRequestDispatcher {
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }
 }
