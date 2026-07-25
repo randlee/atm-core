@@ -352,10 +352,10 @@ mod tests {
     #[test]
     fn release_version_accepts_semver_prerelease() {
         assert_eq!(
-            ReleaseVersion::parse("1.3.2-beta-21-pre")
+            ReleaseVersion::parse("1.3.2-beta-22")
                 .expect("semver prerelease")
                 .to_string(),
-            "1.3.2-beta-21-pre"
+            "1.3.2-beta-22"
         );
     }
 

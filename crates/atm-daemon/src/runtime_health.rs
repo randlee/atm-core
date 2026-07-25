@@ -576,6 +576,16 @@ impl MessageWriter for DaemonRequestDispatcher {
 
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
+        if message.prepared.is_peer_receipt() {
+            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+            let post_send_emitter =
+                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+            message
+                .prepared
+                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
+            return Ok(());
+        }
         let Some(host) = message
             .outbound_request
             .to

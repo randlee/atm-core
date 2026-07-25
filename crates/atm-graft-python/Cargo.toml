@@ -17,6 +17,6 @@ crate-type = ["cdylib", "rlib"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-atm-graft = { path = "../atm-graft", version = "1.3.2-beta-21-pre" }
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.3.2-beta-21-pre" }
+atm-graft = { path = "../atm-graft", version = "1.3.2-beta-22" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.3.2-beta-22" }
 pyo3 = "0.29"

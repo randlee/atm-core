@@ -495,9 +495,6 @@ fn route_peer_http_request(
 
 fn normalize_untrusted_smoke_write_for_local_delivery(request: &mut ApiRequest) {
     if let ApiRequest::Write(write) = request {
-        if let Some(destination) = write.to.as_mut() {
-            destination.host = None;
-        }
         write.authenticated_source_host = None;
     }
 }
@@ -514,14 +511,12 @@ fn write_plaintext_http_request_with_source_host(
     )
 }
 
-/// The authenticated HTTPS adapter has already selected this daemon. It drops
-/// only the transport destination before submitting the same canonical write
-/// request used by local UDS and graft clients.
+/// The HTTPS adapter has already selected this daemon. It preserves the
+/// canonical host-qualified address and records only the adapter-authenticated
+/// source provenance before submitting the shared write request used by local
+/// UDS and graft clients. Origin metadata prevents re-forwarding after write.
 fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest, source_host: HostName) {
     if let ApiRequest::Write(write) = request {
-        if let Some(destination) = write.to.as_mut() {
-            destination.host = None;
-        }
         write.authenticated_source_host = Some(source_host);
     }
 }
@@ -943,7 +938,10 @@ mod tests {
         };
         assert!(write.authenticated_source_host.is_none());
         assert_eq!(write.origin_message_id, Some(origin_message_id));
-        assert!(write.to.expect("destination").host.is_none());
+        assert_eq!(
+            write.to.expect("destination").host,
+            Some("example.invalid".parse().expect("destination host"))
+        );
         assert!(matches!(
             router.ingress.lock().expect("recorded ingress").as_ref(),
             Some(AuthenticatedIngress::UntrustedSmoke(_))
@@ -1095,7 +1093,10 @@ mod tests {
         };
         assert_eq!(write.authenticated_source_host, Some(peer.host));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
-        assert!(write.to.expect("destination").host.is_none());
+        assert_eq!(
+            write.to.expect("destination").host,
+            Some("example.invalid".parse().expect("destination host"))
+        );
         listener.shutdown().expect("shutdown listener");
     }
 
