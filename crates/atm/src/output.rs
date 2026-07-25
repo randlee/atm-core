@@ -893,6 +893,7 @@ mod tests {
             certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
             trusted_peer_count: 3,
             enabled_trusted_peer_count: 2,
+            trusted_peers: vec![],
             validation_failure: None,
         });
 
