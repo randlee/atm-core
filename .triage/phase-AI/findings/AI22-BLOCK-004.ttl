@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-BLOCK-004>
   a triage:Finding ;
   triage:findingId "AI22-BLOCK-004" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
   triage:title "Same-host receipt classification is non-idempotent, amplifying via reconcile_after_success redelivery" ;
   triage:description "crates/atm-daemon/src/runtime_health.rs reconcile_after_success (~617-708) redelivers 'recent' outbound writes for a peer host after every successful delivery, bounded by policy.max_batch_messages/max_message_age and a 60s per-host cooldown. Combined with is_same_host_peer_receipt's flawed classification (see AI22-BLOCK-001) forcing post_write_needed=true on ordinary writes, this can cause repeated hook-subprocess/notification amplification for what should be a single logical delivery." ;
   triage:phaseId "phase-AI" ;

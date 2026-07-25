@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-MINOR-005>
   a triage:Finding ;
   triage:findingId "AI23-MINOR-005" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "Unused send_command()/receive_command() accessors retained under speculative future-phase justification" ;
   triage:description "crates/atm/src/composition.rs:253-275 -- send_command() and receive_command() accessors are marked #[expect(dead_code, reason = \"reserved for future command-routing phase\")] and are unused in production. Per repo Rust guidelines, a code path with no current retained requirement is presumed unnecessary until proven otherwise; 'reserved for a future phase' with no specific sprint ID cited is not a traceable justification." ;
   triage:phaseId "phase-AI" ;

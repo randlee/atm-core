@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-001>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-001" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
   triage:title "Self-send guard exemption trusts unauthenticated host field, inconsistent with the module's own stricter established pattern" ;
   triage:description "crates/atm-core/src/send/mod.rs validate_non_self_recipient exempts same-identity rejection whenever target.host.is_some(), without cross-checking that the host claim is actually authenticated. crates/atm-core/src/delivery_policy.rs resolve_write_recipient_snapshot already establishes a stricter pattern: 'if address.host.is_some() && !authenticated_source_host { ... }'. validate_non_self_recipient's exemption is inconsistent with this established stricter check." ;
   triage:phaseId "phase-AI" ;

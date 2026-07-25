@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI24-BLOCK-001>
   a triage:Finding ;
   triage:findingId "AI24-BLOCK-001" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
   triage:title "AICH-S4-FIX-1 batch breaks AI.12 single-host-routing-decision invariant" ;
   triage:description "rust-qa-agent bisected: test canonical_write_router_has_one_host_routing_decision (crates/atm-architecture/tests/boundary_enforcement.rs:160) passes at af2fbb83 (the commit immediately preceding the AICH-S4-FIX-1 batch) but fails at HEAD (7bb63e01), asserting 'AI.12 requires PostWriteRouter::dispatch to make the sole host decision' (left==right check, 0 vs 1). The reconcile_after_success removal done to fix AI22-BLOCK-004 appears to have split or relocated the host-routing decision point. Confirmed via direct bisection against the pre-batch commit, not a stale/flaky test. Reported by quality-mgr in QA verdict for AICH-S4-FIX-1 (feature/pAI-s24-host-qualified-ack-receipt @ 7bb63e01), file /Users/randlee/.config/atm/share/atm-dev/ai24-fix-batch-verdict.md." ;
   triage:phaseId "phase-AI" ;

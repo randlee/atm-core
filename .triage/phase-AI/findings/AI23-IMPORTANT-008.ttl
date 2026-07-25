@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-IMPORTANT-008>
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-008" ;
+  triage:foundAt "2026-07-25T06:53:26Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "openapi_surface test never cross-checks live api.rs routes against openapi.yaml, letting route drift ship silently" ;
   triage:description "Surfaced by arch-qa during the AI.23 round-2 recheck. The only automated gate over docs/atm-daemon/openapi.yaml is crates/atm/tests/openapi_surface.rs, which only diffs the YAML against its own prior baseline snapshot (around line 88) - it never cross-checks the live route table in crates/atm-core/src/api.rs (endpoint_for and decode_route_request match arms) against openapi.yaml or ADR-033. This is a structural gap: it is why the PeerSync route in api.rs was able to ship with no corresponding OpenAPI entry, ADR-033 row, or http-api.md row, completely undetected by CI." ;
   triage:phaseId "phase-AI" ;

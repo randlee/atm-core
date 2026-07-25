@@ -155,6 +155,12 @@ impl AtmError {
         Self::new(AtmErrorCode::DaemonUnavailable, message)
     }
 
+    /// Local persistence completed, but the peer did not accept the immutable
+    /// write before the caller's shared deadline. Retrying uses the same ULID.
+    pub fn remote_delivery_unconfirmed(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::RemoteDeliveryUnconfirmed, message)
+    }
+
     pub fn peer_config_validation(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::PeerConfigValidationFailed, message)
     }
@@ -427,6 +433,17 @@ mod tests {
         let error = AtmError::member_not_found("test-agent", "test-team");
 
         assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn remote_delivery_unconfirmed_has_its_stable_wire_code() {
+        let error = AtmError::remote_delivery_unconfirmed("peer response deadline elapsed");
+
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        assert!(matches!(
+            "REMOTE_DELIVERY_UNCONFIRMED".parse::<AtmErrorCode>(),
+            Ok(AtmErrorCode::RemoteDeliveryUnconfirmed)
+        ));
     }
 
     #[test]

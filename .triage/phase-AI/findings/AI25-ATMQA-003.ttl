@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-ATMQA-003>
   a triage:Finding ;
   triage:findingId "AI25-ATMQA-003" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "http-api.md never documents the projected https_port/configured-port surface" ;
   triage:description "docs/atm-daemon/http-api.md never documents the projected https_port / configured-port surface that the AI.25 Implementation map calls for. Reported by req-qa (ATM-QA-003) during AICH-S5 QA-1." ;
   triage:phaseId "phase-AI" ;

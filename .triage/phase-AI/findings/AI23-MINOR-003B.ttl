@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-MINOR-003B>
   a triage:Finding ;
   triage:findingId "AI23-MINOR-003B" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "ReleaseVersion's semver validation is unreachable for wire-deserialized peer-supplied version strings" ;
   triage:description "ReleaseVersion is #[serde(transparent)] over a bare String on AI.23 (crates/atm-core/src/protocol.rs:78-79). Deserializing a CompatibilityPreflight body (routed via POST /v1/atm/compatibility, reachable from peer HTTPS listener) populates client_release directly from wire string via serde -- bypasses ReleaseVersion::parse() validation. Daemon-side handler (crates/atm-daemon/src/runtime_health.rs) only does string equality, never re-validates. semver validation hardens only constructor path, has no effect on attacker-controlled wire strings. Impact is low (bounded by request cap, no panic). AI.30 fixes by changing ReleaseVersion(String) to ReleaseVersion(Version), which validates through semver deserializer." ;
   triage:phaseId "phase-AI" ;

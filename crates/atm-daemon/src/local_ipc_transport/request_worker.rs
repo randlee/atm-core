@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use atm_core::api::{
     ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
@@ -43,6 +44,9 @@ pub(super) fn handle_connection(
     registry: Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
+    // The deadline starts at local HTTP admission, not when a later dispatch
+    // worker happens to run. It is propagated unchanged through peer delivery.
+    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     apply_primary_request_deadline(&mut stream);
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream).map(|_| ());
@@ -56,7 +60,14 @@ pub(super) fn handle_connection(
         "daemon HTTP request accepted under configured size cap"
     );
     let request_id = atm_core::protocol::next_request_id();
-    let response = dispatch_request(request_id, request, dispatcher, &registry, observability)?;
+    let response = dispatch_request(
+        request_id,
+        request,
+        deadline,
+        dispatcher,
+        &registry,
+        observability,
+    )?;
     if let Err(error) = write_http_response(&mut stream, &response) {
         let classification = classify_connection_failure(&error);
         if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
@@ -146,6 +157,7 @@ pub(super) fn emit_connection_failure_event(
 fn dispatch_request(
     request_id: RequestId,
     request: ApiRequest,
+    deadline: RequestDeadline,
     dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
@@ -153,7 +165,7 @@ fn dispatch_request(
     let execution_risk = request_execution_risk(&request);
     let result_rx = (|| {
         let (result_rx, completion_rx, dispatch_handle) =
-            spawn_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
+            spawn_dispatch_worker(request, deadline, dispatcher, Arc::clone(registry))?;
         registry.push_dispatch_handle(
             TrackedDispatchHandle {
                 completion_rx,
@@ -169,12 +181,14 @@ fn dispatch_request(
     Ok(await_dispatch_response(
         request_id,
         execution_risk,
+        deadline,
         result_rx,
     ))
 }
 
 fn spawn_dispatch_worker(
     request: ApiRequest,
+    deadline: RequestDeadline,
     dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     dispatch_registry: Arc<ActiveConnectionRegistry>,
 ) -> Result<DispatchWorker, AtmError> {
@@ -192,11 +206,7 @@ fn spawn_dispatch_worker(
         .spawn(move || {
             let _dispatch_work = dispatch_registry.register_dispatch_work();
             let response = dispatcher
-                .route(
-                    request,
-                    AuthenticatedIngress::Local,
-                    RequestDeadline::after(REQUEST_DEADLINE),
-                )
+                .route(request, AuthenticatedIngress::Local, deadline)
                 .map(|response| response.into_inner());
             let _ = result_tx.send(response);
             let _ = completion_tx.send(());
@@ -241,9 +251,11 @@ fn read_bounded_http_request(
 fn await_dispatch_response(
     request_id: RequestId,
     execution_risk: RequestExecutionRisk,
+    deadline: RequestDeadline,
     result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
 ) -> ResponseEnvelope {
-    match result_rx.recv_timeout(REQUEST_DEADLINE) {
+    let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
+    match result_rx.recv_timeout(remaining) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(error),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -252,7 +264,7 @@ fn await_dispatch_response(
                 action = "dispatch",
                 outcome = "deadline_exceeded",
                 request_id = %request_id,
-                deadline_ms = REQUEST_DEADLINE.as_millis(),
+                deadline_ms = remaining.as_millis(),
                 "daemon request dispatcher exceeded the runtime deadline"
             );
             dispatch_timeout_response(execution_risk)
