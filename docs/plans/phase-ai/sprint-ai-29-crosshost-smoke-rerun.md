@@ -42,9 +42,12 @@ historical diagnostics, not passing evidence.
    AI.21-pre-format sanitized
    JSON result and one XHTML pane. Each pane contains: exact commit and
    CLI/daemon/schema/API versions; doctor/liveness/listener identity; a
-   PASS/FAIL/NOT-RUN table; bounded structured logs from the session; and a
-   generated concise assessment naming every failed row and its investigation
-   target. The runner returns nonzero if any required row fails.
+   PASS/FAIL/NOT-RUN table whose every row records expected sprint daemon
+   version and actual running daemon version; bounded structured logs from the
+   session; and a generated concise assessment naming every failed row and its
+   investigation target. Actual daemon version below expected is a hard FAIL,
+   never NOT-RUN or inferred PASS. The runner returns nonzero if any required
+   row fails.
 4. Require the AI.21-pre `combine_inbound_peer_smoke.py` to use `sc-compose render` to form
    one XHTML review page with one current pane for each required host. It must
    fail for a missing, stale, malformed, or wrong-host pane; it must not infer
@@ -72,9 +75,11 @@ historical diagnostics, not passing evidence.
 - Extend only AI.21-pre's `scripts/smoke/run_inbound_peer_smoke.py`,
   `combine_inbound_peer_smoke.py`, `analyze_logs.py`, example JSON, and the
   existing `templates/smoke-report/*.xhtml.j2` templates.
-- Use the daemon-switch skill forward-merged from `develop` for branch-pair
-  selection and mandatory post-smoke restore; the runner itself remains
-  lifecycle-free.
+- Arch-ctm runs the daemon-switch skill forward-merged from `develop` once per
+  sprint to select the branch CLI/daemon pair and leaves the daemon running.
+  QA and the Python runner only check that already-running daemon through
+  `atm doctor --json`; neither invokes daemon-switch. Arch-ctm performs the
+  mandatory post-smoke restore. The runner itself remains lifecycle-free.
 - Add no product transport route, test-only daemon, or shell-report fallback.
 
 ## Acceptance criteria

@@ -54,10 +54,13 @@ change. Nothing else from the evidence branch is adopted.
 3. The initial required table rows are `doctor`, localhost peer send/read/nudge,
    advertised/self-IP peer send/read/nudge, and inbound remote no-ack plus
    requires-ack/read/nudge. A result row is PASS, FAIL, or NOT-RUN—never an
-   inferred success. Each pane includes exact commit, CLI/daemon/schema/API
-   versions, daemon PID/listener identity, bounded session logs, and a concise
-   generated assessment naming every failed row and the next investigation
-   target. A required failed row makes the runner exit nonzero.
+   inferred success. Every table row records the expected sprint daemon
+   version and the actual running daemon version; actual below expected is a
+   hard FAIL, never NOT-RUN or inferred PASS. Each pane includes exact commit,
+   CLI/daemon/schema/API versions, daemon PID/listener identity, bounded
+   session logs, and a concise generated assessment naming every failed row
+   and the next investigation target. A required failed row makes the runner
+   exit nonzero.
 4. Add the only approved debug wire-security option to
    `crates/atm-daemon/src/main.rs`, `composition.rs`, and
    `https_transport.rs`:
@@ -113,10 +116,13 @@ change. Nothing else from the evidence branch is adopted.
 2. `just lint` and `just test` at the exact release-built commit.
 3. `daemon-switch.py` and its `SKILL.md` already exist on `develop`.
    AI.29 forward-merges that existing skill into the Phase AI branch line; it
-   does not author a new tool. After that merge, use the skill on every
-   participating host to run the branch CLI and daemon pair, then run the
-   Python host runner in mTLS and plaintext-test modes. Combine the panes with
-   `sc-compose`; retain the combined XHTML and sanitized JSON/log artifacts.
+   does not author a new tool. After that merge, arch-ctm runs the skill once
+   per sprint on every participating host to set the branch CLI/daemon pair
+   and leaves that daemon running. QA and the Python host runner only check
+   the already-running daemon through `atm doctor --json`; neither invokes
+   daemon-switch. The host runner then runs in mTLS and plaintext-test modes.
+   Combine the panes with `sc-compose`; retain the combined XHTML and
+   sanitized JSON/log artifacts.
 4. QA runs the same release daemon and runner, not a test fixture or the old
    evidence branch daemon. At handoff the branch daemon remains running for
    QA; restore the installed pair only after QA records final completion.
