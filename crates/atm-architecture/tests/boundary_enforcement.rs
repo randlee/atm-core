@@ -69,6 +69,13 @@ fn daemon_must_not_read_caller_workspace_config() {
         composition.contains("runtime_assembly.for_daemon()"),
         "daemon composition must select the runtime view that disables caller workspace config"
     );
+    let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
+    assert!(
+        runtime_composition.contains(
+            "self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));"
+        ),
+        "the daemon runtime view must replace the caller-workspace config doctor"
+    );
 
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates/atm-daemon/src"), &mut files);
