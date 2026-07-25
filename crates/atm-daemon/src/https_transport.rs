@@ -853,9 +853,10 @@ mod tests {
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind stalled peer");
         let address = listener.local_addr().expect("listener address");
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel::<()>(1);
         let server = std::thread::spawn(move || {
             let (_stream, _) = listener.accept().expect("accept client hello");
-            std::thread::sleep(Duration::from_millis(100));
+            let _ = release_rx.recv_timeout(Duration::from_secs(1));
         });
         let peer = TrustedPeer {
             host: "localhost".parse().expect("host"),
@@ -878,6 +879,7 @@ mod tests {
         )
         .expect_err("stalled peer TLS handshake must time out");
         assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        release_tx.send(()).expect("release stalled peer");
         server.join().expect("stalled peer exits");
     }
 

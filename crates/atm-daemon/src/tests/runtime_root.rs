@@ -133,7 +133,9 @@ impl HttpsMessageTransport for DelayedPeerHttpsDelivery {
     ) -> Result<ResponseEnvelope, AtmError> {
         // A deterministic peer stall consumes the caller's one shared budget;
         // it must not receive a fresh five-second transport allowance.
-        std::thread::sleep(Duration::from_millis(10));
+        let (stall_tx, stall_rx) = std::sync::mpsc::sync_channel::<()>(1);
+        let _keep_stall_open = stall_tx;
+        let _ = stall_rx.recv_timeout(Duration::from_millis(10));
         self.observed_budgets
             .lock()
             .expect("peer deadline recording lock")
