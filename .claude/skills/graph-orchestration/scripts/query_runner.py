@@ -219,6 +219,26 @@ def run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
     return list(results)
 
 
+def _cli_load_graph(ttl_dir: str, *, include_findings: bool) -> Graph:
+    """Load a graph while keeping malformed input errors CLI-friendly."""
+    try:
+        return load_graph(ttl_dir, include_findings=include_findings)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: query runner failed to load graph: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def _cli_run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
+    """Run one bundled query while keeping query errors one-line."""
+    try:
+        return run_sparql(g, sparql_file, bindings)
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: query runner failed to run {sparql_file}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
 def main():
     if len(sys.argv) not in (4, 5) or (
         len(sys.argv) == 5 and sys.argv[4] != "--validate-only"
@@ -240,10 +260,12 @@ def main():
     # particular, a legacy malformed finding elsewhere in the repository
     # should never make the documented post-event validation command fail for
     # an otherwise valid structure.
-    g = load_graph(ttl_dir, include_findings=not validate_only)
+    g = _cli_load_graph(ttl_dir, include_findings=not validate_only)
 
     # ── Validate structure before cursor ─────────────────────────────────────
-    validate_rows = run_sparql(g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri})
+    validate_rows = _cli_run_sparql(
+        g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri}
+    )
     if validate_rows:
         for row in validate_rows:
             print(f"ERROR: structure violation: {row[0]} — {row[1]}", file=sys.stderr)
@@ -254,7 +276,7 @@ def main():
         return
 
     # ── Cursor ───────────────────────────────────────────────────────────────
-    cursor_rows = run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})
+    cursor_rows = _cli_run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})
 
     if cursor_rows:
         sprint_iri = str(cursor_rows[0][0])
@@ -274,7 +296,9 @@ def main():
         return
 
     # ── Cursor empty — verify all sprints have valid Completions ─────────────
-    incomplete_rows = run_sparql(g, script_dir / "all-complete.sparql", {"PHASE": phase_iri})
+    incomplete_rows = _cli_run_sparql(
+        g, script_dir / "all-complete.sparql", {"PHASE": phase_iri}
+    )
     if incomplete_rows:
         # Some sprints are in-flight or have invalid Completions
         print(json.dumps({
@@ -285,7 +309,7 @@ def main():
         return
 
     # ── Check for open non-blocking findings (CLEANUP) ───────────────────────
-    cleanup_rows = run_sparql(
+    cleanup_rows = _cli_run_sparql(
         g, script_dir / "open-findings-sprint.sparql", {"PHASE": phase_iri}
     )
 

@@ -574,6 +574,43 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         assert "ERROR: structure violation" in result.stderr
         assert result.stdout == ""
 
+    def test_malformed_structure_is_reported_without_traceback(self, tmp_path):
+        repo = self._make_repo(tmp_path, "not valid Turtle [")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "ERROR: query runner failed to load graph" in result.stderr
+
+    def test_broken_sparql_is_reported_without_traceback(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        broken_scripts = tmp_path / "scripts"
+        broken_scripts.mkdir()
+        (broken_scripts / "validate-structure.sparql").write_text(
+            "SELECT definitely broken"
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "query_runner.py"),
+                "F",
+                str(repo / ".sprints" / "F"),
+                str(broken_scripts),
+            ],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "ERROR: query runner failed to run" in result.stderr
+
     def test_unknown_optional_argument_is_rejected(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
 
