@@ -165,7 +165,10 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_)
+        RequestEnvelope::Write(_)
+            | RequestEnvelope::Clear(_)
+            | RequestEnvelope::PeerSync(_)
+            | RequestEnvelope::ReloadRuntimeView
     )
 }
 
@@ -432,6 +435,13 @@ impl<'a> CliComposition<'a> {
         match self.send_request(RequestEnvelope::PeerSync(request))? {
             ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
             other => Err(unexpected_response("peer sync", other)),
+        }
+    }
+
+    pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
+        match self.send_request(RequestEnvelope::ReloadRuntimeView)? {
+            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
+            other => Err(unexpected_response("runtime reload", other)),
         }
     }
 
@@ -1047,6 +1057,20 @@ mod tests {
         );
         assert!(error.to_string().contains("synthetic daemon failure"));
         assert!(error.message().contains("Recovery:"));
+    }
+
+    #[test]
+    fn cli_runtime_reload_uses_the_authenticated_shared_api_request() {
+        let observability = CliObservability::fallback();
+        let transport = Arc::new(FakeClientTransport::new(|request| {
+            assert!(matches!(request, RequestEnvelope::ReloadRuntimeView));
+            Ok(ResponseEnvelope::RuntimeViewReloaded)
+        }));
+        let composition = CliComposition::from_transport(transport, &observability);
+
+        composition
+            .reload_runtime_view()
+            .expect("CLI runtime reload response");
     }
 
     #[test]

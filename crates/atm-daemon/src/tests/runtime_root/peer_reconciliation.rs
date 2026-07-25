@@ -25,6 +25,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -136,6 +137,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
             host: peer.clone(),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -244,6 +246,7 @@ fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
         host: peer.clone(),
         fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
         enabled: true,
+        https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
     };
     peer_store
         .save_trusted_peer(&trusted_peer)
