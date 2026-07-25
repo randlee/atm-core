@@ -62,6 +62,33 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
+fn daemon_must_not_read_caller_workspace_config() {
+    let root = workspace_root();
+    let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
+    assert!(
+        composition.contains("runtime_assembly.for_daemon()"),
+        "daemon composition must select the runtime view that disables caller workspace config"
+    );
+
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates/atm-daemon/src"), &mut files);
+    let findings: Vec<_> = files
+        .into_iter()
+        .filter_map(|path| {
+            let source = read_source(&path);
+            (source.contains("config::load_config")
+                || source.contains("ConfigIngress")
+                || source.contains("load_workspace_config"))
+            .then(|| path.display().to_string())
+        })
+        .collect();
+    assert!(
+        findings.is_empty(),
+        "daemon source must not restore caller workspace config access: {findings:?}"
+    );
+}
+
+#[test]
 fn ai25_live_trust_refresh_reuses_startup_validation() {
     let root = workspace_root();
     let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));

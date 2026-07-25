@@ -171,6 +171,15 @@ pub fn validate_enabled_peer_configuration_for_reload(
 }
 
 impl RuntimeAssembly {
+    /// Select the system-daemon view of the assembled runtime.
+    ///
+    /// IPC and peer requests carry caller context but must never cause the
+    /// daemon to read a caller workspace's `.atm.toml` file.
+    pub fn for_daemon(mut self) -> Self {
+        self.service_runtime = self.service_runtime.without_workspace_config();
+        self
+    }
+
     pub fn message_store_arc(&self) -> Arc<dyn SharedMessageStore + Send + Sync> {
         self.storage_backends.messages.clone()
     }
