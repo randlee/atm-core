@@ -95,6 +95,10 @@ Input rules:
 - `triage_root` must live under `integration_worktree_path`.
 - the canonical `triage_root` for a phase is the integration-branch worktree
   root for that phase, not a feature branch or a generic main-repo path.
+- `integration_worktree_path`, `triage_root`, and each input
+  `worktrees[].path` are runtime checkout paths. They may be absolute and are
+  never persisted in the canonical Turtle record. Persist occurrence file
+  locations as repository-relative paths only.
 
 Mode rules:
 - `initial_pass`:
@@ -220,9 +224,13 @@ Minimum Occurrence properties:
 
 Minimum WorktreeSnapshot properties:
 - `triage:branch`
-- `triage:path`
 - `triage:headSha`
 - `triage:orderIndex`
+
+The runtime `worktrees[].path` value is intentionally omitted from
+`triage:WorktreeSnapshot`: an external-worktree checkout path is host-layout
+specific, not a stable repository-relative fact. Branch, head SHA, and
+promotion order remain canonical.
 
 Use these prefixes:
 
@@ -264,7 +272,6 @@ cat > /tmp/triage-record-vars.json <<'JSON'
   "occurrence_worktree_ids": ["R17/9421e9f"],
   "worktrees": ["R17/9421e9f"],
   "worktree_branches": ["R.17"],
-  "worktree_paths": ["/abs/worktree-r17"],
   "worktree_head_shas": ["9421e9f"],
   "worktree_order_indices": ["17"]
 }

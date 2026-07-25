@@ -43,7 +43,6 @@ def _vars() -> dict:
         "occurrence_worktree_ids": ["R17/9421e9f"],
         "worktrees": ["R17/9421e9f"],
         "worktree_branches": ["R.17"],
-        "worktree_paths": ["/abs/worktree-r17"],
         "worktree_head_shas": ["9421e9f"],
         "worktree_order_indices": ["17"],
     }
@@ -118,3 +117,32 @@ def test_render_rejects_missing_provenance_variable(
     assert result.returncode != 0
     diagnostic = f"{result.stdout}\n{result.stderr}".lower()
     assert missing in diagnostic
+
+
+@pytest.mark.parametrize(
+    "path_value",
+    [
+        "/abs/integrate-phase-R/crates/atm-daemon/src/tests.rs",
+        "../outside-repository.rs",
+        "crates/../outside-repository.rs",
+        r"C:\\checkout\\crates\\atm-daemon\\src\\tests.rs",
+    ],
+)
+def test_render_rejects_non_repository_relative_occurrence_path(
+    tmp_path: Path, path_value: str
+) -> None:
+    variables = _vars()
+    variables["occurrence_files"] = [path_value]
+
+    result = _render(tmp_path, variables)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    output = tmp_path / "FTQ-001.ttl"
+    rendered = output.read_text(encoding="utf-8")
+    assert "__ERROR_REPOSITORY_RELATIVE_OCCURRENCE_PATH_REQUIRED__" in rendered
+
+    parsed = _parse_turtle(output, tmp_path)
+    # oxigraph currently reports parser failures on stderr while retaining a
+    # zero process exit status for the `load` command. Treat the diagnostic as
+    # the validation result rather than trusting the exit code alone.
+    assert "parser error" in parsed.stderr.lower()

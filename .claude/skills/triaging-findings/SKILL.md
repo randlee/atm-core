@@ -73,6 +73,14 @@ Required ownership rule:
 - the phase integration worktree is the canonical source of truth for triage
   artifacts
 
+Runtime checkout paths (`integration_worktree_path`, `triage_root`, and
+`worktrees[].path`) may be absolute while the sweep runs, but they are not
+canonical finding data and must not be copied into the Turtle record. The
+`triage:Occurrence` `triage:file` value must be repository-relative (no
+leading `/`, any `..` path component, or drive prefix). External worktree checkout paths
+are intentionally omitted from `triage:WorktreeSnapshot`; persist only its
+branch, head SHA, and promotion order.
+
 ## Canonical Turtle rendering
 
 Every finding record must be rendered from
@@ -83,8 +91,8 @@ parallel scalar arrays (`occurrences` with `occurrence_files`,
 `occurrence_lines`, `occurrence_snippets`, `occurrence_statuses`,
 `occurrence_closed`, `occurrence_branches`, `occurrence_head_shas`, and
 `occurrence_worktree_ids`; likewise `worktrees` with
-`worktree_branches`, `worktree_paths`, `worktree_head_shas`, and
-`worktree_order_indices`). Keep each array aligned by index.
+`worktree_branches`, `worktree_head_shas`, and `worktree_order_indices`). Keep
+each array aligned by index.
 
 Render to the canonical path and parse it before committing the batch:
 
@@ -106,9 +114,11 @@ oxigraph load --location "$STORE" --file "$OUTPUT" --format ttl
 
 The rendered Finding must contain `triage:foundIn triage:<declared-sprint>` and
 `triage:foundAt "<UTC timestamp ending in Z>"^^xsd:dateTime`. Missing required
-vars must fail the render through the template frontmatter contract; malformed
-Turtle must fail the Oxigraph parse. Do not add `--strict` to this render until
-`sc-compose` supports loop-local names in strict token validation.
+vars must fail the render through the template frontmatter contract; a
+non-repository-relative occurrence path renders an invalid sentinel and must
+fail the Oxigraph parse. Malformed Turtle must likewise fail the Oxigraph
+parse. Do not add `--strict` to this render until `sc-compose` supports
+loop-local names in strict token validation.
 
 ## Triage Modes
 
