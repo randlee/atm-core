@@ -101,6 +101,49 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
 }
 
 #[test]
+fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
+    let root = workspace_root();
+    let api = read_source(&root.join("crates/atm-core/src/api.rs"));
+    assert!(
+        api.contains("RequestEnvelope::Write(_) => (\"POST\", \"/v1/atm/messages\".to_string())"),
+        "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
+    );
+    assert!(
+        !api.contains("is_ack_path") && !api.contains("/ack\""),
+        "AI.23 forbids an acknowledgement-specific HTTP resource"
+    );
+
+    for (adapter, path) in [
+        (
+            "local IPC",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(
+            source.contains(".route("),
+            "AI.23 {adapter} adapter must enter the shared ApiRouter"
+        );
+        for forbidden in [
+            ".dispatch(",
+            "PostWriteRouter",
+            "MessageWriter",
+            "persist_",
+            "prepare_write",
+            "emit_local_post_write",
+            "DaemonPostSend",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "AI.23 {adapter} adapter must not own write persistence or post-write side effects: `{forbidden}`"
+            );
+        }
+    }
+}
+
+#[test]
 fn canonical_write_router_has_one_host_routing_decision() {
     let root = workspace_root();
     let mut visitor = HostRoutingVisitor::default();

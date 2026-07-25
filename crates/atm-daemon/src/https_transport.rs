@@ -764,6 +764,7 @@ mod tests {
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::schema::AtmMessageId;
     use atm_core::send::{SendMessageSource, WriteRequest};
     use atm_core::types::HostName;
     use atm_storage::{
@@ -781,7 +782,7 @@ mod tests {
     #[derive(Default)]
     struct RecordingRouter {
         routed: AtomicBool,
-        request: Mutex<Option<ApiRequest>>,
+        requests: Mutex<Vec<ApiRequest>>,
         ingress: Mutex<Option<AuthenticatedIngress>>,
     }
 
@@ -795,7 +796,10 @@ mod tests {
             _deadline: RequestDeadline,
         ) -> Result<ApiResponse, AtmError> {
             self.routed.store(true, Ordering::SeqCst);
-            *self.request.lock().expect("recorded request") = Some(_request);
+            self.requests
+                .lock()
+                .expect("recorded requests")
+                .push(_request);
             *self.ingress.lock().expect("recorded ingress") = Some(ingress);
             Ok(ApiResponse::new(ResponseEnvelope::Error(
                 AtmError::validation("test router response"),
@@ -927,19 +931,14 @@ mod tests {
         )
         .expect("write plain peer request");
         let _ = read_http_response(&mut stream, &request).expect("shared router response");
-        let request = router
-            .request
-            .lock()
-            .expect("recorded request")
-            .clone()
-            .expect("router request");
-        let ApiRequest::Write(write) = request else {
+        let requests = router.requests.lock().expect("recorded requests");
+        let ApiRequest::Write(write) = &requests[0] else {
             panic!("expected canonical write request");
         };
         assert!(write.authenticated_source_host.is_none());
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
-            write.to.expect("destination").host,
+            write.to.as_ref().expect("destination").host,
             Some("example.invalid".parse().expect("destination host"))
         );
         assert!(matches!(
@@ -1034,7 +1033,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_peer_host_overwrites_wire_source_host_on_shared_write() {
+    fn advertised_ip_peer_send_and_ack_reach_the_shared_router() {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
@@ -1067,7 +1066,7 @@ mod tests {
             std::env::temp_dir(),
             std::env::temp_dir(),
             "sender".parse().expect("sender"),
-            "recipient@test-team.example.invalid",
+            "recipient@test-team.192.168.128.82",
             "test-team".parse().expect("team"),
             SendMessageSource::Inline("message".to_string()),
             None,
@@ -1082,20 +1081,52 @@ mod tests {
         let request = RequestEnvelope::Write(Box::new(write));
         write_http_request(&mut tls, &request).expect("write shared request");
         let _ = read_http_response(&mut tls, &request).expect("shared router response");
-        let request = router
-            .request
-            .lock()
-            .expect("recorded request")
-            .clone()
-            .expect("router request");
-        let ApiRequest::Write(write) = request else {
+        let ack_source_id = AtmMessageId::new();
+        let mut ack = crate::test_support::test_ack_write_request(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "test-team".parse().expect("team"),
+            ack_source_id,
+            "acknowledged",
+        );
+        let ack_origin_id = AtmMessageId::new();
+        ack.origin_message_id = Some(ack_origin_id);
+        let ack_request = RequestEnvelope::Write(Box::new(ack));
+        let stream = TcpStream::connect(listener.listeners[0].address).expect("connect");
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("mutual TLS handshake");
+        write_http_request(&mut tls, &ack_request).expect("write canonical ack request");
+        let _ = read_http_response(&mut tls, &ack_request).expect("shared router response");
+
+        let requests = router.requests.lock().expect("recorded requests");
+        assert_eq!(requests.len(), 2);
+        let ApiRequest::Write(write) = &requests[0] else {
             panic!("expected canonical write request");
         };
-        assert_eq!(write.authenticated_source_host, Some(peer.host));
+        assert_eq!(write.authenticated_source_host, Some(peer.host.clone()));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
-            write.to.expect("destination").host,
-            Some("example.invalid".parse().expect("destination host"))
+            write.to.as_ref().expect("destination").host,
+            Some("192.168.128.82".parse().expect("advertised IP"))
+        );
+        assert!(write.acknowledges_message_id.is_none());
+        let ApiRequest::Write(ack) = &requests[1] else {
+            panic!("expected canonical acknowledgement write request");
+        };
+        assert_eq!(ack.authenticated_source_host, Some(peer.host));
+        assert_eq!(ack.origin_message_id, Some(ack_origin_id));
+        assert_eq!(ack.acknowledges_message_id, Some(ack_source_id));
+        assert_eq!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(&AuthenticatedIngress::Peer),
+            "the peer TCP listener must present the advertised-IP write to the one shared router as peer ingress"
         );
         listener.shutdown().expect("shutdown listener");
     }

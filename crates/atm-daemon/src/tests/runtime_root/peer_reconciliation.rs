@@ -58,23 +58,20 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         other => panic!("expected inbound send response, got {other:?}"),
     };
 
-    let ack = AckRequest {
-        home_dir: atm_home,
-        current_dir: workspace_dir,
-        caller_identity: "local-recipient".parse().expect("recipient"),
-        caller_chat_id: None,
-        caller_team: TEST_TEAM.parse().expect("team"),
-        message_id: source_message_id,
-        reply_body: "acknowledged".to_string(),
-    };
+    let ack = crate::test_support::test_ack_write_request(
+        atm_home,
+        workspace_dir,
+        "local-recipient".parse().expect("recipient"),
+        TEST_TEAM.parse().expect("team"),
+        source_message_id,
+        "acknowledged",
+    );
     let failing = Arc::new(FailingHttpsDelivery::default());
     dispatcher
         .install_https_transport(failing.clone())
         .expect("install failing transport");
     let error = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            ack.clone().into_write_request(),
-        )))
+        .dispatch(RequestEnvelope::Write(Box::new(ack.clone())))
         .expect_err("failed remote acknowledgement must return the transport error");
     assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
     assert_eq!(
@@ -92,7 +89,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         .install_https_transport(succeeding.clone())
         .expect("replace test transport");
     let retry = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(ack.into_write_request())))
+        .dispatch(RequestEnvelope::Write(Box::new(ack)))
         .expect("source remains pending after failed peer acknowledgement");
     assert!(matches!(
         retry,

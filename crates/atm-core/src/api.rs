@@ -43,10 +43,9 @@ impl HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
-        RequestEnvelope::Write(request) => match request.acknowledges_message_id {
-            Some(message_id) => ("POST", format!("/v1/atm/message/{message_id}/ack")),
-            None => ("POST", "/v1/atm/messages".to_string()),
-        },
+        // Send and acknowledgement are the same canonical write resource.
+        // `acknowledges_message_id` is payload data, never an endpoint choice.
+        RequestEnvelope::Write(_) => ("POST", "/v1/atm/messages".to_string()),
         RequestEnvelope::List(_) => ("GET", "/v1/atm/messages".to_string()),
         RequestEnvelope::Peek(_) => ("POST", "/v1/atm/messages/inspect".to_string()),
         RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
@@ -269,9 +268,6 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
         ("POST", "/v1/atm/messages") => serde_json::from_slice(body)
             .map(|value| ApiRequest::Write(Box::new(value)))
             .map_err(|source| invalid_route_body("write", source)),
-        ("POST", path) if is_ack_path(path) => serde_json::from_slice(body)
-            .map(|value| ApiRequest::Write(Box::new(value)))
-            .map_err(|source| invalid_route_body("ack", source)),
         ("GET", "/v1/atm/messages") => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
             .map_err(|source| invalid_route_body("messages list", source)),
@@ -368,7 +364,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value)) => (
             201,
             "Created",
-            Some(format!("/v1/atm/message/{}/ack", value.message_id)),
+            Some(format!("/v1/atm/message/{}", value.message_id)),
             serde_json::to_vec(value),
         ),
         ResponseEnvelope::CompatibilityVerdict(value) => {
@@ -397,14 +393,6 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
     };
     body.map(|body| (status, reason, body, location))
         .map_err(AtmError::from)
-}
-
-fn is_ack_path(path: &str) -> bool {
-    path.strip_prefix("/v1/atm/message/").is_some_and(|suffix| {
-        suffix
-            .strip_suffix("/ack")
-            .is_some_and(|id| !id.is_empty() && !id.contains('/'))
-    })
 }
 
 fn peer_sync_path_host(path: &str) -> Option<&str> {
@@ -637,10 +625,12 @@ mod tests {
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
         read_http_response, write_http_request, write_http_response,
     };
+    use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
     use crate::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
+    use crate::schema::AtmMessageId;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
@@ -727,8 +717,8 @@ mod tests {
     }
 
     #[test]
-    fn http_decode_uses_method_and_path_to_choose_write_variant() {
-        let request = RequestEnvelope::Write(Box::new(
+    fn normal_send_and_ack_share_one_http_write_resource() {
+        let send = RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 std::env::temp_dir(),
                 std::env::temp_dir(),
@@ -743,20 +733,35 @@ mod tests {
             )
             .expect("send request"),
         ));
-        let mut bytes = Vec::new();
-
-        write_http_request(&mut bytes, &request).expect("write HTTP request");
-        let decoded = decode_request(
-            read_http_request(&mut bytes.as_slice())
-                .expect("read HTTP request")
-                .expect("request"),
-        )
-        .expect("decode HTTP request");
-
-        assert!(matches!(
-            decoded,
-            ApiRequest::Write(request) if request.acknowledges_message_id.is_none()
+        let ack = RequestEnvelope::Write(Box::new(
+            AckRequest {
+                home_dir: std::env::temp_dir(),
+                current_dir: std::env::temp_dir(),
+                caller_identity: TEST_SENDER.parse().expect("sender"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id: AtmMessageId::new(),
+                reply_body: "acknowledged".to_string(),
+            }
+            .into_write_request(),
         ));
+
+        for (request, is_ack) in [(send, false), (ack, true)] {
+            let mut bytes = Vec::new();
+            write_http_request(&mut bytes, &request).expect("write HTTP request");
+            let raw = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
+            assert!(raw.starts_with("POST /v1/atm/messages HTTP/1.1"));
+            let decoded = decode_request(
+                read_http_request(&mut bytes.as_slice())
+                    .expect("read HTTP request")
+                    .expect("request"),
+            )
+            .expect("decode HTTP request");
+            assert!(matches!(
+                decoded,
+                ApiRequest::Write(request) if request.acknowledges_message_id.is_some() == is_ack
+            ));
+        }
     }
 
     #[test]

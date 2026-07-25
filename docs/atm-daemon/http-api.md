@@ -52,11 +52,10 @@ tracked requests within the daemon shutdown deadline.
 | Endpoint | Method | Meaning | Shared handler |
 | --- | --- | --- | --- |
 | `/v1/atm/messages` | `GET` | List/query visible messages; non-mutating | read/query |
-| `/v1/atm/messages` | `POST` | Create/send immutable message | canonical write |
+| `/v1/atm/messages` | `POST` | Create/send or acknowledgement reply | canonical write |
 | `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
-| `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
 | `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
@@ -67,11 +66,12 @@ filters. `agent=hendrix` searches that base agent across every chat identity;
 selected participant direction when a direction is requested, otherwise to
 either message participant. They do not alter the authenticated caller.
 
-`POST /v1/atm/message/{message-id}/ack` constructs the same `WriteRequest` used by
-`POST /messages`, with only `acknowledges_message_id` populated. The receiver's
-canonical write handler owns both persistence and acknowledgement mutation.
-It carries the message's full chat-qualified source address as the reply
-destination without a separate acknowledgement route.
+`POST /v1/atm/messages` carries both sends and acknowledgement replies. An
+acknowledgement is the same `WriteRequest` with only
+`acknowledges_message_id` populated; it does not select another resource. The
+receiver's canonical write handler owns both persistence and acknowledgement
+mutation and carries the source's full chat-qualified address as the reply
+destination.
 
 ## Response rules
 

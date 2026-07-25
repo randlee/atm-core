@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
@@ -74,7 +74,7 @@ pub struct PeerSyncOutcome {
     pub delivered: u16,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ReleaseVersion(String);
 
@@ -85,10 +85,10 @@ impl ReleaseVersion {
             .trim()
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
-        semver::Version::parse(value).map_err(|_source| {
+        semver::Version::parse(value).map_err(|source| {
             AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM release version `{value}`"),
+                format!("invalid ATM release version `{value}`: {source}"),
             )
         })?;
         Ok(Self(value.to_string()))
@@ -96,6 +96,16 @@ impl ReleaseVersion {
 
     pub fn current() -> Self {
         Self::parse(env!("CARGO_PKG_VERSION")).expect("package version must be semver")
+    }
+}
+
+impl<'de> Deserialize<'de> for ReleaseVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -350,13 +360,21 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn release_version_accepts_semver_prerelease() {
+    fn release_version_accepts_semver_prereleases_and_rejects_non_semver() {
         assert_eq!(
-            ReleaseVersion::parse("1.3.2-beta-22")
-                .expect("semver prerelease")
+            ReleaseVersion::parse("v1.3.2-beta-23")
+                .expect("prerelease version")
                 .to_string(),
-            "1.3.2-beta-22"
+            "1.3.2-beta-23"
         );
+        assert!(ReleaseVersion::parse("1.3").is_err());
+    }
+
+    #[test]
+    fn release_version_rejects_invalid_wire_deserialization() {
+        let error = serde_json::from_str::<ReleaseVersion>("\"not-semver\"")
+            .expect_err("wire versions must use the same semver validation");
+        assert!(error.to_string().contains("unexpected character"));
     }
 
     #[test]
