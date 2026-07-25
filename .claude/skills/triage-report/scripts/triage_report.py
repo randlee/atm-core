@@ -19,11 +19,13 @@ from typing import Any
 
 try:
     from rdflib import Graph, Namespace, RDF
+    _RDFLIB_ERROR = None
 except ImportError as exc:  # pragma: no cover - environment error
-    raise SystemExit("rdflib is required; install it with pip install rdflib") from exc
+    Graph = Namespace = RDF = None  # type: ignore[assignment]
+    _RDFLIB_ERROR = str(exc)
 
 
-TRIAGE = Namespace("urn:atm:triage:")
+TRIAGE = Namespace("urn:atm:triage:") if Namespace else None
 UTC = timezone.utc
 ICONS = {
     "assigned": "📥",
@@ -266,6 +268,8 @@ def build_report(
     metadata: Path | None = None,
 ) -> dict[str, Any]:
     """Build canonical report data. No presentation-layer inference occurs here."""
+    if _RDFLIB_ERROR:
+        raise ReportError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
     root = Path(integration_root).resolve()
     phase_name, phase_path = _phase_dir(root, phase)
     structure_path = phase_path / "structure.ttl"
@@ -437,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--qa-master", type=Path)
     parser.add_argument("--metadata", type=Path)
     parser.add_argument("--format", choices=("table", "detailed", "json", "vars"), default="table")
+    parser.add_argument("--mode", choices=("table", "detailed"), default="table", help="template display mode for --format vars")
     parser.add_argument("--json", action="store_true", help="alias for --format json")
     args = parser.parse_args(argv)
     try:
@@ -446,6 +451,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"kind": "error", "error": str(exc)}, sort_keys=True))
         return 2
     output_format = "json" if args.json else args.format
+    report["mode"] = "detailed" if args.format == "detailed" else args.mode
     if output_format == "json":
         print(json.dumps(report, indent=2, sort_keys=True))
     elif output_format == "vars":
