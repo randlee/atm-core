@@ -123,8 +123,8 @@ def test_rejects_non_repository_relative_occurrence_and_legacy_worktree_paths(
 
     assert result.kind == "validation:fail"
     assert result.summary.errors == 3
-    assert any("triage:file" in line for line in result.diagnostics)
-    assert sum("triage:path" in line for line in result.diagnostics) == 2
+    assert any("invalid triage:file" in line for line in result.diagnostics)
+    assert sum("invalid triage:path" in line for line in result.diagnostics) == 2
 
 
 def test_warning_only_metadata_is_validation_pass(tmp_path):
