@@ -1,0 +1,26 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F003" ;
+  triage:title "Reused startup bind-preflight validator will break every live reload" ;
+  triage:description "FIX-1 (commit 2a422872) correctly made refresh_https_trust call validate_enabled_peer_configuration before installing new trust material — this closes the original RBQA-F001 gap (reload skipping the startup validation invariant). However, validate_enabled_peer_configuration (crates/atm-runtime/src/composition.rs:120-158) is documented in its own doc-comment as a startup-only bind preflight, and it literally calls TcpListener::bind(interface.bind_addr) for every enabled interface (line 151). At startup this is safe (nothing bound yet). At reload time, HttpsListenerSet already holds an active bound listener on that same address for the daemon lifetime; a second bind() on an address this process is already listening on will fail (no SO_REUSEPORT). Net effect: every live-reload cycle while any HTTPS interface is enabled will now fail in the bind-preflight step. The existing test live_trust_refresh_keeps_one_listener_reachable does NOT catch this because it calls HttpsListenerSet::refresh_trusted_peers directly, bypassing refresh_https_trust entirely. Required correction: split validate_enabled_peer_configuration into (a) config-shape validation (safe to reuse at reload) and (b) a bind-preflight step invoked only at startup. refresh_https_trust should call only (a)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness/regression" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T06:42:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/feature-pAI-s25/a9e61fb0> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pAI-s25/a9e61fb0> .
+
+<urn:atm:triage:worktree/feature-pAI-s25/a9e61fb0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:orderIndex 1 .
