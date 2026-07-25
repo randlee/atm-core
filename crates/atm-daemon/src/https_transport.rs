@@ -8,7 +8,7 @@
 use std::fmt;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -192,6 +192,7 @@ pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    peer_verifier: Arc<PinnedClientVerifier>,
 }
 
 struct HttpsListener {
@@ -263,7 +264,12 @@ impl HttpsListenerSet {
             stop,
             listeners,
             requests,
+            peer_verifier,
         })
+    }
+
+    pub(crate) fn refresh_trusted_peers(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
+        self.peer_verifier.replace(peers)
     }
 
     pub(crate) fn shutdown(mut self) -> Result<(), AtmError> {
@@ -585,14 +591,14 @@ impl ServerCertVerifier for PinnedServerVerifier {
 
 #[derive(Debug)]
 struct PinnedClientVerifier {
-    peers: Vec<TrustedPeer>,
+    peers: RwLock<Vec<TrustedPeer>>,
     algorithms: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
 impl PinnedClientVerifier {
     fn new(peers: Vec<TrustedPeer>) -> Self {
         Self {
-            peers: peers.into_iter().filter(|peer| peer.enabled).collect(),
+            peers: RwLock::new(peers.into_iter().filter(|peer| peer.enabled).collect()),
             algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
         }
     }
@@ -640,6 +646,14 @@ impl ClientCertVerifier for PinnedClientVerifier {
 }
 
 impl PinnedClientVerifier {
+    fn replace(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
+        let mut current = self
+            .peers
+            .write()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned"))?;
+        *current = peers.into_iter().filter(|peer| peer.enabled).collect();
+        Ok(())
+    }
     fn authenticated_host(&self, connection: &ServerConnection) -> Result<HostName, AtmError> {
         let certificate = connection
             .peer_certificates()
@@ -655,6 +669,8 @@ impl PinnedClientVerifier {
     fn host_for_certificate(&self, certificate: &CertificateDer<'_>) -> Option<HostName> {
         let fingerprint = certificate_fingerprint(certificate);
         self.peers
+            .read()
+            .ok()?
             .iter()
             .find(|peer| normalize_fingerprint(peer.fingerprint.as_str()) == fingerprint)
             .map(|peer| peer.host.clone())

@@ -295,6 +295,21 @@ impl RuntimeComposition {
         self.request_dispatcher.clear_https_transport()
     }
 
+    fn refresh_https_trust(&self) -> Result<(), AtmError> {
+        let peers = self.peer_config_store.list_trusted_peers()?;
+        if let Some(listeners) = self
+            .https_listeners
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+            })?
+            .as_ref()
+        {
+            listeners.refresh_trusted_peers(peers)?;
+        }
+        Ok(())
+    }
+
     fn begin_startup(&self) -> Result<(), AtmError> {
         self.composition_observability.emit_or_warn(
             "start_requested",
@@ -344,7 +359,6 @@ impl RuntimeComposition {
     where
         P: Fn() -> Result<(), AtmError>,
     {
-        let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -353,7 +367,10 @@ impl RuntimeComposition {
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
                 force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
                 begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
+                reload_runtime_view: || {
+                    self.request_dispatcher.reload_runtime_view()?;
+                    self.refresh_https_trust()
+                },
                 publish_ready,
             },
         );
