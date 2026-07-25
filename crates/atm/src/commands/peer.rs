@@ -118,6 +118,8 @@ enum TrustSubcommand {
         host: String,
         #[arg(long)]
         fingerprint: String,
+        #[arg(long, default_value_t = 43101)]
+        https_port: u16,
         #[arg(long)]
         yes: bool,
     },
@@ -126,6 +128,8 @@ enum TrustSubcommand {
         host: String,
         #[arg(long)]
         fingerprint: String,
+        #[arg(long, default_value_t = 43101)]
+        https_port: u16,
         #[arg(long)]
         yes: bool,
     },
@@ -302,10 +306,11 @@ impl TrustCommand {
             TrustSubcommand::Add {
                 host,
                 fingerprint,
+                https_port,
                 yes,
             } => {
                 require_confirmation(yes, "adding a trusted peer")?;
-                let peer = peer(host, fingerprint)?;
+                let peer = peer(host, fingerprint, https_port)?;
                 if store.trusted_peer(&peer.host)?.is_some() {
                     return Err(atm_storage::AtmError::validation(
                         "trusted peer already exists; use `atm peer trust replace --yes`",
@@ -318,10 +323,11 @@ impl TrustCommand {
             TrustSubcommand::Replace {
                 host,
                 fingerprint,
+                https_port,
                 yes,
             } => {
                 require_confirmation(yes, "replacing a trusted-peer fingerprint")?;
-                let peer = peer(host, fingerprint)?;
+                let peer = peer(host, fingerprint, https_port)?;
                 if store.trusted_peer(&peer.host)?.is_none() {
                     return Err(atm_storage::AtmError::validation(
                         "trusted peer does not exist; use `atm peer trust add --yes`",
@@ -348,7 +354,11 @@ impl TrustCommand {
     }
 }
 
-fn peer(host: String, fingerprint: String) -> std::result::Result<TrustedPeer, AtmError> {
+fn peer(
+    host: String,
+    fingerprint: String,
+    https_port: u16,
+) -> std::result::Result<TrustedPeer, AtmError> {
     Ok(TrustedPeer {
         host: host
             .parse()
@@ -357,6 +367,8 @@ fn peer(host: String, fingerprint: String) -> std::result::Result<TrustedPeer, A
             .parse::<CertificateFingerprint>()
             .map_err(|_source| AtmError::peer_config_validation("invalid --fingerprint"))?,
         enabled: true,
+        https_port: NonZeroU16::new(https_port)
+            .ok_or_else(|| AtmError::peer_config_validation("--https-port must be non-zero"))?,
     })
 }
 

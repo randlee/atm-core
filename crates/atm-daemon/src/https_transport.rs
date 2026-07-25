@@ -129,7 +129,9 @@ impl HttpsMessageTransport for HttpsTransport {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
         }
         let host = peer.host.to_string();
-        let address = resolve_peer_address(&host)?;
+        // Resolve anew for every connection. The registered hostname remains
+        // the TLS authority; resolver output is never stored.
+        let address = resolve_peer_address(&host, peer.https_port.get())?;
         let stream = TcpStream::connect_timeout(&address, deadline.connect).map_err(|_source| {
             AtmError::daemon_unavailable(format!("failed to connect to HTTPS peer {host}"))
         })?;
@@ -442,9 +444,9 @@ fn complete_handshake(
     Ok(())
 }
 
-fn resolve_peer_address(host: &str) -> Result<SocketAddr, AtmError> {
+fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
     use std::net::ToSocketAddrs;
-    let mut addresses = format!("{host}:43101")
+    let mut addresses = format!("{host}:{port}")
         .to_socket_addrs()
         .map_err(|_source| {
             AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}"))
@@ -714,6 +716,7 @@ mod tests {
                 host: "localhost".parse().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             }],
             router.clone(),
         )
@@ -726,6 +729,7 @@ mod tests {
                 host: "localhost".parse().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             },
         )
         .expect("client config");
@@ -798,6 +802,7 @@ mod tests {
                 fingerprint: CertificateFingerprint::from_str(&"00".repeat(32))
                     .expect("fingerprint"),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             }],
             router.clone(),
         )
@@ -809,6 +814,7 @@ mod tests {
                 host: "localhost".parse::<HostName>().expect("host"),
                 fingerprint: certificate.fingerprint.clone(),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             },
         )
         .expect("client config");
@@ -836,6 +842,7 @@ mod tests {
             host: "localhost".parse().expect("host"),
             fingerprint: certificate.fingerprint.clone(),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         };
         let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {

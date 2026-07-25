@@ -202,6 +202,7 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -292,6 +293,7 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
 
@@ -356,6 +358,7 @@ fn peer_error_response_is_returned_as_the_post_write_result() {
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         })
         .expect("save trusted peer");
     let dispatcher =

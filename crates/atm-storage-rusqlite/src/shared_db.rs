@@ -106,7 +106,8 @@ CREATE TABLE IF NOT EXISTS peer_local_certificate (
 CREATE TABLE IF NOT EXISTS peer_trusted_peers (
     host TEXT NOT NULL PRIMARY KEY,
     fingerprint TEXT NOT NULL,
-    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+    enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+    https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)
 );
 
 CREATE TABLE IF NOT EXISTS peer_sync_policies (
@@ -485,6 +486,13 @@ pub(crate) fn ensure_schema(
     ensure_mail_message_columns(connection, target)?;
     ensure_team_roster_columns(connection, target)?;
     ensure_team_nudge_template_override_columns(connection, target)?;
+    ensure_column(
+        connection,
+        target,
+        "peer_trusted_peers",
+        "https_port",
+        "https_port INTEGER NOT NULL DEFAULT 43101 CHECK(https_port BETWEEN 1 AND 65535)",
+    )?;
     Ok(())
 }
 
