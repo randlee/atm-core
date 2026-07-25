@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI29-RSH-001" ;
+  triage:title "ActiveConnectionRegistry push_dispatch_handle capacity error propagates to accept loop" ;
+  triage:description "ActiveConnectionRegistry::push_dispatch_handle returns Err when at MAX_CONCURRENT_CONNECTIONS, causing entire local HTTP listener to tear down via ? operator instead of refusing single connection. Both Unix (local_tcp_transport.rs:125-131) and Windows (:311-317) accept-loop call sites use ?, so capacity exceeded kills entire listener instead of staying responsive." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RSH" ;
+  triage:severity "Blocking" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn "AICH-S10" ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RSH-001_8b4bea66> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:occurrence_AI29-RSH-001_8b4bea66>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/active_connection_registry.rs" ;
+  triage:snippet "ActiveConnectionRegistry push_dispatch_handle capacity error propagates to accept loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:orderIndex 29 .

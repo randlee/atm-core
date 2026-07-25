@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RBQA-001>
+  a triage:Finding ;
+  triage:findingId "AI29-RBQA-001" ;
+  triage:title "RuntimeConfigDoctor::inspect_config reads .atm.toml unguarded by WorkspaceConfigAccess" ;
+  triage:description "RuntimeConfigDoctor::inspect_config (composition.rs:73-82) independently calls load_atm_config, completely unguarded by the new WorkspaceConfigAccess/for_daemon() toggle from commit 40ed45e2. Wired into daemon via doctor_ports (composition.rs:101) and runtime_health.rs:791. Daemon DOES still read caller-supplied .atm.toml on doctor path, defeating the fix claim and issue #636." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RBQA" ;
+  triage:severity "Blocking" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn "AICH-S10" ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBQA-001_40ed45e2> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+
+<urn:atm:triage:occurrence_AI29-RBQA-001_40ed45e2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime/src/composition.rs" ;
+  triage:snippet "RuntimeConfigDoctor::inspect_config reads .atm.toml unguarded by WorkspaceConfigAccess" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "40ed45e2" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "40ed45e2" ;
+  triage:orderIndex 29 .
