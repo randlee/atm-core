@@ -1,0 +1,108 @@
+# Phase AI audit guidelines
+
+## Time window
+
+- **AICH work start:** `2026-07-25T04:15:13Z`, the timestamp of the first
+  `AICH-S1` assignment in `.sprints/AICH/events.ttl`.
+- **Audit-session start:** `2026-07-25T16:25:02Z`, the first machine context
+  query for this audit.
+- Git and ATM queries about sprint work should use the AICH work-start time as
+  their default lower bound. Use the audit-session start only when measuring
+  actions taken during this audit.
+- Always state the UTC lower/upper bounds and the branch/ref queried. Do not
+  mix pre-window Phase AI history into AICH conclusions unless it is explicitly
+  tied to AICH-S1 through AICH-S10.
+
+## Scope
+
+This audit covers only the sprint rows supplied for AICH. The status table is
+the user-provided snapshot; its snapshot timestamp should be recorded when it
+changes.
+
+| AICH sprint | Phase sprint | DEV | QA | CI | PR |
+|---|---|---:|---:|---:|---|
+| AICH-S1 | AI.21-pre | ✅ | ✅ | ✅ | [#624](https://github.com/randlee/atm-core/pull/624) |
+| AICH-S2 | AI.22 | ✅ | ✅ | — | — |
+| AICH-S3 | AI.23 | ✅ | ✅ | — | — |
+| AICH-S4 | AI.24 | ✅ | ✅ | — | — |
+| AICH-S5 | AI.25 | ✅ | ✅ | — | — |
+| AICH-S6 | AI.26 | ✅ | ✅ | ✅ | — |
+| AICH-S7 | AI.27 | 🌀 in progress | — | — | — |
+| AICH-S8 | AI.28 | not started | — | — | — |
+| AICH-S9 | AI.30 | ✅ | — | ✅ | [#623](https://github.com/randlee/atm-core/pull/623) |
+| AICH-S10 | AI.29 | — | — | 🚧 failing | [#620](https://github.com/randlee/atm-core/pull/620) |
+
+Exclude unrelated Phase AI sprints, findings, branches, and ATM messages.
+
+## Recommended inputs to add
+
+- Timestamp, author, and source ref for each status-table snapshot.
+- Dev completion commit, QA verdict artifact, and CI run URL for every sprint.
+- Explicit branch/worktree and merge-forward commit for each sprint, including
+  rows currently showing no PR.
+- The intended meaning of `DEV`, `QA`, and `CI` when a sprint has a completion
+  event but its QA gate is still pending.
+- A mapping from each finding to `AICH-S1` through `AICH-S10`, including the
+  finding timestamp and whether it is open, fixed, deferred, or closed.
+- The rule for treating the supplied table versus `.sprints/AICH/events.ttl`
+  when their status snapshots disagree.
+- CI failure URLs/logs for AICH-S10 and the acceptance criterion or owner for
+  resolving them.
+
+## Evidence rules
+
+1. Treat the supplied sprint table as the status snapshot and `.sprints/AICH`
+   as the event ledger; report discrepancies rather than silently reconciling
+   them.
+2. Record the exact command, branch/ref, UTC window, and output summary for
+   every graph-orchestration or triage script run.
+3. Keep the audit worktree read-only for product code. Only audit artifacts
+   under this `.audit/` directory may be added or changed.
+4. Distinguish a script result from a valid conclusion. In particular, verify
+   that findings are linked to the sprint IRIs and timestamps expected by the
+   graph-orchestration queries before trusting `DONE`, `CLEANUP`, or cursor
+   output.
+5. Compare `develop` and `integrate/phase-AI` at pinned commit SHAs. Note
+   scripts present only on one ref and fixes that have not been merge-forwarded.
+
+## QA evidence tables
+
+- [qa-evidence-master.json](qa-evidence-master.json) is the authoritative,
+  machine-friendly index. It has one object per located QA/recheck run and
+  includes ATM message IDs, UTC/PST timestamps, shared ATM paths, local temp
+  scratchpad paths, verdicts, counts, and count-basis notes.
+- [qa-assignment-results.csv](qa-assignment-results.csv) is the Excel-facing
+  projection of the master index. It has one row per located QA run and
+  separate `blockers`, `important`, and `minor` columns.
+- CSV timestamps use fixed PST (`UTC-08:00`) as requested, including the July
+  records; they are not daylight-saving-adjusted PDT values. Blank cells mean
+  the source verdict did not provide a defensible split count.
+- Counts are not silently normalized across verdict styles: the CSV's
+  `count_basis` identifies itemized, headline, open-gate, or reviewer-aggregate
+  counts. A missing assignment or result is recorded in the master table's
+  `coverage_gaps` rather than inferred from a branch name.
+
+## Mandatory process controls
+
+These controls are required for future graph-orchestration runs. They are
+fail-closed requirements, not optional operating guidance.
+
+| Requirement | Required control |
+|---|---|
+| Prevent recurrence | Run schema/provenance validation before assignment, completion, and merge. Any `foundIn`/`foundAt` error blocks progress. |
+| Enforce team-lead protocol | The assignment command must emit an ATM task with `requires_ack`, record the message ID, wait for acknowledgement, and only then append the Assignment TTL. |
+| Provide visibility | Generate a committed status report/CSV showing sprint, assignment, acknowledgement, branch, commit, PR, QA result, finding counts, and current gate. |
+| Never miss findings | Parse every QA verdict and require every finding ID or alias to map to exactly one TTL. Missing IDs, duplicate aliases, stale closures, or count mismatches block the PR. |
+
+The current audit demonstrates why each control is necessary: missing
+provenance produced 125 validator errors, QA records existed uncommitted or on
+unmerged branches, closure statuses drifted from verdicts, and `foundAt`
+timestamps were initially written with a local-time/UTC-label mismatch.
+
+## Current audit baseline
+
+- Audit branch: `audit/phase-ai`
+- Base: `integrate/phase-AI`
+- Integration HEAD at setup: `8627d5f3628e5ebd3bf271b3ac5b7ccf345dc652`
+- Local `develop`: `643fe719ac5265e4b58d6628c771aad850ba156f`
+- `origin/develop`: `e31af4f8107902464ab00c48eab8e2bfa37fffe3`
