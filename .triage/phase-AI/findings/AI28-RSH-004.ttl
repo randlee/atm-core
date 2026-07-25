@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-RSH-004>
+  a triage:Finding ;
+  triage:findingId "AI28-RSH-004" ;
+  triage:title "Only transport call deadline-checked in drain(), not DB read" ;
+  triage:description "The drain() function in peer_drain_coordinator.rs enforces a deadline (or timeout) for the network transport call when delivering messages to a peer, but does not enforce the same deadline on the prior database read that fetches the messages to deliver. In a scenario where the database is slow or overloaded, the DB read can consume the entire operation timeout without the coordinator knowing, leaving no time for the actual delivery attempt. This creates an asymmetry in deadline enforcement and reduces the reliability of the paging/delivery loop under database contention. The issue is not critical (most deliveries succeed quickly), but it's a hardening gap that should be closed. Fix recommended: apply deadline checks to the database read operation in the same way as the transport call, ensuring that both components are bounded. This might involve passing a deadline context to the database layer or explicitly checking elapsed time after the DB read completes." ;
+  triage:category "Service-Hardening" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "drain() paging loop: DB read is not deadline-checked, only transport call is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .
