@@ -1,5 +1,4 @@
 use super::*;
-use atm_core::ack::AckRequest;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{

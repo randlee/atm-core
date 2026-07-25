@@ -757,7 +757,6 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    use atm_core::ack::AckRequest;
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
         read_http_response, write_http_request, write_http_request_with_headers,
@@ -1034,7 +1033,7 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_peer_host_overwrites_wire_source_host_on_shared_write() {
+    fn advertised_ip_peer_send_and_ack_reach_the_shared_router() {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
@@ -1067,7 +1066,7 @@ mod tests {
             std::env::temp_dir(),
             std::env::temp_dir(),
             "sender".parse().expect("sender"),
-            "recipient@test-team.example.invalid",
+            "recipient@test-team.192.168.128.82",
             "test-team".parse().expect("team"),
             SendMessageSource::Inline("message".to_string()),
             None,
@@ -1083,16 +1082,14 @@ mod tests {
         write_http_request(&mut tls, &request).expect("write shared request");
         let _ = read_http_response(&mut tls, &request).expect("shared router response");
         let ack_source_id = AtmMessageId::new();
-        let mut ack = AckRequest {
-            home_dir: std::env::temp_dir(),
-            current_dir: std::env::temp_dir(),
-            caller_identity: "sender".parse().expect("sender"),
-            caller_chat_id: None,
-            caller_team: "test-team".parse().expect("team"),
-            message_id: ack_source_id,
-            reply_body: "acknowledged".to_string(),
-        }
-        .into_write_request();
+        let mut ack = crate::test_support::test_ack_write_request(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            "sender".parse().expect("sender"),
+            "test-team".parse().expect("team"),
+            ack_source_id,
+            "acknowledged",
+        );
         let ack_origin_id = AtmMessageId::new();
         ack.origin_message_id = Some(ack_origin_id);
         let ack_request = RequestEnvelope::Write(Box::new(ack));
@@ -1117,7 +1114,7 @@ mod tests {
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
             write.to.as_ref().expect("destination").host,
-            Some("example.invalid".parse().expect("destination host"))
+            Some("192.168.128.82".parse().expect("advertised IP"))
         );
         assert!(write.acknowledges_message_id.is_none());
         let ApiRequest::Write(ack) = &requests[1] else {
@@ -1126,6 +1123,11 @@ mod tests {
         assert_eq!(ack.authenticated_source_host, Some(peer.host));
         assert_eq!(ack.origin_message_id, Some(ack_origin_id));
         assert_eq!(ack.acknowledges_message_id, Some(ack_source_id));
+        assert_eq!(
+            router.ingress.lock().expect("recorded ingress").as_ref(),
+            Some(&AuthenticatedIngress::Peer),
+            "the peer TCP listener must present the advertised-IP write to the one shared router as peer ingress"
+        );
         listener.shutdown().expect("shutdown listener");
     }
 
