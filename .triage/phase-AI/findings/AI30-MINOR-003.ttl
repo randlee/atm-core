@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-MINOR-003>
+  a triage:Finding ;
+  triage:findingId "AI30-MINOR-003" ;
+  triage:title "No max-length precheck before semver::Version::parse" ;
+  triage:description "crates/atm-core/src/protocol.rs, ReleaseVersion/HttpApiVersion::parse -- no explicit max-length precheck before semver::Version::parse. Low-severity, same-host-only attack surface. Reported by rust-service-hardening-agent (RSH-001)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-003/pAI-s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-003/pAI-s30/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:occurrence/AI30-MINOR-003/pAI-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 88 ;
+  triage:snippet "Version::parse(value).map(Self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:context "ReleaseVersion::parse (lines 86-94)" .
+
+<urn:atm:triage:occurrence/AI30-MINOR-003/pAI-s30/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 114 ;
+  triage:snippet "Version::parse(value).map(Self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:context "HttpApiVersion::parse (lines 112-120)" .
+
+<urn:atm:triage:worktree/pAI-s30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 9 .

@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI21-BLOCK-001" ;
+  triage:title "Anonymous plaintext-test reads mislabeled as authenticated peer ingress" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs:462-491 (route_peer_http_request) — when a connection on the plaintext-test listener carries no X-ATM-Peer-Source-Host header and isn't a Write request, the (None, None) match arm falls through to AuthenticatedIngress::Peer, the identical value a real mTLS-verified peer receives. Currently inert (ApiRouter::route only branches on ingress for Write requests today), but this is exactly the anti-pattern ADR-035 forbids. Fix: route the no-header, non-write case through a distinct unauthenticated/anonymous ingress variant instead of reusing Peer." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:category "authorization-context-mislabeling" ;
+  triage:severity "Blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundAt "2026-07-25T05:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-24T21:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-BLOCK-001/s21pre/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/5678337c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-BLOCK-001/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 462 ;
+  triage:lineEnd 491 ;
+  triage:snippet "(None, None) match arm falls through to AuthenticatedIngress::Peer" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:foundAt "2026-07-25T05:10:00Z"^^xsd:dateTime ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/5678337c> .
+
+<urn:atm:triage:worktree/s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .

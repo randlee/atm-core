@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-MINOR-001>
+  a triage:Finding ;
+  triage:findingId "AI30-MINOR-001" ;
+  triage:title "compile_fail doctest has stray trailing comma masking intended lesson" ;
+  triage:description "crates/atm-daemon-client/src/compatibility.rs:19-34 -- a compile_fail doctest has a stray trailing comma, an unrelated syntax error masking the intended typestate-violation lesson. Reported by rust-best-practices-agent (RBP-F006)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doctest-defect" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-001/pAI-s30-1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI30-MINOR-001/pAI-s30-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/compatibility.rs" ;
+  triage:line 37 ;
+  triage:snippet "///     }),  # stray trailing comma on line 37 after closing brace" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:worktree/pAI-s30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 9 .

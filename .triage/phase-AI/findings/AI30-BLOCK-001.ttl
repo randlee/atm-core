@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI30-BLOCK-001" ;
+  triage:title "Missing compatibility matrix tests for CompatibilityVerdict admission" ;
+  triage:description "Sprint doc's 'Required validation' section explicitly requires compatibility matrix tests covering: release mismatch, schema mismatch, HTTP-major mismatch, same-major minor/patch interoperability. None exist in this diff. git grep compatibility_verdict -- '*.rs' outside test/impl files returns zero test hits. The only #[test] functions in runtime_health.rs (shutdown-step bounding, heartbeat-cache eviction) do not touch compatibility_verdict at all. Confirmed by 3 reviewers (arch-qa, rust-best-practices-agent, req-qa) plus quality-mgr's own grep, independently, after correcting an initial stale-worktree false-positive round." ;
+  triage:category "AI30-BLOCK" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-BLOCK-001/pAI-s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:occurrence/AI30-BLOCK-001/pAI-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing required compatibility_verdict admission matrix test coverage for: release mismatch, schema mismatch, HTTP-major mismatch, same-major minor/patch interoperability" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+
+<urn:atm:triage:worktree/pAI-s30/7ad54d25>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "7ad54d25" ;
+  triage:orderIndex 9 .
