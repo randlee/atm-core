@@ -643,15 +643,20 @@ pub trait PeerConfigStore: Send + Sync {
 /// canonical message rather than in an outbox or delivery-state table.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StoredPeerWrite {
+    /// Ordering key retained with the immutable canonical write. This is a
+    /// transient scan cursor only; it is never delivery state.
+    pub created_at: IsoTimestamp,
+    pub message_id: AtmMessageId,
     pub request_json: String,
 }
 
 /// Read-only selection of local, immutable peer-directed messages.
 pub trait OutboundMessageQuery: Send + Sync {
-    fn recent_outbound_for_peer(
+    fn page_for_peer(
         &self,
         peer: &HostName,
         not_before: IsoTimestamp,
+        after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
 }

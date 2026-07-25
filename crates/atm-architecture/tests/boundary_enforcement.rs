@@ -431,12 +431,17 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
         let local_nudge = method.starts_with("emit_local_post_write");
-        let reconciliation_delivery = method == "deliver"
-            && self.is_runtime_dispatcher_source()
+        let reconciliation_delivery = matches!(method.as_str(), "deliver" | "deliver_page")
             && self.current_function.is_some_and(|index| {
-                self.functions
-                    .get(index)
-                    .is_some_and(|function| function.name == "reconcile_after_success")
+                self.functions.get(index).is_some_and(|function| {
+                    (self.is_runtime_dispatcher_source()
+                        && function.name == "reconcile_after_success")
+                        || (self.source_path.as_ref().is_some_and(|path| {
+                            path.ends_with(Path::new(
+                                "crates/atm-daemon/src/peer_drain_coordinator.rs",
+                            ))
+                        }) && function.name == "drain")
+                })
             });
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"

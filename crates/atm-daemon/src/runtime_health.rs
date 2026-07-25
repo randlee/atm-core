@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -35,13 +34,14 @@ use crate::daemon_runtime_observability::{
 };
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
+use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
+use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
-use atm_storage::{OutboundMessageQuery, PeerConfigStore};
 
 mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
@@ -151,11 +151,10 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
-    https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    https_transport: Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
-    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
-    peer_delivery_projection: PeerDeliveryProjection,
+    peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
@@ -169,7 +168,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
             .field("runtime_reload_hook", &"runtime reload callback")
             .finish()
@@ -423,6 +421,19 @@ impl DaemonRequestDispatcher {
                 );
             }
         }
+        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
+        let coordinator_observability = runtime_health_observability.clone();
+        let coordinator_projection = Arc::clone(&peer_delivery_projection);
+        let peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator> =
+            Arc::new(PeerDrainCoordinator::new(
+                Arc::clone(&peer_config_store),
+                Arc::clone(&outbound_message_query),
+                Arc::clone(&https_transport),
+                Arc::new(move |event| {
+                    coordinator_projection.record(event, &coordinator_observability)
+                }),
+            ));
         Self {
             home_dir,
             observability: Arc::clone(&observability),
@@ -432,11 +443,10 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            outbound_message_query,
-            https_transport: std::sync::Mutex::new(None),
+            https_transport,
+            peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
-            peer_delivery_projection: PeerDeliveryProjection::default(),
+            peer_delivery_projection,
         }
     }
 
@@ -459,6 +469,14 @@ impl DaemonRequestDispatcher {
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
         *slot = None;
         Ok(())
+    }
+
+    pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
+        self.peer_delivery_coordinator.start()
+    }
+
+    pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
+        self.peer_delivery_coordinator.stop()
     }
 
     #[cfg(test)]
@@ -616,132 +634,15 @@ impl DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
-    fn reconcile_after_success(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-        apply_cooldown: bool,
-    ) -> Result<u16, AtmError> {
-        let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
-        policy.validate()?;
-        if policy.max_message_age.is_zero() {
-            return Ok(0);
-        }
-        if apply_cooldown {
-            let now = std::time::Instant::now();
-            let mut cooldown = self
-                .peer_sync_cooldown
-                .lock()
-                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
-            if cooldown
-                .get(peer_host)
-                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
-            {
-                return Ok(0);
-            }
-            // This is only a short-lived rate limiter, never delivery state.
-            // Evicting the oldest entry bounds memory without affecting message data.
-            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
-            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
-                && !cooldown.contains_key(peer_host)
-                && let Some(oldest) = cooldown
-                    .iter()
-                    .min_by_key(|(_, instant)| **instant)
-                    .map(|(host, _)| host.clone())
-            {
-                cooldown.remove(&oldest);
-            }
-            cooldown.insert(peer_host.clone(), now);
-        }
-        let not_before = atm_core::types::IsoTimestamp::from_datetime(
-            chrono::Utc::now()
-                - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
-                    AtmError::validation("peer sync maximum message age is out of range")
-                })?,
-        );
-        let writes = self.outbound_message_query.recent_outbound_for_peer(
-            peer_host,
-            not_before,
-            policy.max_batch_messages,
-        )?;
-        let delivered = u16::try_from(writes.len()).map_err(|_| {
-            AtmError::validation("peer sync selection exceeded its configured batch limit")
-        })?;
-        // The peer transport contract honors this deadline. Keeping the whole
-        // pass bounded means shutdown never waits on an unbounded reconciliation
-        // loop or creates an independent worker/state machine.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        for stored in writes {
-            if std::time::Instant::now() >= deadline {
-                return Err(AtmError::daemon_unavailable(
-                    "peer reconciliation exceeded its bounded request deadline",
-                ));
-            }
-            let request: WriteRequest =
-                serde_json::from_str(&stored.request_json).map_err(|_source| {
-                    AtmError::mailbox_read("stored immutable peer outbound write is invalid")
-                })?;
-            transport.deliver(
-                request,
-                peer,
-                RequestDeadline::after(Duration::from_secs(5)),
-            )?;
-        }
-        Ok(delivered)
-    }
-
     fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        let peer = self
-            .peer_config_store
-            .trusted_peer(&request.peer)?
-            .ok_or_else(|| AtmError::peer_config_validation("unknown trusted peer"))?;
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
-            })?;
-        let delivered =
-            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        let delivered = self.peer_delivery_coordinator.sync_peer(
+            &request.peer,
+            RequestDeadline::after(Duration::from_secs(5)),
+        )?;
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reconcile_after_success_for_test(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
-        self.reconcile_after_success(peer_host, peer, transport, true)
-            .map(|_| ())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn seed_peer_sync_cooldown_for_test(
-        &self,
-        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
-    ) {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .extend(entries);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn peer_sync_cooldown_for_test(
-        &self,
-    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .clone()
     }
 }
 
@@ -1124,6 +1025,21 @@ impl DaemonRequestDispatcher {
             crate::DaemonSubsystem::RuntimeHealth,
             std::sync::Arc::clone(&runtime_observability),
         );
+        let peer_config_store = runtime_assembly.peer_config_store();
+        let outbound_message_query = runtime_assembly.outbound_message_query();
+        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
+        let coordinator_observability = runtime_health_observability.clone();
+        let coordinator_projection = Arc::clone(&peer_delivery_projection);
+        let peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator> =
+            Arc::new(PeerDrainCoordinator::new(
+                Arc::clone(&peer_config_store),
+                Arc::clone(&outbound_message_query),
+                Arc::clone(&https_transport),
+                Arc::new(move |event| {
+                    coordinator_projection.record(event, &coordinator_observability)
+                }),
+            ));
         Self {
             home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
@@ -1132,12 +1048,11 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
-            peer_config_store: runtime_assembly.peer_config_store(),
-            outbound_message_query: runtime_assembly.outbound_message_query(),
-            https_transport: std::sync::Mutex::new(None),
+            peer_config_store,
+            https_transport,
+            peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
-            peer_delivery_projection: PeerDeliveryProjection::default(),
+            peer_delivery_projection,
         }
     }
 }

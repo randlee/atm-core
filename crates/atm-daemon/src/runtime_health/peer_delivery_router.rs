@@ -3,7 +3,7 @@ use std::sync::Arc;
 use atm_core::RequestDeadline;
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::protocol::{ResponseEnvelope, next_request_id};
+use atm_core::protocol::next_request_id;
 
 use crate::https_transport::resolve_peer_authority;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
@@ -43,60 +43,35 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             candidate_count: Some(1),
             next_attempt_at: None,
         });
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone();
-        match transport {
-            Some(transport) => {
-                self.deliver_to_peer(message, deadline, peer, request_id, message_id, transport)
-            }
-            None => self.peer_delivery_unconfirmed(
-                peer.host,
-                request_id,
-                message_id,
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon"),
-            ),
-        }
+        self.deliver_to_peer(message, deadline, peer.host, request_id, message_id)
     }
 }
 
 impl DaemonRequestDispatcher {
+    /// The canonical router's only peer-delivery handoff. AI.28 moves the
+    /// actual bounded drain behind the coordinator without adding a route.
     fn deliver_to_peer(
         &self,
         message: &MessageRecord,
         deadline: RequestDeadline,
-        peer: atm_storage::TrustedPeer,
+        peer: atm_core::types::HostName,
         request_id: atm_core::protocol::RequestId,
         message_id: Option<atm_core::schema::AtmMessageId>,
-        transport: Arc<dyn crate::https_transport::HttpsMessageTransport>,
     ) -> Result<(), AtmError> {
-        match transport.deliver(message.outbound_request.clone(), &peer, deadline) {
-            Ok(ResponseEnvelope::Error(error)) => {
-                self.peer_delivery_terminal_error(peer.host, request_id, message_id, error)
-            }
-            Ok(_) => {
-                self.record_peer_delivery_event(PeerDeliveryEvent {
-                    kind: PeerDeliveryEventKind::PeerDeliveryConfirmed,
-                    request_id,
-                    message_id,
-                    peer: peer.host,
-                    error_code: None,
-                    candidate_count: Some(1),
-                    next_attempt_at: None,
-                });
-                Ok(())
-            }
-            Err(error) if error.is_daemon_unavailable() => {
-                self.peer_delivery_unconfirmed(peer.host, request_id, message_id, error)
-            }
-            Err(error) => {
-                self.peer_delivery_terminal_error(peer.host, request_id, message_id, error)
-            }
+        if let Err(error) = self
+            .peer_delivery_coordinator
+            .deliver_after_persist(&message.outbound_request, deadline)
+        {
+            return if error.is_daemon_unavailable()
+                || error.code() == atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
+            {
+                self.peer_delivery_unconfirmed(peer, request_id, message_id, error)
+            } else {
+                self.peer_delivery_terminal_error(peer, request_id, message_id, error)
+            };
         }
+        Ok(())
     }
-
     fn peer_delivery_unconfirmed(
         &self,
         peer: atm_core::types::HostName,

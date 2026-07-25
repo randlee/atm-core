@@ -20,7 +20,7 @@ name = "atm_core"
 test-utils = []
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.3.2-beta.27" }
+atm-storage = { path = "../atm-storage", version = "1.3.2-beta.28" }
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

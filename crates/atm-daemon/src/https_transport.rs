@@ -41,6 +41,22 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
+
+    /// One bounded drain uses one transport connection. Test transports retain
+    /// the simple one-at-a-time default; the production adapter overrides it
+    /// with one TLS stream and ordinary sequential write requests.
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        requests
+            .iter()
+            .cloned()
+            .map(|request| self.deliver(request, peer, deadline))
+            .collect()
+    }
 }
 
 /// Resolves a delivery target to one configured hostname authority. Literal
@@ -147,6 +163,49 @@ impl HttpsMessageTransport for HttpsTransport {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
+        let mut connection = self.open_connection(peer, deadline)?;
+        connection.deliver(request, deadline)
+    }
+
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        let mut connection = self.open_connection(peer, deadline)?;
+        requests
+            .iter()
+            .cloned()
+            .map(|request| connection.deliver(request, deadline))
+            .collect()
+    }
+}
+
+struct HttpsPeerConnection {
+    tls: StreamOwned<ClientConnection, TcpStream>,
+}
+
+impl HttpsPeerConnection {
+    fn deliver(
+        &mut self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let request = RequestEnvelope::Write(Box::new(request));
+        apply_deadline(self.tls.get_ref(), remaining_budget(deadline)?)?;
+        write_http_request(&mut self.tls, &request)?;
+        apply_deadline(self.tls.get_ref(), remaining_budget(deadline)?)?;
+        read_http_response(&mut self.tls, &request)
+    }
+}
+
+impl HttpsTransport {
+    fn open_connection(
+        &self,
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<HttpsPeerConnection, AtmError> {
         if !peer.enabled {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
         }
@@ -179,11 +238,7 @@ impl HttpsMessageTransport for HttpsTransport {
             })?;
         let mut tls = StreamOwned::new(connection, stream);
         complete_handshake_with_deadline(&mut tls, deadline)?;
-        let request = RequestEnvelope::Write(Box::new(request));
-        apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
-        write_http_request(&mut tls, &request)?;
-        apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
-        read_http_response(&mut tls, &request)
+        Ok(HttpsPeerConnection { tls })
     }
 }
 

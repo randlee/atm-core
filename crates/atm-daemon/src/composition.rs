@@ -294,10 +294,12 @@ impl RuntimeComposition {
         self.request_dispatcher
             .install_https_transport(Arc::clone(&https_transport))?;
         *transport_slot = Some(https_transport);
+        self.request_dispatcher.start_peer_drain_coordinator()?;
         Ok(())
     }
 
     fn stop_https_listeners(&self) -> Result<(), AtmError> {
+        self.request_dispatcher.stop_peer_drain_coordinator()?;
         let listener_set = self
             .https_listeners
             .lock()
