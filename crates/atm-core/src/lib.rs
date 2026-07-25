@@ -91,7 +91,7 @@ pub mod types;
 
 pub use api::{
     ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
-    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline, UntrustedSmokeProvenance,
+    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
 };
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]

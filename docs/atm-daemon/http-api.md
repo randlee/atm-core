@@ -52,10 +52,11 @@ tracked requests within the daemon shutdown deadline.
 | Endpoint | Method | Meaning | Shared handler |
 | --- | --- | --- | --- |
 | `/v1/atm/messages` | `GET` | List/query visible messages; non-mutating | read/query |
-| `/v1/atm/messages` | `POST` | Create/send or acknowledgement reply | canonical write |
+| `/v1/atm/messages` | `POST` | Create/send immutable message | canonical write |
 | `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
+| `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
 | `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
@@ -67,12 +68,11 @@ filters. `agent=hendrix` searches that base agent across every chat identity;
 selected participant direction when a direction is requested, otherwise to
 either message participant. They do not alter the authenticated caller.
 
-`POST /v1/atm/messages` carries both sends and acknowledgement replies. An
-acknowledgement is the same `WriteRequest` with only
-`acknowledges_message_id` populated; it does not select another resource. The
-receiver's canonical write handler owns both persistence and acknowledgement
-mutation and carries the source's full chat-qualified address as the reply
-destination.
+`POST /v1/atm/message/{message-id}/ack` constructs the same `WriteRequest` used by
+`POST /messages`, with only `acknowledges_message_id` populated. The receiver's
+canonical write handler owns both persistence and acknowledgement mutation.
+It carries the message's full chat-qualified source address as the reply
+destination without a separate acknowledgement route.
 
 ## Response rules
 
@@ -107,6 +107,18 @@ explicitly advertised capability, but a minor or patch mismatch must not reject
 an existing operation. Removing or changing a field, status meaning,
 authorization rule, or handler mapping needs a new API major and ADR review.
 Product release versions are diagnostic only and are not HTTP admission input.
+
+## Peer authority
+
+Cross-host authority is configured as a hostname, HTTPS port, and certificate
+pin. The daemon resolves the hostname freshly for each new connection; resolved
+addresses are neither returned by doctor nor persisted. A literal-IP delivery
+target is accepted only when it currently resolves from exactly one configured
+hostname authority. The configured hostname and port remain the TLS authority.
+After an `atm peer trust add`, `replace`, or `revoke`, the CLI invokes the
+authenticated local `POST /v1/atm/runtime/reload` control operation to
+atomically install the updated trust snapshot; it does not start a second
+daemon.
 
 ## Deferred scope
 

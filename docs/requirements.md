@@ -3635,9 +3635,6 @@ mail correctness.
     `plaintext-test` smoke profile is governed by
     `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
   - all production adapters call one HTTP router and the same application handlers
-  - `POST /v1/atm/messages` is the one HTTP write resource for both send and
-    acknowledgement writes; `acknowledges_message_id` is request data, not a
-    route selector
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
     `/v1/atm/doctor`; their typed route-specific schemas and methods are the

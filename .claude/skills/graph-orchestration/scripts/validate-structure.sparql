@@ -1,0 +1,40 @@
+# validate-structure.sparql — Phase structure integrity check.
+#
+# Run once at phase start. Zero rows = valid. Any rows = malformed.
+#
+# Checks:
+#   1. Duplicate triage:order values on different sprints
+#   2. Sprints without triage:criteria
+#   3. Sprints without triage:order
+#
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?violation ?detail WHERE {
+  {
+    # Rule 1: duplicate order values
+    ?s1 a triage:Sprint ; triage:inPhase $PHASE ; triage:order ?order .
+    ?s2 a triage:Sprint ; triage:inPhase $PHASE ; triage:order ?order .
+    FILTER (?s1 != ?s2)
+    BIND("duplicate-order" AS ?violation)
+    BIND(STR(?order) AS ?detail)
+  }
+  UNION
+  {
+    # Rule 2: sprint missing triage:criteria
+    ?s1 a triage:Sprint ; triage:inPhase $PHASE .
+    FILTER NOT EXISTS { ?s1 triage:criteria ?c . }
+    BIND("missing-criteria" AS ?violation)
+    BIND(STR(?s1) AS ?detail)
+  }
+  UNION
+  {
+    # Rule 3: sprint missing triage:order
+    ?s1 a triage:Sprint ; triage:inPhase $PHASE .
+    FILTER NOT EXISTS { ?s1 triage:order ?o . }
+    BIND("missing-order" AS ?violation)
+    BIND(STR(?s1) AS ?detail)
+  }
+}
+ORDER BY ?violation ?detail

@@ -48,6 +48,22 @@
         }
       }
     },
+    "/message/{messageId}/ack": {
+      "post": {
+        "operation_id": "acknowledgeMessage",
+        "request_required": false,
+        "responses": {
+          "201": {
+            "error": false,
+            "schema": "#/components/schemas/Message"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
     "/messages": {
       "delete": {
         "operation_id": "clearMessages",
