@@ -82,6 +82,23 @@ Exclude unrelated Phase AI sprints, findings, branches, and ATM messages.
   counts. A missing assignment or result is recorded in the master table's
   `coverage_gaps` rather than inferred from a branch name.
 
+## Mandatory process controls
+
+These controls are required for future graph-orchestration runs. They are
+fail-closed requirements, not optional operating guidance.
+
+| Requirement | Required control |
+|---|---|
+| Prevent recurrence | Run schema/provenance validation before assignment, completion, and merge. Any `foundIn`/`foundAt` error blocks progress. |
+| Enforce team-lead protocol | The assignment command must emit an ATM task with `requires_ack`, record the message ID, wait for acknowledgement, and only then append the Assignment TTL. |
+| Provide visibility | Generate a committed status report/CSV showing sprint, assignment, acknowledgement, branch, commit, PR, QA result, finding counts, and current gate. |
+| Never miss findings | Parse every QA verdict and require every finding ID or alias to map to exactly one TTL. Missing IDs, duplicate aliases, stale closures, or count mismatches block the PR. |
+
+The current audit demonstrates why each control is necessary: missing
+provenance produced 125 validator errors, QA records existed uncommitted or on
+unmerged branches, closure statuses drifted from verdicts, and `foundAt`
+timestamps were initially written with a local-time/UTC-label mismatch.
+
 ## Current audit baseline
 
 - Audit branch: `audit/phase-ai`
