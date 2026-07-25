@@ -23,3 +23,7 @@ triage:a3 a triage:Assignment ;
     triage:ofSprint triage:AICH-S2 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-07-25T04:45:03Z"^^xsd:dateTime .
+triage:a4 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S9 ;
+    triage:assignedTo "cwin" ;
+    triage:assignedAt "2026-07-25T04:58:51Z"^^xsd:dateTime .
