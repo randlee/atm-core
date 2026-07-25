@@ -5,43 +5,79 @@
   a triage:Finding ;
   triage:findingId "AI26-ATMQA-002" ;
   triage:title "Required deterministic delayed-peer/cancellation/retry/tracked-work tests from sprint-ai-26 were not added" ;
-  triage:description "Quality-mgr independently reviewed feature/pAI-s26-peer-write-deadline @ dc079fff8a96a5441e1eda3c790383670589f2f9 (AICH-S6, sprint-ai-26 peer-write-deadline). docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md's Required validation section calls for: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. The actual diff only: (1) adjusted 2 pre-existing tests' expected error code (DaemonUnavailable -> RemoteDeliveryUnconfirmed) in tests/runtime_root.rs:324 and tests/runtime_root/peer_reconciliation.rs:80, and (2) added 2 small unit tests in https_transport.rs (request_deadline_is_one_absolute_budget, expired_peer_budget_reports_remote_delivery_unconfirmed) that test the RequestDeadline/remaining_budget helpers directly, not an end-to-end delayed-peer scenario. No new deterministic test simulates a delayed peer response to prove budget propagation end-to-end, no disconnect-mid-flight test, no cancellation-race test, no retry-with-original-ULID test, and no new runtime tracked-work test was added. This gap is the same class of gap that let the AI26-ATMQA-001 handshake-mapping bug through untested." ;
+  triage:description "Quality-mgr independently reviewed feature/pAI-s26-peer-write-deadline @ dc079fff8a96a5441e1eda3c790383670589f2f9 (AICH-S6, sprint-ai-26 peer-write-deadline). docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md's Required validation section calls for: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Follow-up pass (AICH-S6-FIX-1, 2026-07-25T15:12Z) on feature/pAI-s27-peer-delivery-observability @ f7b779ab50ea8ff6f35ab02388b7dab23df9c3db shows: 4 of 5 named properties are now covered by genuine tests (budget propagation, disconnect, retry-with-original-ULID, runtime tracked-work). The 5th property — local-side cancellation race test — is STILL MISSING. This gap is a specific missing test: no deterministic test simulates local-side cancellation (connection close / caller-side deadline expiry) while a delayed peer delivery is in-flight, asserting that the tracked dispatch worker is cancelled/joined rather than silently detached or falsely reporting success. This test implements sprint AI.26's acceptance criterion 3 ('a cancellation race cannot claim remote success') and ADR-041's cancellation-safety claim at the delayed-peer level." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s26/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s26/dc079fff> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s27/dc079fff> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/dc079fff> .
+  triage:status "fixed_partial" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T15:12:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/budget-propagation> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/disconnect> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/retry-original-ulid> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/tracked-work> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/cancellation> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/f7b779ab> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s27/f7b779ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
 
-<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s26/1>
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/budget-propagation>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 0 ;
-  triage:snippet "Required: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Not added." ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s26-peer-write-deadline" ;
-  triage:headSha "dc079fff" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s26/dc079fff> .
+  triage:snippet "Deterministic delayed-peer test: budget propagation end-to-end. Covers RequestDeadline/remaining_budget helpers on delayed response from peer." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
 
-<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/1>
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/disconnect>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 0 ;
-  triage:snippet "Required: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Not added (inherited from s26)." ;
+  triage:snippet "Deterministic delayed-peer test: disconnect mid-flight. Covers peer connection close behavior during delayed delivery." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/retry-original-ulid>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Deterministic delayed-peer test: retry with original ULID. Covers peer retry behavior after timeout/disconnect with original message identifier." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/tracked-work>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Runtime tracked-work test: verifies dispatch worker resource tracking during delayed peer delivery lifecycle." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/cancellation>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "MISSING: Deterministic delayed-peer test: local-side cancellation race. Required: test simulates local connection close / caller-side deadline expiry while a peer delivery is in-flight (stalled/delayed response). Must assert: tracked dispatch worker is cancelled/joined (not detached), no false-success outcome reported. Implements sprint AI.26 acceptance criterion 3 ('a cancellation race cannot claim remote success') and ADR-041 cancellation-safety at delayed-peer level." ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "dc079fff" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s27/dc079fff> .
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
@@ -71,11 +107,11 @@
   triage:headSha "c326cbe7" ;
   triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pAI-s25/b520061e>
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b520061e" ;
+  triage:headSha "0265c94f" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/pAI-s26/dc079fff>
@@ -85,11 +121,11 @@
   triage:headSha "dc079fff" ;
   triage:orderIndex 6 .
 
-<urn:atm:triage:worktree/pAI-s27/dc079fff>
+<urn:atm:triage:worktree/pAI-s27/f7b779ab>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "dc079fff" ;
+  triage:headSha "f7b779ab" ;
   triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/pAI-s28/b5eec1bf>
