@@ -69,3 +69,7 @@ triage:c7 a triage:Completion ;
 triage:c8 a triage:Completion ;
     triage:ofSprint triage:AICH-S4 ;
     triage:at "2026-07-25T07:37:35Z"^^xsd:dateTime .
+triage:a11 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S4 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-25T07:43:51Z"^^xsd:dateTime .
