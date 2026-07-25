@@ -12,13 +12,13 @@
   triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/2> ;
-  triage:openOn <urn:atm:triage:worktree/s25/0265c94f> ;
-  triage:promoteTo <urn:atm:triage:worktree/s25/0265c94f> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/b520061e> .
 
 <urn:atm:triage:occurrence/AI25-ATMQA-005/s25/1>
   a triage:Occurrence ;
