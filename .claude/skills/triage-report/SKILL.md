@@ -61,7 +61,8 @@ sc-compose render .claude/skills/triage-report/report.md.j2 \
     --phase AICH --format vars)
 ```
 
-Use `--mode detailed --format vars` for the detailed template view.
+Use the same `--mode detailed --format vars` projection with
+`report-detailed.md.j2` for the detailed template view.
 
 `--format vars` is a scalar-only projection of the same canonical result for
 the `sc-compose` var-file boundary. The report script remains the calculation
