@@ -1,6 +1,6 @@
 # Graph-orchestration and triaging-findings script audit
 
-Audit window: `2026-07-25T04:15:13Z` through `2026-07-25T16:34Z` UTC.
+Audit window: `2026-07-25T04:15:13Z` through `2026-07-25T16:40:12Z` UTC.
 The lower bound is the first AICH event. Scope is AICH-S1 through AICH-S10 as
 defined in [README.md](README.md).
 
@@ -123,4 +123,3 @@ branch-specific behavior, not a complete phase finding inventory.
    enforce contiguous orders and resolvable criteria paths.
 5. Record the status-table timestamp, commit/QA/CI evidence, and the rule for
    reconciling table state with `.sprints/AICH/events.ttl`.
-
