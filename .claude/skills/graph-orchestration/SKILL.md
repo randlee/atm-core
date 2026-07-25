@@ -59,6 +59,23 @@ the phase starts.
 
 Run `validate-structure.sparql` at creation. It must return zero rows.
 
+Before relying on cursor output, validate the raw findings directory as well:
+
+```bash
+python3 .claude/skills/graph-orchestration/scripts/validate-findings.py \
+  --findings-dir .triage/phase-AI/findings \
+  --structure .sprints/AICH/structure.ttl \
+  --events .sprints/AICH/events.ttl
+```
+
+This check runs before `query_runner.py`'s sprint-membership filter, so a
+finding cannot disappear merely because `triage:foundIn` is absent. Missing
+`triage:foundIn` or `triage:foundAt` is reported as `#error` and fails the
+command; missing `triage:findingId`, `triage:severity`, or
+`triage:description` is reported as `#warning`. Use `--finding-id-regex` to
+restrict an audit to a known sprint range and `--max-results N` to truncate
+repetitive output while preserving the failure status.
+
 ## Orchestrator Loop
 
 ```bash

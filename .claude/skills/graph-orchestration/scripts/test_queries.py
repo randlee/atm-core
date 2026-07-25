@@ -170,6 +170,41 @@ triage:S1 a triage:Sprint ; triage:inPhase triage:PhaseF ; triage:order 1 .
         assert "missing-criteria" in violations
 
 
+# ── validate-findings tests ───────────────────────────────────────────────────
+
+class TestValidateFindings:
+    def test_complete_finding_returns_zero_rows(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ; triage:foundAt
+      "2026-07-01T12:00:00Z"^^xsd:dateTime ;
+    triage:severity "important" ; triage:description "Issue" .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        assert rows == []
+
+    def test_missing_graph_critical_fields_are_errors(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:severity "important" ; triage:description "Issue" .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        levels = {(str(row[0]), str(row[2])) for row in rows}
+        assert ("#error", "triage:foundIn") in levels
+        assert ("#error", "triage:foundAt") in levels
+
+    def test_missing_descriptive_fields_are_warnings(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        levels = {(str(row[0]), str(row[2])) for row in rows}
+        assert ("#warning", "triage:findingId") in levels
+        assert ("#warning", "triage:severity") in levels
+        assert ("#warning", "triage:description") in levels
+
+
 # ── open-findings-sprint tests ────────────────────────────────────────────────
 
 class TestOpenFindingsSprint:

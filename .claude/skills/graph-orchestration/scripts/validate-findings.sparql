@@ -1,0 +1,54 @@
+# validate-findings.sparql — Finding metadata integrity check.
+#
+# Run against the phase structure/events graph plus the raw findings files.
+# The query deliberately runs before membership filtering so a finding with no
+# triage:foundIn cannot disappear silently.
+#
+# Levels:
+#   #error   fields required for cursor invalidation and phase scoping
+#   #warning descriptive/routing fields needed by cleanup and dispatch output
+#
+# Parameter: none
+
+PREFIX triage: <urn:atm:triage:>
+PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?level ?finding ?field ?detail WHERE {
+  ?finding a triage:Finding .
+
+  {
+    FILTER NOT EXISTS { ?finding triage:findingId ?id . }
+    BIND("#warning" AS ?level)
+    BIND("triage:findingId" AS ?field)
+    BIND("stable finding identity is missing" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:foundIn ?sprint . }
+    BIND("#error" AS ?level)
+    BIND("triage:foundIn" AS ?field)
+    BIND("finding cannot be assigned to a sprint" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:foundAt ?found_at . }
+    BIND("#error" AS ?level)
+    BIND("triage:foundAt" AS ?field)
+    BIND("completion invalidation cannot be time-ordered" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:severity ?severity . }
+    BIND("#warning" AS ?level)
+    BIND("triage:severity" AS ?field)
+    BIND("blocking/important/minor routing cannot be determined" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:description ?description . }
+    BIND("#warning" AS ?level)
+    BIND("triage:description" AS ?field)
+    BIND("dispatch and cleanup output lack a description" AS ?detail)
+  }
+}
+ORDER BY ?level ?finding ?field
