@@ -4,11 +4,11 @@
 <urn:atm:triage:finding/AI24-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI24-IMPORTANT-002" ;
-  triage:title "No rate-limit/cooldown on repeated manual PeerSync /sync calls, wire-level amplification still possible" ;
-  triage:description "As part of the AI22-BLOCK-004 fix, the automatic reconcile_after_success replay was removed and replaced with an explicit PeerSync path that is confirmed idempotent against the original hook/notification amplification hazard (receiver-side immutable-ULID dedup via AlreadyDeliveredRemote disposition suppressing requires_post_write()). However, rust-service-hardening-agent found no rate-limit or cooldown on repeated manual /sync calls -- wire-level (not hook-level) amplification is still possible under a tight retry loop hitting the sync endpoint directly." ;
+  triage:title "PeerSync cooldown does not distinguish rate-limited outcome from legitimate zero-message sync; global lock serializes cross-peer reconciliation" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs: per-peer cooldown state exists (peer_sync_progress: Mutex<HashMap<HostName, PeerSyncProgress>>, lines ~155/720) and self-clears after 60s. However when the cooldown is active, sync_peer returns Ok(PeerSyncOutcome{delivered:0}) (runtime_health.rs:722-727) which is identical in shape to a legitimate zero-message sync or a disabled-policy no-op -- callers cannot distinguish 'rate-limited' from 'nothing to deliver'. An existing test (peer_reconciliation.rs:218-229) asserts on this ambiguous shape for both cases. Additionally, sync_peer holds the single peer_sync_progress MutexGuard across the ENTIRE reconcile_peer call, which performs blocking network I/O (up to 5s per peer) -- despite cooldown state being per-peer, the lock scope is global, so an explicit sync for peer B can stall behind peer A's in-flight reconciliation. Verified as NOT adequately fixed at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt by arch-qa (FAIL), rust-service-hardening-agent (important), and req-qa (flags same fact) -- 3-reviewer convergence. Prior state: this finding was dispatched in AICH-S4-FIX-3 as one of 3 targeted findings; the per-peer keying/cooldown-self-clear was implemented but the ambiguous-outcome-signal and lock-scope requirements were not met." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "hardening" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "service-hardening" ;
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
@@ -18,84 +18,36 @@
   triage:highestOpenBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:highestFixedBranch "none" ;
   triage:promoteToBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s21pre/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s22/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1> ;
-  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
-  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
-  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
-  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
-  triage:promoteTo <urn:atm:triage:worktree/s24/7bb63e01> .
-
-<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s21pre/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 552 ;
-  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:headSha "42fbd9fa" ;
-  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
-
-<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s22/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 552 ;
-  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:headSha "a5aa6813" ;
-  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
-
-<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s23/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 701 ;
-  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "c528137c" ;
-  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2> ;
+  triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/c326cbe7> .
 
 <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 552 ;
-  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
+  triage:line 704 ;
+  triage:snippet "if policy.max_message_age.is_zero() { return Ok(PeerSyncOutcome { delivered: 0 })" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "7bb63e01" ;
-  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
 
-<urn:atm:triage:worktree/s21pre/42fbd9fa>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:headSha "42fbd9fa" ;
-  triage:orderIndex 1 .
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 716 ;
+  triage:snippet "let mut progress = self.peer_sync_progress.lock()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
 
-<urn:atm:triage:worktree/s22/a5aa6813>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:headSha "a5aa6813" ;
-  triage:orderIndex 2 .
-
-<urn:atm:triage:worktree/s23/c528137c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "c528137c" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/s24/7bb63e01>
+<urn:atm:triage:worktree/s24/c326cbe7>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "7bb63e01" ;
+  triage:headSha "c326cbe7" ;
   triage:orderIndex 4 .

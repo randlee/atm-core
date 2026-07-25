@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-003>
+  a triage:Finding ;
+  triage:findingId "RSH-003" ;
+  triage:title "sync_peer holds global peer_sync_progress lock across entire reconcile_peer network I/O, serializing cross-peer reconciliation" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs: sync_peer acquires the single peer_sync_progress Mutex<HashMap<HostName, PeerSyncProgress>> guard and holds it across the ENTIRE reconcile_peer call, which performs blocking network I/O (up to 5s per peer, per existing per-call deadline). Even though cooldown STATE is keyed per-peer, the lock SCOPE is global -- an explicit sync request for peer B can be stalled behind peer A's in-flight reconciliation, defeating the purpose of per-peer cooldown tracking. Surfaced independently by rust-service-hardening-agent at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt, corroborated by req-qa (confirms no test exercises genuine multi-peer concurrent independence). Related to AI24-IMPORTANT-002 (shares the same peer_sync_progress lock/PeerSyncOutcome code path) -- a fix likely narrows the lock scope to only guard the cooldown-state read/write, releasing it before the network I/O begins." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pAI-s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/c326cbe7> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/c326cbe7> .
+
+<urn:atm:triage:occurrence/RSH-003/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 716 ;
+  triage:snippet "let mut progress = self.peer_sync_progress.lock().map_err(...)?; ... self.reconcile_peer(...)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/c326cbe7> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
