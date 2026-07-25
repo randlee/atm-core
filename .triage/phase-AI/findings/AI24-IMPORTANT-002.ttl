@@ -1,0 +1,101 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI24-IMPORTANT-002" ;
+  triage:title "No rate-limit/cooldown on repeated manual PeerSync /sync calls, wire-level amplification still possible" ;
+  triage:description "As part of the AI22-BLOCK-004 fix, the automatic reconcile_after_success replay was removed and replaced with an explicit PeerSync path that is confirmed idempotent against the original hook/notification amplification hazard (receiver-side immutable-ULID dedup via AlreadyDeliveredRemote disposition suppressing requires_post_write()). However, rust-service-hardening-agent found no rate-limit or cooldown on repeated manual /sync calls -- wire-level (not hook-level) amplification is still possible under a tight retry loop hitting the sync endpoint directly." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "hardening" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:highestFixedBranch "none" ;
+  triage:promoteToBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 552 ;
+  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 552 ;
+  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 701 ;
+  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 552 ;
+  triage:snippet "RequestEnvelope::PeerSync(request) => { Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/7bb63e01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:orderIndex 4 .
