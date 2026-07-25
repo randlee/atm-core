@@ -28,6 +28,7 @@ required_variables:
   - occurrence_head_shas
   - occurrence_worktree_ids
   - worktrees
+  - worktree_paths
   - worktree_branches
   - worktree_head_shas
   - worktree_order_indices
@@ -72,6 +73,9 @@ required_variables:
 
 {% endfor %}{% for worktree_id in worktrees %}<urn:atm:triage:worktree/{{ worktree_id }}>
   a triage:WorktreeSnapshot ;
+{% if worktree_paths[loop.index0][0:1] == "/" or worktree_paths[loop.index0][0:1] == "\\" or ".." in worktree_paths[loop.index0] or worktree_paths[loop.index0][1:2] == ":" %}__ERROR_REPOSITORY_RELATIVE_WORKTREE_PATH_REQUIRED__ .
+{% endif %}
+  triage:path "{{ worktree_paths[loop.index0] }}" ;
   triage:branch "{{ worktree_branches[loop.index0] }}" ;
   triage:headSha "{{ worktree_head_shas[loop.index0] }}" ;
   triage:orderIndex {{ worktree_order_indices[loop.index0] }} .

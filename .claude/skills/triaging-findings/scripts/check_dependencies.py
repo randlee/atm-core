@@ -6,17 +6,23 @@ from __future__ import annotations
 import json
 import importlib.metadata
 import os
-import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+_CLAUDE_DIR = Path(__file__).resolve().parents[3]
+if str(_CLAUDE_DIR) not in sys.path:
+    sys.path.insert(0, str(_CLAUDE_DIR))
+
+from lib.sc_compose_dependency import (  # noqa: E402
+    MIN_SC_COMPOSE,
+    SC_COMPOSE_INSTALL,
+    parse_version as _version,
+)
 
 REFERENCE = "references/installation-and-troubleshooting.md"
-MIN_SC_COMPOSE = (1, 2, 0)
-SC_COMPOSE_INSTALL = "python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'"
 
 
 def _candidates(name: str) -> list[Path]:
@@ -55,13 +61,6 @@ def _run_version(path: Path) -> tuple[str | None, str | None]:
         return None, str(exc)
     output = (result.stdout or result.stderr).strip()
     return output if result.returncode == 0 else None, output
-
-
-def _version(text: str | None) -> tuple[int, int, int] | None:
-    if not text:
-        return None
-    match = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)", text)
-    return tuple(int(part) for part in match.groups()) if match else None
 
 
 def _entry(name: str, required: str, *, minimum: tuple[int, int, int] | None = None) -> dict[str, Any]:

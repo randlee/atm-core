@@ -7,6 +7,7 @@ Requires: rdflib, pytest
 """
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 
@@ -536,15 +537,21 @@ class TestNextDevTaskValidation:
         return repo
 
     def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        # Keep the shell wrapper and query runner on the same interpreter as
+        # pytest; this also exercises the GRAPH_ORCH_PYTHON escape hatch used
+        # by the dependency preflight.
+        env["GRAPH_ORCH_PYTHON"] = sys.executable
         return subprocess.run(
             [str(SCRIPTS / "next-dev-task"), *args],
             cwd=repo,
             text=True,
             capture_output=True,
+            env=env,
             check=False,
         )
 
-    def test_validate_only_returns_success_json_without_loading_findings(self, tmp_path):
+    def test_validate_only_blocks_malformed_findings_before_structure_query(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
         malformed = repo / ".triage" / "phase-U" / "findings"
         malformed.mkdir(parents=True)
@@ -552,9 +559,46 @@ class TestNextDevTaskValidation:
 
         result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
 
+        assert result.returncode == 2, result.stderr
+        assert result.stdout == ""
+        assert "findings validation could not run" not in result.stderr
+        assert "findings validation blocked query resolution" in result.stderr
+        assert "malformed Turtle" in result.stderr
+
+    def test_cursor_resolution_is_blocked_by_missing_provenance(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:severity "important" ; triage:description "missing provenance" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1, result.stderr
+        assert result.stdout == ""
+        assert "findings validation blocked query resolution" in result.stderr
+        assert "triage:foundIn" in result.stderr
+        assert "triage:foundAt" in result.stderr
+
+    def test_cursor_resolution_runs_after_clean_findings_validation(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:foundIn triage:S1 ; '
+            'triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; '
+            'triage:severity "important" ; triage:description "clean" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout) == {"phase": "VALIDATE_ONLY", "vars": {}}
-        assert "malformed findings file" not in result.stderr
+        assert json.loads(result.stdout)["phase"] == "TRAVERSAL"
 
     def test_validate_only_reports_structure_errors(self, tmp_path):
         invalid = PREFIX + """
@@ -577,10 +621,12 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
 
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
-        assert result.returncode == 1
+        # Findings validation is intentionally the first gate, so malformed
+        # structure is reported by the validator before the RDF loader runs.
+        assert result.returncode == 2
         assert result.stdout == ""
         assert "Traceback" not in result.stderr
-        assert "ERROR: query runner failed to load graph" in result.stderr
+        assert "findings validation blocked query resolution" in result.stderr
 
     def test_broken_sparql_is_reported_without_traceback(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -588,6 +634,12 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         broken_scripts.mkdir()
         (broken_scripts / "validate-structure.sparql").write_text(
             "SELECT definitely broken"
+        )
+        (broken_scripts / "validate-findings.py").write_text(
+            (SCRIPTS / "validate-findings.py").read_text()
+        )
+        (broken_scripts / "validate-findings.sparql").write_text(
+            (SCRIPTS / "validate-findings.sparql").read_text()
         )
 
         result = subprocess.run(
@@ -632,11 +684,14 @@ class TestAssigneeBusy:
         return repo
 
     def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env["GRAPH_ORCH_PYTHON"] = sys.executable
         return subprocess.run(
             [str(SCRIPTS / "assignee-busy"), *args],
             cwd=repo,
             text=True,
             capture_output=True,
+            env=env,
             check=False,
         )
 

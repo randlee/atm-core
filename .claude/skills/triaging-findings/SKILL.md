@@ -74,6 +74,8 @@ For each triage batch, assemble:
 - `integration_worktree_path`
 - `triage_root`
 - ordered `worktrees` with branch, absolute path, head SHA, and order index
+- repository-relative `worktree_paths` labels aligned with `worktrees` (never
+  copy the runtime checkout paths)
 - finding records with:
   - `finding_id`
   - `title`
@@ -106,10 +108,11 @@ Required ownership rule:
 Runtime checkout paths (`integration_worktree_path`, `triage_root`, and
 `worktrees[].path`) may be absolute while the sweep runs, but they are not
 canonical finding data and must not be copied into the Turtle record. The
-`triage:Occurrence` `triage:file` value must be repository-relative (no
-leading `/`, any `..` path component, or drive prefix). External worktree checkout paths
-are intentionally omitted from `triage:WorktreeSnapshot`; persist only its
-branch, head SHA, and promotion order.
+`triage:Occurrence` `triage:file` and `triage:WorktreeSnapshot`
+`triage:path` values must be repository-relative (no leading `/` or `\\`, any
+`..` path component, or drive prefix). Supply a repository-relative worktree
+label in `worktree_paths`; never pass the runtime checkout path in that array.
+The template rejects invalid values before the Turtle parse check.
 
 ## Canonical Turtle rendering
 
@@ -120,7 +123,7 @@ including `found_in` and `found_at`. The occurrence and worktree inputs are
 parallel scalar arrays (`occurrences` with `occurrence_files`,
 `occurrence_lines`, `occurrence_snippets`, `occurrence_statuses`,
 `occurrence_closed`, `occurrence_branches`, `occurrence_head_shas`, and
-`occurrence_worktree_ids`; likewise `worktrees` with
+`occurrence_worktree_ids`; likewise `worktrees` with `worktree_paths`,
 `worktree_branches`, `worktree_head_shas`, and `worktree_order_indices`). Keep
 each array aligned by index.
 
@@ -252,31 +255,6 @@ Reason:
 Do not dispatch dev work from uncommitted `.ttl` state.
 
 The per-finding `.ttl` record is canonical. Aggregation is derived.
-
-### 3.1 Commit triage artifacts before dispatch
-
-After all `qa-triage` agents in the batch have finished and after aggregation
-confirms the `.ttl` set is complete, stage, commit, and push the triage
-artifacts to git before sending any dev assignment to `arch-ctm`.
-
-Required commit scope:
-- the phase findings under `<triage_root>/<phase_id>/findings/`
-- any phase-local triage metadata needed for later follow-up, such as
-  worktree inventories under `<triage_root>/<phase_id>/`
-
-Required timing:
-- after triage batch aggregation
-- before branch-scoped fix dispatch
-- on the phase integration-branch worktree identified by
-  `integration_branch` / `integration_worktree_path`
-
-Reason:
-- parallel `qa-triage` agents write into one shared triage root
-- committing inside each agent would create batch races and partial evidence
-- leaving `.ttl` records untracked until phase end risks silent loss of the
-  canonical QA evidence
-
-Do not dispatch dev work from uncommitted `.ttl` state.
 
 ### 4. Dispatch branch-scoped fix work to `arch-ctm`
 

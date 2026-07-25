@@ -2,6 +2,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "triage_report.py"
 spec = importlib.util.spec_from_file_location("triage_report", SCRIPT)
@@ -10,6 +12,20 @@ assert spec.loader is not None
 spec.loader.exec_module(triage_report)
 
 PREFIX = "@prefix triage: <urn:atm:triage:> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+
+
+@pytest.fixture(autouse=True)
+def _validator_passes(monkeypatch):
+    """Keep report unit tests hermetic; validator invocation has a dedicated test."""
+    monkeypatch.setattr(
+        triage_report,
+        "_run_findings_validator",
+        lambda *args: {
+            "kind": "validation:pass",
+            "diagnostics": [],
+            "summary": {"files": 1, "findings": 1, "errors": 0, "warnings": 0},
+        },
+    )
 
 
 def _inputs(tmp_path: Path):
@@ -27,6 +43,14 @@ def _inputs(tmp_path: Path):
         + "triage:a1 a triage:Assignment ; triage:ofSprint triage:AICH-S1 ; triage:assignedAt \"2026-07-25T01:00:00Z\"^^xsd:dateTime .\n"
         + "triage:c1 a triage:Completion ; triage:ofSprint triage:AICH-S1 ; triage:at \"2026-07-25T02:00:00Z\"^^xsd:dateTime .\n"
         + "triage:a2 a triage:Assignment ; triage:ofSprint triage:AICH-S2 ; triage:assignedAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime .\n"
+    )
+    findings_dir = root / ".triage" / "phase-AI" / "findings"
+    findings_dir.mkdir(parents=True)
+    (findings_dir / "S1.ttl").write_text(
+        PREFIX
+        + "triage:F1 a triage:Finding ; triage:findingId \"F1\" ; "
+        + "triage:foundIn triage:AICH-S1 ; "
+        + "triage:foundAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime .\n"
     )
     qa_path = root / "qa.json"
     qa_path.write_text(json.dumps({"runs": [
@@ -114,3 +138,52 @@ def test_duplicate_structure_orders_are_report_error(tmp_path):
         assert "orders must be unique" in str(exc)
     else:
         raise AssertionError("duplicate sprint orders must fail")
+
+
+def test_findings_validator_is_called_before_rows(tmp_path, monkeypatch):
+    root, qa, metadata = _inputs(tmp_path)
+    calls = []
+
+    def validator(*args):
+        calls.append(args)
+        return {"kind": "validation:pass", "diagnostics": []}
+
+    monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
+    report = triage_report.build_report(root, "AICH", qa, metadata)
+    assert len(calls) == 1
+    assert calls[0][1].name == "findings"
+    assert calls[0][2].name == "structure.ttl"
+    assert calls[0][3].name == "events.ttl"
+    assert report["validation"]["kind"] == "validation:pass"
+
+
+def test_findings_validator_subprocess_passes_for_valid_schema(tmp_path):
+    root, _, _ = _inputs(tmp_path)
+    findings_dir = root / ".triage" / "phase-AI" / "findings"
+    result = triage_report._run_findings_validator(
+        root,
+        findings_dir,
+        root / ".sprints" / "AICH" / "structure.ttl",
+        root / ".sprints" / "AICH" / "events.ttl",
+    )
+    assert result["kind"] == "validation:pass"
+
+
+def test_validator_failure_blocks_report(tmp_path, monkeypatch):
+    root, qa, metadata = _inputs(tmp_path)
+
+    def validator(*args):
+        raise triage_report.ReportError(
+            "findings validation blocked report: validation:fail"
+        )
+
+    monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
+    with pytest.raises(triage_report.ReportError, match="validation blocked"):
+        triage_report.build_report(root, "AICH", qa, metadata)
+
+
+def test_phase_sprint_accepts_non_ai_prefix_and_rejects_bad_convention():
+    assert triage_report._phase_sprint("docs/sprint-ak-7.md") == "AK.7"
+    assert triage_report._phase_sprint("docs/sprint-ak-7-pre-notes.md") == "AK.7-pre"
+    with pytest.raises(triage_report.ReportError, match="unsupported sprint criteria"):
+        triage_report._phase_sprint("docs/sprint-ak-not-number.md")

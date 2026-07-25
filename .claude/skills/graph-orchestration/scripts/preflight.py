@@ -12,17 +12,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterable
 
+_CLAUDE_DIR = Path(__file__).resolve().parents[3]
+if str(_CLAUDE_DIR) not in sys.path:
+    sys.path.insert(0, str(_CLAUDE_DIR))
 
-MIN_SC_COMPOSE = (1, 2, 0)
-SC_COMPOSE_INSTALL = "python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'"
-_VERSION_RE = re.compile(r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?")
+from lib.sc_compose_dependency import (  # noqa: E402
+    MIN_SC_COMPOSE,
+    MIN_SC_COMPOSE_TEXT,
+    SC_COMPOSE_INSTALL,
+    parse_version as _version,
+)
 
 
 @dataclass(frozen=True)
@@ -41,11 +47,6 @@ class Check:
         if self.path is not None:
             value["path"] = self.path
         return value
-
-
-def _version(text: str) -> tuple[int, int, int] | None:
-    match = _VERSION_RE.search(text)
-    return tuple(int(part) for part in match.groups()) if match else None
 
 
 def _run(command: list[str], *, timeout: float = 5.0) -> tuple[int, str, str]:
@@ -85,7 +86,8 @@ def check_sc_compose() -> Check:
         return Check(
             "sc-compose",
             False,
-            "not found; install sc-compose>=1.2.0 (see references/installation-and-troubleshooting.md)",
+            "not found; install sc-compose"
+            f"{MIN_SC_COMPOSE_TEXT} (see references/installation-and-troubleshooting.md)",
         )
     rc, stdout, stderr = _run([path, "--version"])
     version = _version(" ".join((stdout, stderr)))
@@ -100,7 +102,8 @@ def check_sc_compose() -> Check:
         return Check(
             "sc-compose",
             False,
-            f"{path} reports {version[0]}.{version[1]}.{version[2]}; required >= 1.2.0",
+            f"{path} reports {version[0]}.{version[1]}.{version[2]}; "
+            f"required {MIN_SC_COMPOSE_TEXT}",
             path,
         )
     return Check("sc-compose", True, f"version {version[0]}.{version[1]}.{version[2]}", path)

@@ -59,7 +59,9 @@ The JSON contains `mode`, `phase`, `sprint_rows`, `integration_row`, and
 `detailed_rows` variables for the templates in this directory:
 
 ```bash
-python3 -m pip install --upgrade 'sc-compose>=1.2,<1.3'
+# Install the standalone CLI from the platform release channel first, e.g.:
+brew install randlee/tap/sc-compose
+sc-compose --version  # must be 1.2.0 or newer; no upper bound is enforced
 sc-compose render --root . --file .claude/skills/triage-report/report.md.j2 \
   --var-file <(python3 .claude/skills/triage-report/scripts/triage_report.py \
     --phase AICH --format vars)

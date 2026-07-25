@@ -250,10 +250,28 @@ def _count(run: dict[str, Any] | None, name: str) -> int | None:
 
 
 def _phase_sprint(criteria: str) -> str | None:
-    match = re.search(r"sprint-(?:ai|AI)-([0-9]+)(-pre)?", criteria)
+    """Derive the human phase sprint label from a criteria filename.
+
+    Criteria are conventionally named ``sprint-<prefix>-<number>`` (with an
+    optional suffix such as ``-pre``).  Prefixes are intentionally not
+    hard-coded to AI: the same report producer is used by every phase.  A
+    path that advertises the convention but cannot be parsed is rejected so
+    a row is never silently labelled with the wrong sprint.
+    """
+    basename = Path(criteria).name
+    match = re.search(
+        r"^sprint-([A-Za-z][A-Za-z0-9]*)[-.]([0-9]+)(?:-([A-Za-z][A-Za-z0-9]*))?",
+        basename,
+    )
     if not match:
+        if basename.lower().startswith("sprint-"):
+            raise ReportError(
+                f"unsupported sprint criteria filename {basename!r}; expected "
+                "sprint-<prefix>-<number>[-suffix]"
+            )
         return None
-    return f"AI.{match.group(1)}{'-pre' if match.group(2) else ''}"
+    suffix = f"-{match.group(3)}" if match.group(3) else ""
+    return f"{match.group(1).upper()}.{match.group(2)}{suffix}"
 
 
 def _status_icon(status: str | None) -> str:
@@ -311,6 +329,104 @@ def _validate_qa(run: dict[str, Any] | None, sprint: str) -> None:
             raise ReportError(f"QA run {sprint}.{field} must be a non-negative integer or null")
 
 
+def _findings_dir(root: Path, plan_phase: str | None) -> Path:
+    """Resolve the phase findings directory without guessing across phases."""
+    if not plan_phase:
+        raise ReportError(
+            "cannot locate findings: sprint criteria do not declare a plan phase"
+        )
+    suffix = plan_phase.removeprefix("phase-")
+    candidates = [
+        root / ".triage" / plan_phase,
+        root / ".triage" / f"phase-{suffix.upper()}",
+        root / ".triage" / f"phase-{suffix}",
+    ]
+    existing: list[Path] = []
+    # macOS's default filesystem is case-insensitive even though Path keeps
+    # the spelling supplied by the caller; compare case-folded real paths.
+    existing_real: set[str] = set()
+    for candidate in candidates:
+        findings = candidate / "findings"
+        if findings.is_dir():
+            resolved = findings.resolve()
+            identity = str(resolved).casefold()
+            if identity not in existing_real:
+                existing_real.add(identity)
+                existing.append(resolved)
+    if len(existing) != 1:
+        listed = ", ".join(str(item) for item in existing) or "none"
+        raise ReportError(
+            f"cannot determine unique findings directory for {plan_phase}: "
+            f"found {len(existing)} ({listed})"
+        )
+    return existing[0]
+
+
+def _run_findings_validator(
+    root: Path,
+    findings_dir: Path,
+    structure_path: Path,
+    events_path: Path,
+) -> dict[str, Any]:
+    """Run the canonical findings validator before any report is produced.
+
+    ``validation:fail`` is a completed validation with invalid records, and
+    therefore blocks report generation just like an operational validator
+    error.  Keeping this subprocess boundary means this script always uses
+    the exact validator shipped by graph-orchestration.
+    """
+    validator = (
+        Path(__file__).resolve().parents[2]
+        / "graph-orchestration"
+        / "scripts"
+        / "validate-findings.py"
+    )
+    if not validator.is_file():
+        raise ReportError(f"findings validator not found: {validator}")
+    command = [
+        sys.executable,
+        str(validator),
+        "--findings-dir",
+        str(findings_dir),
+        "--structure",
+        str(structure_path),
+        "--events",
+        str(events_path),
+        "--json",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise ReportError(f"could not execute findings validator: {exc}") from exc
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        detail = (result.stderr or result.stdout).strip()
+        raise ReportError(
+            f"findings validator returned non-JSON (exit {result.returncode}): {detail}"
+        ) from exc
+    if not isinstance(payload, dict) or payload.get("kind") not in {
+        "validation:pass",
+        "validation:fail",
+        "error",
+    }:
+        raise ReportError("findings validator returned an invalid result object")
+    if payload.get("kind") != "validation:pass" or result.returncode != 0:
+        diagnostics = payload.get("diagnostics") or []
+        detail = "; ".join(str(item) for item in diagnostics[:8])
+        message = payload.get("message") or payload.get("kind") or "unknown result"
+        if detail:
+            message = f"{message}: {detail}"
+        raise ReportError(f"findings validation blocked report: {message}")
+    return payload
+
+
 def build_report(
     integration_root: Path,
     phase: str | None = None,
@@ -345,6 +461,10 @@ def build_report(
     if metadata is not None and not metadata.is_absolute():
         metadata = root / metadata
     metadata_data = _json(metadata) if metadata else None
+    # Validate raw findings before calculating a single row.  This prevents
+    # query_runner's phase scoping from hiding malformed or orphan records.
+    findings_dir = _findings_dir(root, plan_phase)
+    validation = _run_findings_validator(root, findings_dir, structure_path, events_path)
     qa = _qa_runs(qa_data)
     meta = _metadata(metadata_data)
     dev = _dev_states(events)
@@ -498,6 +618,7 @@ def build_report(
         "detailed_rows": "\n────────────────────────────────────────\n".join(detailed),
         "table": table,
         "data_gaps": data_gaps,
+        "validation": validation,
         "sources": {
             "integration_root": ".",
             "structure": str(structure_path.relative_to(root)),

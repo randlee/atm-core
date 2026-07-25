@@ -42,6 +42,7 @@ def _vars() -> dict:
         "occurrence_head_shas": ["9421e9f"],
         "occurrence_worktree_ids": ["R17/9421e9f"],
         "worktrees": ["R17/9421e9f"],
+        "worktree_paths": [".worktrees/R17"],
         "worktree_branches": ["R.17"],
         "worktree_head_shas": ["9421e9f"],
         "worktree_order_indices": ["17"],
@@ -104,6 +105,7 @@ def test_render_includes_found_provenance_and_parses_as_turtle(tmp_path: Path) -
     assert 'triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime' in rendered
     assert "triage:hasOccurrence" in rendered
     assert "a triage:WorktreeSnapshot" in rendered
+    assert 'triage:path ".worktrees/R17"' in rendered
 
     parsed = _parse_turtle(output, tmp_path)
     assert parsed.returncode == 0, parsed.stderr or parsed.stdout
@@ -129,7 +131,7 @@ def test_python_binding_renders_canonical_template() -> None:
     assert 'triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime' in rendered
 
 
-@pytest.mark.parametrize("missing", ["found_in", "found_at"])
+@pytest.mark.parametrize("missing", ["found_in", "found_at", "worktree_paths"])
 def test_render_rejects_missing_provenance_variable(
     tmp_path: Path, missing: str
 ) -> None:
@@ -144,26 +146,39 @@ def test_render_rejects_missing_provenance_variable(
 
 
 @pytest.mark.parametrize(
-    "path_value",
+    ("variable", "path_value"),
     [
-        "/abs/integrate-phase-R/crates/atm-daemon/src/tests.rs",
-        "../outside-repository.rs",
-        "crates/../outside-repository.rs",
-        r"C:\\checkout\\crates\\atm-daemon\\src\\tests.rs",
+        (
+            "occurrence_files",
+            "/abs/integrate-phase-R/crates/atm-daemon/src/tests.rs",
+        ),
+        ("occurrence_files", "../outside-repository.rs"),
+        ("occurrence_files", "crates/../outside-repository.rs"),
+        ("occurrence_files", r"C:\\checkout\\crates\\atm-daemon\\src\\tests.rs"),
+        ("worktree_paths", "/abs/integrate-phase-R"),
+        ("worktree_paths", "../outside-repository"),
+        ("worktree_paths", "worktrees/../outside-repository"),
+        ("worktree_paths", r"C:\\checkout\\integrate-phase-R"),
+        ("worktree_paths", r"\\server\\share\\integrate-phase-R"),
     ],
 )
-def test_render_rejects_non_repository_relative_occurrence_path(
-    tmp_path: Path, path_value: str
+def test_render_rejects_non_repository_relative_persisted_paths(
+    tmp_path: Path, variable: str, path_value: str
 ) -> None:
     variables = _vars()
-    variables["occurrence_files"] = [path_value]
+    variables[variable] = [path_value]
 
     result = _render(tmp_path, variables)
     assert result.returncode == 0, result.stderr or result.stdout
 
     output = tmp_path / "FTQ-001.ttl"
     rendered = output.read_text(encoding="utf-8")
-    assert "__ERROR_REPOSITORY_RELATIVE_OCCURRENCE_PATH_REQUIRED__" in rendered
+    marker = (
+        "__ERROR_REPOSITORY_RELATIVE_OCCURRENCE_PATH_REQUIRED__"
+        if variable == "occurrence_files"
+        else "__ERROR_REPOSITORY_RELATIVE_WORKTREE_PATH_REQUIRED__"
+    )
+    assert marker in rendered
 
     parsed = _parse_turtle(output, tmp_path)
     assert parsed.returncode != 0

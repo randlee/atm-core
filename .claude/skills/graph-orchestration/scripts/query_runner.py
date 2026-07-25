@@ -35,7 +35,7 @@ Output shape (DONE):
   }
 
 Findings are NOT resolved here. The orchestrator checks .triage/ via
-triage-findings skill to decide between dev-task.xml.j2 and dev-fix.xml.j2.
+triaging-findings skill to decide between dev-task.xml.j2 and dev-fix.xml.j2.
 Assignments are appended to events.ttl by the orchestrator after dispatch.
 
 Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
@@ -45,6 +45,7 @@ Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
   --validate-only  validate structure.ttl/events.ttl and stop before cursor resolution
 """
 
+import importlib.util
 import sys
 import json
 from pathlib import Path
@@ -239,6 +240,84 @@ def _cli_run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
         raise SystemExit(1) from exc
 
 
+def _load_validator(script_dir: Path):
+    """Load the canonical findings validator without duplicating its rules."""
+
+    validator_path = script_dir / "validate-findings.py"
+    if not validator_path.exists():
+        raise RuntimeError(f"validate-findings.py not found at {validator_path}")
+    spec = importlib.util.spec_from_file_location("graph_orchestration_validator", validator_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load validator at {validator_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
+    """Run raw findings validation before *any* graph query.
+
+    ``load_graph`` intentionally scopes findings by ``foundIn``.  Running this
+    gate first prevents malformed or incomplete records from disappearing in
+    that scope filter.  A normal validation failure (exit-1 equivalent) and a
+    validator execution error both stop cursor resolution; warnings alone are
+    allowed by the validator's discriminated result contract.
+    """
+
+    repo_root = _find_repo_root(Path(ttl_dir))
+    if repo_root is None:
+        raise RuntimeError(
+            "cannot locate repository root containing .triage; findings validation cannot run"
+        )
+    triage_root = repo_root / ".triage"
+    findings_dirs = sorted(
+        path for path in triage_root.glob("*/findings") if path.is_dir()
+    ) if triage_root.exists() else []
+    # An existing but empty .triage tree is a valid no-findings input.  Passing
+    # the root directory still exercises the validator and gives a structured
+    # error if the directory itself is missing or unreadable.
+    if not findings_dirs:
+        findings_dirs = [triage_root]
+
+    validator = _load_validator(script_dir)
+    structure = Path(ttl_dir) / "structure.ttl"
+    events_path = Path(ttl_dir) / "events.ttl"
+    events = events_path if events_path.exists() else None
+
+    for findings_dir in findings_dirs:
+        result = validator.run_validation(
+            findings_dir=findings_dir,
+            structure=structure,
+            events=events,
+            script_dir=script_dir,
+        )
+        if result.kind == "validation:pass":
+            continue
+        summary = getattr(result, "summary", None)
+        counts = (
+            f" ({summary.errors} error(s), {summary.warnings} warning(s))"
+            if summary is not None
+            else ""
+        )
+        print(
+            f"ERROR: findings validation blocked query resolution for {findings_dir}"
+            f"{counts}",
+            file=sys.stderr,
+        )
+        for diagnostic in result.diagnostics[:20]:
+            print(diagnostic, file=sys.stderr)
+        if len(result.diagnostics) > 20:
+            print(
+                f"… {len(result.diagnostics) - 20} diagnostic line(s) truncated; "
+                "run validate-findings.py directly for the full report",
+                file=sys.stderr,
+            )
+        if result.kind == "error":
+            raise SystemExit(2)
+        raise SystemExit(1)
+
+
 def main():
     if len(sys.argv) not in (4, 5) or (
         len(sys.argv) == 5 and sys.argv[4] != "--validate-only"
@@ -256,10 +335,20 @@ def main():
     validate_only = len(sys.argv) == 5
 
     phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
-    # Structure validation must not depend on findings being parseable. In
-    # particular, a legacy malformed finding elsewhere in the repository
-    # should never make the documented post-event validation command fail for
-    # an otherwise valid structure.
+    # This is deliberately before structure loading and before --validate-only:
+    # every query_runner entry point must prove that raw findings are valid.
+    try:
+        _validate_findings_before_query(ttl_dir, script_dir)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: findings validation could not run: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+    # The raw findings gate above runs before structure validation so malformed
+    # or incomplete records cannot disappear during phase membership filtering.
+    # Once that gate passes, structure validation can report graph-shape errors
+    # without being conflated with finding-schema diagnostics.
     g = _cli_load_graph(ttl_dir, include_findings=not validate_only)
 
     # ── Validate structure before cursor ─────────────────────────────────────

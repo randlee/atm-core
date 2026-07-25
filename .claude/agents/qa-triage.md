@@ -33,8 +33,10 @@ with free-form input.
   "phase_id": "phase-R",
   "integration_branch": "integrate/phase-R",
   "integration_worktree_path": "/abs/integrate-phase-R",
+  "structure_path": "/abs/integrate-phase-R/.sprints/R/structure.ttl",
+  "events_path": "/abs/integrate-phase-R/.sprints/R/events.ttl",
   "finding_id": "FTQ-001",
-  "found_in": "AICH-S7",
+  "found_in": "R-S1",
   "found_at": "2026-07-25T16:26:33Z",
   "title": "Process-global shutdown state in tests",
   "description": "Global OnceLock / static shutdown state leaks across test cases.",
@@ -77,11 +79,14 @@ Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
 - `phase_id` is required.
 - `integration_branch` and `integration_worktree_path` are required.
+- `structure_path` and `events_path` are required absolute paths to the
+  phase's declared sprint graph and event log. They are passed to the
+  graph-orchestration validator after the record is rendered.
 - `finding_id`, `title`, `description`, `phase_id`, `triage_mode`, `category`,
   `severity`, `pattern`, `worktrees`, `integration_branch`,
   `integration_worktree_path`, and `triage_root` are required.
 - `found_in` is required and must be the declared sprint local id (for example,
-  `AICH-S7`) that will render as `triage:AICH-S7`.
+  `R-S1`) that will render as `triage:R-S1`.
 - `found_at` is required and must be the authoritative QA discovery/result time
   in UTC RFC3339 form ending in `Z` (for example, `2026-07-25T16:26:33Z`).
 - `worktrees` must already be listed in the desired promotion order. Do not
@@ -92,6 +97,7 @@ Input rules:
 - `file_filter` is optional.
 - `triage_root` must be an absolute path.
 - `integration_worktree_path` must be an absolute path.
+- `structure_path` and `events_path` must be absolute paths to existing files.
 - `triage_root` must live under `integration_worktree_path`.
 - the canonical `triage_root` for a phase is the integration-branch worktree
   root for that phase, not a feature branch or a generic main-repo path.
@@ -167,10 +173,31 @@ Mode rules:
     `.claude/skills/triaging-findings/triage-record.ttl.j2` using the vars
     contract below. Do not hand-write a replacement record:
     - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
-12. Validate the rendered Turtle output:
+12. Validate the rendered Turtle output immediately after writing it:
    - run `oxigraph convert --from-file <ttl> --from-format ttl --to-file
      <temporary-output> --to-format ttl`
    - fail on a nonzero exit status when the Turtle cannot be parsed
+   - then run the canonical schema/provenance validator from the integration
+     worktree. The validator must cover the complete phase findings directory
+     and both phase graph inputs:
+
+     ```bash
+     VALIDATION_JSON=$(python3 \
+       "$integration_worktree_path/.claude/skills/graph-orchestration/scripts/validate-findings.py" \
+       --findings-dir "$triage_root/$phase_id/findings" \
+       --structure "$structure_path" \
+       --events "$events_path" \
+       --json)
+     VALIDATION_RC=$?
+     ```
+
+   - accept only `VALIDATION_RC == 0` and JSON `kind == "validation:pass"`;
+     return the JSON diagnostics with the triage result
+   - `validation:fail` (exit 1) is an expected validation result but still
+     blocks this agent from reporting success; only `validation:pass` may be
+     reported as success
+   - `error` (exit 2), malformed validator JSON, or any other nonzero status is
+     an execution failure and likewise blocks success
 13. Return enough information for the team-lead batch commit step:
    - `integration_branch`
    - `integration_worktree_path`
@@ -224,14 +251,15 @@ Minimum Occurrence properties:
 - `triage:closed`
 
 Minimum WorktreeSnapshot properties:
+- `triage:path` (repository-relative worktree label; never a host checkout path)
 - `triage:branch`
 - `triage:headSha`
 - `triage:orderIndex`
 
-The runtime `worktrees[].path` value is intentionally omitted from
-`triage:WorktreeSnapshot`: an external-worktree checkout path is host-layout
-specific, not a stable repository-relative fact. Branch, head SHA, and
-promotion order remain canonical.
+The runtime `worktrees[].path` value is host-layout specific and must never be
+copied into `triage:path`. Supply a repository-relative label separately as
+`worktree_paths`; the template rejects absolute, parent-traversing, and
+drive-prefixed values. Branch, head SHA, and promotion order remain canonical.
 
 Use these prefixes:
 
@@ -260,7 +288,7 @@ cat > /tmp/triage-record-vars.json <<'JSON'
   "status": "fixed_partial",
   "dispatch_ready": true,
   "triaged_at": "2026-07-25T16:30:00Z",
-  "found_in": "AICH-S7",
+  "found_in": "R-S1",
   "found_at": "2026-07-25T16:26:33Z",
   "occurrences": ["R17-1"],
   "occurrence_files": ["crates/atm-daemon/src/tests.rs"],
@@ -272,14 +300,18 @@ cat > /tmp/triage-record-vars.json <<'JSON'
   "occurrence_head_shas": ["9421e9f"],
   "occurrence_worktree_ids": ["R17/9421e9f"],
   "worktrees": ["R17/9421e9f"],
+  "worktree_paths": [".worktrees/R17"],
   "worktree_branches": ["R.17"],
   "worktree_head_shas": ["9421e9f"],
   "worktree_order_indices": ["17"]
 }
 JSON
 
-TRIAGE_ROOT=/abs/integrate-phase-R/.triage
+INTEGRATION_WORKTREE_PATH=/abs/integrate-phase-R
+TRIAGE_ROOT="$INTEGRATION_WORKTREE_PATH/.triage"
 PHASE_ID=phase-R
+STRUCTURE_PATH="$INTEGRATION_WORKTREE_PATH/.sprints/R/structure.ttl"
+EVENTS_PATH="$INTEGRATION_WORKTREE_PATH/.sprints/R/events.ttl"
 FINDING_ID=FTQ-001
 OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
 mkdir -p "$(dirname "$OUTPUT")"
@@ -296,6 +328,23 @@ oxigraph convert \
   --from-format ttl \
   --to-file "$PARSED" \
   --to-format ttl
+
+# Schema/provenance validation is a separate gate from Turtle parseability.
+VALIDATION_JSON=$(python3 \
+  "$INTEGRATION_WORKTREE_PATH/.claude/skills/graph-orchestration/scripts/validate-findings.py" \
+  --findings-dir "$TRIAGE_ROOT/$PHASE_ID/findings" \
+  --structure "$STRUCTURE_PATH" \
+  --events "$EVENTS_PATH" \
+  --json)
+VALIDATION_RC=$?
+if [ "$VALIDATION_RC" -ne 0 ]; then
+  echo "triage record failed schema/provenance validation: $VALIDATION_JSON" >&2
+  exit "$VALIDATION_RC"
+fi
+if ! printf '%s' "$VALIDATION_JSON" | rg -q '"kind"\s*:\s*"validation:pass"'; then
+  echo "triage record did not return validation:pass: $VALIDATION_JSON" >&2
+  exit 1
+fi
 ```
 
 The vars file must provide `found_in` as a declared sprint local id and
