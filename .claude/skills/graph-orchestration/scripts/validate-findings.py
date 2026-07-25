@@ -133,7 +133,6 @@ def _load_graph(
     finding_files: dict[str, Path] = {}
     diagnostics: list[str] = []
     path_diagnostics: list[str] = []
-    reported_paths: set[tuple[str, str, str]] = set()
 
     known_sprints: set[URIRef] = set()
     for path in (structure, events):
@@ -205,10 +204,6 @@ def _load_graph(
                 field_name = (
                     "triage:file" if predicate == TRIAGE.file else "triage:path"
                 )
-                key = (str(subject), field_name, str(value))
-                if key in reported_paths:
-                    continue
-                reported_paths.add(key)
                 path_diagnostics.append(
                     f"#error: {path}: {subject} invalid {field_name} — "
                     "persisted path must be repository-relative"

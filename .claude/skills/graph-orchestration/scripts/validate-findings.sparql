@@ -14,7 +14,7 @@
 PREFIX triage: <urn:atm:triage:>
 PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
 
-SELECT ?level ?finding ?field ?detail WHERE {
+SELECT DISTINCT ?level ?finding ?field ?detail WHERE {
   ?finding a triage:Finding .
 
   {
@@ -62,7 +62,10 @@ SELECT ?level ?finding ?field ?detail WHERE {
     )
     BIND("#error" AS ?level)
     BIND("triage:file" AS ?field)
-    BIND("occurrence path must be repository-relative" AS ?detail)
+    BIND(
+      CONCAT("occurrence path must be repository-relative: ", STR(?file))
+      AS ?detail
+    )
   }
   UNION
   {
@@ -76,7 +79,13 @@ SELECT ?level ?finding ?field ?detail WHERE {
     )
     BIND("#error" AS ?level)
     BIND("triage:path" AS ?field)
-    BIND("legacy worktree path must not be absolute or escape repository" AS ?detail)
+    BIND(
+      CONCAT(
+        "legacy worktree path must not be absolute or escape repository: ",
+        STR(?path)
+      )
+      AS ?detail
+    )
   }
 }
 ORDER BY ?level ?finding ?field
