@@ -174,6 +174,13 @@ def _load_graph(
                 for value in parsed.objects(finding, TRIAGE.findingId)
             )
         }
+        all_linked_records: set[object] = set()
+        for finding in file_findings:
+            for occurrence in parsed.objects(finding, TRIAGE.hasOccurrence):
+                all_linked_records.add(occurrence)
+                all_linked_records.update(
+                    parsed.objects(occurrence, TRIAGE.occursIn)
+                )
         for finding in selected:
             finding_files[str(finding)] = path
             linked_records: set[object] = set()
@@ -199,7 +206,11 @@ def _load_graph(
             for subject, predicate, value in parsed:
                 if predicate not in (TRIAGE.file, TRIAGE.path):
                     continue
-                if subject in linked_records or not _is_invalid_persisted_path(value):
+                if (
+                    subject in linked_records
+                    or subject in all_linked_records
+                    or not _is_invalid_persisted_path(value)
+                ):
                     continue
                 field_name = (
                     "triage:file" if predicate == TRIAGE.file else "triage:path"

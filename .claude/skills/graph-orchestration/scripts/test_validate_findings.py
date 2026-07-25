@@ -288,3 +288,36 @@ def test_regex_limits_validation_scope(tmp_path, capsys):
     assert "1 finding(s)" in output
     assert "AI21-001" in output
     assert "AI10-001" not in output
+
+
+def test_path_validation_respects_finding_id_scope(tmp_path):
+    validator = _validator()
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "mixed.ttl").write_text(
+        PREFIX
+        + (
+            "triage:a a triage:Finding ; triage:findingId \"AI21-001\" ; "
+            "triage:foundIn triage:S1 ; "
+            "triage:foundAt \"2026-07-01T12:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"important\" ; triage:description \"A\" ; "
+            "triage:hasOccurrence triage:oa .\n"
+            "triage:oa triage:file \"/abs/selected.rs\" .\n"
+            "triage:b a triage:Finding ; triage:findingId \"AI10-001\" ; "
+            "triage:foundIn triage:S1 ; "
+            "triage:foundAt \"2026-07-01T12:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"important\" ; triage:description \"B\" ; "
+            "triage:hasOccurrence triage:ob .\n"
+            "triage:ob triage:file \"/abs/unselected.rs\" .\n"
+        )
+    )
+
+    result = validator.run_validation(
+        findings_dir=findings,
+        finding_id_regex=r"^AI21-",
+    )
+
+    assert result.kind == "validation:fail"
+    assert result.summary.findings == 1
+    assert len(result.diagnostics) == 1
+    assert "selected.rs" in result.diagnostics[0]
