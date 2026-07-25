@@ -105,8 +105,10 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
     let root = workspace_root();
     let api = read_source(&root.join("crates/atm-core/src/api.rs"));
     assert!(
-        api.contains("RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())")
-            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";"),
+        api.contains("HttpRouteKind::Write")
+            && api.contains("path_template: MESSAGES_PATH")
+            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";")
+            && api.contains("fn route_kind_for_http"),
         "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
     );
     assert!(

@@ -213,6 +213,20 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         delivered[0].origin_message_id, delivered[2].origin_message_id,
         "reconciliation reuses the canonical immutable write and its original ULID"
     );
+    drop(delivered);
+
+    let cooldown = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer }))
+        .expect("immediate duplicate sync is rate limited");
+    assert!(matches!(
+        cooldown,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome { delivered: 0, .. })
+    ));
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        3,
+        "the cooldown prevents another peer delivery pass"
+    );
 }
 
 #[test]

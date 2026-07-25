@@ -144,7 +144,6 @@ fn openapi_routes_match_live_router_surface() {
         })
         .collect::<BTreeSet<_>>();
     let live = atm_core::api::http_route_surface()
-        .iter()
         .map(|route| (route.method.to_owned(), route.path_template.to_owned()))
         .collect::<BTreeSet<_>>();
 
