@@ -18,7 +18,7 @@
   triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP. Repeatable-pattern sweep found the AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING precedent (atm-graft-python FFI boundary) as thematically related but not the same finding (different crate/file/root site); left as separate record. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
-  triage:foundAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBP-F002/pAI-s27/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBP-F002/pAI-s27/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBP-F002/pAI-s27/3> ;
