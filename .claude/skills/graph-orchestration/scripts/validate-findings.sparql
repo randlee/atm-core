@@ -7,6 +7,7 @@
 # Levels:
 #   #error   fields required for cursor invalidation and phase scoping
 #   #warning descriptive/routing fields needed by cleanup and dispatch output
+#   #error   persisted file paths must not escape the repository
 #
 # Parameter: none
 
@@ -49,6 +50,33 @@ SELECT ?level ?finding ?field ?detail WHERE {
     BIND("#warning" AS ?level)
     BIND("triage:description" AS ?field)
     BIND("dispatch and cleanup output lack a description" AS ?detail)
+  }
+  UNION
+  {
+    ?finding triage:hasOccurrence ?occurrence .
+    ?occurrence triage:file ?file .
+    FILTER (
+      STRSTARTS(STR(?file), "/")
+      || REGEX(STR(?file), "(^|[/\\\\])\\.\\.(?:[/\\\\]|$)")
+      || REGEX(STR(?file), "^[A-Za-z]:[/\\\\]")
+    )
+    BIND("#error" AS ?level)
+    BIND("triage:file" AS ?field)
+    BIND("occurrence path must be repository-relative" AS ?detail)
+  }
+  UNION
+  {
+    ?finding triage:hasOccurrence ?occurrence .
+    ?occurrence triage:occursIn ?worktree .
+    ?worktree triage:path ?path .
+    FILTER (
+      STRSTARTS(STR(?path), "/")
+      || REGEX(STR(?path), "(^|[/\\\\])\\.\\.(?:[/\\\\]|$)")
+      || REGEX(STR(?path), "^[A-Za-z]:[/\\\\]")
+    )
+    BIND("#error" AS ?level)
+    BIND("triage:path" AS ?field)
+    BIND("legacy worktree path must not be absolute or escape repository" AS ?detail)
   }
 }
 ORDER BY ?level ?finding ?field

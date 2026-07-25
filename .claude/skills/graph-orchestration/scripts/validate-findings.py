@@ -39,6 +39,9 @@ except ImportError:
 TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
 SCRIPT_DIR = Path(__file__).resolve().parent
+_INVALID_REPOSITORY_PATH = re.compile(
+    r"(^/|^[A-Za-z]:[/\\]|(^|[/\\])\.\.(?:[/\\]|$))"
+)
 
 
 @dataclass(frozen=True)
@@ -107,15 +110,30 @@ def _parse_file(path: Path, graph: Graph, *, errors: list[str]) -> dict:
     }
 
 
+def _is_invalid_persisted_path(value: object) -> bool:
+    """Return whether a persisted path is absolute or escapes its repository."""
+
+    return _INVALID_REPOSITORY_PATH.search(str(value)) is not None
+
+
 def _load_graph(
     findings_dir: Path,
     structure: Path | None,
     events: Path | None,
     finding_id_pattern: re.Pattern[str] | None,
-) -> tuple[Graph, dict[str, Path], set[URIRef], list[str], int]:
+) -> tuple[
+    Graph,
+    dict[str, Path],
+    set[URIRef],
+    list[str],
+    int,
+    list[str],
+]:
     graph = Graph()
     finding_files: dict[str, Path] = {}
     diagnostics: list[str] = []
+    path_diagnostics: list[str] = []
+    reported_paths: set[tuple[str, str, str]] = set()
 
     known_sprints: set[URIRef] = set()
     for path in (structure, events):
@@ -132,10 +150,10 @@ def _load_graph(
 
     if not findings_dir.exists():
         diagnostics.append(f"#error: {findings_dir}: findings directory does not exist")
-        return graph, finding_files, known_sprints, diagnostics, 0
+        return graph, finding_files, known_sprints, diagnostics, 0, path_diagnostics
     if not findings_dir.is_dir():
         diagnostics.append(f"#error: {findings_dir}: findings path is not a directory")
-        return graph, finding_files, known_sprints, diagnostics, 0
+        return graph, finding_files, known_sprints, diagnostics, 0, path_diagnostics
 
     parsed_files = 0
     finding_graph = Graph()
@@ -159,12 +177,53 @@ def _load_graph(
         }
         for finding in selected:
             finding_files[str(finding)] = path
+            linked_records: set[object] = set()
             for triple in parsed.triples((finding, None, None)):
                 finding_graph.add(triple)
+            # Include occurrence/worktree metadata reachable from this
+            # finding. The validator's query intentionally scopes findings by
+            # ID, but path invariants live on the linked records rather than
+            # on the Finding subject itself.
+            for occurrence in parsed.objects(finding, TRIAGE.hasOccurrence):
+                linked_records.add(occurrence)
+                for triple in parsed.triples((occurrence, None, None)):
+                    finding_graph.add(triple)
+                for worktree in parsed.objects(occurrence, TRIAGE.occursIn):
+                    linked_records.add(worktree)
+                    for triple in parsed.triples((worktree, None, None)):
+                        finding_graph.add(triple)
+
+            # The SPARQL query validates paths reachable through the canonical
+            # Finding -> Occurrence -> WorktreeSnapshot edges above. Keep a
+            # parse-time check for legacy/unlinked records in the same selected
+            # TTL file so absolute paths cannot evade the gate.
+            for subject, predicate, value in parsed:
+                if predicate not in (TRIAGE.file, TRIAGE.path):
+                    continue
+                if subject in linked_records or not _is_invalid_persisted_path(value):
+                    continue
+                field_name = (
+                    "triage:file" if predicate == TRIAGE.file else "triage:path"
+                )
+                key = (str(subject), field_name, str(value))
+                if key in reported_paths:
+                    continue
+                reported_paths.add(key)
+                path_diagnostics.append(
+                    f"#error: {path}: {subject} invalid {field_name} — "
+                    "persisted path must be repository-relative"
+                )
 
     for triple in finding_graph:
         graph.add(triple)
-    return graph, finding_files, known_sprints, diagnostics, parsed_files
+    return (
+        graph,
+        finding_files,
+        known_sprints,
+        diagnostics,
+        parsed_files,
+        path_diagnostics,
+    )
 
 
 def _run_query(graph: Graph, script_dir: Path) -> list:
@@ -182,7 +241,12 @@ def _diagnostic_line(row, finding_files: dict[str, Path]) -> str:
     # Most query rows represent an absent predicate.  The wrapper also adds a
     # row when ``foundIn`` is present but points at an undeclared sprint; call
     # that invalid rather than claiming the field is missing.
-    verb = "invalid" if "undeclared sprint" in detail else "missing"
+    verb = (
+        "invalid"
+        if "undeclared sprint" in detail
+        or field in {"triage:file", "triage:path"}
+        else "missing"
+    )
     return f"{level}: {location}{finding} {verb} {field} — {detail}"
 
 
@@ -237,9 +301,14 @@ def run_validation(
         return ValidationError(message=f"invalid validator configuration: {exc}")
 
     try:
-        graph, finding_files, known_sprints, input_diagnostics, parsed_files = (
-            _load_graph(findings_dir, structure, events, finding_id_pattern)
-        )
+        (
+            graph,
+            finding_files,
+            known_sprints,
+            input_diagnostics,
+            parsed_files,
+            path_diagnostics,
+        ) = _load_graph(findings_dir, structure, events, finding_id_pattern)
         # Input diagnostics are operational errors, not validation findings:
         # returning an Error keeps malformed files from being mistaken for a
         # successful run that merely found invalid records.
@@ -279,7 +348,8 @@ def run_validation(
                         )
 
         diagnostics = tuple(
-            _diagnostic_line(row, finding_files) for row in rows
+            [_diagnostic_line(row, finding_files) for row in rows]
+            + path_diagnostics
         )
         summary = _summary(
             parsed_files,

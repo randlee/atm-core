@@ -107,18 +107,22 @@ sc-compose render \
   --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
   --var-file /tmp/triage-record-vars.json \
   --output "$OUTPUT"
-STORE=$(mktemp -d)
-trap 'rm -rf "$STORE"' EXIT
-oxigraph load --location "$STORE" --file "$OUTPUT" --format ttl
+PARSED=$(mktemp)
+trap 'rm -f "$PARSED"' EXIT
+oxigraph convert \
+  --from-file "$OUTPUT" \
+  --from-format ttl \
+  --to-file "$PARSED" \
+  --to-format ttl
 ```
 
 The rendered Finding must contain `triage:foundIn triage:<declared-sprint>` and
 `triage:foundAt "<UTC timestamp ending in Z>"^^xsd:dateTime`. Missing required
 vars must fail the render through the template frontmatter contract; a
 non-repository-relative occurrence path renders an invalid sentinel and must
-fail the Oxigraph parse. Malformed Turtle must likewise fail the Oxigraph
-parse. Do not add `--strict` to this render until `sc-compose` supports
-loop-local names in strict token validation.
+make `oxigraph convert` exit nonzero. Malformed Turtle must likewise make the
+conversion fail. Do not add `--strict` to this render until `sc-compose`
+supports loop-local names in strict token validation.
 
 ## Triage Modes
 

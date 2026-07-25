@@ -72,17 +72,21 @@ def _render(tmp_path: Path, variables: dict) -> subprocess.CompletedProcess[str]
     )
 
 
-def _parse_turtle(path: Path, tmp_path: Path) -> subprocess.CompletedProcess[str]:
-    store = tmp_path / "oxigraph"
+def _parse_turtle(
+    path: Path, tmp_path: Path
+) -> subprocess.CompletedProcess[str]:
+    converted = tmp_path / "parsed.ttl"
     return subprocess.run(
         [
             "oxigraph",
-            "load",
-            "--location",
-            str(store),
-            "--file",
+            "convert",
+            "--from-file",
             str(path),
-            "--format",
+            "--from-format",
+            "ttl",
+            "--to-file",
+            str(converted),
+            "--to-format",
             "ttl",
         ],
         text=True,
@@ -142,7 +146,4 @@ def test_render_rejects_non_repository_relative_occurrence_path(
     assert "__ERROR_REPOSITORY_RELATIVE_OCCURRENCE_PATH_REQUIRED__" in rendered
 
     parsed = _parse_turtle(output, tmp_path)
-    # oxigraph currently reports parser failures on stderr while retaining a
-    # zero process exit status for the `load` command. Treat the diagnostic as
-    # the validation result rather than trusting the exit code alone.
-    assert "parser error" in parsed.stderr.lower()
+    assert parsed.returncode != 0

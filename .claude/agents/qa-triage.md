@@ -168,8 +168,9 @@ Mode rules:
     contract below. Do not hand-write a replacement record:
     - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
 12. Validate the rendered Turtle output:
-   - use a temporary Oxigraph store and `oxigraph load` against the TTL file
-   - fail if the Turtle cannot be parsed
+   - run `oxigraph convert --from-file <ttl> --from-format ttl --to-file
+     <temporary-output> --to-format ttl`
+   - fail on a nonzero exit status when the Turtle cannot be parsed
 13. Return enough information for the team-lead batch commit step:
    - `integration_branch`
    - `integration_worktree_path`
@@ -288,9 +289,13 @@ sc-compose render \
   --var-file /tmp/triage-record-vars.json \
   --output "$OUTPUT"
 
-STORE=$(mktemp -d)
-trap 'rm -rf "$STORE"' EXIT
-oxigraph load --location "$STORE" --file "$OUTPUT" --format ttl
+PARSED=$(mktemp)
+trap 'rm -f "$PARSED"' EXIT
+oxigraph convert \
+  --from-file "$OUTPUT" \
+  --from-format ttl \
+  --to-file "$PARSED" \
+  --to-format ttl
 ```
 
 The vars file must provide `found_in` as a declared sprint local id and

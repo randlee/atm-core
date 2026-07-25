@@ -93,6 +93,40 @@ def test_valid_finding_is_validation_pass(tmp_path):
     assert result.diagnostics == ()
 
 
+def test_rejects_non_repository_relative_occurrence_and_legacy_worktree_paths(
+    tmp_path,
+):
+    validator = _validator()
+    structure = tmp_path / "structure.ttl"
+    structure.write_text(_structure())
+    findings = tmp_path / "findings"
+    findings.mkdir()
+    (findings / "F-1.ttl").write_text(
+        PREFIX
+        + (
+            "triage:f1 a triage:Finding ; triage:findingId \"F-1\" ; "
+            "triage:foundIn triage:S1 ; "
+            "triage:foundAt \"2026-07-01T12:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"important\" ; triage:description \"Issue\" ; "
+            "triage:hasOccurrence triage:o1 .\n"
+            "triage:o1 a triage:Occurrence ; "
+            "triage:file \"/checkout/src/lib.rs\" ; "
+            "triage:occursIn triage:w1 .\n"
+            "triage:w1 a triage:WorktreeSnapshot ; "
+            "triage:path \"../feature-worktree\" .\n"
+            "triage:w2 a triage:WorktreeSnapshot ; "
+            "triage:path \"/abs/orphan-worktree\" .\n"
+        )
+    )
+
+    result = validator.run_validation(findings_dir=findings, structure=structure)
+
+    assert result.kind == "validation:fail"
+    assert result.summary.errors == 3
+    assert any("triage:file" in line for line in result.diagnostics)
+    assert sum("triage:path" in line for line in result.diagnostics) == 2
+
+
 def test_warning_only_metadata_is_validation_pass(tmp_path):
     validator = _validator()
     findings = tmp_path / "findings"
