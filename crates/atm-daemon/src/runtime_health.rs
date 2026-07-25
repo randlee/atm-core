@@ -10,7 +10,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerWireSecurityStatus,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -33,8 +33,8 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, PeerWireSecurity};
-use crate::post_send_emitter::DaemonPostSendHookEmitter;
+use crate::https_transport::HttpsMessageTransport;
+use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -42,6 +42,8 @@ use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_stat
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
 use atm_storage::{OutboundMessageQuery, PeerConfigStore};
+
+mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -149,11 +151,14 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    peer_wire_security: PeerWireSecurity,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
+    peer_delivery_projection: PeerDeliveryProjection,
 }
+
+type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -166,6 +171,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("peer_config_store", &"dyn PeerConfigStore")
             .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
+            .field("runtime_reload_hook", &"runtime reload callback")
             .finish()
     }
 }
@@ -394,7 +400,6 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
-        peer_wire_security: PeerWireSecurity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -427,10 +432,11 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            peer_wire_security,
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
+            runtime_reload_hook: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }
 
@@ -483,7 +489,7 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-struct MessageRecord {
+pub(super) struct MessageRecord {
     prepared: PreparedWrite,
     outbound_request: WriteRequest,
 }
@@ -492,22 +498,39 @@ trait MessageWriter: Send + Sync {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
 }
 
-trait PostWriteRouter: Send + Sync {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
+pub(super) trait PostWriteRouter: Send + Sync {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
+    #[cfg(test)]
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        self.dispatch_with_deadline(request, RequestDeadline::after(Duration::from_secs(5)))
+    }
+
+    fn dispatch_with_deadline(
+        &self,
+        request: RequestEnvelope,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Write(request) => self.route_write(*request),
+            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
             request => self.dispatch_non_write(request),
         }
     }
 
-    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(
+        &self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         if message.prepared.requires_post_write_route() {
-            PostWriteRouter::dispatch(self, &mut message)?;
+            PostWriteRouter::dispatch(self, &mut message, deadline)?;
         }
         let outcome = message
             .prepared
@@ -555,6 +578,10 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::PeerSync(request) => {
                 Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
             }
+            RequestEnvelope::ReloadRuntimeView => {
+                self.reload_runtime_view()?;
+                Ok(ResponseEnvelope::RuntimeViewReloaded)
+            }
             RequestEnvelope::Write(_) => unreachable!("writes are handled by route_write"),
         }
     }
@@ -574,55 +601,17 @@ impl MessageWriter for DaemonRequestDispatcher {
     }
 }
 
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
-        if message.prepared.is_peer_receipt() {
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        }
-        let Some(host) = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host.as_ref())
-        else {
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        };
-        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
-            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
-        })?;
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
-            })?;
-        match transport.deliver(
-            message.outbound_request.clone(),
-            &peer,
-            HttpsRequestDeadline::default(),
-        ) {
-            Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => self
-                .reconcile_after_success(host, &peer, transport.as_ref(), true)
-                .map(|_| ()),
-            Err(error) => Err(error),
-        }
+impl DaemonRequestDispatcher {
+    /// The canonical route and future recovery coordination use this sole
+    /// event-to-projection writer; no transport adapter owns delivery state.
+    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
+        self.peer_delivery_projection
+            .record(event, &self.runtime_health_observability);
+    }
+
+    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
+        self.peer_delivery_projection
+            .statuses(self.peer_config_store.as_ref())
     }
 }
 
@@ -693,7 +682,11 @@ impl DaemonRequestDispatcher {
                 serde_json::from_str(&stored.request_json).map_err(|_source| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })?;
-            transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+            transport.deliver(
+                request,
+                peer,
+                RequestDeadline::after(Duration::from_secs(5)),
+            )?;
         }
         Ok(delivered)
     }
@@ -784,12 +777,36 @@ impl DaemonRequestDispatcher {
         let current_state = self.status_cache.clone_state();
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
+        self.refresh_https_trust()?;
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
         );
+        Ok(())
+    }
+
+    pub(crate) fn install_runtime_reload_hook(
+        &self,
+        hook: RuntimeReloadHook,
+    ) -> Result<(), AtmError> {
+        let mut slot = self.runtime_reload_hook.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned")
+        })?;
+        *slot = Some(hook);
+        Ok(())
+    }
+
+    fn refresh_https_trust(&self) -> Result<(), AtmError> {
+        let hook = self
+            .runtime_reload_hook
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned"))?
+            .clone();
+        if let Some(hook) = hook {
+            hook()?;
+        }
         Ok(())
     }
 
@@ -863,12 +880,8 @@ impl DaemonRequestDispatcher {
         peer_findings.insert(0, daemon_observability_finding);
         let daemon_runtime = DaemonRuntimeDoctorReport {
             findings: peer_findings,
-            http_api_version: atm_core::api::HTTP_API_VERSION,
             peer_config: Some(peer_config),
-            peer_wire_security: Some(match self.peer_wire_security {
-                PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls,
-                PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest,
-            }),
+            peer_links: self.peer_link_statuses(),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -893,9 +906,8 @@ impl DaemonRequestDispatcher {
         } else {
             report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
                 findings: vec![runtime_status_finding],
-                http_api_version: atm_core::api::HTTP_API_VERSION,
                 peer_config: None,
-                peer_wire_security: None,
+                peer_links: Vec::new(),
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -982,26 +994,18 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
-                AuthenticatedIngress::UntrustedSmoke(_)
-                    if write.authenticated_source_host.is_some()
-                        || write.origin_message_id.is_none()
-                        || write.origin_timestamp.is_none() =>
-                {
-                    return Err(AtmError::validation(
-                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
-                    ));
-                }
-                AuthenticatedIngress::AnonymousSmoke => {
-                    return Err(AtmError::validation(
-                        "anonymous plaintext diagnostics cannot submit writes; include the X-ATM-Peer-Source-Host header only for an explicit smoke write",
-                    ));
-                }
-                AuthenticatedIngress::Local
-                | AuthenticatedIngress::Peer
-                | AuthenticatedIngress::UntrustedSmoke(_) => {}
+                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
             }
         }
-        self.dispatch(request).map(ApiResponse::new)
+        if matches!(request, RequestEnvelope::ReloadRuntimeView)
+            && ingress != AuthenticatedIngress::Local
+        {
+            return Err(AtmError::validation(
+                "runtime reload is available only through authenticated local IPC",
+            ));
+        }
+        self.dispatch_with_deadline(request, deadline)
+            .map(ApiResponse::new)
     }
 }
 
@@ -1129,10 +1133,11 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
             peer_config_store: runtime_assembly.peer_config_store(),
-            peer_wire_security: PeerWireSecurity::MutualTls,
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
+            runtime_reload_hook: std::sync::Mutex::new(None),
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }
 }
@@ -1142,8 +1147,48 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
+    use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+        let refreshed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let refresh_flag = Arc::clone(&refreshed);
+        dispatcher
+            .install_runtime_reload_hook(Arc::new(move || {
+                refresh_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }))
+            .expect("install reload hook");
+
+        let response = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("authenticated local reload routes")
+            .into_inner();
+        assert!(matches!(response, ResponseEnvelope::RuntimeViewReloaded));
+        assert!(refreshed.load(std::sync::atomic::Ordering::SeqCst));
+
+        let error = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect_err("peer ingress must not control daemon reload");
+        assert!(error.is_validation());
+    }
 
     struct ShutdownFinalizerDrainGuard;
 

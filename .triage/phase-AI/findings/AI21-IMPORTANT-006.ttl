@@ -4,36 +4,60 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-006>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-006" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "Three required initial-table rows are silently not-run by default" ;
-  triage:description "scripts/smoke/run_inbound_peer_smoke.py:469-540 vs :409-458 — three required initial-table rows (localhost loopback, own-IP, nudge) are only reachable via the separate --host/run_host() path; the primary documented two-peer workflow and shipped example.json never populate them, so they're silently NOT-RUN by default." ;
+  triage:description "scripts/smoke/run_inbound_peer_smoke.py code-path fix is correct: run() now properly populates host.local_checks rows when present in config. However, the shipped scripts/smoke/inbound-peer-smoke.example.json (the sprint's documented 'sole supported smoke surface') only declares 2 of 3 required keys: localhost/local loopback and own-IP are present, but 'nudge' is absent. Therefore, under the actual documented two-peer workflow with the actual shipped example config, the nudge row remains silently NOT-RUN. validate_host_config only validates that present keys are in the allowed set; it does not require all three keys, so the gap does not fail loudly." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "AI21" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "this-branch-only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-24T12:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:relatedFinding "AI21-QA2-001" .
 
 <urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_inbound_peer_smoke.py" ;
   triage:line 469 ;
   triage:snippet "def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:" ;
-  triage:description "run() function (default two-peer workflow) does not populate three required PANE_CASES rows: localhost/local loopback, own-IP, nudge. These are only reachable via run_host() with --host flag." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:description "run() function (default two-peer workflow) has correct code-path: lines 485-491 now call validate_host_config(config).get('local_checks', {}).items() and execute all declared checks. But because the shipped example.json is incomplete, the nudge check is silently absent." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "5678337c" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/inbound-peer-smoke.example.json" ;
+  triage:line 14 ;
+  triage:snippet "\"local_checks\": { \"localhost/local loopback\": [...], \"own-IP\": [...] }" ;
+  triage:description "Shipped example config at host.local_checks declares only 2 of 3 required keys. Missing 'nudge' entry. This incomplete config is the actual gap: under the documented two-peer workflow with this shipped config, the nudge check is silently not-run because it's not declared in the JSON." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
 
 <urn:atm:triage:worktree/pAI-s21pre/5678337c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "5678337c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
   triage:orderIndex 1 .

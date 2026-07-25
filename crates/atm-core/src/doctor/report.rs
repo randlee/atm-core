@@ -7,7 +7,7 @@ use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::protocol::{ReleaseVersion, RuntimeStatusSnapshot};
 use crate::team_admin::MembersList;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -101,21 +101,67 @@ pub struct BootstrapTraceReport {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct DaemonRuntimeDoctorReport {
     pub findings: Vec<DoctorFinding>,
-    #[serde(default)]
-    pub http_api_version: u16,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub peer_config: Option<PeerConfigDoctorReport>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub peer_wire_security: Option<PeerWireSecurityStatus>,
+    /// Bounded, in-memory delivery health for configured peers. This is
+    /// diagnostic state only: it never contains message data, receipts,
+    /// cursors, resolved addresses, or TLS material.
+    #[serde(default)]
+    pub peer_links: Vec<PeerLinkStatus>,
 }
 
-/// Active peer-wire security profile reported by the daemon control plane.
-/// This type avoids drift between daemon state, doctor JSON, and smoke tools.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum PeerWireSecurityStatus {
-    MutualTls,
-    PlaintextTest,
+pub enum PeerLinkQuality {
+    Healthy,
+    Degraded,
+    Unreachable,
+    #[default]
+    Misconfigured,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerDrainState {
+    #[default]
+    Idle,
+    Connecting,
+    Draining,
+}
+
+/// Safe per-peer delivery-health projection. The peer is always the registered
+/// hostname; this deliberately excludes addresses resolved from DNS.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerLinkStatus {
+    pub peer: HostName,
+    pub quality: PeerLinkQuality,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_success_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_failure_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error_code: Option<AtmErrorCode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_attempt_at: Option<IsoTimestamp>,
+    #[serde(default)]
+    pub drain: PeerDrainState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_count: Option<u32>,
+}
+
+impl PeerLinkStatus {
+    pub fn misconfigured(peer: HostName) -> Self {
+        Self {
+            peer,
+            quality: PeerLinkQuality::Misconfigured,
+            last_success_at: None,
+            last_failure_at: None,
+            last_error_code: None,
+            next_attempt_at: None,
+            drain: PeerDrainState::Idle,
+            candidate_count: None,
+        }
+    }
 }
 
 /// Safe control-plane visibility for cross-host HTTPS. Private key references
@@ -128,8 +174,18 @@ pub struct PeerConfigDoctorReport {
     pub certificate_fingerprint: Option<String>,
     pub trusted_peer_count: usize,
     pub enabled_trusted_peer_count: usize,
+    #[serde(default)]
+    pub trusted_peers: Vec<PeerAuthorityDoctorReport>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_failure: Option<DoctorFinding>,
+}
+
+/// Safe durable peer authority projection. Never includes DNS output or secrets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerAuthorityDoctorReport {
+    pub host: String,
+    pub https_port: u16,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
