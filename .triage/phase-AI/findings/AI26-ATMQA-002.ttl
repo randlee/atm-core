@@ -12,9 +12,12 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T15:12:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-25T15:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S6-FIX-2 recheck PASS (all 3 reviewers): new test local_client_close_during_delayed_peer_delivery_never_reports_success_or_leaks_work at peer_reconciliation.rs:157-273 confirmed as a real local-IPC client/server interaction proving worker join/no-leak on local-side cancellation. See /Users/randlee/.config/atm/share/atm-dev/aich-s6-fix2-verdict.md." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/budget-propagation> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/disconnect> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/retry-original-ulid> ;
@@ -72,11 +75,11 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 0 ;
-  triage:snippet "MISSING: Deterministic delayed-peer test: local-side cancellation race. Required: test simulates local connection close / caller-side deadline expiry while a peer delivery is in-flight (stalled/delayed response). Must assert: tracked dispatch worker is cancelled/joined (not detached), no false-success outcome reported. Implements sprint AI.26 acceptance criterion 3 ('a cancellation race cannot claim remote success') and ADR-041 cancellation-safety at delayed-peer level." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "FIXED on efb92da0: local_client_close_during_delayed_peer_delivery_never_reports_success_or_leaks_work (peer_reconciliation.rs:157-273). Real local-IPC client/server, real drop(stream) cancellation mid-flight, asserts production shutdown path joins the tracked dispatch worker without leak/hang. Verified independently by req-qa/arch-qa/rust-qa-agent." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "f7b779ab" ;
+  triage:headSha "efb92da0" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
