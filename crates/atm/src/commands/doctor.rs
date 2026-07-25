@@ -106,6 +106,8 @@ impl DoctorCommand {
             Some(DaemonRuntimeDoctorReport {
                 findings: peer_findings,
                 peer_config: Some(peer_config),
+                peer_links: Vec::new(),
+                peer_wire_security: None,
             }),
         )
         .map_err(anyhow::Error::from)

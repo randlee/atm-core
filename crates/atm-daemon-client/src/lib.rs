@@ -23,6 +23,10 @@ pub use compatibility::{Connection, Unverified, VersionVerified, verify_connecti
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(30);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+// The request deadline governs daemon work. Keep a narrow response-only grace
+// so a daemon that reaches that deadline can serialize its typed terminal
+// result instead of racing the client's identical socket-read timeout.
+const LOCAL_IPC_RESPONSE_GRACE: Duration = Duration::from_millis(250);
 const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -404,16 +408,17 @@ pub fn exchange_request(
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
     let mut stream = try_connect(endpoint)?;
+    let response_deadline = request_deadline.saturating_add(LOCAL_IPC_RESPONSE_GRACE);
     let _send_deadline_support = apply_local_ipc_deadline(
         set_stream_write_timeout(&stream, Some(request_deadline)),
         "failed to configure daemon local IPC write timeout",
     )?;
     let recv_deadline_support = apply_local_ipc_deadline(
-        set_stream_read_timeout(&stream, Some(request_deadline)),
+        set_stream_read_timeout(&stream, Some(response_deadline)),
         "failed to configure daemon local IPC read timeout",
     )?;
     write_local_http_request(&mut stream, request, endpoint.as_ref())?;
-    read_http_response_with_deadline(stream, request, request_deadline, recv_deadline_support)
+    read_http_response_with_deadline(stream, request, response_deadline, recv_deadline_support)
 }
 
 fn write_local_http_request(
@@ -956,6 +961,7 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::net::{Ipv4Addr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -970,7 +976,7 @@ mod tests {
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline, exchange_request,
         next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
         resolve_daemon_local_ipc_endpoint_from_home,
     };
@@ -1018,6 +1024,72 @@ mod tests {
 
         assert_eq!(canonical.as_ref(), expected);
         assert_eq!(compatibility_endpoint.as_ref(), expected);
+    }
+
+    #[test]
+    fn side_effecting_deadline_response_has_time_to_cross_local_http() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind local HTTP");
+        let endpoint = listener.local_addr().expect("local HTTP address");
+        let capability = atm_core::local_http::LocalCapability::generate().expect("capability");
+        let record_path = tempdir
+            .path()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        let record = atm_core::local_http::LocalHttpEndpointRecord::active(
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                .parse()
+                .expect("daemon instance id"),
+            Some(endpoint),
+            None,
+            &capability,
+        );
+        let instance_id = record.daemon_instance_id;
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&record).expect("serialize endpoint record"),
+        )
+        .expect("write endpoint record");
+        std::fs::write(
+            tempdir
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:test:{instance_id}"),
+        )
+        .expect("write owner record");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept local HTTP request");
+            let request = atm_core::api::read_http_request(&mut stream)
+                .expect("read HTTP request")
+                .expect("request");
+            let (_wait_tx, wait_rx) = std::sync::mpsc::sync_channel::<()>(1);
+            assert!(matches!(
+                wait_rx.recv_timeout(Duration::from_millis(40)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ));
+            atm_core::api::write_http_response(
+                &mut stream,
+                &atm_core::ResponseEnvelope::Error(AtmError::remote_delivery_unconfirmed(
+                    "peer delivery deadline elapsed",
+                )),
+            )
+            .expect("write terminal response");
+            drop(request);
+        });
+
+        let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+        let response = exchange_request(
+            &DaemonLocalIpcEndpoint::new(record_path).expect("endpoint path"),
+            &request,
+            Duration::from_millis(30),
+        )
+        .expect("typed terminal response must outlive the work deadline");
+
+        assert!(matches!(
+            response,
+            atm_core::ResponseEnvelope::Error(error)
+                if error.code() == AtmErrorCode::RemoteDeliveryUnconfirmed
+        ));
+        server.join().expect("server join");
     }
 
     #[test]

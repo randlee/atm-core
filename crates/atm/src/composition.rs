@@ -166,7 +166,10 @@ impl LocalIpcClientTransportAdapter {
 fn request_requires_compatibility_verification(request: &RequestEnvelope) -> bool {
     matches!(
         request,
-        RequestEnvelope::Write(_) | RequestEnvelope::Clear(_) | RequestEnvelope::PeerSync(_)
+        RequestEnvelope::Write(_)
+            | RequestEnvelope::Clear(_)
+            | RequestEnvelope::PeerSync(_)
+            | RequestEnvelope::ReloadRuntimeView
     )
 }
 
@@ -257,22 +260,6 @@ impl<'a> CliComposition<'a> {
     )]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future command-routing phase — exposes send entry-point to callers"
-    )]
-    pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
-        &self.send_command
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future command-routing phase — exposes receive entry-point to callers"
-    )]
-    pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
-        &self.receive_command
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
@@ -433,6 +420,13 @@ impl<'a> CliComposition<'a> {
         match self.send_request(RequestEnvelope::PeerSync(request))? {
             ResponseEnvelope::PeerSync(outcome) => Ok(outcome),
             other => Err(unexpected_response("peer sync", other)),
+        }
+    }
+
+    pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
+        match self.send_request(RequestEnvelope::ReloadRuntimeView)? {
+            ResponseEnvelope::RuntimeViewReloaded => Ok(()),
+            other => Err(unexpected_response("runtime reload", other)),
         }
     }
 
@@ -1051,6 +1045,20 @@ mod tests {
     }
 
     #[test]
+    fn cli_runtime_reload_uses_the_authenticated_shared_api_request() {
+        let observability = CliObservability::fallback();
+        let transport = Arc::new(FakeClientTransport::new(|request| {
+            assert!(matches!(request, RequestEnvelope::ReloadRuntimeView));
+            Ok(ResponseEnvelope::RuntimeViewReloaded)
+        }));
+        let composition = CliComposition::from_transport(transport, &observability);
+
+        composition
+            .reload_runtime_view()
+            .expect("CLI runtime reload response");
+    }
+
+    #[test]
     fn cli_graft_daemon_and_read_preserve_one_chat_identity_contract() {
         let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
         let send_request = SendRequest::new(
@@ -1141,7 +1149,7 @@ mod tests {
             request
                 .to
                 .as_ref()
-                .and_then(|target| target.chat_id.as_ref())
+                .and_then(|target| target.chat_id())
                 .map(ToString::to_string)
                 .as_deref(),
             Some("target-chat")

@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-MINOR-003>
+  a triage:Finding ;
+  triage:findingId "AI21-MINOR-003" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:title "Unbounded thread-per-connection is cheaper to exploit against the zero-auth-cost plaintext-test listener" ;
+  triage:description "accept_loop/spawn_request_worker uses unbounded thread-per-connection. Pre-existing (not introduced by this diff), flagged for awareness only — cheaper to exploit against the zero-auth-cost plaintext-test listener than against mTLS." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "AI" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:notes "Pre-existing resource exhaustion surface. Quality-mgr verdict: 'Not a new defect; follow-up hardening ticket suggested, not a blocker for this sprint.' Flagged for awareness only. Recorded as open Minor finding per standard triage contract but explicitly non-blocking for this sprint per QA-2 assessment. Reconsidered in followup_pass QA recheck (2026-07-24): confirmed still open, correctly not re-raised as blocking per original verdict." ;
+  triage:triagedAt "2026-07-24T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-003/pAI-s21pre/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-MINOR-003/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 0 ;
+  triage:snippet "accept_loop/spawn_request_worker — unbounded thread-per-connection pattern" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .

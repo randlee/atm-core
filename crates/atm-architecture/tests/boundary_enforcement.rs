@@ -62,6 +62,104 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
+fn daemon_must_not_read_caller_workspace_config() {
+    let root = workspace_root();
+    let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
+    assert!(
+        composition.contains("runtime_assembly.for_daemon()"),
+        "daemon composition must select the runtime view that disables caller workspace config"
+    );
+    let runtime_composition = read_source(&root.join("crates/atm-runtime/src/composition.rs"));
+    assert!(
+        runtime_composition.contains(
+            "self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));"
+        ),
+        "the daemon runtime view must replace the caller-workspace config doctor"
+    );
+
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("crates/atm-daemon/src"), &mut files);
+    let findings: Vec<_> = files
+        .into_iter()
+        .filter_map(|path| {
+            let source = read_source(&path);
+            (source.contains("config::load_config")
+                || source.contains("ConfigIngress")
+                || source.contains("load_workspace_config"))
+            .then(|| path.display().to_string())
+        })
+        .collect();
+    assert!(
+        findings.is_empty(),
+        "daemon source must not restore caller workspace config access: {findings:?}"
+    );
+}
+
+#[test]
+fn ai25_live_trust_refresh_reuses_startup_validation() {
+    let root = workspace_root();
+    let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
+    let syntax = syn::parse_file(&source).expect("daemon composition source must parse");
+    let mut visitor = LiveTrustRefreshVisitor::default();
+    visitor.visit_file(&syntax);
+    assert!(
+        visitor.installs_refresh_hook,
+        "AI.25 must install the runtime trust refresh hook during daemon composition"
+    );
+    assert!(
+        visitor.calls_reload_validator,
+        "AI.25 forbids installing reload-time trust without the startup validator"
+    );
+    assert!(
+        visitor.calls_verifier_refresh,
+        "AI.25 live reload must replace the retained verifier snapshot"
+    );
+
+    let fixture = syn::parse_file(
+        "fn bad() { dispatcher.install_runtime_reload_hook(Arc::new(move || { listeners.refresh_trusted_peers(peers)?; Ok(()) })); }",
+    )
+    .expect("negative fixture must parse");
+    let mut negative = LiveTrustRefreshVisitor::default();
+    negative.visit_file(&fixture);
+    assert!(negative.installs_refresh_hook);
+    assert!(negative.calls_verifier_refresh);
+    assert!(
+        !negative.calls_reload_validator,
+        "negative fixture proves the AST gate rejects verifier refresh without reload validation"
+    );
+}
+
+#[derive(Default)]
+struct LiveTrustRefreshVisitor {
+    installs_refresh_hook: bool,
+    calls_reload_validator: bool,
+    calls_verifier_refresh: bool,
+}
+
+impl<'ast> Visit<'ast> for LiveTrustRefreshVisitor {
+    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
+        if node.method == "install_runtime_reload_hook" {
+            self.installs_refresh_hook = true;
+        }
+        if node.method == "refresh_trusted_peers" {
+            self.calls_verifier_refresh = true;
+        }
+        syn::visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = node.func.as_ref()
+            && path.path.segments.last().is_some_and(|segment| {
+                segment.ident == "validate_enabled_peer_configuration_for_reload"
+            })
+        {
+            self.calls_reload_validator = true;
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
+}
+
+#[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
@@ -367,12 +465,17 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
         let local_nudge = method.starts_with("emit_local_post_write");
-        let reconciliation_delivery = method == "deliver"
-            && self.is_runtime_dispatcher_source()
+        let reconciliation_delivery = matches!(method.as_str(), "deliver" | "deliver_page")
             && self.current_function.is_some_and(|index| {
-                self.functions
-                    .get(index)
-                    .is_some_and(|function| function.name == "reconcile_after_success")
+                self.functions.get(index).is_some_and(|function| {
+                    (self.is_runtime_dispatcher_source()
+                        && function.name == "reconcile_after_success")
+                        || (self.source_path.as_ref().is_some_and(|path| {
+                            path.ends_with(Path::new(
+                                "crates/atm-daemon/src/peer_drain_coordinator.rs",
+                            ))
+                        }) && function.name == "drain")
+                })
             });
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"

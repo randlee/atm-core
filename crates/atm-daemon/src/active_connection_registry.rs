@@ -64,6 +64,35 @@ impl ActiveConnectionRegistry {
         }
     }
 
+    /// Reserve a connection slot before spawning its worker.  Admission is
+    /// decided atomically so an accept loop cannot over-admit while a newly
+    /// spawned worker has not yet incremented the counter.
+    #[cfg(any(windows, test))]
+    pub(crate) fn try_register(
+        self: &Arc<Self>,
+        maximum_connections: usize,
+    ) -> Option<ActiveConnectionGuard> {
+        let mut current = self.active_connections.load(Ordering::SeqCst);
+        loop {
+            if current >= maximum_connections {
+                return None;
+            }
+            match self.active_connections.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => {
+                    return Some(ActiveConnectionGuard {
+                        registry: Arc::clone(self),
+                    });
+                }
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
     pub(crate) fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
         self.active_dispatches.fetch_add(1, Ordering::SeqCst);
         ActiveDispatchGuard {
@@ -342,6 +371,64 @@ mod tests {
         assert!(
             error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn connection_admission_is_atomic_and_recovers_after_drop() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let first = registry.try_register(1).expect("first slot admitted");
+        assert!(
+            registry.try_register(1).is_none(),
+            "cap must reject admission"
+        );
+        drop(first);
+        assert!(
+            registry.try_register(1).is_some(),
+            "released slot must become available again"
+        );
+    }
+
+    #[test]
+    fn shutdown_joins_completed_dispatch_without_detaching_tracked_work() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let worker_registry = Arc::clone(&registry);
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let join_handle = std::thread::spawn(move || {
+            let _work = worker_registry.register_dispatch_work();
+            started_tx.send(()).expect("report tracked worker start");
+            release_rx.recv().expect("release tracked worker");
+            completion_tx
+                .send(())
+                .expect("report tracked worker completion");
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                1,
+            )
+            .expect("track dispatch worker");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker entered tracked runtime work");
+        assert_eq!(registry.active_work_items(), 1);
+        release_tx.send(()).expect("release worker");
+
+        registry
+            .join_tracked_dispatches(Duration::from_secs(1))
+            .expect("shutdown joins completed tracked work");
+        assert_eq!(registry.active_work_items(), 0);
+        assert!(
+            registry
+                .lock_dispatch_handles()
+                .expect("lock dispatch handles")
+                .is_empty(),
+            "shutdown leaves no detached tracked dispatch"
         );
     }
 }

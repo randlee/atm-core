@@ -67,14 +67,19 @@ impl fmt::Debug for RuntimeAssembly {
 
 #[derive(Debug, Default)]
 struct RuntimeConfigDoctor {
-    config_current_dir: PathBuf,
+    // `None` is the daemon-owned doctor.  A system daemon has no caller
+    // workspace and therefore must not read `.atm.toml` while answering
+    // doctor requests.
+    config_current_dir: Option<PathBuf>,
 }
 
 impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
 
 impl ConfigDoctor for RuntimeConfigDoctor {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
-        let _ = load_atm_config(&self.config_current_dir)?;
+        if let Some(config_current_dir) = &self.config_current_dir {
+            let _ = load_atm_config(config_current_dir)?;
+        }
         Ok(ConfigDoctorReport {
             findings: Vec::new(),
         })
@@ -99,7 +104,7 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
         inputs.non_claude_outbound,
     );
     let doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor {
-        config_current_dir: inputs.config_current_dir,
+        config_current_dir: Some(inputs.config_current_dir),
     }));
     Ok(RuntimeAssembly {
         service_runtime,
@@ -118,6 +123,26 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
 /// Ordinary CLI commands intentionally do not call this: they use the shared
 /// runtime assembly only to reach durable configuration and mailbox boundaries.
 pub fn validate_enabled_peer_configuration(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<(), AtmError> {
+    validate_enabled_peer_configuration_for_reload(store)?;
+    let enabled = store
+        .list_interfaces()?
+        .into_iter()
+        .filter(|interface| interface.enabled)
+        .collect::<Vec<_>>();
+    for interface in enabled {
+        TcpListener::bind(interface.bind_addr).map_err(|error| {
+            AtmError::bind_preflight(format!(
+                "HTTPS bind preflight failed for {}: {error}",
+                interface.bind_addr
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+pub fn validate_enabled_peer_configuration_for_reload(
     store: &(dyn PeerConfigStore + Send + Sync),
 ) -> Result<(), AtmError> {
     for peer in store.list_trusted_peers()? {
@@ -147,18 +172,20 @@ pub fn validate_enabled_peer_configuration(
             "enabled HTTPS interfaces require a non-empty certificate fingerprint and key reference",
         ));
     }
-    for interface in enabled {
-        TcpListener::bind(interface.bind_addr).map_err(|error| {
-            AtmError::bind_preflight(format!(
-                "HTTPS bind preflight failed for {}: {error}",
-                interface.bind_addr
-            ))
-        })?;
-    }
     Ok(())
 }
 
 impl RuntimeAssembly {
+    /// Select the system-daemon view of the assembled runtime.
+    ///
+    /// IPC and peer requests carry caller context but must never cause the
+    /// daemon to read a caller workspace's `.atm.toml` file.
+    pub fn for_daemon(mut self) -> Self {
+        self.service_runtime = self.service_runtime.without_workspace_config();
+        self.doctor_ports = runtime_doctor_ports(Arc::new(RuntimeConfigDoctor::default()));
+        self
+    }
+
     pub fn message_store_arc(&self) -> Arc<dyn SharedMessageStore + Send + Sync> {
         self.storage_backends.messages.clone()
     }
@@ -197,12 +224,40 @@ pub fn with_installed_roster_store<T>(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use atm_core::boundary::ConfigDoctor;
     use atm_storage::{
         CertificateFingerprint, HostName, HttpsInterface, LocalCertificate, PeerConfigStore,
         PrivateKeyRef, TrustedPeer,
     };
 
-    use super::validate_enabled_peer_configuration;
+    use super::{RuntimeConfigDoctor, validate_enabled_peer_configuration};
+
+    #[test]
+    fn daemon_config_doctor_does_not_read_a_caller_workspace() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let workspace = std::env::temp_dir().join(format!(
+            "atm-runtime-daemon-doctor-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&workspace).expect("workspace fixture");
+        std::fs::write(workspace.join(".atm.toml"), "not = [valid")
+            .expect("write invalid workspace config");
+
+        let caller_doctor = RuntimeConfigDoctor {
+            config_current_dir: Some(PathBuf::from(&workspace)),
+        };
+        assert!(caller_doctor.inspect_config().is_err());
+
+        RuntimeConfigDoctor::default()
+            .inspect_config()
+            .expect("daemon doctor must ignore caller workspace config");
+        std::fs::remove_dir_all(workspace).expect("remove workspace fixture");
+    }
 
     #[derive(Default)]
     struct TestPeerConfigStore {

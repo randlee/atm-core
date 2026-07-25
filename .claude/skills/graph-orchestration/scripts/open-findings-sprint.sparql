@@ -1,0 +1,33 @@
+# open-findings-sprint.sparql — All open non-blocking findings across the phase.
+#
+# Used to detect CLEANUP phase: all sprints have valid Completions but
+# non-blocking findings remain.
+#
+# Blocking findings are excluded here: if any exist, cursor.sparql would
+# have returned a sprint (Completion invalidated).
+#
+# Returns: ?finding ?sprint ?severity ?foundAt ?description
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?finding ?sprint ?severity ?foundAt ?description WHERE {
+  ?sprint a triage:Sprint ; triage:inPhase $PHASE .
+
+  ?finding a triage:Finding ;
+           triage:foundIn ?sprint ;
+           triage:severity ?severity ;
+           triage:foundAt ?foundAt ;
+           triage:description ?description .
+
+  # Non-blocking only
+  FILTER (?severity != "blocking")
+
+  # Open: no Resolution references this finding
+  FILTER NOT EXISTS { ?r a triage:Resolution ; triage:resolves ?finding . }
+
+  # Sort key: important before minor, then by time
+  BIND(IF(?severity = "important", 0, 1) AS ?sev_order)
+}
+ORDER BY ?sev_order ?foundAt

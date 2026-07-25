@@ -28,6 +28,8 @@ mod local_ipc_wake;
 #[cfg(any(unix, windows, test))]
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
+mod peer_delivery_observability;
+mod peer_drain_coordinator;
 mod post_send_emitter;
 mod runtime_health;
 mod runtime_status_cache;
@@ -56,6 +58,7 @@ pub use daemon_runtime_observability::{
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
+pub use https_transport::PeerWireSecurity;
 #[cfg(not(windows))]
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
 #[cfg(windows)]
@@ -132,7 +135,14 @@ impl AtmHomeDir {
 pub fn run_daemon_with_observability(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<(), AtmError> {
-    composition::compose_runtime(observability)?.start()
+    run_daemon_with_observability_and_wire_security(observability, PeerWireSecurity::MutualTls)
+}
+
+pub fn run_daemon_with_observability_and_wire_security(
+    observability: Arc<dyn DaemonRuntimeObservability>,
+    wire_security: PeerWireSecurity,
+) -> Result<(), AtmError> {
+    composition::compose_runtime(observability, wire_security)?.start()
 }
 
 #[cfg(test)]

@@ -24,8 +24,10 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerConfigDoctorReport, PostSendDoctorReport, PostSendHookRuleIndex,
-    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerDrainState,
+    PeerLinkQuality, PeerLinkStatus, PeerWireSecurityStatus, PostSendDoctorReport,
+    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -213,6 +215,14 @@ fn peer_config_doctor_report_inner(
         certificate_fingerprint: certificate.map(|certificate| certificate.fingerprint.to_string()),
         trusted_peer_count: peers.len(),
         enabled_trusted_peer_count: peers.iter().filter(|peer| peer.enabled).count(),
+        trusted_peers: peers
+            .iter()
+            .map(|peer| PeerAuthorityDoctorReport {
+                host: peer.host.to_string(),
+                https_port: peer.https_port.get(),
+                enabled: peer.enabled,
+            })
+            .collect(),
         validation_failure: None,
     })
 }
@@ -743,6 +753,7 @@ mod tests {
                     .parse::<CertificateFingerprint>()
                     .expect("fingerprint"),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             }])
         }
 
