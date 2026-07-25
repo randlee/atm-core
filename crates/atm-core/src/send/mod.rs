@@ -853,7 +853,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         && let Some(host) = request
             .to
             .as_ref()
-            .and_then(|address| address.host.as_ref())
+            .and_then(|address| address.host())
     {
         let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
@@ -875,7 +875,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                 request
                     .to
                     .as_ref()
-                    .and_then(|destination| destination.host.as_ref())
+                    .and_then(|destination| destination.host())
                     .map(|destination_host| (source_host, destination_host))
             }),
     )
@@ -906,7 +906,7 @@ fn build_send_envelope(
         destination_chat_id: request
             .to
             .as_ref()
-            .and_then(|address| address.chat_id.clone()),
+            .and_then(|address| address.chat_id().cloned()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -966,7 +966,7 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host.is_none() {
+    if same_identity && target.host().is_none() {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -1024,12 +1024,12 @@ fn resolve_recipient(
     // `AgentAddress` has already validated the explicit team segment. Never
     // parse it again and silently substitute the caller team on failure.
     let team = target_address
-        .team
-        .clone()
+        .team()
+        .cloned()
         .unwrap_or_else(|| caller_team.clone());
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
+        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
         team,
     })
 }

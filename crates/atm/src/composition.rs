@@ -1124,7 +1124,7 @@ mod tests {
             request
                 .to
                 .as_ref()
-                .and_then(|target| target.chat_id.as_ref())
+                .and_then(|target| target.chat_id())
                 .map(ToString::to_string)
                 .as_deref(),
             Some("target-chat")

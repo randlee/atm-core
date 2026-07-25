@@ -61,9 +61,9 @@ pub struct SendCommand {
 impl SendCommand {
     fn message_validation_error(
         message: impl Into<String>,
-        _recovery: impl Into<String>,
+        recovery: impl Into<String>,
     ) -> anyhow::Error {
-        atm_core::error::AtmError::validation(message.into()).into()
+        atm_core::error::AtmError::validation_with_recovery(message, recovery).into()
     }
 
     /// Execute the `atm send` command.
@@ -183,6 +183,28 @@ mod tests {
             .expect_err("invalid target");
 
         assert!(error.to_string().contains("agent name"));
+    }
+
+    #[test]
+    fn validation_errors_retain_their_actionable_recovery() {
+        let command = SendCommand {
+            to: "recipient@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            chat_id: None,
+            actor: None,
+            file: Some(PathBuf::from("message.txt")),
+            stdin: true,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+        let error = command.build_message_source().expect_err("invalid sources");
+        assert!(error
+            .to_string()
+            .contains("Choose exactly one message source"));
     }
 
     #[test]

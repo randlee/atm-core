@@ -217,7 +217,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
 
 #[test]
 #[serial_test::serial(env)]
-fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
+fn successful_peer_write_does_not_automatically_replay_stored_messages() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -237,14 +237,22 @@ fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
     let peer_store = open_sqlite_boundary(&db_path)
         .expect("sqlite boundary")
         .peer_config_store();
-    let trusted_peer = TrustedPeer {
-        host: peer.clone(),
-        fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-        enabled: true,
-    };
     peer_store
-        .save_trusted_peer(&trusted_peer)
+        .save_trusted_peer(&TrustedPeer {
+            host: peer.clone(),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+        })
         .expect("save trusted peer");
+    peer_store
+        .save_peer_sync_policy(
+            &peer,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: NonZeroU16::new(100).expect("non-zero cap"),
+            },
+        )
+        .expect("enable explicit peer sync");
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
@@ -269,61 +277,9 @@ fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
             .expect("remote write request"),
         )))
         .expect("initial peer write");
-    peer_store
-        .save_peer_sync_policy(
-            &peer,
-            PeerSyncPolicy {
-                max_message_age: Duration::from_secs(60),
-                max_batch_messages: NonZeroU16::new(100).expect("non-zero cap"),
-            },
-        )
-        .expect("enable peer sync");
-
-    dispatcher.seed_peer_sync_cooldown_for_test((0_u64..256).map(|index| {
-        let host = format!("peer-{index}.example.test")
-            .parse()
-            .expect("bounded cooldown host");
-        (
-            host,
-            std::time::Instant::now() - Duration::from_secs(index + 1),
-        )
-    }));
-
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("first automatic reconciliation");
     assert_eq!(
         transport.delivered.lock().expect("deliveries").len(),
-        2,
-        "one original write plus one automatic reconciliation delivery"
-    );
-    {
-        let cooldown = dispatcher.peer_sync_cooldown_for_test();
-        assert_eq!(cooldown.len(), 256, "cooldown map remains hard-bounded");
-        assert!(cooldown.contains_key(&peer), "new peer is retained");
-        assert!(
-            !cooldown.contains_key(&"peer-255.example.test".parse().expect("oldest host")),
-            "oldest cooldown entry is evicted"
-        );
-    }
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("cooldown skips duplicate automatic scan");
-    assert_eq!(
-        transport.delivered.lock().expect("deliveries").len(),
-        2,
-        "60-second cooldown suppresses another automatic delivery"
-    );
-    dispatcher.seed_peer_sync_cooldown_for_test([(
-        peer.clone(),
-        std::time::Instant::now() - Duration::from_secs(61),
-    )]);
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("expired cooldown permits another scan");
-    assert_eq!(
-        transport.delivered.lock().expect("deliveries").len(),
-        3,
-        "expired cooldown permits exactly one new bounded delivery"
+        1,
+        "a successful ordinary peer write never starts a second replay path"
     );
 }

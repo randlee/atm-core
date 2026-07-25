@@ -133,9 +133,10 @@ impl<'de> Deserialize<'de> for ReplyTarget {
         let address: crate::address::AgentAddress =
             value.parse().map_err(serde::de::Error::custom)?;
         let team = address
-            .team
+            .team()
+            .cloned()
             .ok_or_else(|| serde::de::Error::custom("expected <agent>@<team> reply target"))?;
-        Ok(Self::new(address.agent, team, address.host))
+        Ok(Self::new(address.agent().clone(), team, address.host().cloned()))
     }
 }
 
@@ -252,13 +253,13 @@ pub(crate) fn resolve_received_acknowledgement_write<
     let target = request.to.clone().ok_or_else(|| {
         AtmError::validation("received peer acknowledgement is missing a destination")
     })?;
-    let actor = target.agent;
-    let team = target.team.unwrap_or_else(|| request.caller_team.clone());
+    let actor = target.agent().clone();
+    let team = target.team().cloned().unwrap_or_else(|| request.caller_team.clone());
     let source = load_ack_source(runtime, &request.home_dir, &team, &actor, message_id)?;
     let source_record =
         load_ack_source_record(runtime, &request.home_dir, &team, &actor, &source.row)?;
     ensure_ack_is_pending(message_id, &source_record.envelope)?;
-    let reply_target = ReplyTarget::new(actor.clone(), team.clone(), target.host);
+    let reply_target = ReplyTarget::new(actor.clone(), team.clone(), target.host().cloned());
     Ok(ResolvedAcknowledgement {
         canonical_request: request,
         source,
@@ -332,12 +333,12 @@ fn canonical_ack_write_request(
         authenticated_source_host: None,
         origin_message_id: None,
         origin_timestamp: None,
-        to: Some(crate::address::AgentAddress {
-            agent: target.agent.clone(),
-            chat_id: source.envelope.source_chat_id.clone(),
-            team: Some(target.team.clone()),
-            host: target.host.clone(),
-        }),
+        to: Some(crate::address::AgentAddress::new(
+            target.agent.clone(),
+            source.envelope.source_chat_id.clone(),
+            Some(target.team.clone()),
+            target.host.clone(),
+        )?),
         message_source: SendMessageSource::Inline(request.reply_body.clone()),
         summary_override: None,
         requires_ack: false,
@@ -576,7 +577,7 @@ mod tests {
             &source,
         )
         .expect("canonical ack write");
-        assert_eq!(write.to.expect("destination").host, Some(host));
+        assert_eq!(write.to.expect("destination").host(), Some(&host));
         assert_eq!(write.acknowledges_message_id, Some(message_id));
         assert_eq!(
             write.caller_chat_id.as_ref().map(ChatId::as_str),

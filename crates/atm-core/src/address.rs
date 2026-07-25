@@ -2,20 +2,90 @@ use std::fmt;
 use std::str::FromStr;
 
 pub use atm_storage::validate_path_segment;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::AtmError;
 use crate::types::{AgentIdentity, AgentName, ChatId, HostName, TeamName};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentAddress {
-    pub agent: AgentName,
+    agent: AgentName,
+    chat_id: Option<ChatId>,
+    team: Option<TeamName>,
+    host: Option<HostName>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AgentAddressWire {
+    agent: AgentName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chat_id: Option<ChatId>,
+    chat_id: Option<ChatId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub team: Option<TeamName>,
+    team: Option<TeamName>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub host: Option<HostName>,
+    host: Option<HostName>,
+}
+
+impl AgentAddress {
+    /// Creates an address while enforcing that a host is always team-qualified.
+    pub fn new(
+        agent: AgentName,
+        chat_id: Option<ChatId>,
+        team: Option<TeamName>,
+        host: Option<HostName>,
+    ) -> Result<Self, AtmError> {
+        if host.is_some() && team.is_none() {
+            return Err(AtmError::address_parse(
+                "a host-qualified address must also specify a team",
+            ));
+        }
+        Ok(Self {
+            agent,
+            chat_id,
+            team,
+            host,
+        })
+    }
+
+    #[must_use]
+    pub fn agent(&self) -> &AgentName {
+        &self.agent
+    }
+
+    #[must_use]
+    pub fn chat_id(&self) -> Option<&ChatId> {
+        self.chat_id.as_ref()
+    }
+
+    #[must_use]
+    pub fn team(&self) -> Option<&TeamName> {
+        self.team.as_ref()
+    }
+
+    #[must_use]
+    pub fn host(&self) -> Option<&HostName> {
+        self.host.as_ref()
+    }
+}
+
+impl Serialize for AgentAddress {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        AgentAddressWire {
+            agent: self.agent.clone(),
+            chat_id: self.chat_id.clone(),
+            team: self.team.clone(),
+            host: self.host.clone(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentAddress {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = AgentAddressWire::deserialize(deserializer)?;
+        Self::new(wire.agent, wire.chat_id, wire.team, wire.host)
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 /// Selects which participant position a chat-qualified filter applies to.
@@ -56,21 +126,11 @@ impl FromStr for AgentAddress {
                     Some((team, host)) => (team.parse()?, Some(host.parse()?)),
                     None => (destination.parse()?, None),
                 };
-                Ok(Self {
-                    agent: identity.agent,
-                    chat_id: identity.chat_id,
-                    team: Some(team),
-                    host,
-                })
+                Self::new(identity.agent, identity.chat_id, Some(team), host)
             }
             None => {
                 let identity: AgentIdentity = trimmed.parse()?;
-                Ok(Self {
-                    agent: identity.agent,
-                    chat_id: identity.chat_id,
-                    team: None,
-                    host: None,
-                })
+                Self::new(identity.agent, identity.chat_id, None, None)
             }
         }
     }
@@ -83,7 +143,7 @@ impl fmt::Display for AgentAddress {
             (Some(team), Some(host)) => write!(f, "{identity}@{team}.{host}"),
             (Some(team), None) => write!(f, "{identity}@{team}"),
             (None, None) => write!(f, "{identity}"),
-            (None, Some(_)) => Err(fmt::Error),
+            (None, Some(_)) => unreachable!("AgentAddress forbids a host without a team"),
         }
     }
 }
@@ -124,6 +184,17 @@ mod tests {
     fn rejects_invalid_team_segment() {
         assert!(AgentAddress::from_str(&format!("{TEST_SENDER}@")).is_err());
         assert!(AgentAddress::from_str(&format!("{TEST_SENDER}@atm@dev")).is_err());
+    }
+
+    #[test]
+    fn rejects_host_without_team_at_every_construction_boundary() {
+        let agent = AgentName::from_validated(TEST_SENDER);
+        let host = "peer.example.test".parse::<HostName>().expect("host");
+        assert!(AgentAddress::new(agent, None, None, Some(host)).is_err());
+        assert!(serde_json::from_str::<AgentAddress>(
+            r#"{"agent":"sender","host":"peer.example.test"}"#
+        )
+        .is_err());
     }
 
     #[test]

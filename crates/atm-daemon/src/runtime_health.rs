@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -152,7 +151,6 @@ pub(crate) struct DaemonRequestDispatcher {
     peer_wire_security: PeerWireSecurity,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -430,7 +428,6 @@ impl DaemonRequestDispatcher {
             peer_wire_security,
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -599,7 +596,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .outbound_request
             .to
             .as_ref()
-            .and_then(|address| address.host.as_ref())
+            .and_then(|address| address.host())
         else {
             let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
@@ -627,52 +624,27 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             HttpsRequestDeadline::default(),
         ) {
             Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => self
-                .reconcile_after_success(host, &peer, transport.as_ref(), true)
-                .map(|_| ()),
+            // The just-delivered immutable write is already the canonical peer
+            // action. Replaying recent outbound records here re-delivered the
+            // same-store receipt and amplified its nudge. Reconciliation is
+            // explicit through the PeerSync resource below.
+            Ok(_) => Ok(()),
             Err(error) => Err(error),
         }
     }
 }
 
 impl DaemonRequestDispatcher {
-    fn reconcile_after_success(
+    fn reconcile_peer(
         &self,
         peer_host: &atm_core::types::HostName,
         peer: &atm_storage::TrustedPeer,
         transport: &dyn HttpsMessageTransport,
-        apply_cooldown: bool,
     ) -> Result<u16, AtmError> {
         let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
         policy.validate()?;
         if policy.max_message_age.is_zero() {
             return Ok(0);
-        }
-        if apply_cooldown {
-            let now = std::time::Instant::now();
-            let mut cooldown = self
-                .peer_sync_cooldown
-                .lock()
-                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
-            if cooldown
-                .get(peer_host)
-                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
-            {
-                return Ok(0);
-            }
-            // This is only a short-lived rate limiter, never delivery state.
-            // Evicting the oldest entry bounds memory without affecting message data.
-            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
-            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
-                && !cooldown.contains_key(peer_host)
-                && let Some(oldest) = cooldown
-                    .iter()
-                    .min_by_key(|(_, instant)| **instant)
-                    .map(|(host, _)| host.clone())
-            {
-                cooldown.remove(&oldest);
-            }
-            cooldown.insert(peer_host.clone(), now);
         }
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
             chrono::Utc::now()
@@ -720,44 +692,11 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        let delivered =
-            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        let delivered = self.reconcile_peer(&request.peer, &peer, transport.as_ref())?;
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reconcile_after_success_for_test(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
-        self.reconcile_after_success(peer_host, peer, transport, true)
-            .map(|_| ())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn seed_peer_sync_cooldown_for_test(
-        &self,
-        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
-    ) {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .extend(entries);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn peer_sync_cooldown_for_test(
-        &self,
-    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .clone()
     }
 }
 
@@ -1143,7 +1082,6 @@ impl DaemonRequestDispatcher {
             peer_wire_security: PeerWireSecurity::MutualTls,
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }

@@ -24,6 +24,37 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 pub const HTTP_API_VERSION: u16 = 1;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+const MESSAGES_PATH: &str = "/v1/atm/messages";
+const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
+const READ_PATH: &str = "/v1/atm/messages/read";
+const DOCTOR_PATH: &str = "/v1/atm/doctor";
+const PEER_SYNC_PREFIX: &str = "/v1/atm/peers/";
+const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
+const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
+
+/// One registered HTTP route, published from the same constants as request encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HttpRoute {
+    pub method: &'static str,
+    pub path_template: &'static str,
+}
+
+const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[
+    HttpRoute { method: "GET", path_template: MESSAGES_PATH },
+    HttpRoute { method: "POST", path_template: MESSAGES_PATH },
+    HttpRoute { method: "DELETE", path_template: MESSAGES_PATH },
+    HttpRoute { method: "POST", path_template: INSPECT_PATH },
+    HttpRoute { method: "POST", path_template: READ_PATH },
+    HttpRoute { method: "GET", path_template: DOCTOR_PATH },
+    HttpRoute { method: "POST", path_template: "/v1/atm/peers/{peer}/sync" },
+    HttpRoute { method: "POST", path_template: COMPATIBILITY_PATH },
+    HttpRoute { method: "POST", path_template: HEARTBEAT_PATH },
+];
+
+/// Registered HTTP route inventory for documentation conformance tests.
+pub fn http_route_surface() -> &'static [HttpRoute] {
+    HTTP_ROUTE_SURFACE
+}
 
 type EncodedHttpResponse = (u16, &'static str, Vec<u8>, Option<String>);
 
@@ -45,17 +76,17 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
         // Send and acknowledgement are the same canonical write resource.
         // `acknowledges_message_id` is payload data, never an endpoint choice.
-        RequestEnvelope::Write(_) => ("POST", "/v1/atm/messages".to_string()),
-        RequestEnvelope::List(_) => ("GET", "/v1/atm/messages".to_string()),
-        RequestEnvelope::Peek(_) => ("POST", "/v1/atm/messages/inspect".to_string()),
-        RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
-        RequestEnvelope::Clear(_) => ("DELETE", "/v1/atm/messages".to_string()),
-        RequestEnvelope::Doctor(_) => ("GET", "/v1/atm/doctor".to_string()),
+        RequestEnvelope::Write(_) => ("POST", MESSAGES_PATH.to_string()),
+        RequestEnvelope::List(_) => ("GET", MESSAGES_PATH.to_string()),
+        RequestEnvelope::Peek(_) => ("POST", INSPECT_PATH.to_string()),
+        RequestEnvelope::Receive(_) => ("POST", READ_PATH.to_string()),
+        RequestEnvelope::Clear(_) => ("DELETE", MESSAGES_PATH.to_string()),
+        RequestEnvelope::Doctor(_) => ("GET", DOCTOR_PATH.to_string()),
         RequestEnvelope::PeerSync(request) => {
-            ("POST", format!("/v1/atm/peers/{}/sync", request.peer))
+            ("POST", format!("{PEER_SYNC_PREFIX}{}/sync", request.peer))
         }
-        RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
-        RequestEnvelope::Heartbeat(_) => ("POST", "/v1/atm/heartbeat".to_string()),
+        RequestEnvelope::CompatibilityPreflight(_) => ("POST", COMPATIBILITY_PATH.to_string()),
+        RequestEnvelope::Heartbeat(_) => ("POST", HEARTBEAT_PATH.to_string()),
     }
 }
 
