@@ -1,0 +1,120 @@
+"""Focused render and Turtle-parse tests for the canonical triage record."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+TEMPLATE = ".claude/skills/triaging-findings/triage-record.ttl.j2"
+
+
+def _vars() -> dict:
+    return {
+        "finding_id": "FTQ-001",
+        "title": "Process-global shutdown state in tests",
+        "description": "Global state leaks across test cases.",
+        "phase_id": "phase-R",
+        "triage_mode": "initial_pass",
+        "category": "FTQ",
+        "severity": "important",
+        "repeatable": True,
+        "sweep_scope": "crate",
+        "status": "open",
+        "dispatch_ready": True,
+        "triaged_at": "2026-07-25T16:30:00Z",
+        "found_in": "AICH-S7",
+        "found_at": "2026-07-25T16:26:33Z",
+        # sc-compose var-files intentionally accept scalar arrays only. The
+        # parallel arrays below are joined by index in the Turtle template.
+        "occurrences": ["R17-1"],
+        "occurrence_files": ["crates/atm-daemon/src/tests.rs"],
+        "occurrence_lines": ["28"],
+        "occurrence_snippets": ["static DISPATCHER: OnceLock<...>"],
+        "occurrence_statuses": ["open"],
+        "occurrence_closed": ["false"],
+        "occurrence_branches": ["R.17"],
+        "occurrence_head_shas": ["9421e9f"],
+        "occurrence_worktree_ids": ["R17/9421e9f"],
+        "worktrees": ["R17/9421e9f"],
+        "worktree_branches": ["R.17"],
+        "worktree_paths": ["/abs/worktree-r17"],
+        "worktree_head_shas": ["9421e9f"],
+        "worktree_order_indices": ["17"],
+    }
+
+
+def _render(tmp_path: Path, variables: dict) -> subprocess.CompletedProcess[str]:
+    vars_path = tmp_path / "vars.json"
+    output_path = tmp_path / "FTQ-001.ttl"
+    vars_path.write_text(json.dumps(variables), encoding="utf-8")
+    return subprocess.run(
+        [
+            "sc-compose",
+            "render",
+            "--root",
+            str(REPO_ROOT),
+            "--file",
+            TEMPLATE,
+            "--var-file",
+            str(vars_path),
+            "--output",
+            str(output_path),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "NO_COLOR": "1"},
+    )
+
+
+def _parse_turtle(path: Path, tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    store = tmp_path / "oxigraph"
+    return subprocess.run(
+        [
+            "oxigraph",
+            "load",
+            "--location",
+            str(store),
+            "--file",
+            str(path),
+            "--format",
+            "ttl",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+
+def test_render_includes_found_provenance_and_parses_as_turtle(tmp_path: Path) -> None:
+    result = _render(tmp_path, _vars())
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    output = tmp_path / "FTQ-001.ttl"
+    rendered = output.read_text(encoding="utf-8")
+    assert "triage:foundIn triage:AICH-S7" in rendered
+    assert 'triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime' in rendered
+    assert "triage:hasOccurrence" in rendered
+    assert "a triage:WorktreeSnapshot" in rendered
+
+    parsed = _parse_turtle(output, tmp_path)
+    assert parsed.returncode == 0, parsed.stderr or parsed.stdout
+
+
+@pytest.mark.parametrize("missing", ["found_in", "found_at"])
+def test_render_rejects_missing_provenance_variable(
+    tmp_path: Path, missing: str
+) -> None:
+    variables = _vars()
+    del variables[missing]
+
+    result = _render(tmp_path, variables)
+
+    assert result.returncode != 0
+    diagnostic = f"{result.stdout}\n{result.stderr}".lower()
+    assert missing in diagnostic

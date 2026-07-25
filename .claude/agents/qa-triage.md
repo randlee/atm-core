@@ -1,6 +1,6 @@
 ---
 name: qa-triage
-version: 1.1.0
+version: 1.2.0
 description: Pre-dispatch QA triage agent. Correlates one finding across ordered worktrees, records canonical Turtle facts under .triage/<phase_id>/findings/, identifies the highest open branch, performs repeatable-pattern sweeps on that branch, and returns fenced JSON for later aggregation.
 model: haiku
 ---
@@ -34,6 +34,8 @@ with free-form input.
   "integration_branch": "integrate/phase-R",
   "integration_worktree_path": "/abs/integrate-phase-R",
   "finding_id": "FTQ-001",
+  "found_in": "AICH-S7",
+  "found_at": "2026-07-25T16:26:33Z",
   "title": "Process-global shutdown state in tests",
   "description": "Global OnceLock / static shutdown state leaks across test cases.",
   "category": "FTQ",
@@ -75,9 +77,13 @@ Input rules:
 - `triage_mode` is required. Allowed values: `initial_pass`, `followup_pass`.
 - `phase_id` is required.
 - `integration_branch` and `integration_worktree_path` are required.
-- `finding_id`, `title`, `description`, `category`, `severity`, `pattern`,
-  `worktrees`, `integration_branch`, `integration_worktree_path`, and
-  `triage_root` are required.
+- `finding_id`, `title`, `description`, `phase_id`, `triage_mode`, `category`,
+  `severity`, `pattern`, `worktrees`, `integration_branch`,
+  `integration_worktree_path`, and `triage_root` are required.
+- `found_in` is required and must be the declared sprint local id (for example,
+  `AICH-S7`) that will render as `triage:AICH-S7`.
+- `found_at` is required and must be the authoritative QA discovery/result time
+  in UTC RFC3339 form ending in `Z` (for example, `2026-07-25T16:26:33Z`).
 - `worktrees` must already be listed in the desired promotion order. Do not
   invent or infer branch priority from branch names.
 - `repeatable` is required.
@@ -153,9 +159,11 @@ Mode rules:
    - `propagated`: fixed on all branches where it previously existed
    - `merge_forward_needed`: fixed on some higher branch but still open below it
    - `regressed`: fixed before, open again now
-11. Write the canonical Turtle record:
-   - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
-12. Validate the Turtle output:
+11. Render the canonical Turtle record from
+    `.claude/skills/triaging-findings/triage-record.ttl.j2` using the vars
+    contract below. Do not hand-write a replacement record:
+    - `<triage_root>/<phase_id>/findings/<finding_id>.ttl`
+12. Validate the rendered Turtle output:
    - use a temporary Oxigraph store and `oxigraph load` against the TTL file
    - fail if the Turtle cannot be parsed
 13. Return enough information for the team-lead batch commit step:
@@ -177,6 +185,8 @@ Primary node types:
 Required edges:
 - `triage:Finding -> triage:hasOccurrence -> triage:Occurrence`
 - `triage:Occurrence -> triage:occursIn -> triage:WorktreeSnapshot`
+- `triage:Finding -> triage:foundIn -> triage:Sprint`
+- `triage:Finding -> triage:foundAt -> xsd:dateTime` (UTC)
 
 Recommended derived edges:
 - `triage:Finding -> triage:openOn -> triage:WorktreeSnapshot`
@@ -196,6 +206,8 @@ Minimum Finding properties:
 - `triage:status`
 - `triage:dispatchReady`
 - `triage:triagedAt`
+- `triage:foundIn`
+- `triage:foundAt` (UTC `xsd:dateTime`)
 
 Minimum Occurrence properties:
 - `triage:file`
@@ -219,44 +231,65 @@ Use these prefixes:
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 ```
 
-Record shape example:
+Canonical record creation is a template render followed by an RDF parse check.
+The template's frontmatter declares all required scalar variables. Because
+`sc-compose` var-files accept arrays of scalars (not nested objects), occurrence
+and worktree fields are parallel arrays joined by index.
 
-```turtle
-@prefix triage: <urn:atm:triage:> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+```bash
+cat > /tmp/triage-record-vars.json <<'JSON'
+{
+  "finding_id": "FTQ-001",
+  "title": "Process-global shutdown state in tests",
+  "description": "Global OnceLock / static shutdown state leaks across test cases.",
+  "phase_id": "phase-R",
+  "triage_mode": "followup_pass",
+  "category": "FTQ",
+  "severity": "important",
+  "repeatable": true,
+  "sweep_scope": "crate",
+  "status": "fixed_partial",
+  "dispatch_ready": true,
+  "triaged_at": "2026-07-25T16:30:00Z",
+  "found_in": "AICH-S7",
+  "found_at": "2026-07-25T16:26:33Z",
+  "occurrences": ["R17-1"],
+  "occurrence_files": ["crates/atm-daemon/src/tests.rs"],
+  "occurrence_lines": ["28"],
+  "occurrence_snippets": ["static DISPATCHER: OnceLock<...>"],
+  "occurrence_statuses": ["open"],
+  "occurrence_closed": ["false"],
+  "occurrence_branches": ["R.17"],
+  "occurrence_head_shas": ["9421e9f"],
+  "occurrence_worktree_ids": ["R17/9421e9f"],
+  "worktrees": ["R17/9421e9f"],
+  "worktree_branches": ["R.17"],
+  "worktree_paths": ["/abs/worktree-r17"],
+  "worktree_head_shas": ["9421e9f"],
+  "worktree_order_indices": ["17"]
+}
+JSON
 
-<urn:atm:triage:finding/FTQ-001>
-  a triage:Finding ;
-  triage:findingId "FTQ-001" ;
-  triage:title "Process-global shutdown state in tests" ;
-  triage:phaseId "phase-R" ;
-  triage:triageMode "followup_pass" ;
-  triage:repeatable true ;
-  triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/R17/1> ;
-  triage:openOn <urn:atm:triage:worktree/R17/9421e9f> ;
-  triage:fixedOn <urn:atm:triage:worktree/R16/c7b4455> ;
-  triage:promoteTo <urn:atm:triage:worktree/R17/9421e9f> .
+TRIAGE_ROOT=/abs/integrate-phase-R/.triage
+PHASE_ID=phase-R
+FINDING_ID=FTQ-001
+OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
+mkdir -p "$(dirname "$OUTPUT")"
+sc-compose render \
+  --root . \
+  --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
+  --var-file /tmp/triage-record-vars.json \
+  --output "$OUTPUT"
 
-<urn:atm:triage:occurrence/FTQ-001/R17/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 28 ;
-  triage:snippet "static DISPATCHER: OnceLock<...>" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "R.17" ;
-  triage:occursIn <urn:atm:triage:worktree/R17/9421e9f> .
-
-<urn:atm:triage:worktree/R17/9421e9f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "R.17" ;
-  triage:path "/abs/worktree-r17" ;
-  triage:headSha "9421e9f" ;
-  triage:orderIndex 17 .
+STORE=$(mktemp -d)
+trap 'rm -rf "$STORE"' EXIT
+oxigraph load --location "$STORE" --file "$OUTPUT" --format ttl
 ```
+
+The vars file must provide `found_in` as a declared sprint local id and
+`found_at` as the authoritative QA result/discovery timestamp in UTC ending in
+`Z`. The rendered output must retain both `triage:foundIn` and
+`triage:foundAt` before the record is committed.
 
 ## Output Format
 

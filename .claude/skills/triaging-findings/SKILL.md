@@ -1,6 +1,6 @@
 ---
 name: triaging-findings
-version: 1.1.0
+version: 1.2.0
 description: Orchestrate pre-dispatch QA finding triage as team-lead. Launch one qa-triage agent per finding, collect phase-scoped Turtle records, aggregate by promoted branch, and only then dispatch branch-scoped fix assignments to arch-ctm.
 depends_on:
   codex-orchestration: 0.x
@@ -24,7 +24,8 @@ Before using this workflow:
 2. The target phase has an explicit `phase_id` such as `phase-R`.
 3. The ordered worktree list is known in promotion order.
 4. QA findings exist in a structured form with stable finding ids.
-5. `sc-compose` is installed for rendering assignment templates.
+5. `sc-compose` and `oxigraph` are installed for rendering and parsing
+   canonical Turtle records.
 
 ## Ownership Model
 
@@ -47,10 +48,19 @@ For each triage batch, assemble:
   - `finding_id`
   - `title`
   - `description`
+  - `phase_id`
+  - `triage_mode`
+  - `category`
   - `severity`
   - `pattern`
   - `repeatable`
   - `sweep_scope`
+  - `status`
+  - `dispatch_ready`
+  - `triaged_at`
+  - `found_in` (declared sprint local id, such as `AICH-S7`)
+  - `found_at` (authoritative QA discovery/result timestamp in UTC ending in
+    `Z`)
 - triage mode:
   - `initial_pass`
   - `followup_pass`
@@ -62,6 +72,43 @@ Required ownership rule:
 - `triage_root` must live under `integration_worktree_path`
 - the phase integration worktree is the canonical source of truth for triage
   artifacts
+
+## Canonical Turtle rendering
+
+Every finding record must be rendered from
+`.claude/skills/triaging-findings/triage-record.ttl.j2`; do not hand-write a
+parallel Turtle shape. Its frontmatter declares the required variables above,
+including `found_in` and `found_at`. The occurrence and worktree inputs are
+parallel scalar arrays (`occurrences` with `occurrence_files`,
+`occurrence_lines`, `occurrence_snippets`, `occurrence_statuses`,
+`occurrence_closed`, `occurrence_branches`, `occurrence_head_shas`, and
+`occurrence_worktree_ids`; likewise `worktrees` with
+`worktree_branches`, `worktree_paths`, `worktree_head_shas`, and
+`worktree_order_indices`). Keep each array aligned by index.
+
+Render to the canonical path and parse it before committing the batch:
+
+```bash
+TRIAGE_ROOT=/abs/integrate-phase-R/.triage
+PHASE_ID=phase-R
+FINDING_ID=FTQ-001
+OUTPUT="$TRIAGE_ROOT/$PHASE_ID/findings/$FINDING_ID.ttl"
+mkdir -p "$(dirname "$OUTPUT")"
+sc-compose render \
+  --root . \
+  --file .claude/skills/triaging-findings/triage-record.ttl.j2 \
+  --var-file /tmp/triage-record-vars.json \
+  --output "$OUTPUT"
+STORE=$(mktemp -d)
+trap 'rm -rf "$STORE"' EXIT
+oxigraph load --location "$STORE" --file "$OUTPUT" --format ttl
+```
+
+The rendered Finding must contain `triage:foundIn triage:<declared-sprint>` and
+`triage:foundAt "<UTC timestamp ending in Z>"^^xsd:dateTime`. Missing required
+vars must fail the render through the template frontmatter contract; malformed
+Turtle must fail the Oxigraph parse. Do not add `--strict` to this render until
+`sc-compose` supports loop-local names in strict token validation.
 
 ## Triage Modes
 
