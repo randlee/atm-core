@@ -16,6 +16,27 @@ use interprocess::local_socket::traits::Stream as _;
 use std::net::TcpStream as LocalSocketStream;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+
+#[cfg(test)]
+pub(crate) fn test_ack_write_request(
+    home_dir: std::path::PathBuf,
+    current_dir: std::path::PathBuf,
+    caller_identity: atm_core::types::AgentName,
+    caller_team: atm_core::types::TeamName,
+    message_id: atm_core::schema::AtmMessageId,
+    reply_body: &str,
+) -> atm_core::send::WriteRequest {
+    atm_core::ack::AckRequest {
+        home_dir,
+        current_dir,
+        caller_identity,
+        caller_chat_id: None,
+        caller_team,
+        message_id,
+        reply_body: reply_body.to_string(),
+    }
+    .into_write_request()
+}
 #[cfg(not(windows))]
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);

@@ -59,23 +59,20 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         other => panic!("expected inbound send response, got {other:?}"),
     };
 
-    let ack = AckRequest {
-        home_dir: atm_home,
-        current_dir: workspace_dir,
-        caller_identity: "local-recipient".parse().expect("recipient"),
-        caller_chat_id: None,
-        caller_team: TEST_TEAM.parse().expect("team"),
-        message_id: source_message_id,
-        reply_body: "acknowledged".to_string(),
-    };
+    let ack = crate::test_support::test_ack_write_request(
+        atm_home,
+        workspace_dir,
+        "local-recipient".parse().expect("recipient"),
+        TEST_TEAM.parse().expect("team"),
+        source_message_id,
+        "acknowledged",
+    );
     let failing = Arc::new(FailingHttpsDelivery::default());
     dispatcher
         .install_https_transport(failing.clone())
         .expect("install failing transport");
     let error = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            ack.clone().into_write_request(),
-        )))
+        .dispatch(RequestEnvelope::Write(Box::new(ack.clone())))
         .expect_err("failed remote acknowledgement must return the transport error");
     assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
@@ -93,7 +90,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         .install_https_transport(succeeding.clone())
         .expect("replace test transport");
     let retry = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(ack.into_write_request())))
+        .dispatch(RequestEnvelope::Write(Box::new(ack)))
         .expect("source remains pending after failed peer acknowledgement");
     assert!(matches!(
         retry,
@@ -212,17 +209,31 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     assert_eq!(
         delivered.len(),
         3,
-        "two ordinary writes plus exactly one bounded replay are delivered"
+        "two ordinary writes plus exactly one bounded reconciliation delivery are delivered"
     );
     assert_eq!(
         delivered[0].origin_message_id, delivered[2].origin_message_id,
         "reconciliation reuses the canonical immutable write and its original ULID"
     );
+    drop(delivered);
+
+    let cooldown = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer }))
+        .expect("immediate duplicate sync is rate limited");
+    assert!(matches!(
+        cooldown,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome { delivered: 0, .. })
+    ));
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        3,
+        "the cooldown prevents another peer delivery pass"
+    );
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
+fn successful_peer_write_does_not_start_automatic_reconciliation() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -251,6 +262,15 @@ fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
     peer_store
         .save_trusted_peer(&trusted_peer)
         .expect("save trusted peer");
+    peer_store
+        .save_peer_sync_policy(
+            &peer,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: NonZeroU16::new(100).expect("non-zero cap"),
+            },
+        )
+        .expect("enable explicit peer sync");
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
@@ -275,61 +295,9 @@ fn automatic_peer_sync_cooldown_is_bounded_and_expires() {
             .expect("remote write request"),
         )))
         .expect("initial peer write");
-    peer_store
-        .save_peer_sync_policy(
-            &peer,
-            PeerSyncPolicy {
-                max_message_age: Duration::from_secs(60),
-                max_batch_messages: NonZeroU16::new(100).expect("non-zero cap"),
-            },
-        )
-        .expect("enable peer sync");
-
-    dispatcher.seed_peer_sync_cooldown_for_test((0_u64..256).map(|index| {
-        let host = format!("peer-{index}.example.test")
-            .parse()
-            .expect("bounded cooldown host");
-        (
-            host,
-            std::time::Instant::now() - Duration::from_secs(index + 1),
-        )
-    }));
-
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("first automatic reconciliation");
     assert_eq!(
         transport.delivered.lock().expect("deliveries").len(),
-        2,
-        "one original write plus one automatic reconciliation delivery"
-    );
-    {
-        let cooldown = dispatcher.peer_sync_cooldown_for_test();
-        assert_eq!(cooldown.len(), 256, "cooldown map remains hard-bounded");
-        assert!(cooldown.contains_key(&peer), "new peer is retained");
-        assert!(
-            !cooldown.contains_key(&"peer-255.example.test".parse().expect("oldest host")),
-            "oldest cooldown entry is evicted"
-        );
-    }
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("cooldown skips duplicate automatic scan");
-    assert_eq!(
-        transport.delivered.lock().expect("deliveries").len(),
-        2,
-        "60-second cooldown suppresses another automatic delivery"
-    );
-    dispatcher.seed_peer_sync_cooldown_for_test([(
-        peer.clone(),
-        std::time::Instant::now() - Duration::from_secs(61),
-    )]);
-    dispatcher
-        .reconcile_after_success_for_test(&peer, &trusted_peer, transport.as_ref())
-        .expect("expired cooldown permits another scan");
-    assert_eq!(
-        transport.delivered.lock().expect("deliveries").len(),
-        3,
-        "expired cooldown permits exactly one new bounded delivery"
+        1,
+        "a successful ordinary peer write never starts a second delivery pass"
     );
 }

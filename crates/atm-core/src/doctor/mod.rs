@@ -24,8 +24,8 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PostSendDoctorReport,
-    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerWireSecurityStatus,
+    PostSendDoctorReport, PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
     RecipientDeliveryPathReport,
 };
 
@@ -750,7 +750,7 @@ mod tests {
                     .parse::<CertificateFingerprint>()
                     .expect("fingerprint"),
                 enabled: true,
-                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
             }])
         }
 

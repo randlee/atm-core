@@ -353,7 +353,7 @@ impl DeliveryPolicyCoordinator {
         recipient: &crate::send::ResolvedRecipient,
         authenticated_source_host: bool,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        if address.host.is_some() && !authenticated_source_host {
+        if address.host().is_some() && !authenticated_source_host {
             return Ok(DeliveryRecipientSnapshot::remote(
                 recipient.agent.clone(),
                 recipient.team.clone(),

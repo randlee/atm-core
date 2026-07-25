@@ -46,26 +46,27 @@ pub struct PyAgentAddress {
 
 impl PyAgentAddress {
     fn to_typed(&self) -> PyResult<AgentAddress> {
-        Ok(AgentAddress {
-            agent: self.agent.parse::<AgentName>().map_err(atm_error)?,
-            chat_id: self
-                .chat_id
+        AgentAddress::new(
+            self.agent.parse::<AgentName>().map_err(atm_error)?,
+            self.chat_id
                 .as_deref()
                 .map(str::parse::<ChatId>)
                 .transpose()
                 .map_err(atm_error)?,
-            team: Some(self.team.parse::<TeamName>().map_err(atm_error)?),
-            host: None,
-        })
+            Some(self.team.parse::<TeamName>().map_err(atm_error)?),
+            None,
+        )
+        .map_err(atm_error)
     }
 
     fn from_typed(address: AgentAddress) -> PyResult<Self> {
         let team = address
-            .team
+            .team()
+            .cloned()
             .ok_or_else(|| PyValueError::new_err("ATM address requires a team"))?;
         Ok(Self {
-            agent: address.agent.to_string(),
-            chat_id: address.chat_id.map(|chat_id| chat_id.to_string()),
+            agent: address.agent().to_string(),
+            chat_id: address.chat_id().map(ToString::to_string),
             team: team.to_string(),
         })
     }
@@ -143,12 +144,15 @@ impl PyMessage {
         outcome
             .message
             .map(|message| {
-                PyAgentAddress::from_typed(AgentAddress {
-                    agent: message.envelope.from,
-                    chat_id: message.envelope.source_chat_id,
-                    team: message.envelope.source_team,
-                    host: None,
-                })
+                PyAgentAddress::from_typed(
+                    AgentAddress::new(
+                        message.envelope.from,
+                        message.envelope.source_chat_id,
+                        message.envelope.source_team,
+                        None,
+                    )
+                    .map_err(atm_error)?,
+                )
                 .map(|source| Self {
                     message_id: message.envelope.message_id.map(|id| id.to_string()),
                     source,
@@ -302,9 +306,9 @@ impl PyGraftSession {
         let request = SendRequest::new(
             home_dir,
             current_dir,
-            self.caller.agent.clone(),
+            self.caller.agent().clone(),
             &to.to_typed()?.to_string(),
-            self.caller.team.clone().expect("validated caller team"),
+            self.caller.team().cloned().expect("validated caller team"),
             SendMessageSource::Inline(body),
             None,
             false,
@@ -312,7 +316,7 @@ impl PyGraftSession {
             false,
         )
         .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id.clone());
+        .with_caller_chat_id(self.caller.chat_id().cloned());
         self.client()?.send_message(request).map_err(atm_error)?;
         Ok(())
     }
@@ -322,9 +326,9 @@ impl PyGraftSession {
         let query = ReadQuery::new(
             home_dir,
             current_dir,
-            self.caller.agent.clone(),
+            self.caller.agent().clone(),
             None,
-            self.caller.team.clone().expect("validated caller team"),
+            self.caller.team().cloned().expect("validated caller team"),
             ReadSelection::All,
             false,
             true,
@@ -336,7 +340,7 @@ impl PyGraftSession {
             None,
         )
         .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id.clone());
+        .with_caller_chat_id(self.caller.chat_id().cloned());
         PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
     }
 
@@ -345,9 +349,9 @@ impl PyGraftSession {
         let request = AckRequest {
             home_dir,
             current_dir,
-            caller_identity: self.caller.agent.clone(),
-            caller_chat_id: self.caller.chat_id.clone(),
-            caller_team: self.caller.team.clone().expect("validated caller team"),
+            caller_identity: self.caller.agent().clone(),
+            caller_chat_id: self.caller.chat_id().cloned(),
+            caller_team: self.caller.team().cloned().expect("validated caller team"),
             message_id: message_id
                 .parse()
                 .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?,
