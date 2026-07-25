@@ -109,6 +109,24 @@ def test_render_includes_found_provenance_and_parses_as_turtle(tmp_path: Path) -
     assert parsed.returncode == 0, parsed.stderr or parsed.stdout
 
 
+def test_python_binding_renders_canonical_template() -> None:
+    """The pip/maturin binding must render the same template tokens as the CLI."""
+    try:
+        import importlib.metadata
+        import sc_compose
+    except ImportError as exc:  # pragma: no cover - dependency preflight owns setup
+        pytest.fail(
+            "install sc-compose>=1.2.0 in the invoking Python before running "
+            f"binding tests: {exc}"
+        )
+    assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= (1, 2, 0)
+    rendered = sc_compose.render_template(
+        (REPO_ROOT / TEMPLATE).read_text(encoding="utf-8"), _vars()
+    )
+    assert "triage:foundIn triage:AICH-S7" in rendered
+    assert 'triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime' in rendered
+
+
 @pytest.mark.parametrize("missing", ["found_in", "found_at"])
 def test_render_rejects_missing_provenance_variable(
     tmp_path: Path, missing: str

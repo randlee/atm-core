@@ -51,7 +51,7 @@ from pathlib import Path
 
 try:
     from rdflib import Graph, URIRef, Namespace
-    from rdflib.namespace import RDF, XSD
+    from rdflib.namespace import RDF
 except ImportError:
     print("ERROR: rdflib not installed. Run: pip3 install rdflib", file=sys.stderr)
     sys.exit(1)

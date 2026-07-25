@@ -1,7 +1,18 @@
 ---
 name: triaging-findings
-version: 1.2.0
+version: 1.3.0
 description: Orchestrate pre-dispatch QA finding triage as team-lead. Launch one qa-triage agent per finding, collect phase-scoped Turtle records, aggregate by promoted branch, and only then dispatch branch-scoped fix assignments to arch-ctm.
+requires:
+  cli:
+    - name: sc-compose
+      minimum_version: 1.2.0
+    - name: oxigraph
+    - name: rg
+  python:
+    - package: rdflib
+    - package: sc-compose
+      import_name: sc_compose
+      minimum_version: 1.2.0
 depends_on:
   codex-orchestration: 0.x
   quality-management-gh: 1.x
@@ -14,6 +25,25 @@ Audience: `team-lead` only.
 Use this skill when QA has produced findings and you need to correlate them
 across worktrees before any fix work is sent to `arch-ctm`.
 
+## Step 1 — Verify CLI dependencies
+
+Run this preflight before reading inputs, delegating agents, or rendering a
+record:
+
+```bash
+python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
+```
+
+The preflight requires the `sc-compose` CLI and Python `sc_compose` binding at
+`>= 1.2.0`, plus `oxigraph`, `rg`, and Python `rdflib`. It checks PATH plus
+common Homebrew/Cargo/user-install locations and returns a structured result.
+A non-zero result is a hard stop; read
+`references/installation-and-troubleshooting.md`, fix the environment, and
+rerun the preflight. Do not silently continue with a missing or old CLI.
+
+The installation reference is intentionally separate from this entry point so
+it is loaded only when setup or troubleshooting is needed.
+
 For phase-end learning and process hardening, also read:
 - `references/post-mortem.md`
 
@@ -24,8 +54,8 @@ Before using this workflow:
 2. The target phase has an explicit `phase_id` such as `phase-R`.
 3. The ordered worktree list is known in promotion order.
 4. QA findings exist in a structured form with stable finding ids.
-5. `sc-compose` and `oxigraph` are installed for rendering and parsing
-   canonical Turtle records.
+5. The Step 1 preflight passes: `sc-compose >= 1.2.0` CLI and Python binding,
+   `oxigraph`, `rg`, and Python `rdflib` are available.
 
 ## Ownership Model
 

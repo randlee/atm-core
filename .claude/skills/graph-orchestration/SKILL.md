@@ -1,8 +1,22 @@
 ---
 name: graph-orchestration
-version: 0.4.0
+version: 0.5.0
 description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic query loop — cursor → triage-findings check → dispatch → await Completion → re-query. No agent ever decides phase, cursor position, or done-ness; queries answer all of it. Derived from codex-orchestration; replaces static sprint-doc assignments with a live RDF event log. Adds Assignment events (collision prevention), Completion invalidation (blocking post-Completion finding snaps cursor back), and CLEANUP phase (non-blocking findings after all sprints complete).
 repo: atm-core
+requires:
+  cli:
+    - name: sc-compose
+      minimum_version: 1.2.0
+    - name: jq
+  python:
+    - package: rdflib
+      purpose: RDF/Turtle parsing and SPARQL queries
+    - package: sc-compose
+      import_name: sc_compose
+      minimum_version: 1.2.0
+      purpose: Python/maturin rendering integrations
+  test:
+    - package: pytest
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -21,6 +35,31 @@ depends_on:
 Mechanical phase orchestration backed by an append-only RDF event log.
 Every orchestration decision is a SPARQL query result. Agents never decide
 phase, cursor position, or whether a sprint is done.
+
+## Step 1 — Verify dependencies
+
+Run the dependency preflight as the first executable step, before discovering
+the phase, invoking an agent, reading the cursor, or appending a TTL event:
+
+```bash
+.claude/skills/graph-orchestration/scripts/preflight
+```
+
+It checks the `sc-compose >= 1.2.0` CLI, the matching `sc_compose >= 1.2.0`
+Python/maturin binding, `jq`, and a `python3` interpreter that can import
+`rdflib`. The command always emits a structured JSON result and exits `0`
+only when all runtime checks pass; exit `2` is an operational dependency error
+and must stop the workflow. For test work, include pytest:
+
+```bash
+.claude/skills/graph-orchestration/scripts/preflight --for-tests
+```
+
+If the check fails, read
+`references/installation-and-troubleshooting.md`, correct the environment,
+and rerun preflight. Do not proceed with a degraded or guessed dependency.
+The reference is intentionally separate so the normal skill entry point stays
+small (progressive disclosure).
 
 ## Defaults
 
@@ -372,6 +411,7 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 | Script | Purpose |
 |---|---|
 | `next-dev-task` | Entry point: cursor resolution, returns JSON |
+| `preflight` | First-step dependency gate; requires CLI + Python binding `sc-compose >= 1.2.0`, `jq`, and `python3` + `rdflib` |
 | `query_runner.py` | Python SPARQL runner (rdflib) |
 | `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |
 | `open-findings-sprint.sparql` | Returns open non-blocking findings across the phase (used for CLEANUP detection); parameter: `$PHASE` |
@@ -381,7 +421,8 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 
 Usage:
 ```bash
-# From repo root — make executable first: chmod +x .claude/skills/graph-orchestration/scripts/next-dev-task
+# From repo root — dependency gate must pass before the cursor is queried
+.claude/skills/graph-orchestration/scripts/preflight
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F
 ```
 

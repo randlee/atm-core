@@ -10,10 +10,8 @@ import json
 import subprocess
 import sys
 
-import pytest
 from pathlib import Path
 from rdflib import Graph, URIRef, Namespace
-from rdflib.namespace import XSD
 
 SCRIPTS = Path(__file__).parent
 TRIAGE = "urn:atm:triage:"
@@ -688,5 +686,4 @@ triage:c1 a triage:Completion ; triage:ofSprint triage:S1 ;
 
 
 if __name__ == "__main__":
-    import subprocess, sys
     sys.exit(subprocess.call(["python3", "-m", "pytest", __file__, "-v"]))

@@ -25,10 +25,11 @@ PHASE="$1"
 TTL_DIR="$2"
 ASSIGNEE="$3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
 
-if ! python3 -c "import rdflib" 2>/dev/null; then
+if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
   echo >&2 "ERROR: rdflib not found. Install with: pip3 install rdflib"
   exit 1
 fi
 
-exec python3 "$SCRIPT_DIR/check_assignee.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" "$ASSIGNEE"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/check_assignee.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" "$ASSIGNEE"
