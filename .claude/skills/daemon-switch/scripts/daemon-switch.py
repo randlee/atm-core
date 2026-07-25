@@ -145,20 +145,19 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
 
 
-def daemon_still_reachable(cli: Path) -> bool:
-    return "error" not in doctor(cli)
-
-
-def repair_macos_orphan() -> None:
-    """Terminate only a verified stale daemon after its LaunchAgent is unloaded."""
+def macos_socket_owner_pids() -> list[int]:
     socket_path = Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
     result = run(["lsof", "-t", str(socket_path)], timeout=5.0)
-    raw_pids = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
-    if len(raw_pids) != 1:
+    return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+
+
+def repair_macos_orphan(pids: list[int]) -> None:
+    """Terminate only a verified stale daemon after its LaunchAgent is unloaded."""
+    if len(pids) != 1:
         raise SwitchError(
             "managed stop left an ATM socket owner, but it is not exactly one repairable daemon PID"
         )
-    pid = int(raw_pids[0])
+    pid = pids[0]
     command = run(["ps", "-p", str(pid), "-o", "command="], timeout=5.0).stdout.strip()
     if "atm-daemon" not in command:
         raise SwitchError(f"refusing to terminate non-ATM socket owner pid {pid}: {command}")
@@ -172,17 +171,20 @@ def repair_macos_orphan() -> None:
     raise SwitchError(f"verified stale ATM daemon pid {pid} did not stop after SIGTERM")
 
 
-def require_stopped_daemon(args: argparse.Namespace, cli: Path) -> None:
-    if not daemon_still_reachable(cli):
+def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
+    if platform.system() != "Darwin":
         return
-    if platform.system() != "Darwin" or not args.repair_orphan:
+    pids = macos_socket_owner_pids()
+    if not pids:
+        return
+    if not args.repair_orphan:
         raise SwitchError(
-            "controlled service stop left a reachable daemon; refuse a split pair. "
+            "controlled service stop left an ATM socket owner; refuse a split pair. "
             "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
         )
-    repair_macos_orphan()
-    if daemon_still_reachable(cli):
-        raise SwitchError("ATM daemon remained reachable after explicit orphan repair")
+    repair_macos_orphan(pids)
+    if macos_socket_owner_pids():
+        raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
 
 
 def replace_link(link: Path, target: Path) -> None:
