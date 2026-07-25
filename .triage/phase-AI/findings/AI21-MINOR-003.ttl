@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-MINOR-003>
   a triage:Finding ;
   triage:findingId "AI21-MINOR-003" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "Unbounded thread-per-connection is cheaper to exploit against the zero-auth-cost plaintext-test listener" ;
   triage:description "accept_loop/spawn_request_worker uses unbounded thread-per-connection. Pre-existing (not introduced by this diff), flagged for awareness only — cheaper to exploit against the zero-auth-cost plaintext-test listener than against mTLS." ;
   triage:phaseId "phase-AI" ;

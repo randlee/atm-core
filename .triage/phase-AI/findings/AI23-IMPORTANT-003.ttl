@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-IMPORTANT-003>
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "New AI.23 adapter-side-effect boundary gate uses gameable substring matching instead of AST-based enforcement" ;
   triage:description "crates/atm-architecture/tests/boundary_enforcement.rs::ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects enforces its forbidden-call list via raw substring matching against literal tokens instead of AST-based enforcement. This is trivially defeated by differently-named private helpers that duplicate logic without matching the forbidden tokens. The same file already contains HostRoutingVisitor with alias/binding resolution (lines 310-616) for AI.12, which was not extended to this new check despite AI.23 sub-task 2 requiring fail-closed enforcement." ;
   triage:phaseId "phase-AI" ;

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RBQA-F002>
   a triage:Finding ;
   triage:findingId "AI25-RBQA-F002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "No mechanical boundary-enforcement gate for reload/startup validation parity" ;
   triage:description "The repo already has AST-based single-call-site guards for other invariants (AI.12 routing, AI.16 reconciliation) but none covering 'every trust-install path must route through the retained validator' -- exactly the class of gap that produced AI25-RBQA-F001 (refresh_https_trust bypassing validate_enabled_peer_configuration). This is a process/tooling-gap finding, not a code defect itself. FOLLOWUP (AICH-S5-FIX-1 recheck, a9e61fb0): still open. FIX-1 added a gate but it is a substring/string-match check, not an AST visitor like the AI.12/AI.16 precedents this finding calls for -- confirmed independently by ruthless-boundary-qa and arch-qa (ARCH-002) during the recheck. A substring check does not reliably catch call-site refactors (renames, re-exports, indirection) the way an AST-based single-call-site guard does, so the class of gap this finding describes is not yet mechanically closed." ;
   triage:phaseId "phase-AI" ;

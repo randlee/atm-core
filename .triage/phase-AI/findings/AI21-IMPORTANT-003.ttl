@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-003>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "plaintext-test listener has no compensating interface restriction" ;
   triage:description "crates/atm-daemon/src/composition.rs:308-312 — plaintext-test binds to the same interface list as production mTLS, with no additional loopback/allowlist restriction in code; reachability is scoped only by the CLI flag itself, not a compensating control. Recommend documenting the interface-scoping requirement in the runbook. Reported by rust-service-hardening-agent (QA-1)." ;
   triage:phaseId "phase-AI" ;

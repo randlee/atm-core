@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-QA-002>
   a triage:Finding ;
   triage:findingId "AI25-QA-002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "just lint fails the version check -- winget manifest still 1.3.1" ;
   triage:description ".winget/randlee.agent-team-mail.yaml still says PackageVersion 1.3.1, not updated to match the workspace version bump to 1.3.2-beta.25. Causes just lint to fail its version-consistency check." ;
   triage:phaseId "phase-AI" ;

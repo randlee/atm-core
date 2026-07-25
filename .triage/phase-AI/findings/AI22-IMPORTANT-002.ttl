@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
   triage:title "No unified provenance validator -- ingress/host-authentication checks are duplicated and can drift across call sites" ;
   triage:description "Provenance/authentication checks for authenticated_source_host, origin_message_id, and target.host are each re-implemented ad hoc at multiple call sites (validate_non_self_recipient in send/mod.rs, the AuthenticatedIngress match arms in runtime_health.rs DaemonRequestDispatcher::route, resolve_write_recipient_snapshot in delivery_policy.rs, resolve_acknowledgement_write in ack/mod.rs) rather than going through one shared validator, making it easy for one call site (e.g. the Local ingress arm, see AI22-BLOCK-003) to silently diverge from the others. Found by ruthless-boundary-qa (RBQA-F004, Important)." ;
   triage:phaseId "phase-AI" ;

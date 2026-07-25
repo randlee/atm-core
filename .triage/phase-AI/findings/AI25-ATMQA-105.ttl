@@ -15,7 +15,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T12:00:00Z"^^xsd:dateTime ;
-  triage:foundAt "2026-07-25T03:51:02Z"^^xsd:dateTime ;
+  triage:foundAt "2026-07-25T10:51:05Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S5 ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-105/s25/1> ;
   triage:openOn <urn:atm:triage:worktree/s25/a9e61fb0> ;
