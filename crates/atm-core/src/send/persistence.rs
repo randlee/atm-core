@@ -1,12 +1,14 @@
 use std::path::Path;
 
 use serde_json::Map;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, clear_transport_delivery_metadata,
+};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -156,6 +158,12 @@ fn mirror_message_to_store(
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
+            info!(
+                message_id = %message_id,
+                team = %team,
+                agent = %agent,
+                "duplicate message ULID write matched immutable data; retaining existing record"
+            );
             return Ok(false);
         }
         error!(
@@ -199,5 +207,7 @@ fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool 
     right.read = false;
     right.pending_ack_at = None;
     right.acknowledged_at = None;
+    clear_transport_delivery_metadata(&mut left);
+    clear_transport_delivery_metadata(&mut right);
     left == right
 }

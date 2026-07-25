@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-IMPORTANT-006>
+  a triage:Finding ;
+  triage:findingId "AI21-IMPORTANT-006" ;
+  triage:title "Three required initial-table rows are silently not-run by default" ;
+  triage:description "scripts/smoke/run_inbound_peer_smoke.py:469-540 vs :409-458 — three required initial-table rows (localhost loopback, own-IP, nudge) are only reachable via the separate --host/run_host() path; the primary documented two-peer workflow and shipped example.json never populate them, so they're silently NOT-RUN by default." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI21" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-006/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_inbound_peer_smoke.py" ;
+  triage:line 469 ;
+  triage:snippet "def run(config: dict[str, Any], output_root: Path, timeout: float, receive_timeout: float) -> int:" ;
+  triage:description "run() function (default two-peer workflow) does not populate three required PANE_CASES rows: localhost/local loopback, own-IP, nudge. These are only reachable via run_host() with --host flag." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .

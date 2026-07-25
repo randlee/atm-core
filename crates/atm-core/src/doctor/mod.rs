@@ -24,8 +24,9 @@ pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary, PeerConfigDoctorReport, PostSendDoctorReport, PostSendHookRuleIndex,
-    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
+    DoctorSummary, PeerConfigDoctorReport, PeerWireSecurityStatus, PostSendDoctorReport,
+    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
+    RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.

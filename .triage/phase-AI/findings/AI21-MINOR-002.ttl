@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-MINOR-002>
+  a triage:Finding ;
+  triage:findingId "AI21-MINOR-002" ;
+  triage:title "environment_cannot_select_plaintext_test test name overstates its own coverage" ;
+  triage:description "main.rs — the environment_cannot_select_plaintext_test test doesn't actually set the env var it claims to disprove. Structurally satisfied elsewhere (grep confirms zero env-var reads), but the test name overstates its own coverage. Reported by rust-service-hardening-agent (QA-3)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI21" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T21:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-002/pAI-s21pre/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-MINOR-002/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/main.rs" ;
+  triage:line 76 ;
+  triage:snippet "fn environment_cannot_select_plaintext_test()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "5678337c" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .
