@@ -207,7 +207,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     assert_eq!(
         delivered.len(),
         3,
-        "two ordinary writes plus exactly one bounded replay are delivered"
+        "two ordinary writes plus exactly one bounded reconciliation delivery are delivered"
     );
     assert_eq!(
         delivered[0].origin_message_id, delivered[2].origin_message_id,
@@ -217,7 +217,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
 
 #[test]
 #[serial_test::serial(env)]
-fn successful_peer_write_does_not_automatically_replay_stored_messages() {
+fn successful_peer_write_does_not_start_automatic_reconciliation() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -280,6 +280,6 @@ fn successful_peer_write_does_not_automatically_replay_stored_messages() {
     assert_eq!(
         transport.delivered.lock().expect("deliveries").len(),
         1,
-        "a successful ordinary peer write never starts a second replay path"
+        "a successful ordinary peer write never starts a second delivery pass"
     );
 }

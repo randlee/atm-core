@@ -105,7 +105,8 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
     let root = workspace_root();
     let api = read_source(&root.join("crates/atm-core/src/api.rs"));
     assert!(
-        api.contains("RequestEnvelope::Write(_) => (\"POST\", \"/v1/atm/messages\".to_string())"),
+        api.contains("RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())")
+            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";"),
         "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
     );
     assert!(
@@ -409,13 +410,18 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
+        if method == "host"
+            && let Some(function) = self.current_function_mut()
+        {
+            function.accesses_host = true;
+        }
         let local_nudge = method.starts_with("emit_local_post_write");
         let reconciliation_delivery = method == "deliver"
             && self.is_runtime_dispatcher_source()
             && self.current_function.is_some_and(|index| {
                 self.functions
                     .get(index)
-                    .is_some_and(|function| function.name == "reconcile_after_success")
+                    .is_some_and(|function| function.name == "reconcile_peer")
             });
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"
