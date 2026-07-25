@@ -568,17 +568,49 @@ impl LocalIpcServerTransportAdapter {
 mod tests {
     use std::io::Write as _;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
 
-    use atm_core::api::{read_http_response, write_http_request_with_headers};
+    use atm_core::ack::AckRequest;
+    use atm_core::api::{
+        ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
+        read_http_response, write_http_request_with_headers,
+    };
     use atm_core::doctor::DoctorQuery;
+    use atm_core::error::AtmError;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::schema::AtmMessageId;
+    use atm_core::send::{SendMessageSource, SendRequest};
+    use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use ulid::Ulid;
 
     use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
     use crate::test_support::DoctorOnlyDispatcher;
+
+    #[derive(Default)]
+    struct RecordingWriteRouter {
+        requests: Mutex<Vec<(AuthenticatedIngress, ApiRequest)>>,
+    }
+
+    impl atm_core::boundary::sealed::Sealed for RecordingWriteRouter {}
+
+    impl ApiRouter for RecordingWriteRouter {
+        fn route(
+            &self,
+            request: ApiRequest,
+            ingress: AuthenticatedIngress,
+            _deadline: RequestDeadline,
+        ) -> Result<ApiResponse, AtmError> {
+            self.requests
+                .lock()
+                .expect("recorded local write")
+                .push((ingress, request));
+            Ok(ApiResponse::new(ResponseEnvelope::Error(
+                AtmError::validation("recorded write"),
+            )))
+        }
+    }
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
@@ -636,6 +668,82 @@ mod tests {
 
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
         server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_send_and_ack_use_the_same_write_router() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let router = Arc::new(RecordingWriteRouter::default());
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server_router: Arc<dyn ApiRouter + Send + Sync> = router.clone();
+        let server = thread::spawn(move || {
+            for _ in 0..2 {
+                let (stream, peer) = listener.accept().expect("accept client");
+                assert!(peer.ip().is_loopback());
+                handle_connection(
+                    stream,
+                    Arc::clone(&server_router),
+                    &capability,
+                    &std::sync::atomic::AtomicBool::new(false),
+                )
+                .expect("serve local write");
+            }
+        });
+        let send = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                std::env::temp_dir(),
+                std::env::temp_dir(),
+                TEST_SENDER.parse().expect("sender"),
+                "receiver",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("message".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("send write"),
+        ));
+        let ack = RequestEnvelope::Write(Box::new(
+            AckRequest {
+                home_dir: std::env::temp_dir(),
+                current_dir: std::env::temp_dir(),
+                caller_identity: TEST_SENDER.parse().expect("sender"),
+                caller_chat_id: None,
+                caller_team: TEST_TEAM.parse().expect("team"),
+                message_id: AtmMessageId::new(),
+                reply_body: "acknowledged".to_string(),
+            }
+            .into_write_request(),
+        ));
+
+        for request in [&send, &ack] {
+            let mut stream = TcpStream::connect(address).expect("connect");
+            write_http_request_with_headers(
+                &mut stream,
+                request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("write request");
+            stream.flush().expect("flush request");
+            assert!(matches!(
+                read_http_response(&mut stream, request).expect("read response"),
+                ResponseEnvelope::Error(error) if error.is_validation()
+            ));
+        }
+        server.join().expect("server join");
+        let requests = router.requests.lock().expect("recorded local writes");
+        assert_eq!(requests.len(), 2);
+        assert!(matches!(
+            &requests[0],
+            (AuthenticatedIngress::Local, ApiRequest::Write(write)) if write.acknowledges_message_id.is_none()
+        ));
+        assert!(matches!(
+            &requests[1],
+            (AuthenticatedIngress::Local, ApiRequest::Write(write)) if write.acknowledges_message_id.is_some()
+        ));
     }
 
     #[cfg(unix)]

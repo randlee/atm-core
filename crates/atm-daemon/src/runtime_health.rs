@@ -10,7 +10,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerWireSecurityStatus,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -33,7 +33,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::HttpsMessageTransport;
+use crate::https_transport::{HttpsMessageTransport, PeerWireSecurity};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -154,6 +154,7 @@ pub(crate) struct DaemonRequestDispatcher {
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
+    peer_wire_security: PeerWireSecurity,
     peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
     peer_delivery_projection: PeerDeliveryProjection,
 }
@@ -400,6 +401,7 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_wire_security: PeerWireSecurity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -435,6 +437,7 @@ impl DaemonRequestDispatcher {
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
+            peer_wire_security,
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }
@@ -671,10 +674,10 @@ impl DaemonRequestDispatcher {
         // The peer transport contract honors this deadline. Keeping the whole
         // pass bounded means shutdown never waits on an unbounded reconciliation
         // loop or creates an independent worker/state machine.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = RequestDeadline::after(Duration::from_secs(5));
         for stored in writes {
-            if std::time::Instant::now() >= deadline {
-                return Err(AtmError::daemon_unavailable(
+            if deadline.remaining().is_none() {
+                return Err(AtmError::remote_delivery_unconfirmed(
                     "peer reconciliation exceeded its bounded request deadline",
                 ));
             }
@@ -682,11 +685,7 @@ impl DaemonRequestDispatcher {
                 serde_json::from_str(&stored.request_json).map_err(|_source| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })?;
-            transport.deliver(
-                request,
-                peer,
-                RequestDeadline::after(Duration::from_secs(5)),
-            )?;
+            transport.deliver(request, peer, deadline)?;
         }
         Ok(delivered)
     }
@@ -705,43 +704,11 @@ impl DaemonRequestDispatcher {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
         let delivered =
-            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), true)?;
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reconcile_after_success_for_test(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
-        self.reconcile_after_success(peer_host, peer, transport, true)
-            .map(|_| ())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn seed_peer_sync_cooldown_for_test(
-        &self,
-        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
-    ) {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .extend(entries);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn peer_sync_cooldown_for_test(
-        &self,
-    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .clone()
     }
 }
 
@@ -882,6 +849,10 @@ impl DaemonRequestDispatcher {
             findings: peer_findings,
             peer_config: Some(peer_config),
             peer_links: self.peer_link_statuses(),
+            peer_wire_security: Some(match self.peer_wire_security {
+                PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls,
+                PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest,
+            }),
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -908,6 +879,7 @@ impl DaemonRequestDispatcher {
                 findings: vec![runtime_status_finding],
                 peer_config: None,
                 peer_links: Vec::new(),
+                peer_wire_security: None,
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -994,7 +966,23 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
-                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+                AuthenticatedIngress::UntrustedSmoke(_)
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_none()
+                        || write.origin_timestamp.is_none() =>
+                {
+                    return Err(AtmError::validation(
+                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
+                    ));
+                }
+                AuthenticatedIngress::AnonymousSmoke => {
+                    return Err(AtmError::validation(
+                        "anonymous plaintext diagnostics cannot submit writes",
+                    ));
+                }
+                AuthenticatedIngress::Local
+                | AuthenticatedIngress::Peer
+                | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
         if matches!(request, RequestEnvelope::ReloadRuntimeView)
@@ -1136,6 +1124,7 @@ impl DaemonRequestDispatcher {
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
+            peer_wire_security: PeerWireSecurity::MutualTls,
             peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }

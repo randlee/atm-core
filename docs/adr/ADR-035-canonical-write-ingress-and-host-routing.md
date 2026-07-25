@@ -15,6 +15,8 @@ one storage method. The handler orders work exactly as: idempotent persistence,
 optional receiver-side acknowledgement transition, then one post-write event.
 An event cannot precede a visible persisted write. Inbound HTTPS has no
 cross-host-specific mailbox, acknowledgement, or nudge branch.
+All of those writes use the one HTTP resource `POST /v1/atm/messages`; an ACK
+sets `acknowledges_message_id` and cannot select an ACK-specific endpoint.
 
 Routing is decided exactly once by the post-write event router:
 
@@ -45,7 +47,10 @@ handling. This prevents an inbound peer write from selecting another peer path
 without adding an inbound special handler.
 
 The origin creates the ULID once. Repeating the same ULID with an identical
-immutable payload logs a skipped database write. An already-delivered remote
+immutable payload logs a skipped database write. The same-store receipt log is
+`peer_duplicate_write_skipped` with the ULID, source/destination host,
+`same_store_peer_receipt=true`, `database_write=skipped`, and
+`delivery=continued`. An already-delivered remote
 duplicate is otherwise a no-op. The narrow same-host peer receipt that finds
 this daemon's retained host-qualified origin record continues the ordinary
 inbound local nudge after the skipped write, without mutating the origin
