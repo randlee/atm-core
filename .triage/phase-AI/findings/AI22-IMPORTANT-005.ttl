@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-IMPORTANT-005>
+  a triage:Finding ;
+  triage:findingId "AI22-IMPORTANT-005" ;
+  triage:title "SendCommand::message_validation_error discards its recovery-text argument, tailored guidance never reaches the user" ;
+  triage:description "SendCommand::message_validation_error takes a _recovery parameter that is never used. All three call sites construct specific, actionable recovery text that is written in the source but never reaches the resulting AtmError/anyhow::Error. The error only carries the generic fallback recovery string via error_catalog::request_guidance - the tailored guidance authored at each call site is silently replaced by boilerplate." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "error-handling" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s22/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, _recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation(message.into()).into() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 8 .
