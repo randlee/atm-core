@@ -8,7 +8,11 @@ documented semantic alias exists; “missing” means no canonical record was
 found. A semantic alias is still flagged when the verdict introduced a new
 ID, because aliases are not safe for automated closure.
 
-## Run-by-run coverage
+## Run-by-run coverage — pre-remediation baseline
+
+This table records the original audit state at baseline HEAD `8dd3e622`, before
+the 17 TTL files were merged from `integrate/phase-AI`. The current state is in
+the [post-remediation section](#current-post-remediation-state) below.
 
 | Run | Verdict artifact | Expected finding records | Coverage | Missing / stale items |
 |---|---|---:|---|---|
@@ -31,7 +35,7 @@ ID, because aliases are not safe for automated closure.
 | AICH-S8 QA-1 | `aich-s8-qa1-verdict.md` | 14 unique findings | **Missing** | No `AI28-*` records and no canonical records for the verdict’s aliases |
 | AICH-S10 | No QA verdict located | — | Not run | Assignment exists after the integrate merge; no QA result or triage records |
 
-## Missing AICH-S7 records
+## Missing AICH-S7 records — baseline state
 
 No exact TTL or canonical text match was found for these S7 findings:
 
@@ -45,7 +49,7 @@ The first bullet is one underlying issue reported under three reviewer labels;
 the verdict still needs one canonical record with those aliases, rather than
 zero records.
 
-## Missing AICH-S8 records
+## Missing AICH-S8 records — baseline state
 
 No exact TTL or canonical text match was found for these S8 findings:
 
@@ -77,12 +81,14 @@ verdict history:
   explicitly open in the indexed S5 FIX-1 verdict; the later closure must not
   be back-projected onto that earlier QA result.
 
-## Cross-cutting metadata defect
+## Cross-cutting metadata defect — baseline and current legacy state
 
-The validator still reports 63 scoped AICH records with 125 errors and zero
-warnings: every scoped record lacks `triage:foundIn`, and every record except
-`AI21-BLOCK-001` also lacks `triage:foundAt`. Thus “record present” above does
-not mean the record is graph-complete or usable for cursor invalidation.
+The baseline validator reported 63 scoped AICH records with 125 errors and
+zero warnings. After the remediation merge, 77 scoped records are selected;
+the same 125 errors remain on the 63 legacy records: every legacy record lacks
+`triage:foundIn`, and every legacy record except `AI21-BLOCK-001` also lacks
+`triage:foundAt`. Thus “record present” does not automatically mean the record
+is graph-complete or usable for cursor invalidation.
 
 ## Current post-remediation state
 
@@ -97,7 +103,7 @@ same missing-field errors.
 | AICH-S2 | `AI22-RBP-F002` exact record now present; status remains unknown because the original detail was irretrievable |
 | AICH-S5 | `AI25-ATMQA-105` exact record now present and field-complete |
 | AICH-S8 | 14/14 canonical AI28 records now present and field-complete; aliases are grouped in canonical records |
-| AICH-S7 | 0/13 records present on audit/integrate; candidate files exist only in unmerged commit `be2387cc` on another branch |
+| AICH-S7 | 0/13 records present on audit/integrate; all 13 now exist on feature-branch HEAD `599c8a67` across commits `be2387cc`, `baaee8ad`, and `599c8a67`, but those commits are not merged into integrate/audit |
 | Legacy AICH records | `foundIn` remains missing on all legacy records; `foundAt` remains missing on 62 legacy records |
 
 ### New timestamp defect
@@ -109,15 +115,23 @@ its QA result at `2026-07-25T05:48:10Z`; the same pattern occurs on the S2,
 S5, and S8 records. Presence validation passes, but temporal validation must
 correct these values from the UTC `result_time_utc` field in the master index.
 
+### S7 source-branch remediation
+
+The S7 records are no longer merely uncommitted: the feature branch
+`feature/pAI-s27-peer-delivery-observability` is clean at `599c8a67` and carries
+13 canonical AI27 records plus the AI26 closure correction. The commits are
+available for a dedicated triage PR, but they are not yet present on
+`origin/integrate/phase-AI` or `audit/phase-ai`; therefore the audit branch must
+continue to report S7 as missing until that PR is merged.
+
 ## Recommended remediation order
 
-1. Create canonical triage records for all AICH-S7 and AICH-S8 verdict items,
-   preserving reviewer aliases in each record.
-2. Create the missing S1/S2/S5 follow-up records (`AI21-QA2-001`, lost
-   `RBP-F002` disposition, and `ATM-QA-105`); record semantic mappings for
-   `ATM-QA-101/102/103/104` explicitly.
+1. Merge the dedicated S7 triage PR containing the 13 AI27 records and the
+   AI26 closure correction; preserve reviewer aliases in each record.
+2. Correct all new `foundAt` values from the master index's UTC result times;
+   the presence validator does not catch timezone mislabeling.
 3. Append separate closure/resolution records for the stale open findings;
    do not rewrite existing TTL history.
-4. Populate `triage:foundIn` and authoritative `triage:foundAt` from the QA
+4. Populate legacy `triage:foundIn` and authoritative `triage:foundAt` from the QA
    evidence index. Any TTL changes must be committed and pushed separately
    from narrative audit documentation for cherry-pickability.
