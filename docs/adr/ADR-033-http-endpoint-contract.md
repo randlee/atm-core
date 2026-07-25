@@ -26,6 +26,7 @@ The initial stable application surface is resource-oriented REST under
 | `/messages/inspect` | `POST` non-mutating inspection/query |
 | `/messages` | `DELETE` clear selected messages where authorized |
 | `/messages/read` | `POST` owner-only read-state mutation |
+| `/message/{message-id}` | `GET` canonical message resource returned by `Location` after a write |
 | `/doctor` | `GET` doctor report |
 
 The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,

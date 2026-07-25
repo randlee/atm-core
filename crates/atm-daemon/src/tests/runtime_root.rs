@@ -1,5 +1,4 @@
 use super::*;
-use atm_core::ack::AckRequest;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
@@ -269,6 +268,66 @@ fn host_qualified_write_reaches_https_delivery_only_through_post_write_router() 
 
 #[test]
 #[serial_test::serial(env)]
+fn authenticated_host_qualified_peer_receipt_routes_local_without_redelivery() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let transport = Arc::new(RecordingHttpsDelivery::default());
+    dispatcher
+        .install_https_transport(transport.clone())
+        .expect("install test HTTPS delivery");
+
+    let mut receipt = SendRequest::new(
+        atm_home,
+        workspace_dir,
+        "remote-agent".parse().expect("caller"),
+        "team-lead@test-team.peer.example.test",
+        "remote-team".parse().expect("team"),
+        SendMessageSource::Inline("peer receipt".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("peer receipt");
+    receipt.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
+    receipt.origin_message_id = Some(atm_core::schema::AtmMessageId::new());
+    receipt.origin_timestamp = Some(atm_core::types::IsoTimestamp::now());
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(receipt)))
+        .expect("peer receipt must use the shared writer/router");
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+    ));
+    assert!(
+        transport
+            .delivered
+            .lock()
+            .expect("HTTPS delivery recording lock")
+            .is_empty(),
+        "an inbound peer receipt must choose the router's local post-write action, never redelivery"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -452,7 +511,7 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
             .lock()
             .expect("HTTPS delivery recording lock")
             .is_empty(),
-        "the receiving peer write has no destination host and must not re-forward"
+        "origin metadata prevents a receiving peer write from re-forwarding"
     );
 
     let replay = ApiRouter::route(
