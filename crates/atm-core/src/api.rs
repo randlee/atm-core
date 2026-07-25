@@ -322,7 +322,9 @@ fn decode_success_response(
     body: &[u8],
 ) -> Result<ResponseEnvelope, AtmError> {
     match request {
-        RequestEnvelope::Write(request) if request.acknowledges_message_id.is_some() => {
+        RequestEnvelope::Write(request)
+            if request.acknowledges_message_id.is_some() && request.to.is_none() =>
+        {
             serde_json::from_slice(body)
                 .map(|value| {
                     ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(
@@ -637,10 +639,13 @@ mod tests {
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
-    use crate::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
-    use crate::send::{SendMessageSource, SendRequest};
+    use crate::protocol::{
+        PeerSyncRequest, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    };
+    use crate::schema::AtmMessageId;
+    use crate::send::{SendCommandOutcome, SendMessageSource, SendOutcome, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::CommandAction;
+    use crate::types::{AgentName, CommandAction, TeamName};
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -769,6 +774,48 @@ mod tests {
         assert!(matches!(
             decoded,
             ApiRequest::Write(request) if request.acknowledges_message_id.is_none()
+        ));
+    }
+
+    #[test]
+    fn peer_ack_write_decodes_a_send_response_not_a_local_ack_outcome() {
+        let mut write = SendRequest::new(
+            std::env::temp_dir(),
+            std::env::temp_dir(),
+            TEST_SENDER.parse().expect("sender"),
+            "receiver@test-team.peer.example.test",
+            TEST_TEAM.parse().expect("team"),
+            SendMessageSource::Inline("ack".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("peer acknowledgement request");
+        write.acknowledges_message_id = Some(AtmMessageId::new());
+        let request = RequestEnvelope::Write(Box::new(write));
+        let response = ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
+            action: CommandAction::Send,
+            team: TeamName::from_validated(TEST_TEAM),
+            agent: AgentName::from_validated("receiver"),
+            sender: AgentName::from_validated(TEST_SENDER),
+            outcome: SendCommandOutcome::Sent,
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            task_id: None,
+            summary: None,
+            message: None,
+            warnings: Vec::new(),
+            dry_run: false,
+        }));
+        let mut bytes = Vec::new();
+        write_http_response(&mut bytes, &response).expect("write peer response");
+
+        let decoded = read_http_response(&mut bytes.as_slice(), &request)
+            .expect("peer acknowledgement response decodes");
+        assert!(matches!(
+            decoded,
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
         ));
     }
 

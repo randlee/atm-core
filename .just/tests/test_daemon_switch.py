@@ -107,6 +107,29 @@ class DaemonSwitchTests(unittest.TestCase):
                 mock.call(self.daemon_link, self.old_daemon),
             ],
         )
+
+    def test_switch_pair_repairs_dangling_selectors_only_with_explicit_repair(self) -> None:
+        with self.patch_switch_inputs() as patched:
+            patched["selected_links"].return_value = (self.cli_link, self.daemon_link)
+            patched["require_executable"].side_effect = [
+                self.module.SwitchError("selected atm CLI does not exist"),
+                self.new_cli,
+                self.new_daemon,
+            ]
+            patched["live_pair_matches"].return_value = (True, "matched")
+            self.args.repair_orphan = True
+
+            self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+
+        patched["save_default_pair"].assert_not_called()
+        patched["require_stopped_daemon"].assert_called_once_with(self.args, self.cli_link)
+        self.assertEqual(
+            patched["replace_link"].call_args_list,
+            [
+                mock.call(self.cli_link, self.new_cli),
+                mock.call(self.daemon_link, self.new_daemon),
+            ],
+        )
         self.assertEqual(
             patched["run_service"].call_args_list,
             [
@@ -158,6 +181,22 @@ class DaemonSwitchTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(self.module.SwitchError, "refuse a split pair"):
                 self.module.require_stopped_daemon(args, self.old_cli)
+
+    def test_restart_requires_a_single_live_pair_after_controlled_stop(self) -> None:
+        args = argparse.Namespace(yes=True)
+        with (
+            mock.patch.object(self.module, "selected_links", return_value=(self.old_cli, self.old_daemon)),
+            mock.patch.object(self.module, "run_service") as run_service,
+            mock.patch.object(self.module, "require_stopped_daemon") as stopped,
+            mock.patch.object(self.module, "live_pair_matches", return_value=(True, "matched")),
+        ):
+            self.module.restart(args)
+
+        stopped.assert_called_once_with(args, self.old_cli)
+        self.assertEqual(
+            run_service.call_args_list,
+            [mock.call(args, "stop", allow_absent=True), mock.call(args, "start")],
+        )
 
     def test_restore_prefers_homebrew_then_explicit_then_saved_state(self) -> None:
         explicit = argparse.Namespace(default_cli="/explicit/atm", default_daemon="/explicit/atm-daemon")

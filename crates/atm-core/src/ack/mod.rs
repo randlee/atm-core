@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host};
+use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -32,6 +32,7 @@ impl AckRequest {
             caller_chat_id: self.caller_chat_id,
             caller_team: self.caller_team,
             authenticated_source_host: None,
+            same_host_peer_delivery: false,
             origin_message_id: None,
             origin_timestamp: None,
             to: None,
@@ -295,6 +296,7 @@ fn canonical_ack_write_request(
         caller_chat_id: request.caller_chat_id.clone(),
         caller_team: team.clone(),
         authenticated_source_host: None,
+        same_host_peer_delivery: false,
         origin_message_id: None,
         origin_timestamp: None,
         to: Some(crate::address::AgentAddress {
@@ -419,7 +421,8 @@ fn validate_reply_target<R: RetainedServiceRuntime>(
         .clone()
         .unwrap_or_else(|| current_team.clone());
     let agent = crate::threading::canonical_sender_identity(&source.envelope);
-    let host = authenticated_source_host(&source.envelope)?;
+    let host =
+        authenticated_source_host(&source.envelope)?.or(peer_outbound_host(&source.envelope)?);
     if host.is_none() {
         ensure_roster_member_exists(
             runtime,

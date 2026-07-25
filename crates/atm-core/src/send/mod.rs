@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Map;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
@@ -72,6 +72,13 @@ pub struct WriteRequest {
     /// persists an inbound record. It is not trusted from wire JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub authenticated_source_host: Option<HostName>,
+    /// Set only by the authenticated HTTPS adapter when a peer request is
+    /// proven to originate from this daemon's own advertised host. It is
+    /// adapter-local state, never accepted from the wire, and lets a
+    /// same-host HTTPS replay retain the normal post-write nudge after its
+    /// idempotent database write is skipped.
+    #[serde(skip)]
+    pub same_host_peer_delivery: bool,
     /// The immutable identity assigned by the origin canonical writer.
     /// Authenticated peer ingress preserves it so both hosts store one ULID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -120,6 +127,7 @@ impl WriteRequest {
             caller_chat_id: None,
             caller_team,
             authenticated_source_host: None,
+            same_host_peer_delivery: false,
             origin_message_id: None,
             origin_timestamp: None,
             to: Some(to.parse()?),
@@ -478,6 +486,13 @@ fn write_mail_with_runtime_impl<
         }
         return prepare_persisted_write(request, observability, runtime, None);
     }
+    if request.to.is_some() && request.authenticated_source_host.is_some() {
+        // The HTTPS adapter has already authenticated and normalized this as
+        // a canonical acknowledgement message from another daemon. It carries
+        // `acknowledges_message_id` as immutable message data, not as a local
+        // `atm ack` command that should resolve and mutate a local source.
+        return prepare_persisted_write(request, observability, runtime, None);
+    }
     if request.to.is_some() {
         return Err(AtmError::validation(
             "acknowledgement write must not include a client-supplied destination",
@@ -523,7 +538,13 @@ fn prepare_persisted_write<
         requires_ack,
         task_id.clone(),
     )?;
-    let post_write_needed = persistence.newly_persisted;
+    let post_write_needed = persistence.newly_persisted || request.same_host_peer_delivery;
+    if request.same_host_peer_delivery && !persistence.newly_persisted {
+        info!(
+            message_id = %message_id,
+            "duplicate peer receipt matched the local message; skipped the database write and retained the normal post-write notification"
+        );
+    }
     let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
     let outcome = finalize_send_outcome(
         runtime,
@@ -749,7 +770,13 @@ fn prepare_send_context<
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
     let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
+    validate_non_self_recipient(
+        &canonical_sender,
+        &request.caller_team,
+        &recipient,
+        target.host.as_ref(),
+        request.authenticated_source_host.as_ref(),
+    )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot = delivery_policy.resolve_write_recipient_snapshot(
@@ -901,10 +928,14 @@ pub(crate) fn validate_non_self_recipient(
     sender: &AgentName,
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
+    destination_host: Option<&HostName>,
+    authenticated_source_host: Option<&HostName>,
 ) -> Result<(), AtmError> {
-    if sender
-        .as_str()
-        .eq_ignore_ascii_case(recipient.agent.as_str())
+    if destination_host.is_none()
+        && authenticated_source_host.is_none()
+        && sender
+            .as_str()
+            .eq_ignore_ascii_case(recipient.agent.as_str())
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str())
@@ -920,7 +951,7 @@ pub(crate) fn validate_non_self_recipient(
 mod self_address_tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};
     use crate::error_codes::AtmErrorCode;
-    use crate::types::{AgentName, TeamName};
+    use crate::types::{AgentName, HostName, TeamName};
 
     #[test]
     fn validate_non_self_recipient_rejects_case_variant_self_target() {
@@ -931,10 +962,43 @@ mod self_address_tests {
                 agent: AgentName::from_validated("sender-a"),
                 team: TeamName::from_validated("test-team"),
             },
+            None,
+            None,
         )
         .expect_err("case-variant self target must be rejected");
 
         assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_host_qualified_same_identity() {
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            Some(&"localhost".parse::<HostName>().expect("host")),
+            None,
+        )
+        .expect("host-qualified delivery uses the ordinary peer route");
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_normalized_authenticated_peer_write() {
+        let peer = "localhost".parse::<HostName>().expect("host");
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            None,
+            Some(&peer),
+        )
+        .expect("peer ingress already authenticated the host-qualified route");
     }
 }
 

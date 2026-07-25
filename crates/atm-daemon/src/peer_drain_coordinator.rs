@@ -190,7 +190,7 @@ impl PeerDrainCoordinator {
     fn drain(&self, host: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
         let peer = self.configured_peer(host)?;
         let policy = self.peers.peer_sync_policy(host)?.validate()?;
-        let transport = self.peer_transport()?;
+        let transport = self.https_sender()?;
         let not_before = Self::sync_not_before(policy)?;
         self.record(
             PeerDeliveryEventKind::PeerRecoveryAttempt,
@@ -203,7 +203,7 @@ impl PeerDrainCoordinator {
         self.drain_pages(host, deadline, &peer, policy, transport, not_before)
     }
 
-    fn peer_transport(&self) -> Result<Arc<dyn HttpsMessageTransport>, AtmError> {
+    fn https_sender(&self) -> Result<Arc<dyn HttpsMessageTransport>, AtmError> {
         self.transport
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?

@@ -60,6 +60,23 @@ pub(crate) fn set_peer_outbound_write(
         .insert(PEER_OUTBOUND_KEY.to_string(), Value::Object(value));
 }
 
+/// Returns the destination host retained with a locally authored peer write.
+/// This is adapter metadata created by the canonical origin writer, never a
+/// value accepted from an inbound peer payload.
+pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(PEER_OUTBOUND_KEY) else {
+        return Ok(None);
+    };
+    let host = value
+        .as_object()
+        .and_then(|object| object.get("host"))
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| AtmError::mailbox_read("persisted peer outbound host is invalid"))?;
+    host.parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted peer outbound host is invalid"))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AckIntentFields {
     pub(crate) requires_ack: bool,

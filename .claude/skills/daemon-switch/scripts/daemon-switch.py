@@ -214,8 +214,19 @@ def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
-    old_cli = require_executable(cli_link, "selected atm CLI")
-    old_daemon = require_executable(daemon_link, "selected atm daemon")
+    old_pair: tuple[Path, Path] | None
+    try:
+        old_pair = (
+            require_executable(cli_link, "selected atm CLI"),
+            require_executable(daemon_link, "selected atm daemon"),
+        )
+    except SwitchError:
+        if not args.repair_orphan:
+            raise SwitchError(
+                "selected ATM pair is missing or dangling; refuse to repair selectors without "
+                "--repair-orphan after verifying the managed service"
+            ) from None
+        old_pair = None
     cli_target = require_executable(cli_target, "target atm CLI")
     daemon_target = require_executable(daemon_target, "target atm daemon")
     if cli_target.parent != daemon_target.parent:
@@ -230,9 +241,10 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         return
     if not args.yes:
         raise SwitchError("switch changes the system-wide pair; re-run with --yes")
-    save_default_pair(old_cli, old_daemon)
+    if old_pair is not None:
+        save_default_pair(*old_pair)
     run_service(args, "stop", allow_absent=True)
-    require_stopped_daemon(args, old_cli)
+    require_stopped_daemon(args, old_pair[0] if old_pair is not None else cli_link)
     try:
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
@@ -241,12 +253,13 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         if not matched:
             raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
-        replace_link(cli_link, old_cli)
-        replace_link(daemon_link, old_daemon)
-        try:
-            run_service(args, "start")
-        except SwitchError:
-            pass
+        if old_pair is not None:
+            replace_link(cli_link, old_pair[0])
+            replace_link(daemon_link, old_pair[1])
+            try:
+                run_service(args, "start")
+            except SwitchError:
+                pass
         raise
 
 
@@ -265,8 +278,13 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
+    cli, _daemon = selected_links(args)
     run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
     run_service(args, "start")
+    matched, detail = live_pair_matches(cli)
+    if not matched:
+        raise SwitchError(f"refusing a split CLI/daemon pair after restart: {detail}")
 
 
 def doctor(cli: Path) -> dict[str, object]:

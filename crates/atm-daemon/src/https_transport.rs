@@ -264,6 +264,13 @@ impl HttpsListenerSet {
         router: Arc<dyn ApiRouter + Send + Sync>,
     ) -> Result<Self, AtmError> {
         let identity = TlsIdentity::load(certificate)?;
+        let local_listener_ips = Arc::new(
+            interfaces
+                .iter()
+                .filter(|interface| interface.enabled)
+                .map(|interface| interface.bind_addr.ip())
+                .collect::<Vec<_>>(),
+        );
         let peer_verifier = Arc::new(PinnedClientVerifier::new(peers));
         let server_config = Arc::new(server_config(&identity, Arc::clone(&peer_verifier))?);
         let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -296,6 +303,7 @@ impl HttpsListenerSet {
             let thread_config = Arc::clone(&server_config);
             let thread_requests = Arc::clone(&requests);
             let thread_peer_verifier = Arc::clone(&peer_verifier);
+            let thread_local_listener_ips = Arc::clone(&local_listener_ips);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
                 .spawn(move || {
@@ -306,6 +314,7 @@ impl HttpsListenerSet {
                         thread_router,
                         thread_requests,
                         thread_peer_verifier,
+                        thread_local_listener_ips,
                     )
                 })
                 .map_err(|_source| {
@@ -360,11 +369,19 @@ fn accept_loop(
     router: Arc<dyn ApiRouter + Send + Sync>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     peer_verifier: Arc<PinnedClientVerifier>,
+    local_listener_ips: Arc<Vec<IpAddr>>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                spawn_request_worker(stream, &config, &router, &requests, &peer_verifier);
+                spawn_request_worker(
+                    stream,
+                    &config,
+                    &router,
+                    &requests,
+                    &peer_verifier,
+                    &local_listener_ips,
+                );
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -389,6 +406,7 @@ fn spawn_request_worker(
     router: &Arc<dyn ApiRouter + Send + Sync>,
     requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
     peer_verifier: &Arc<PinnedClientVerifier>,
+    local_listener_ips: &Arc<Vec<IpAddr>>,
 ) {
     if let Err(error) = stream.set_nonblocking(false) {
         tracing::warn!(
@@ -406,12 +424,17 @@ fn spawn_request_worker(
             let config = Arc::clone(config);
             let router = Arc::clone(router);
             let peer_verifier = Arc::clone(peer_verifier);
+            let local_peer_socket = stream
+                .peer_addr()
+                .map(|peer| peer.ip().is_loopback() || local_listener_ips.contains(&peer.ip()))
+                .unwrap_or(false);
             move || {
                 log_peer_request_result(handle_peer_connection(
                     stream,
                     config,
                     router,
                     peer_verifier,
+                    local_peer_socket,
                 ))
             }
         })
@@ -461,6 +484,7 @@ fn handle_peer_connection(
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
     peer_verifier: Arc<PinnedClientVerifier>,
+    local_peer_socket: bool,
 ) -> Result<(), AtmError> {
     let deadline = RequestDeadline::after(HTTPS_TIMEOUT);
     apply_deadline(&stream, HTTPS_TIMEOUT)?;
@@ -477,7 +501,11 @@ fn handle_peer_connection(
     // The custom client verifier completed during the read above. Routing is
     // intentionally impossible before that mTLS + exact fingerprint check.
     let mut request = decode_request(request)?;
-    normalize_peer_write_for_local_delivery(&mut request, authenticated_source_host);
+    normalize_peer_write_for_local_delivery(
+        &mut request,
+        authenticated_source_host,
+        local_peer_socket,
+    );
     let response = router
         .route(request, AuthenticatedIngress::Peer, deadline)
         .map(|response| response.into_inner())
@@ -488,11 +516,16 @@ fn handle_peer_connection(
 /// The authenticated HTTPS adapter has already selected this daemon. It drops
 /// only the transport destination before submitting the same canonical write
 /// request used by local UDS and graft clients.
-fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest, source_host: HostName) {
+fn normalize_peer_write_for_local_delivery(
+    request: &mut ApiRequest,
+    source_host: HostName,
+    local_peer_socket: bool,
+) {
     if let ApiRequest::Write(write) = request {
         if let Some(destination) = write.to.as_mut() {
             destination.host = None;
         }
+        write.same_host_peer_delivery = local_peer_socket;
         write.authenticated_source_host = Some(source_host);
     }
 }
@@ -1186,6 +1219,7 @@ mod tests {
         };
         assert_eq!(write.authenticated_source_host, Some(peer.host));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
+        assert!(write.same_host_peer_delivery);
         assert!(write.to.expect("destination").host.is_none());
         listener.shutdown().expect("shutdown listener");
     }

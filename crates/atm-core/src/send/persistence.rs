@@ -156,6 +156,12 @@ fn mirror_message_to_store(
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
+            tracing::info!(
+                message_id = %message_id,
+                team = %team,
+                agent = %agent,
+                "duplicate message ULID matched immutable data; retaining original record"
+            );
             return Ok(false);
         }
         error!(
@@ -199,5 +205,14 @@ fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool 
     right.read = false;
     right.pending_ack_at = None;
     right.acknowledged_at = None;
+    // These values describe the adapter that carried an otherwise immutable
+    // message. The origin keeps the outbound request for later peer delivery;
+    // the receiving HTTPS adapter records its authenticated source. Neither
+    // changes the message identity, and comparing either would turn a normal
+    // same-ULID receipt into a false immutable-payload conflict.
+    left.extra.remove("sourceHost");
+    left.extra.remove("peerOutbound");
+    right.extra.remove("sourceHost");
+    right.extra.remove("peerOutbound");
     left == right
 }
