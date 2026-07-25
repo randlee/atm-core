@@ -25,8 +25,17 @@ def executable_name(name: str) -> str:
     return f"{name}.exe" if os.name == "nt" else name
 
 
-def run(args: Sequence[str], *, timeout: float = 10.0) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)
+def run(
+    args: Sequence[str], *, timeout: float = 10.0, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+        cwd=cwd,
+    )
 
 
 def version(path: Path) -> str | None:
@@ -133,6 +142,16 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
             if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
                 return
             time.sleep(0.1)
+        if args.repair_orphan:
+            # `bootout` has already prevented a replacement process. A
+            # blocked daemon can still keep the job loaded long enough to
+            # defeat the normal polling window, so repair the one verified
+            # socket owner before declaring the singleton unrecoverable.
+            repair_macos_orphan(macos_socket_owner_pids())
+            for _ in range(20):
+                if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
+                    return
+                time.sleep(0.1)
         raise SwitchError("LaunchAgent remained loaded after controlled stop")
 
     last_detail = ""
@@ -289,7 +308,11 @@ def restart(args: argparse.Namespace) -> None:
 
 def doctor(cli: Path) -> dict[str, object]:
     try:
-        result = run([str(cli), "doctor", "--json"], timeout=10.0)
+        # The managed daemon must not be forced to traverse a caller's source
+        # worktree merely to validate the selected service pair. In particular,
+        # macOS privacy controls can hold a launch-agent request at that file
+        # boundary. Pair validation has no workspace-config dependency.
+        result = run([str(cli), "doctor", "--json"], timeout=10.0, cwd=Path.home())
     except (OSError, subprocess.TimeoutExpired) as error:
         return {"error": str(error)}
     if result.returncode != 0:

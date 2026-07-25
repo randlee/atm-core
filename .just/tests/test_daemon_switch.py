@@ -244,6 +244,48 @@ class DaemonSwitchTests(unittest.TestCase):
         ):
             self.module.run_service(args, "start")
 
+    def test_macos_stop_repairs_one_verified_orphan_after_bootout(self) -> None:
+        args = argparse.Namespace(
+            service="atm-daemon",
+            launch_agent_plist="/tmp/atm-daemon.plist",
+            repair_orphan=True,
+        )
+        loaded = subprocess.CompletedProcess([], 0, "", "")
+        unloaded = subprocess.CompletedProcess([], 1, "", "not loaded")
+        with (
+            mock.patch.object(self.module.platform, "system", return_value="Darwin"),
+            mock.patch.object(self.module.os, "getuid", return_value=501, create=True),
+            mock.patch.object(
+                self.module,
+                "run",
+                side_effect=[subprocess.CompletedProcess([], 0, "", ""), *([loaded] * 20), unloaded],
+            ),
+            mock.patch.object(self.module, "macos_socket_owner_pids", return_value=[42]),
+            mock.patch.object(self.module, "repair_macos_orphan") as repair,
+            mock.patch.object(self.module.time, "sleep"),
+        ):
+            self.module.run_service(args, "stop", allow_absent=True)
+
+        repair.assert_called_once_with([42])
+
+    def test_live_pair_doctor_uses_a_home_directory_not_the_calling_worktree(self) -> None:
+        report = {
+            "client_context": {"version": "1.3.2-beta.29"},
+            "daemon_context": {"version": "1.3.2-beta.29"},
+        }
+        with (
+            mock.patch.object(self.module, "selected_release_version", return_value="1.3.2-beta.29"),
+            mock.patch.object(
+                self.module,
+                "run",
+                return_value=subprocess.CompletedProcess([], 0, __import__("json").dumps(report), ""),
+            ) as run,
+        ):
+            matched, _detail = self.module.live_pair_matches(self.new_cli)
+
+        self.assertTrue(matched)
+        self.assertEqual(run.call_args.kwargs["cwd"], Path.home())
+
 
 if __name__ == "__main__":
     unittest.main()
