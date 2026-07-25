@@ -16,6 +16,7 @@ from typing import Any
 
 REFERENCE = "references/installation-and-troubleshooting.md"
 MIN_SC_COMPOSE = (1, 2, 0)
+SC_COMPOSE_INSTALL = "python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'"
 
 
 def _candidates(name: str) -> list[Path]:
@@ -81,10 +82,26 @@ def _python_binding_entry() -> dict[str, Any]:
         import sc_compose  # noqa: F401
         installed = _version(importlib.metadata.version("sc-compose"))
         version_text = importlib.metadata.version("sc-compose")
-    except (ImportError, importlib.metadata.PackageNotFoundError) as exc:
-        return {"name": "sc_compose", "required": "Python binding >=1.2.0", "path": sys.executable, "ok": False, "error": str(exc)}
+    except (ImportError, importlib.metadata.PackageNotFoundError):
+        return {
+            "name": "sc_compose",
+            "required": "Python binding >=1.2.0",
+            "path": sys.executable,
+            "ok": False,
+            "error": (
+                "sc-compose Python bindings not installed. Run: "
+                + SC_COMPOSE_INSTALL
+            ),
+        }
     if installed is None or installed < MIN_SC_COMPOSE:
-        return {"name": "sc_compose", "required": "Python binding >=1.2.0", "path": sys.executable, "version": version_text, "ok": False, "error": "requires >= 1.2.0"}
+        return {
+            "name": "sc_compose",
+            "required": "Python binding >=1.2.0",
+            "path": sys.executable,
+            "version": version_text,
+            "ok": False,
+            "error": "requires >= 1.2.0; reinstall with: " + SC_COMPOSE_INSTALL,
+        }
     return {"name": "sc_compose", "required": "Python binding >=1.2.0", "path": sys.executable, "version": version_text, "ok": True}
 
 

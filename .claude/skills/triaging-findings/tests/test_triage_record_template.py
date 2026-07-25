@@ -114,10 +114,12 @@ def test_python_binding_renders_canonical_template() -> None:
     try:
         import importlib.metadata
         import sc_compose
-    except ImportError as exc:  # pragma: no cover - dependency preflight owns setup
+    except (ImportError, importlib.metadata.PackageNotFoundError) as exc:  # pragma: no cover - dependency preflight owns setup
         pytest.fail(
-            "install sc-compose>=1.2.0 in the invoking Python before running "
-            f"binding tests: {exc}"
+            "sc-compose Python bindings not installed. Run: "
+            "python3 -m pip install --user --break-system-packages "
+            "'sc-compose>=1.2.0' before running binding tests: "
+            f"{exc}"
         )
     assert tuple(int(part) for part in importlib.metadata.version("sc-compose").split(".")[:3]) >= (1, 2, 0)
     rendered = sc_compose.render_template(

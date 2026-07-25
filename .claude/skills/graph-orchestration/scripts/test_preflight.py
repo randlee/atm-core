@@ -59,6 +59,19 @@ def test_binding_rejects_old_python_wheel(monkeypatch):
     assert "required >= 1.2.0" in result.detail
 
 
+def test_binding_failure_has_actionable_install_hint(monkeypatch):
+    preflight = _module()
+    monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
+    monkeypatch.setattr(
+        preflight,
+        "_run",
+        lambda *_args, **_kwargs: (1, "", "ModuleNotFoundError: sc_compose"),
+    )
+    result = preflight.check_sc_compose_binding()
+    assert not result.ok
+    assert "python3 -m pip install --user --break-system-packages" in result.detail
+
+
 def test_missing_rdflib_is_a_structured_failure(monkeypatch):
     preflight = _module()
     monkeypatch.setattr(preflight, "_python_candidates", lambda: ["/fake/python3"])
@@ -117,8 +130,10 @@ def test_python_binding_render_integration_when_1_2_or_newer_is_installed():
         import sc_compose
     except (importlib.metadata.PackageNotFoundError, ImportError) as exc:
         raise AssertionError(
-            "install sc-compose>=1.2.0 in the invoking Python before running "
-            f"binding integration tests: {exc}"
+            "sc-compose Python bindings not installed. Run: "
+            "python3 -m pip install --user --break-system-packages "
+            "'sc-compose>=1.2.0' before running binding integration tests: "
+            f"{exc}"
         ) from exc
     if _module()._version(version) < (1, 2, 0):
         raise AssertionError(f"sc-compose Python binding {version} is below 1.2.0")

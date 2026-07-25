@@ -9,7 +9,7 @@ requires:
 | Python `sc_compose` binding | **1.2.0** | Native Python rendering/API tests |
 | `oxigraph` | supported installed release | Parse/validate rendered Turtle |
 | `rg` | installed | Sweep source worktrees |
-| Python `rdflib` | installed in the invoking Python | Graph/query support |
+| Python `rdflib` | **3.11+**, installed in the invoking Python | Graph/query support |
 
 ## Check first
 
@@ -24,18 +24,19 @@ locations. If it reports success, do not reinstall anything.
 
 ## Install
 
-macOS (recommended, avoids PEP 668 system-Python restrictions):
+macOS (one-time per-machine setup):
 
 ```bash
 brew install randlee/tap/sc-compose
-python3 -m venv .venv-triaging-findings
-.venv-triaging-findings/bin/python -m pip install --upgrade pip
-.venv-triaging-findings/bin/python -m pip install 'sc-compose>=1.2.0' rdflib pytest
-export PATH="$PWD/.venv-triaging-findings/bin:$PATH"
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 cargo install oxigraph-cli
 ```
 
-The PyPI package supplies the `sc_compose` Python binding; it does not replace
+The `--user` target avoids Homebrew-managed site-packages and
+`--break-system-packages` is Python's sanctioned override for this trusted
+user-owned wheel. Do not create or activate a venv for this setup. The PyPI
+package supplies the `sc_compose` Python binding (Python 3.11+; prebuilt
+platform wheels); it does not replace
 the standalone `sc-compose` CLI. On Linux without Homebrew, install the CLI
 from the v1.2.0 release or from a source checkout with the upstream
 `cargo install --path crates/sc-compose` procedure.
@@ -43,10 +44,7 @@ from the v1.2.0 release or from a source checkout with the upstream
 Linux:
 
 ```bash
-python3 -m venv .venv-triaging-findings
-.venv-triaging-findings/bin/python -m pip install --upgrade pip
-.venv-triaging-findings/bin/python -m pip install 'sc-compose>=1.2.0' rdflib pytest
-export PATH="$PWD/.venv-triaging-findings/bin:$PATH"
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 # Install the standalone CLI from the v1.2.0 release, or from source:
 # cargo install --path crates/sc-compose
 cargo install oxigraph-cli
@@ -62,9 +60,7 @@ sudo apt-get install ripgrep         # Debian/Ubuntu
 Windows PowerShell:
 
 ```powershell
-py -m venv .venv-triaging-findings
-.venv-triaging-findings\Scripts\python -m pip install --upgrade pip
-.venv-triaging-findings\Scripts\python -m pip install "sc-compose>=1.2.0" rdflib pytest
+py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
 cargo install oxigraph-cli
 winget install BurntSushi.ripgrep.MSVC
 ```
@@ -113,9 +109,11 @@ python3 .claude/skills/triaging-findings/scripts/check_dependencies.py
 - Installing with one Python and invoking the skill with another leaves
   `rdflib` unavailable. Compare `python3 -c 'import sys; print(sys.executable)'`
   with the interpreter used for installation.
-- Homebrew/system Python may reject global `pip install` with an
-  `externally-managed-environment` (PEP 668) error. Use the venv commands above;
-  do not bypass the protection with `--break-system-packages` for this workflow.
+- Homebrew/system Python may reject plain `pip install` with an
+  `externally-managed-environment` (PEP 668) error. Use the sanctioned,
+  one-time user install `python3 -m pip install --user
+  --break-system-packages 'sc-compose>=1.2.0'`; no venv or activation step is
+  required.
 - `cargo install` puts `oxigraph` under `~/.cargo/bin`; ensure that directory is
   visible to the Claude Code shell.
 - If a dependency is unavailable, stop the triage workflow. Do not write a

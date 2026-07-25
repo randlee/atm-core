@@ -29,7 +29,7 @@ The required runtime dependencies are:
 |---|---:|---|
 | `sc-compose` CLI | **1.2.0** | Rendering fenced Jinja templates and agent prompts |
 | `sc_compose` Python binding | **1.2.0** | Python/maturin rendering integrations and wrappers |
-| Python 3 + `rdflib` | supported Python 3 | RDF/Turtle parsing and SPARQL queries |
+| Python + `rdflib` | **3.11+** | RDF/Turtle parsing and SPARQL queries |
 | `jq` | any current release | Reading the JSON cursor contract |
 | `pytest` | any current release | Unit tests (only required with `--for-tests`) |
 
@@ -44,7 +44,7 @@ command -v jq && jq --version
 command -v python3 && python3 -c 'import rdflib; print(rdflib.__version__)'
 python3 -c 'from importlib.metadata import version; import sc_compose; print(version("sc-compose"))'
 
-for p in "$HOME/.local/bin" "$HOME/.venvs/graph-orchestration/bin" \
+for p in "$HOME/.local/bin" \
   "/opt/homebrew/bin" "/usr/local/bin"; do
   [ -x "$p/sc-compose" ] && echo "sc-compose: $p/sc-compose"
   [ -x "$p/python3" ] && echo "python3: $p/python3"
@@ -77,32 +77,25 @@ For the CLI (Homebrew tap):
 brew install randlee/tap/sc-compose
 ```
 
-For the Python/maturin binding and RDF/test packages (no administrator access
-required):
+For the Python/maturin binding (a one-time per-machine setup; no activation
+step):
 
 ```bash
-python3 -m pip install --user --upgrade 'sc-compose>=1.2.0' rdflib pytest
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 brew install jq
 ```
 
-If the system `python3` is managed by another tool, use a venv instead:
-
-```bash
-python3 -m venv .venv-graph-orchestration
-.venv-graph-orchestration/bin/python -m pip install --upgrade pip
-.venv-graph-orchestration/bin/python -m pip install 'sc-compose>=1.2.0' rdflib pytest
-export PATH="$PWD/.venv-graph-orchestration/bin:$PATH"
-brew install randlee/tap/sc-compose
-brew install jq
-```
+The `--user` target keeps the wheel out of Homebrew-managed site-packages;
+`--break-system-packages` is the explicit Python override for this trusted,
+user-owned install.  The wheel is published on PyPI and provides the
+`sc_compose` binding (Python 3.11+; prebuilt platform wheels).  It does not install the standalone CLI, so keep the
+Homebrew CLI install above as a separate step.  This is done once per machine;
+callers only perform a guarded `import sc_compose` on each invocation.
 
 ### Linux
 
 ```bash
-python3 -m venv .venv-graph-orchestration
-.venv-graph-orchestration/bin/python -m pip install --upgrade pip
-.venv-graph-orchestration/bin/python -m pip install 'sc-compose>=1.2.0' rdflib pytest
-export PATH="$PWD/.venv-graph-orchestration/bin:$PATH"
+python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'
 sudo apt-get install jq                 # Debian/Ubuntu; use the native package manager otherwise
 ```
 
@@ -111,29 +104,18 @@ CLI. Install the CLI from the v1.2.0 release or from a source checkout with
 the upstream `cargo install --path crates/sc-compose` procedure, then rerun
 preflight.
 
-If distribution Python permits a user install, the equivalent is:
-
-```bash
-python3 -m pip install --user --upgrade 'sc-compose>=1.2.0' rdflib pytest
-export PATH="$HOME/.local/bin:$PATH"
-```
-
 Install the `sc-compose` CLI from the project release channel for the
 platform (Homebrew tap, package manager, or a release binary); the pip wheel
 above is the Python binding and is not a CLI installation.
-
-Prefer the venv commands when distribution Python refuses user installs
-(PEP 668). Do not bypass the protection with `--break-system-packages`.
+If the invoking Python is not `python3`, substitute that interpreter in the
+one-time install command and in the preflight.
 
 ### Windows (PowerShell)
 
 ```powershell
-py -m venv .venv-graph-orchestration
-.venv-graph-orchestration\Scripts\python -m pip install --upgrade pip
-.venv-graph-orchestration\Scripts\python -m pip install 'sc-compose>=1.2.0' rdflib pytest
+py -m pip install --user --break-system-packages "sc-compose>=1.2.0"
 winget install randlee.sc-compose
 winget install jqlang.jq
-$env:Path = "$PWD\.venv-graph-orchestration\Scripts;$env:Path"
 ```
 
 The PyPI package and the standalone Windows CLI are separate artifacts. Restart
@@ -160,8 +142,10 @@ preflight: dependency errors are distinct from expected validation failures.
   often point at different interpreters.  Compare `command -v python3` with
   `python3 -m pip --version`, then use the same interpreter for installation or
   set `GRAPH_ORCH_PYTHON`.
-- **PEP 668 blocks `pip install`.** Use the venv commands above; do not bypass
-  the protection with `--break-system-packages` for this workflow.
+- **PEP 668 blocks `pip install`.** Run the sanctioned one-time user install:
+  `python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'`.
+  No venv or activation step is required.  If that interpreter is not the one
+  used by the skill, repeat the command with the exact invoking interpreter.
 - **The CLI works in Terminal but not in Claude Code.** Add the discovered
   directory to `PATH` in the current command/session.  Shell startup files are
   not guaranteed to be loaded.

@@ -37,6 +37,16 @@ def test_old_sc_compose_is_a_structured_failure(monkeypatch):
     assert any(item["name"] == "sc-compose" for item in result["error"]["failures"])
 
 
+def test_missing_python_binding_has_actionable_install_hint(monkeypatch):
+    def missing(_name):
+        raise check_dependencies.importlib.metadata.PackageNotFoundError("sc-compose")
+
+    monkeypatch.setattr(check_dependencies.importlib.metadata, "version", missing)
+    result = check_dependencies._python_binding_entry()
+    assert result["ok"] is False
+    assert "python3 -m pip install --user --break-system-packages" in result["error"]
+
+
 def test_cli_emits_json_success_contract():
     result = subprocess.run(
         [sys.executable, str(SCRIPT)],

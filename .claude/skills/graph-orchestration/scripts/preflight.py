@@ -21,6 +21,7 @@ from typing import Callable, Iterable
 
 
 MIN_SC_COMPOSE = (1, 2, 0)
+SC_COMPOSE_INSTALL = "python3 -m pip install --user --break-system-packages 'sc-compose>=1.2.0'"
 _VERSION_RE = re.compile(r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?")
 
 
@@ -166,7 +167,11 @@ def check_sc_compose_binding() -> Check:
 
     candidates = _python_candidates()
     if not candidates:
-        return Check("python3/sc_compose", False, "python3 not found")
+        return Check(
+            "python3/sc_compose",
+            False,
+            "python3 not found; install the binding with: " + SC_COMPOSE_INSTALL,
+        )
     failures: list[str] = []
     probe = (
         "from importlib.metadata import version; "
@@ -181,7 +186,8 @@ def check_sc_compose_binding() -> Check:
                 return Check(
                     "python3/sc_compose",
                     False,
-                    f"{path} has sc-compose {stdout}; required >= 1.2.0",
+                    f"{path} has sc-compose {stdout}; required >= 1.2.0; "
+                    "reinstall with: " + SC_COMPOSE_INSTALL,
                     path,
                 )
             return Check("python3/sc_compose", True, f"{path} binding {stdout}", path)
@@ -189,7 +195,10 @@ def check_sc_compose_binding() -> Check:
     return Check(
         "python3/sc_compose",
         False,
-        "sc_compose binding is unavailable to the selected python3 interpreter: "
+        "sc_compose binding is unavailable to the selected python3 interpreter; "
+        "install it with: "
+        + SC_COMPOSE_INSTALL
+        + ". Details: "
         + "; ".join(failures),
     )
 
