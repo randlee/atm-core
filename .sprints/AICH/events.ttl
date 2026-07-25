@@ -66,3 +66,6 @@ triage:a10 a triage:Assignment ;
 triage:c7 a triage:Completion ;
     triage:ofSprint triage:AICH-S1 ;
     triage:at "2026-07-25T07:07:03Z"^^xsd:dateTime .
+triage:c8 a triage:Completion ;
+    triage:ofSprint triage:AICH-S4 ;
+    triage:at "2026-07-25T07:37:35Z"^^xsd:dateTime .
