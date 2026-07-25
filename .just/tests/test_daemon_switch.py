@@ -47,6 +47,8 @@ class DaemonSwitchTests(unittest.TestCase):
             save_default_pair=mock.DEFAULT,
             replace_link=mock.DEFAULT,
             run_service=mock.DEFAULT,
+            validate_macos_launch_agent=mock.DEFAULT,
+            verify_live_pair=mock.DEFAULT,
         )
 
     def test_switch_pair_stops_then_replaces_both_selectors_then_starts(self) -> None:
@@ -77,6 +79,7 @@ class DaemonSwitchTests(unittest.TestCase):
                 mock.call(self.daemon_link, self.new_daemon),
             ],
         )
+        patched["verify_live_pair"].assert_called_once()
 
     def test_switch_pair_rolls_back_both_selectors_and_restarts_after_replace_failure(self) -> None:
         with self.patch_switch_inputs() as patched:
@@ -108,6 +111,33 @@ class DaemonSwitchTests(unittest.TestCase):
                 mock.call(self.args, "start"),
             ],
         )
+
+    def test_switch_restarts_and_verifies_when_selectors_already_match(self) -> None:
+        with self.patch_switch_inputs() as patched:
+            patched["selected_links"].return_value = (self.new_cli, self.new_daemon)
+            patched["require_executable"].side_effect = [
+                self.new_cli,
+                self.new_daemon,
+                self.new_cli,
+                self.new_daemon,
+            ]
+            self.module.switch_pair(self.args, self.new_cli, self.new_daemon)
+
+        self.assertEqual(
+            patched["run_service"].call_args_list,
+            [mock.call(self.args, "stop", allow_absent=True), mock.call(self.args, "start")],
+        )
+        patched["replace_link"].assert_not_called()
+        patched["verify_live_pair"].assert_called_once()
+
+    def test_verify_live_pair_rejects_stale_daemon(self) -> None:
+        with mock.patch.object(
+            self.module,
+            "doctor",
+            return_value={"daemon_context": {"version": "1.3.1"}},
+        ):
+            with self.assertRaisesRegex(self.module.SwitchError, "does not match"):
+                self.module.verify_live_pair(Path("/selectors/atm"), "atm 1.3.2-beta.21")
 
     def test_invalid_selector_is_rejected_before_service_stop(self) -> None:
         with self.patch_switch_inputs() as patched:

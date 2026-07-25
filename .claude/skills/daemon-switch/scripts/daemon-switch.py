@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -168,9 +169,61 @@ def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
             raise SwitchError(f"refusing to replace non-symlink {label} selector: {link}")
 
 
+def validate_macos_launch_agent(args: argparse.Namespace, daemon_link: Path) -> None:
+    """Require the managed LaunchAgent to execute the daemon selector itself.
+
+    A plist which names a Cellar/worktree binary bypasses the pair switch and
+    can leave a new CLI talking to an old daemon.  The service must execute the
+    selector path so both binaries move as one controlled unit.
+    """
+    if platform.system() != "Darwin":
+        return
+    if not args.launch_agent_plist:
+        raise SwitchError("macOS requires --launch-agent-plist for controlled singleton restart")
+    plist_path = Path(args.launch_agent_plist).expanduser()
+    try:
+        with plist_path.open("rb") as handle:
+            plist = plistlib.load(handle)
+    except (OSError, plistlib.InvalidFileException) as error:
+        raise SwitchError(f"cannot read LaunchAgent plist {plist_path}: {error}") from error
+    program_arguments = plist.get("ProgramArguments") if isinstance(plist, dict) else None
+    if not isinstance(program_arguments, list) or not program_arguments or not isinstance(program_arguments[0], str):
+        raise SwitchError(f"LaunchAgent plist {plist_path} has no executable ProgramArguments entry")
+    if Path(program_arguments[0]).expanduser().absolute() != daemon_link:
+        raise SwitchError(
+            "LaunchAgent daemon executable must be the daemon selector "
+            f"{daemon_link}, not {program_arguments[0]}"
+        )
+
+
+def daemon_version_from_doctor(report: dict[str, object]) -> str | None:
+    context = report.get("daemon_context")
+    if not isinstance(context, dict):
+        return None
+    value = context.get("version")
+    return value if isinstance(value, str) else None
+
+
+def verify_live_pair(cli: Path, expected_cli_version: str | None) -> None:
+    """Fail closed unless the selected CLI reaches a healthy matching daemon."""
+    report = doctor(cli)
+    if "error" in report:
+        raise SwitchError(f"managed daemon failed doctor after switch: {report['error']}")
+    daemon_version = daemon_version_from_doctor(report)
+    if not expected_cli_version or not daemon_version:
+        raise SwitchError("cannot verify selected CLI and daemon versions after switch")
+    normalized_cli = expected_cli_version.removeprefix("atm ").strip()
+    if daemon_version != normalized_cli:
+        raise SwitchError(
+            "managed daemon version does not match the selected CLI: "
+            f"daemon={daemon_version}, cli={normalized_cli}"
+        )
+
+
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
+    validate_macos_launch_agent(args, daemon_link)
     old_cli = require_executable(cli_link, "selected atm CLI")
     old_daemon = require_executable(daemon_link, "selected atm daemon")
     cli_target = require_executable(cli_target, "target atm CLI")
@@ -179,9 +232,6 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         raise SwitchError(
             "refusing targets from different release directories; build or install the matched pair together"
         )
-    if cli_link.resolve() == cli_target and daemon_link.resolve() == daemon_target:
-        print("already selected; service left running")
-        return
     if args.dry_run:
         print(json.dumps({"cli_link": str(cli_link), "daemon_link": str(daemon_link), "cli_target": str(cli_target), "daemon_target": str(daemon_target)}, indent=2))
         return
@@ -190,14 +240,18 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
     save_default_pair(old_cli, old_daemon)
     run_service(args, "stop", allow_absent=True)
     try:
-        replace_link(cli_link, cli_target)
-        replace_link(daemon_link, daemon_target)
+        if cli_link.resolve() != cli_target:
+            replace_link(cli_link, cli_target)
+        if daemon_link.resolve() != daemon_target:
+            replace_link(daemon_link, daemon_target)
         run_service(args, "start")
+        verify_live_pair(cli_link, version(cli_link))
     except Exception:
         replace_link(cli_link, old_cli)
         replace_link(daemon_link, old_daemon)
         try:
             run_service(args, "start")
+            verify_live_pair(cli_link, version(cli_link))
         except SwitchError:
             pass
         raise
