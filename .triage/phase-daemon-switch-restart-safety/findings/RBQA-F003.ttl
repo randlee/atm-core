@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F003>
+  a triage:Finding ;
+  triage:findingId "RBQA-F003" ;
+  triage:title "plain string equality in verify_live_pair can't distinguish differently-built binaries sharing an unbumped version string" ;
+  triage:description "The version check in verify_live_pair() (daemon-switch.py:216) uses plain string equality, which can't distinguish two different branch/worktree builds that happen to share an unbumped version string (e.g. both report 0.15.0-dev) — exactly the tool's documented primary use case per its own --cli/--daemon help text (\"branch/release atm binary\")." ;
+  triage:phaseId "phase-daemon-switch-restart-safety" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T22:08:30Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003/daemon-switch-restart-safety/1> ;
+  triage:openOn <urn:atm:triage:worktree/daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> ;
+  triage:promoteTo <urn:atm:triage:worktree/daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:occurrence/RBQA-F003/daemon-switch-restart-safety/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 216 ;
+  triage:snippet "if daemon_version != normalized_cli:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:occursIn <urn:atm:triage:worktree/daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:worktree/daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/daemon-switch-tooling" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:orderIndex 1 .

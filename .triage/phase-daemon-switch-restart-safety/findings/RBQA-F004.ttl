@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "RBQA-F004" ;
+  triage:title "Darwin requires --launch-agent-plist precondition is duplicated in two places" ;
+  triage:description "The \"Darwin requires --launch-agent-plist\" precondition is independently implemented in two places (service_commands() at daemon-switch.py:104-105 and validate_macos_launch_agent() at :181-182) — duplicated decision logic that can silently drift apart." ;
+  triage:phaseId "phase-daemon-switch-restart-safety" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "RBQA" ;
+  triage:severity "Important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/feature-daemon-switch-restart-safety/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F004/feature-daemon-switch-restart-safety/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94> .
+
+<urn:atm:triage:occurrence/RBQA-F004/feature-daemon-switch-restart-safety/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 104 ;
+  triage:snippet "if not args.launch_agent_plist: raise SwitchError(\"macOS requires --launch-agent-plist for controlled singleton restart\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94> .
+
+<urn:atm:triage:occurrence/RBQA-F004/feature-daemon-switch-restart-safety/2>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 181 ;
+  triage:snippet "if not args.launch_agent_plist: raise SwitchError(\"macOS requires --launch-agent-plist for controlled singleton restart\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94> .
+
+<urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/daemon-switch-tooling" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:orderIndex 1 .

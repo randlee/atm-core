@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "rollback reverification failure is silently swallowed" ;
+  triage:description "daemon-switch.py:249-257, in switch_pair's exception handler — after restoring the old cli/daemon links, run_service(start) and verify_live_pair(...) are both wrapped in `except SwitchError: pass`, then the function unconditionally re-raises only the original exception. If the rollback restart or its reverification itself fails, that second failure is completely discarded — no print, no log, nothing. The operator sees only the original error with no way to know whether recovery left the system verified-good or unknown/broken. This reproduces the exact \"silently mismatched pair\" failure class the fix exists to close, relocated to the rollback path." ;
+  triage:phaseId "phase-daemon-switch-restart-safety" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "QA" ;
+  triage:severity "Blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/feature-daemon-switch-restart-safety/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/feature-daemon-switch-restart-safety/1>
+  a triage:Occurrence ;
+  triage:file ".claude/skills/daemon-switch/scripts/daemon-switch.py" ;
+  triage:line 255 ;
+  triage:snippet "except SwitchError:\n            pass" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/daemon-switch-tooling" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:orderIndex 1 .

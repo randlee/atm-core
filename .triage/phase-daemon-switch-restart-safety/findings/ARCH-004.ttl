@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-004" ;
+  triage:title "validate_macos_launch_agent only covers Darwin/launchctl, no tracking issue for other platforms" ;
+  triage:description "validate_macos_launch_agent only covers Darwin/launchctl; the same incident class is architecturally possible via a systemd ExecStart= or Windows service binPath if/when this tool grows support for those platforms — no tracking issue recorded. Non-blocking, informational." ;
+  triage:phaseId "phase-daemon-switch-restart-safety" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "single-occurrence" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T22:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-004/feature-daemon-switch-restart-safety/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:occurrence/ARCH-004/feature-daemon-switch-restart-safety/1>
+  a triage:Occurrence ;
+  triage:file "scripts/daemon-switch.py" ;
+  triage:line -1 ;
+  triage:snippet "validate_macos_launch_agent: Darwin/launchctl only; missing tracking issues for systemd/Windows service variants" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1> .
+
+<urn:atm:triage:worktree/feature-daemon-switch-restart-safety/42589c94f9c5a1a946a38e3deb4f327796e1c2a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/daemon-switch-restart-safety" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/daemon-switch-tooling" ;
+  triage:headSha "42589c94f9c5a1a946a38e3deb4f327796e1c2a1" ;
+  triage:orderIndex 1 .
