@@ -7,15 +7,15 @@
   triage:title "Unbounded thread-per-connection is cheaper to exploit against the zero-auth-cost plaintext-test listener" ;
   triage:description "accept_loop/spawn_request_worker uses unbounded thread-per-connection. Pre-existing (not introduced by this diff), flagged for awareness only — cheaper to exploit against the zero-auth-cost plaintext-test listener than against mTLS." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "AI" ;
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "this-branch-only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:notes "Pre-existing resource exhaustion surface. Quality-mgr verdict: 'Not a new defect; follow-up hardening ticket suggested, not a blocker for this sprint.' Flagged for awareness only. Recorded as open Minor finding per standard triage contract but explicitly non-blocking for this sprint per QA-2 assessment." ;
-  triage:triagedAt "2026-07-24T00:00:00Z" ;
+  triage:notes "Pre-existing resource exhaustion surface. Quality-mgr verdict: 'Not a new defect; follow-up hardening ticket suggested, not a blocker for this sprint.' Flagged for awareness only. Recorded as open Minor finding per standard triage contract but explicitly non-blocking for this sprint per QA-2 assessment. Reconsidered in followup_pass QA recheck (2026-07-24): confirmed still open, correctly not re-raised as blocking per original verdict." ;
+  triage:triagedAt "2026-07-24T23:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-003/pAI-s21pre/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s21pre/5678337c> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
