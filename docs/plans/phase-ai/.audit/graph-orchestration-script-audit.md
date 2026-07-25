@@ -1,6 +1,6 @@
 # Graph-orchestration and triaging-findings script audit
 
-Audit window: `2026-07-25T04:15:13Z` through `2026-07-25T16:40:12Z` UTC.
+Audit window: `2026-07-25T04:15:13Z` through `2026-07-25T16:56:11Z` UTC.
 The lower bound is the first AICH event. Scope is AICH-S1 through AICH-S10 as
 defined in [README.md](README.md).
 
@@ -80,6 +80,31 @@ This supplemental criteria/order check is recorded because the validator query
 itself only checks duplicate orders and missing `triage:criteria`/
 `triage:order` properties; it does not check path resolution or contiguity.
 
+The raw findings validator was then run from the development ref, restricted
+to finding IDs matching `^AI(21|22|23|24|25|26|27|28|29|30)-`:
+
+```text
+python3 .claude/skills/graph-orchestration/scripts/validate-findings.py \
+  --findings-dir <audit-worktree>/.triage/phase-AI/findings \
+  --structure <audit-worktree>/.sprints/AICH/structure.ttl \
+  --events <audit-worktree>/.sprints/AICH/events.ttl \
+  --finding-id-regex '^AI(21|22|23|24|25|26|27|28|29|30)-' \
+  --max-results 12
+```
+
+Result: `169` files parsed, `63` scoped findings selected, `125` errors, and
+`0` warnings. The 125 errors are 124 missing-field errors for the 62 findings
+without `foundAt`, plus one `foundIn` error for `AI21-BLOCK-001` (the sole
+record with a top-level `foundAt`). The output was truncated after 12 detail
+lines; the exit status remained `1`.
+
+The validator is deliberately separate from cursor loading: `query_runner.py`
+filters out findings without a sprint membership link, while this check scans
+the raw directory first. Its implementation is
+`.claude/skills/graph-orchestration/scripts/validate-findings.py` with the
+SPARQL rule set in `validate-findings.sparql`; the tests pass with the existing
+graph suite (`23 passed`).
+
 ### Triaging-findings carry-forward
 
 Both refs pass the three unit tests in `scripts/test_triage_carry_forward.py`.
@@ -123,6 +148,14 @@ branch-specific behavior, not a complete phase finding inventory.
    in-flight S8 and selects S10. Preserve both snapshots and resolve the
    discrepancy explicitly.
 
+8. **High — AICH finding metadata is not sufficient to infer provenance.**
+   Git history identifies likely sprint/QA-pass batches from commit subjects
+   and bodies (for example, AI21, AI22, AI23 rechecks, and AI25/AI26 followups),
+   and the records retain occurrence branches and head SHAs. However, branch
+   names are current locations, not authoritative origin; commit author time
+   is only a lower bound for record creation. The actual QA observation time
+   and authoritative sprint assignment must come from the planned QA evidence.
+
 ## Recommended next actions
 
 1. Choose and document one canonical finding schema, or add an explicit
@@ -137,3 +170,6 @@ branch-specific behavior, not a complete phase finding inventory.
    enforce contiguous orders and resolvable criteria paths.
 5. Record the status-table timestamp, commit/QA/CI evidence, and the rule for
    reconciling table state with `.sprints/AICH/events.ttl`.
+6. Use QA artifacts to populate `triage:foundIn` and `triage:foundAt`; retain
+   occurrence branch/head SHA as reproducibility metadata rather than treating
+   it as origin provenance.
