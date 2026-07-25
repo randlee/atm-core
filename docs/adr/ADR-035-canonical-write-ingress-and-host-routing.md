@@ -76,16 +76,20 @@ second routing or acknowledgement path.
 Architecture checks must reject these shapes structurally, not merely by a
 denylist of historical identifiers.
 
-The router receives an authenticated ingress context. The peer form is an
-opaque `AuthenticatedPeer` constructed only by the HTTPS adapter after mTLS and
-exact configured-host/fingerprint verification; adapters cannot fabricate it.
-This type preserves the authenticate-before-route invariant without adding a
-peer-specific application handler.
+The router receives an ingress context. The normal peer form is an opaque
+`AuthenticatedPeer` constructed only by the HTTPS adapter after mTLS and exact
+configured-host/fingerprint verification; adapters cannot fabricate it. The
+explicit daemon-only `plaintext-test` smoke profile may construct a separately
+typed untrusted test-peer provenance context. Both forms reach the same router
+and handler; the test form cannot authorize a recipient or claim peer
+authentication. This preserves the production authenticate-before-route
+invariant without adding a peer-specific application handler.
 
 ## Compliance status
 
-This ADR is the accepted target contract. At the current integrated tip, the
-pre-persistence `route_write` remote-host branch and no-op
-`PostWriteRouter::dispatch` remain; AI.12 is the sole owning sprint for their
-deletion and the structural enforcement of this ADR. Until AI.12 closes, no
-current code claim may describe the post-write routing invariants as enforced.
+This ADR is the accepted target contract. AI.23 is the sole owner for removing
+any remaining pre-persistence host branch and for enforcing adapter convergence
+on the one `ApiRouter`/dispatcher/write/post-write chain. AI.24 owns the
+narrow same-store host-qualified duplicate receipt proof. Until their runtime
+evidence and structural gates close, no current code claim may describe these
+post-write routing invariants as enforced.

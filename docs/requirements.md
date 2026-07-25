@@ -3631,7 +3631,9 @@ mail correctness.
   Required behavior:
   - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
     Windows same-host clients use HTTP over loopback TCP only
-  - remote peers use HTTPS over TCP
+  - normal remote peers use HTTPS over TCP; the explicit daemon-only
+    `plaintext-test` smoke profile is governed by
+    `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
   - all production adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
@@ -3775,6 +3777,27 @@ mail correctness.
   - doctor output must surface listener, certificate, and trust state without
     exposing private key material
 
+- `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
+  plaintext peer-wire profile only for debug/smoke diagnosis.
+
+  Required behavior:
+  - default and every normal release invocation use mTLS plus the exact peer
+    allowlist; no TLS, certificate, or allowlist failure may fall back to
+    plaintext
+  - only `atm-daemon --peer-wire-security plaintext-test` enables plaintext;
+    the setting is non-durable, not environment-driven, and a restart without
+    that argument restores mTLS
+  - plaintext-test uses the same HTTP resource, `WriteRequest`, router,
+    persistence, and post-write path as mTLS. It must not introduce a
+    plaintext-only message shape, route, nudge, or acknowledgement path
+  - plaintext-test does not authenticate or authorize a peer. A declared
+    source-host is untrusted smoke provenance only and must not be presented as
+    authenticated, used to authorize a recipient, or treated as production
+    trust evidence
+  - doctor, retained logs, smoke JSON, and XHTML label the active wire-security
+    mode. Plaintext-test evidence never satisfies mTLS/allowlist acceptance
+    criteria
+
 - `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
   contract and must not be implemented as a special loopback-only send mode.
 
@@ -3813,8 +3836,10 @@ mail correctness.
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
     `max_batch_messages` control the feature; zero age disables it by default
     and the batch cap defaults to 100
-  - an operator can enable policy and request a one-shot sync; after a normal
-    HTTPS write succeeds the daemon may run the same bounded sync for that peer
+  - an operator can enable policy and request a one-shot sync. Automatic work
+    is signalled only by a locally persisted host-qualified write or an
+    unconfirmed peer delivery; ordinary peer success does not create a probe
+    loop or a second scheduler
   - storage queries locally persisted outbound records for the exact peer newer
     than the configured age and returns their original ULID and immutable
     payload through a storage trait
@@ -3828,9 +3853,8 @@ mail correctness.
     database write; same ULID with different immutable data returns a typed
     conflict, logs the discrepancy, preserves the original record, and has no
     side effect or panic
-  - automatic sync is limited to one peer batch per 60 seconds using a bounded
-    in-memory peer cooldown with no payload or message-ID state; explicit sync
-    runs one batch immediately and neither path retries or backs off
+  - explicit sync runs one bounded pass through the same per-host coordinator
+    as automatic recovery; it introduces no second transport or write route
 
 - `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
   accepts the canonical write request.
@@ -3906,6 +3930,24 @@ mail correctness.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it
+  - exactly one non-durable drain lease exists per canonical peer hostname;
+    it owns storage paging, one connection, ordered sends, and final rescan,
+    but contains no message ID, payload, cursor, receipt, or attempt history
+  - every drain advances a transient exclusive `(created_at, message_ulid)`
+    lower bound through pages of at most `max_batch_messages`, ordered
+    oldest-first, until an empty page, transport failure, or cancellation. It
+    sends ordinary canonical writes sequentially on one HTTP(S) connection;
+    no batch request shape or recovery-only endpoint is allowed. The lower
+    bound is dropped with the in-memory lease and is never durable state
+  - every newly persisted outbound write signals a per-host generation. The
+    drain must re-scan before lease release if that generation changes, and a
+    post-release signal starts the next lease; no write may be lost in the
+    final-scan/release race
+  - the post-write router has one `PeerDeliveryCoordinator::deliver_after_persist`
+    handoff for host-qualified writes. It serializes a foreground write behind
+    the same host lease and existing older backlog; it must not open a second
+    socket or bypass ordered canonical records. A request-local wait ends at
+    its existing deadline and is never durable or per-message delivery state
   - first recovery attempt is no earlier than 60 seconds; later failures use
     exponential backoff capped at 15 minutes
   - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
@@ -3914,6 +3956,10 @@ mail correctness.
   - empty window, policy disable, or peer revoke stops scheduling
   - retained events distinguish scheduled, attempted, confirmed, and
     unconfirmed recovery without body or certificate material
+  - doctor exposes a bounded, secret-free per-host link projection: quality,
+    last success/failure, last typed error, next attempt, drain state, and
+    bounded candidate count. It is observability only, not durable delivery
+    state
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

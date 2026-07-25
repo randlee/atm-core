@@ -5,7 +5,7 @@
 | ID | ADR-041 |
 | Status | Proposed |
 | Scope | Repository-wide |
-| Relates to | ADR-032, ADR-034, ADR-035, Phase AI.23–AI.24 |
+| Relates to | ADR-032, ADR-034, ADR-035, Phase AI.26–AI.27 |
 
 ## Decision
 

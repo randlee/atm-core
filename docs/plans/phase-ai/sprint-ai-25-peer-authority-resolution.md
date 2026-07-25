@@ -3,7 +3,7 @@ title: AI.25 DNS-backed peer authority
 status: proposed
 branch: feature/pAI-s25-peer-authority-resolution
 target: integrate/phase-AI
-depends_on: AI.22, AI.23, AI.11–AI.16
+depends_on: AI.21-pre, AI.22, AI.23, AI.11–AI.16
 ---
 
 # AI.25 — DNS-backed peer authority
@@ -21,19 +21,27 @@ effect in the one live daemon without a restart.
 
 ## Deliverables
 
-1. Define the storage-trait-owned authority record below; delete any peer-IP-
-   as-authority lookup.
+1. Evolve the existing storage-trait-owned `atm_storage::TrustedPeer` authority
+   record below; do **not** introduce a second `PeerAuthority` type or any
+   peer-IP-as-authority lookup.
 
    ```rust
-   pub struct PeerAuthority {
-       pub hostname: HostName,
+   pub struct TrustedPeer {
+       pub host: HostName,
        pub https_port: std::num::NonZeroU16,
-       pub pinned_fingerprint: CertificateFingerprint,
+       pub fingerprint: CertificateFingerprint,
    }
    ```
+
+   Update `crates/atm-storage/src/contract.rs::PeerConfigStore`, its storage
+   implementations/tests, `crates/atm-daemon/src/composition.rs`, and
+   `crates/atm-daemon/src/https_transport.rs` together. The peer CLI and
+   doctor DTO consume that same record; neither gets a parallel authority DTO.
 2. Add bounded fresh DNS resolution: hostname targets exact-match a registered
    authority; literal IP targets match exactly one authority's current A/AAAA
-   result. Zero or multiple matches fail closed with typed errors.
+   result. Zero or multiple matches fail closed with typed errors. Resolution
+   occurs for every new HTTPS connection; it is never a cached delivery or
+   health decision.
 3. Preserve the chosen registered hostname and port for TLS authority/pin verification;
    reject reverse-DNS inference and never persist resolver output. Document
    that the peer operator maintains the hostname's forward DNS/DDNS record as
@@ -41,6 +49,19 @@ effect in the one live daemon without a restart.
 4. Add daemon-owned atomic refresh of live trust verification after CLI trust
    add/replace/revoke. No second daemon, listener fallback, or direct SQLite
    access outside storage traits.
+
+## Implementation map
+
+- `crates/atm-storage/src/contract.rs`: evolve `TrustedPeer` and
+  `PeerConfigStore`; define no resolver cache/persistence method.
+- `crates/atm-daemon/src/https_transport.rs`: resolve a hostname for each new
+  peer connection, select exactly one existing `TrustedPeer`, and retain that
+  record's hostname/port for TLS SNI and fingerprint verification.
+- `crates/atm-daemon/src/composition.rs`: replace the live verifier atomically
+  from `PeerConfigStore` after a trust mutation; do not rebuild the daemon.
+- `crates/atm-core/src/doctor/report.rs` and `docs/atm-daemon/http-api.md`:
+  project only hostname, configured port, and safe configuration health—never
+  resolved addresses or certificate/private-key material.
 
 ## Acceptance criteria
 
@@ -51,7 +72,8 @@ effect in the one live daemon without a restart.
 - A forward DNS change models a VPN address change without reverse DNS,
   SQLite mutation, daemon replacement, or a second trust record.
 - An IP matching zero or multiple registered names fails before TLS/route.
-- An IP-only record does not authorize a hostname, and no resolver result is
+- A literal IP has no standalone authority record; it authorizes only when it
+  resolves to exactly one registered hostname, and no resolver result is
   written to SQLite.
 - A live trust mutation changes the current daemon verifier without process
   replacement; tests prove one daemon remains.
@@ -73,3 +95,7 @@ requests into the existing `RequestEnvelope` and dispatch them through the
 daemon's single `Arc<dyn RequestDispatcher>` (`composition.rs`'s
 `request_dispatcher()` accessor), per `AI.23` — it must not persist or nudge
 through a second implementation.
+
+It also does not probe peers or retain reachability state. AI.27 exposes
+derived link quality and AI.28 owns the only bounded reconnect/drain
+coordination.

@@ -145,10 +145,11 @@ Current implementation:
   response decoding for the current `AtmProtocol` request/response contract.
 - It must not access SQLite or spawn processes. No external crate may depend
   on it or construct it directly.
-- The active implementation's bounded timeout/retry and durable replay-resume
-  behavior is legacy transport behavior. Phase AI's proposed HTTP peer adapter
-  is specified separately and does not change this active manifest until its
-  owning sprint lands.
+- Historical timeout/retry and durable replay-resume behavior is retired. The
+  Phase AI HTTPS adapter owns only HTTP(S) adaptation. ADR-038's separate,
+  daemon-private coordinator may ask the storage trait for canonical records,
+  but neither adapter nor coordinator can own a replay store, outbox, retry
+  queue, receipt, message payload, or persistence implementation.
 
 ## LifecycleControlSourceAdapter
 

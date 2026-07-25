@@ -33,7 +33,14 @@ types. Environment variables are not an operator configuration surface. Peer
 trust is a stable hostname plus pinned certificate fingerprint; ADR-040 defines
 the bounded DNS lookup that permits a direct current IP without storing an IP
 alias. The initial certificate may be self-signed and generated on demand.
-Unauthenticated or untrusted TLS peers are rejected before routing.
+Unauthenticated or untrusted TLS peers are rejected before routing. The only
+exception is the explicit non-durable daemon launch profile
+`--peer-wire-security plaintext-test`, used solely to diagnose connectivity in
+smoke work. It disables TLS/pin/allowlist enforcement without selecting a
+different HTTP route or payload. It has no automatic fallback, is visibly
+reported by doctor/logs/evidence, and never proves the production security
+contract. A declared plaintext source host is untrusted test provenance, not
+peer authentication.
 
 The daemon has no cross-host outbox, replay store, retry state, receipt
 synthesis, per-host acknowledgement state, or duplicate-delivery subsystem.

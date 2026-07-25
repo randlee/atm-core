@@ -3,7 +3,7 @@ title: AI.27 truthful peer delivery outcomes
 status: proposed
 branch: feature/pAI-s27-peer-delivery-observability
 target: integrate/phase-AI
-depends_on: AI.23, AI.26
+depends_on: AI.21-pre, AI.23, AI.26
 ---
 
 # AI.27 — truthful peer delivery outcomes
@@ -15,8 +15,9 @@ depends_on: AI.23, AI.26
 
 ## Closure
 
-CLI errors and retained daemon events distinguish persisted, confirmed, and
-unconfirmed peer writes; no sender-side event overstates remote receipt.
+CLI errors, retained daemon events, and `atm doctor --json` distinguish
+persisted, confirmed, and unconfirmed peer writes. Each configured peer has a
+derived link-quality projection without a second delivery-state store.
 
 ## Deliverables
 
@@ -43,7 +44,7 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
        pub kind: PeerDeliveryEventKind,
        pub request_id: RequestId,
        pub message_id: Option<MessageId>,
-       pub peer: PeerAuthority,
+       pub peer: HostName,
        pub error_code: Option<AtmErrorCode>,
        pub candidate_count: Option<u32>,
        pub next_attempt_at: Option<IsoTimestamp>,
@@ -54,11 +55,48 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
    peer acceptance is unknown. `peer_delivery_unconfirmed` is this sprint's
    retained terminal event for that same result. AI.28 uses the four
    `peer_recovery_*` variants only for its later bounded recovery attempts.
-3. Replace pre-peer `outcome sent` with `write_persisted`; emit
+   The event deliberately contains the registered hostname only: never a
+   certificate pin, private-key reference, body, or resolved IP.
+3. Add the following bounded, in-memory projection to the daemon runtime and
+   `DoctorReport`; `atm doctor --json` is the initial operator display surface:
+
+   ```rust
+   pub enum PeerLinkQuality { Healthy, Degraded, Unreachable, Misconfigured }
+   pub enum PeerDrainState { Idle, Connecting, Draining }
+
+   pub struct PeerLinkStatus {
+       pub peer: HostName,
+       pub quality: PeerLinkQuality,
+       pub last_success_at: Option<IsoTimestamp>,
+       pub last_failure_at: Option<IsoTimestamp>,
+       pub last_error_code: Option<AtmErrorCode>,
+       pub next_attempt_at: Option<IsoTimestamp>,
+       pub drain: PeerDrainState,
+       pub candidate_count: Option<u32>,
+   }
+   ```
+
+   `PeerLinkStatus` is a lossy observability snapshot. It stores no message
+   IDs, payloads, cursors, delivery receipts, or authority material; restart
+   resets it to `Misconfigured` or `Degraded` until an ordinary attempt
+   establishes a newer fact.
+4. Replace pre-peer `outcome sent` with `write_persisted`; emit
    `peer_delivery_confirmed` only after peer HTTP acceptance, otherwise
    `peer_delivery_unconfirmed`.
-4. Update smoke evidence parsers and user-facing recovery text to reject local
+5. Update smoke evidence parsers and user-facing recovery text to reject local
    persistence as receiver proof.
+
+## Implementation map
+
+- `crates/atm-core/src/error_codes.rs` and `error.rs`: own the one typed
+  `RemoteDeliveryUnconfirmed` catalog entry and safe recovery text.
+- `crates/atm-daemon/src/runtime_health.rs`: emit the specified events from the
+  canonical route/post-write outcome and maintain the bounded projection; do
+  not add transport-local status state.
+- `crates/atm-core/src/doctor/report.rs` and `doctor/mod.rs`: add the
+  secret-free `PeerLinkStatus` projection to `DoctorReport`.
+- `scripts/smoke/analyze_logs.py`: consume event names only; it must not infer
+  receiver acceptance from persistence or TCP connect logs.
 
 ## Acceptance criteria
 
@@ -66,12 +104,16 @@ unconfirmed peer writes; no sender-side event overstates remote receipt.
   response arrives.
 - Every terminal error is observable and maps to one ADR-032 error value.
 - A local read timeout has a truthful typed outcome and recovery guidance.
+- `atm doctor --json` reports one secret-free, bounded status row per configured
+  peer; a failed attempt changes it to `Degraded` or `Unreachable`, and a peer
+  HTTP acceptance changes it to `Healthy`.
 - No new receipt, delivery state, or ack-specific route is introduced.
 
 ## Required validation
 
 Tests for response-write failure, route failure, peer success, peer uncertainty,
-and error-code mapping; event-schema assertion; `just lint`; `just test`.
+and error-code mapping; doctor status transition/secret-exclusion assertion;
+event-schema assertion; `just lint`; `just test`.
 
 ## Non-closure
 
@@ -79,4 +121,6 @@ Physical peer proof belongs only to AI.29. Delivery-event emission must occur
 within the same shared dispatch/write path AI.23 establishes
 (`Arc<dyn RequestDispatcher>` via `composition.rs`'s `request_dispatcher()`
 accessor) — this sprint does not introduce a second event-emission or
-write/nudge implementation for peer-originated messages.
+write/nudge implementation for peer-originated messages. AI.28 owns all
+reconnect timing and single-flight coordination; this sprint only projects its
+observable facts.

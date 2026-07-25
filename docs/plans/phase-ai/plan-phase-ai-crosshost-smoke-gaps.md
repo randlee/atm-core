@@ -12,13 +12,16 @@ depends_on: AI.11–AI.16
 ## Goal
 
 Close the concrete defects found in the first Mac↔Windows smoke without
-creating a second transport path or delivery-state subsystem. HTTPS remains
-only the post-write adapter of the existing canonical write path.
+creating a second transport path or delivery-state subsystem. Normal mTLS HTTPS
+is only the post-write adapter of the existing canonical write path;
+AI.21-pre's explicit plaintext-test process profile uses that same HTTP route
+solely to diagnose connectivity and proves no production security property.
 
 ## Findings and owners
 
 | Finding | Owner sprint | Closure |
 | --- | --- | --- |
+| mixed evidence branch has no supported, repeatable real-daemon harness | AI.21-pre | Python/sc-compose JSON/XHTML runner and explicitly labelled diagnostic wire profile |
 | host-qualified same identity is rejected before remote routing | AI.22 | identity-only self-send guard; host-preserving address parser |
 | peer/local write and nudge convergence is not mechanically proven | AI.23 | one HTTP `WriteRequest` endpoint and structural enforcement |
 | host-qualified ACK reply has no receiver-inbox/nudge proof | AI.24 | advertised-IP TCP ACK receipt and nudge proof |
@@ -37,14 +40,16 @@ unconfirmed; none is release evidence.
 ## Dependencies
 
 ```text
-AI.22 self-send guard ─> AI.23 shared write endpoint ─> AI.24 ACK receipt proof
-                                      │
-AI.25 peer authority ──────────────────────────────┐
-AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery ─> AI.29 physical rerun
-AI.30 schema/HTTP compatibility ────────────────────┘
+AI.21-pre evidence harness ─┬─> AI.22 self-send guard ─> AI.23 shared write endpoint ─> AI.24 ACK receipt proof
+                            ├─> AI.25 peer authority ────────────────────────────────┐
+                            └─> AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery
+AI.30 schema/HTTP compatibility ───────────────────────────────────────────────┘
+AI.24 + AI.25–AI.28 + AI.30 ─> AI.29 physical rerun
 ```
 
-AI.22, AI.23, and AI.24 are strictly ordered. AI.25 and AI.26 may be
+AI.21-pre closes the retained smoke harness/security-profile adoption before
+the later behavioral sprints use it for real-daemon evidence. AI.22, AI.23,
+and AI.24 are strictly ordered. AI.25 and AI.26 may be
 implemented in parallel after AI.23 because they own separate authority and
 deadline seams. AI.27 follows AI.26 because it reports AI.26's typed
 uncertainty result. AI.28 follows AI.27. AI.29 starts only after AI.24,
@@ -55,6 +60,8 @@ so tested CLI/daemon builds are not artificially blocked by release-label drift.
 
 - A registered hostname plus certificate pin is the peer authority; resolved
   IPs are transient DNS facts, never SQLite aliases.
+- The existing `TrustedPeer { host, https_port, fingerprint }` is that one
+  authority record; a second `PeerAuthority` DTO is prohibited.
 - An IP target is accepted only when it currently resolves from exactly one
   registered hostname. No reverse-DNS inference exists.
 - A single absolute request deadline governs every local and remote leg.
@@ -68,6 +75,10 @@ so tested CLI/daemon builds are not artificially blocked by release-label drift.
 - Product release SemVer is diagnostic only. A separate CLI/daemon schema and
   HTTP API SemVer contract governs admission; same-major additive HTTP changes
   remain interoperable.
+- Plaintext smoke diagnosis is selected only by the non-durable daemon CLI
+  argument, is visibly labelled, provides untrusted provenance only, and never
+  changes the HTTP resource, `WriteRequest`, router, persistence, post-write,
+  or production TLS/allowlist evidence contract.
 - Each sprint's first commit sets matching workspace CLI/daemon release
   metadata to `1.3.2-beta-<sprint-number>` and verifies it with
   `atm doctor --json` before runtime evidence.

@@ -5,7 +5,7 @@
 | ID | ADR-038 |
 | Status | Proposed |
 | Scope | Repository-wide |
-| Relates to | ADR-034, ADR-035, ADR-036, Phase AI.16 |
+| Relates to | ADR-034, ADR-035, ADR-036, ADR-041, Phase AI.28 |
 
 ## Decision
 
@@ -21,22 +21,36 @@ pub struct PeerSyncPolicy {
 ```
 
 The policy defaults to disabled. An operator enables it with the peer CLI and
-may request a one-shot sync. After an ordinary HTTPS write succeeds or peer
-delivery is unconfirmed, the daemon may run the same bounded sync for that
-peer. A sync queries storage for local
-outbound canonical records addressed to that exact peer and newer than
-`now - max_message_age`, then submits each unchanged record to
-`PeerHttpTransport`.
+may request a one-shot sync. A host-qualified local outbound persistence or a
+peer-delivery failure signals the one bounded per-host drain coordinator. The
+coordinator queries storage for local outbound canonical records addressed to
+that exact peer and newer than `now - max_message_age`, then submits each
+unchanged record to `PeerHttpTransport`.
 
-Each scan selects at most `max_batch_messages`, oldest first. Automatic scans
-are rate-limited to once per peer per 60 seconds by a bounded in-memory
-`HostName -> Instant` cooldown map with no message IDs or payloads. The map is
-not durable delivery state and is discarded on restart. Explicit one-shot sync
-executes one bounded batch immediately. After a delivery failure, one bounded
-in-memory per-peer scheduler may trigger the scan no earlier than 60 seconds,
-then with exponential backoff capped at 15 minutes while eligible records
-remain. It stores no message ID, payload, cursor, receipt, or delivery result
-and restarts with the 60-second minimum.
+Each scan advances a transient exclusive `(created_at, message_ulid)` lower
+bound through pages of at most `max_batch_messages`, ordered oldest first,
+until it observes an empty page, a transport failure, or cancellation. One
+in-memory lease per `HostName` covers storage paging, one HTTP(S) connection in
+the active wire-security profile, sequential ordinary `WriteRequest`
+submissions, and final rescan. It carries only running
+state, a wake generation, next attempt time, and backoff; it stores no message
+ID, payload, cursor, receipt, or delivery result. A persisted write increments
+the generation. Before lease release, an empty final scan must observe the same
+generation; otherwise it scans again. A post-release signal starts the next
+lease.
+
+The post-write router calls the one coordinator handoff for every
+host-qualified origin write after canonical persistence. A foreground request
+waits behind that same host lease and older ordered records only within its
+existing request deadline; it never opens a second socket. This transient
+request-local wait is neither a coordinator slot field nor durable delivery
+state. Its timeout is the one truthful unconfirmed outcome defined by ADR-041.
+
+After a delivery failure, the coordinator schedules the same host no earlier
+than 60 seconds, then with exponential backoff capped at 15 minutes while
+eligible records remain. Restart waits the same minimum before an eligible
+attempt. Explicit one-shot sync uses the same lease and connection. There is no
+ping, empty-peer monitor, batch endpoint, or recovery-specific router.
 
 The storage trait—not the daemon or transport—owns the backend-neutral query.
 There is no outbox, replay store, retry queue, background monitor, cursor,

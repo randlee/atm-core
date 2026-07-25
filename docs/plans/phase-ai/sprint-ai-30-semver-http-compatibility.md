@@ -33,6 +33,18 @@ interoperable.
 4. Add opt-in prerelease publication support for `alpha`/`beta` SemVer builds
    through `atm-beta`; keep normal Homebrew `atm` stable-only.
 
+## Implementation map
+
+- `crates/atm-core/src/protocol.rs`: replace release-string admission with
+  strict `ReleaseVersion`, schema-version, and `HttpApiVersion` DTO fields.
+- `crates/atm-daemon-client/src/compatibility.rs` and
+  `crates/atm-daemon/src/runtime_health.rs`: exchange and decide the same
+  compatibility preflight/verdict; neither independently compares releases.
+- `crates/atm-core/src/api.rs` and the OpenAPI source: declare `/v{major}` and
+  additive-field decoding once for local and peer HTTP adapters.
+- repo release/Homebrew scripts: publish explicit `atm-beta` prereleases only;
+  normal stable formula selection cannot resolve a prerelease.
+
 ## Required signatures
 
 ```rust

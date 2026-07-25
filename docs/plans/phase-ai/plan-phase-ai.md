@@ -113,10 +113,10 @@ pub trait DaemonApiClient: Send + Sync {
 
 pub struct RequestDeadline(/* monotonic absolute deadline */);
 
-pub struct PeerAuthority {
-    pub hostname: HostName,
+pub struct TrustedPeer {
+    pub host: HostName,
     pub https_port: std::num::NonZeroU16,
-    pub pinned_fingerprint: CertificateFingerprint,
+    pub fingerprint: CertificateFingerprint,
 }
 
 pub struct AuthenticatedPeer {
@@ -128,6 +128,7 @@ pub struct AuthenticatedPeer {
 pub enum AuthenticatedIngress {
     Local(/* UDS-authenticated local caller */),
     Peer(AuthenticatedPeer),
+    UntrustedSmokePeer(/* plaintext-test provenance only */),
 }
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
@@ -178,6 +179,7 @@ integration; they do not alter it.
 | AI.19 | `feature/pAI-s19-hermes-graft-integration` | One typed bridge maps canonical nudge source address to an isolated Hermes `atm:` chat after persistence |
 | AI.20 | `feature/pAI-s20-hermes-bridge-deployment` | Per-profile launchd deployment and reproducible bridge runbook |
 | AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
+| AI.21-pre | `feature/pAI-s21pre-crosshost-evidence-harness` | Supported Python/XHTML peer-smoke harness and explicit test-only plaintext wire profile |
 | AI.22 | `feature/pAI-s22-loopback-self-send-exemption` | Host-qualified destinations bypass only the unqualified identity self-send guard; advertised-IP is the required same-host TCP proof |
 | AI.23 | `feature/pAI-s23-crosshost-shared-write-path` | Local CLI, own-IP, and peer traffic converge at one HTTP `WriteRequest` endpoint, dispatcher, persistence method, and post-write router |
 | AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route |

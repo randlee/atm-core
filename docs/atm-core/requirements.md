@@ -196,8 +196,11 @@ Initial crate requirement IDs:
   implementation unless it is proven to be shared ATM semantics.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the transport-neutral application
   request/response types: `AgentAddress`, `WriteRequest`, read/query inputs,
-  and canonical message projections. Local UDS HTTP, remote HTTPS, and the
-  in-process test adapter decode to or encode from these same types. Satisfies:
+  and canonical message projections. Local UDS HTTP, normal remote HTTPS, the
+  explicit daemon-only plaintext-test peer profile, and the in-process test
+  adapter decode to or encode from these same types. The plaintext profile is
+  untrusted provenance only and cannot create a second application path.
+  Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
 - `REQ-CORE-TRANSPORT-002` `atm-core` owns the typed destination-host field
   and post-write routing contract. Exactly one post-write router chooses local
@@ -212,12 +215,15 @@ Initial crate requirement IDs:
   metadata and still uses the canonical write. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
-  delivery state: no replay store, outbox, retry queue, receipt, remote ack
-  state, or duplicate-delivery subsystem. Storage idempotency is by immutable
-  message ULID. An identical already-delivered remote duplicate is a no-op;
-  the narrow same-host peer receipt of a retained origin record logs its
-  skipped database write and continues the ordinary inbound nudge without a
-  second record or peer re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
+  per-message delivery state: no replay store, outbox, retry queue, receipt,
+  remote ack state, or duplicate-delivery subsystem. The sole permitted
+  non-durable state is REQ-CORE-TRANSPORT-003B's per-host lease, generation,
+  next-attempt time, and backoff for bounded canonical-record scans.
+  Storage idempotency is by immutable message ULID. An identical
+  already-delivered remote duplicate is a no-op; the narrow same-host peer
+  receipt of a retained origin record logs its skipped database write and
+  continues the ordinary inbound nudge without a second record or peer
+  re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
   canonical write. A failed remote attempt creates no remote recipient row or
   delivery state; an already-persisted local sender record remains immutable.

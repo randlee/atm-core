@@ -5,7 +5,7 @@
 | ID | ADR-040 |
 | Status | Proposed |
 | Scope | Repository-wide |
-| Relates to | ADR-034, ADR-035, Phase AI.22 |
+| Relates to | ADR-034, ADR-035, Phase AI.25 |
 
 ## Decision
 

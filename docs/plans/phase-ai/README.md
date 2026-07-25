@@ -42,7 +42,9 @@ browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
 
 Cross-host smoke-gap closure is specified by
-[AI.22–AI.30](plan-phase-ai-crosshost-smoke-gaps.md): AI.22 fixes the
+[AI.21-pre–AI.30](plan-phase-ai-crosshost-smoke-gaps.md): AI.21-pre establishes
+the supported Python/XHTML smoke harness and explicit plaintext-test diagnostic
+profile; AI.22 fixes the
 host-qualified self-send guard; AI.23 proves one shared HTTP write endpoint;
 AI.24 proves host-qualified ACK receipt/nudge through the advertised-IP TCP
 path; AI.25 establishes stable hostname/pin peer authority; AI.26 establishes

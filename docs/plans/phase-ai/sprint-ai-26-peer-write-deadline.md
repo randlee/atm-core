@@ -3,7 +3,7 @@ title: AI.26 end-to-end peer write deadline
 status: proposed
 branch: feature/pAI-s26-peer-write-deadline
 target: integrate/phase-AI
-depends_on: AI.23, AI.25, AI.11–AI.16
+depends_on: AI.21-pre, AI.23, AI.25, AI.11–AI.16
 ---
 
 # AI.26 — end-to-end peer write deadline
@@ -42,6 +42,19 @@ completion or cancellation; no route creates a longer independent deadline.
    AI.27 emits the retained terminal event for this same error; it does not
    create a second delivery outcome or a second error contract.
 
+## Implementation map
+
+- `crates/atm-core/src/api.rs`: retain `RequestDeadline` as the sole public
+  deadline value; add no peer-specific deadline type to core.
+- `crates/atm-daemon/src/local_ipc_transport/request_worker.rs` and
+  `local_tcp_transport.rs`: create the deadline once at HTTP admission and
+  pass it unchanged to `ApiRouter`.
+- `crates/atm-daemon/src/runtime_health.rs`: pass only remaining budget through
+  `PostWriteRouter`; delete its fresh `HttpsRequestDeadline::default()` call.
+- `crates/atm-daemon/src/https_transport.rs`: consume `RequestDeadline` for
+  DNS/connect/TLS/request/response, and map expiry/disconnect after local
+  persistence to the one `RemoteDeliveryUnconfirmed` error.
+
 ## Acceptance criteria
 
 - A 3s local request cannot run a 5s-per-leg peer attempt.
@@ -50,6 +63,12 @@ completion or cancellation; no route creates a longer independent deadline.
 - A cancellation race cannot claim remote success; receiver duplicate-ULID
   semantics make a caller retry safe.
 - Runtime shutdown and request cancellation leave no detached tracked work.
+
+The synchronous foreground attempt is one ordinary `WriteRequest` on the
+shared peer HTTP endpoint. If its deadline expires after local persistence,
+the request ends with `REMOTE_DELIVERY_UNCONFIRMED`; AI.28 may later start a
+new bounded recovery drain from the persisted immutable record. It is not a
+detached continuation of this request.
 
 ## Required validation
 
