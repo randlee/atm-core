@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-004>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-004" ;
+  triage:title "ADR-033 HTTP endpoint route table disagrees with requirements.md/http-api.md/actual encode_response code" ;
+  triage:description "docs/adr/ADR-033-http-endpoint-contract.md (lines ~23-29, status Accepted) describes a route family with no per-message path parameter at all (/messages, /messages/inspect, /messages DELETE, /messages/read, /doctor). This disagrees with docs/requirements.md (lines ~3641-3643: /v1/atm/messages, /v1/atm/message/{message-id}, /v1/atm/message/{message-id}/read), docs/plans/phase-ai/README.md (same singular/{message-id} shape), docs/atm-daemon/http-api.md, and the actual Location header construction in crates/atm-core/src/api.rs (lines 361/367: format!(\"/v1/atm/message/{}\", value.message_id)) which uses a real per-message id path segment. These cannot both be the accepted contract -- one has drifted. AI.23's sprint doc 'Required Document Updates' section lists ADR-034/ADR-035 but not ADR-033, so this drift is currently unowned by any sprint." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T23:23:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/3> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-033-http-endpoint-contract.md" ;
+  triage:line 23 ;
+  triage:snippet "| Resource | Initial operations | / | `/messages` | `GET` list/query, `POST` canonical send/ack write |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/2>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 3641 ;
+  triage:snippet "- the stable initial resources are `/v1/atm/messages`, `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and `/v1/atm/doctor`;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 361 ;
+  triage:snippet "Some(format!(\"/v1/atm/message/{}\", value.message_id))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .

@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-001>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-001" ;
+  triage:title "ReleaseVersion::parse discards semver's own diagnostic detail via .is_err() instead of .map_err()" ;
+  triage:description "crates/atm-core/src/protocol.rs:88-93: `if semver::Version::parse(value).is_err() { return Err(...) }` discards semver::Error's specific parse-failure description and the resulting AtmError message only echoes the raw input value, not why parsing failed. Recommend `.map_err(|source| AtmError::new(..., format!(\"invalid ATM release version `{value}`: {source}\")))` to fold in semver's own diagnostic." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-001/AI23/1> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca01> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI23/b88ca01> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-001/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 88 ;
+  triage:snippet "if semver::Version::parse(value).is_err() { return Err(AtmError::new(...)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca01" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca01> .
+
+<urn:atm:triage:worktree/AI23/b88ca01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca01" ;
+  triage:orderIndex 23 .

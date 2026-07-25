@@ -1,0 +1,111 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-002" ;
+  triage:title "Peer HTTPS listener spawns unbounded per-connection threads with no concurrency cap or handle reaping" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs accept_loop (around line 339-402) spawns a new OS thread per accepted TCP connection via spawn_request_worker with no concurrency limit, unlike the local loopback listener in the same crate (local_tcp_transport.rs) which enforces MAX_CONCURRENT_CONNECTIONS = 64. Resulting JoinHandles accumulate in HttpsListenerSet.requests: Arc<Mutex<Vec<JoinHandle<()>>>> and are only drained at full listener shutdown -- nothing reaps completed handles during normal uptime. This listener is untrusted-by-default per ADR-034 (peer authentication happens inside the spawned worker, after accept), so a remote peer can open connections faster than they complete, growing live thread count and the tracking Vec unboundedly for the life of the process." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/1> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
+  triage:openOn <urn:atm:triage:worktree/AI26/b5eec1bf> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 348 ;
+  triage:snippet "spawn_request_worker(stream, &security, &router, &requests)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 384 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-peer-http-request\".to_string()).spawn({...})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 270 ;
+  triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 306 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 270 ;
+  triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.26" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 306 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.26" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/AI26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.26" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 26 .

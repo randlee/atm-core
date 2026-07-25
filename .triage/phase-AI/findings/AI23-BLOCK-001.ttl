@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-001" ;
+  triage:title "Sub-task 4 own-IP/advertised-IP peer-TCP write proof not implemented" ;
+  triage:description "Sprint AI.23 sub-task 4 requires a daemon-pair integration helper proving a write addressed to <self>@<team>.<advertised-ip> enters the peer HTTP listener and executes ApiRouter::route(..., Peer, ...), with a required structural boundary test that localhost/own-IP are not matched by a dedicated production branch before the peer adapter. This is also an explicit acceptance criterion. Commit 80da43238523398d4a5eede54c41b5bdcef1df96 implements sub-tasks 1/2/3/5 but contains no advertised_ip/own-IP daemon-pair helper, test, or boundary check anywhere in the tree." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
+  triage:openOn <urn:atm:triage:worktree/AI25/b5eec1bf> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI25/b5eec1bf> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 ;
+  triage:patternMatches 0 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AI24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 ;
+  triage:patternMatches 0 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/AI25/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.25" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 25 ;
+  triage:patternMatches 0 ;
+  triage:status "absent" .

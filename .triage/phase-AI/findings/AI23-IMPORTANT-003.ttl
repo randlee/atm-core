@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-003>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-003" ;
+  triage:title "New AI.23 adapter-side-effect boundary gate uses gameable substring matching instead of AST-based enforcement" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs::ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects enforces its forbidden-call list via raw substring matching against literal tokens instead of AST-based enforcement. This is trivially defeated by differently-named private helpers that duplicate logic without matching the forbidden tokens. The same file already contains HostRoutingVisitor with alias/binding resolution (lines 310-616) for AI.12, which was not extended to this new check despite AI.23 sub-task 2 requiring fail-closed enforcement." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-003/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-003/AI24/1> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-003/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 104 ;
+  triage:snippet "fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() { ... uses .contains(forbidden) for substring matching }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-003/AI24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 104 ;
+  triage:snippet "fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() { ... uses .contains(forbidden) for substring matching }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.24" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/AI24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.24" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .
