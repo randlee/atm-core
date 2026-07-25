@@ -16,7 +16,6 @@ use crate::protocol::{
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
-use crate::types::HostName;
 use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
@@ -43,9 +42,10 @@ impl HttpRequest {
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
     match request {
-        // Send and acknowledgement are the same canonical write resource.
-        // `acknowledges_message_id` is payload data, never an endpoint choice.
-        RequestEnvelope::Write(_) => ("POST", "/v1/atm/messages".to_string()),
+        RequestEnvelope::Write(request) => match request.acknowledges_message_id {
+            Some(message_id) => ("POST", format!("/v1/atm/message/{message_id}/ack")),
+            None => ("POST", "/v1/atm/messages".to_string()),
+        },
         RequestEnvelope::List(_) => ("GET", "/v1/atm/messages".to_string()),
         RequestEnvelope::Peek(_) => ("POST", "/v1/atm/messages/inspect".to_string()),
         RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
@@ -54,6 +54,7 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
         RequestEnvelope::PeerSync(request) => {
             ("POST", format!("/v1/atm/peers/{}/sync", request.peer))
         }
+        RequestEnvelope::ReloadRuntimeView => ("POST", "/v1/atm/runtime/reload".to_string()),
         RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
         RequestEnvelope::Heartbeat(_) => ("POST", "/v1/atm/heartbeat".to_string()),
     }
@@ -259,6 +260,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
         RequestEnvelope::PeerSync(value) => serde_json::to_vec(value),
+        RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
 }
@@ -268,6 +270,9 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
         ("POST", "/v1/atm/messages") => serde_json::from_slice(body)
             .map(|value| ApiRequest::Write(Box::new(value)))
             .map_err(|source| invalid_route_body("write", source)),
+        ("POST", path) if is_ack_path(path) => serde_json::from_slice(body)
+            .map(|value| ApiRequest::Write(Box::new(value)))
+            .map_err(|source| invalid_route_body("ack", source)),
         ("GET", "/v1/atm/messages") => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
             .map_err(|source| invalid_route_body("messages list", source)),
@@ -299,6 +304,9 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
             }
             Ok(ApiRequest::PeerSync(request))
         }
+        ("POST", "/v1/atm/runtime/reload") => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid_route_body("runtime reload", source)),
         _ => Err(AtmError::validation(format!(
             "unsupported daemon HTTP route {method} {path}"
         ))),
@@ -350,6 +358,9 @@ fn decode_success_response(
         RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
             .map(ResponseEnvelope::PeerSync)
             .map_err(AtmError::from),
+        RequestEnvelope::ReloadRuntimeView => serde_json::from_slice::<()>(body)
+            .map(|()| ResponseEnvelope::RuntimeViewReloaded)
+            .map_err(AtmError::from),
     }
 }
 
@@ -364,7 +375,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Send(crate::protocol::SendResponseEnvelope::Acknowledged(value)) => (
             201,
             "Created",
-            Some(format!("/v1/atm/message/{}", value.message_id)),
+            Some(format!("/v1/atm/message/{}/ack", value.message_id)),
             serde_json::to_vec(value),
         ),
         ResponseEnvelope::CompatibilityVerdict(value) => {
@@ -377,6 +388,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
         ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::PeerSync(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::RuntimeViewReloaded => (200, "OK", None, serde_json::to_vec(&())),
         ResponseEnvelope::Error(value) => {
             let status = if value.is_validation() { 400 } else { 503 };
             (
@@ -393,6 +405,14 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
     };
     body.map(|body| (status, reason, body, location))
         .map_err(AtmError::from)
+}
+
+fn is_ack_path(path: &str) -> bool {
+    path.strip_prefix("/v1/atm/message/").is_some_and(|suffix| {
+        suffix
+            .strip_suffix("/ack")
+            .is_some_and(|id| !id.is_empty() && !id.contains('/'))
+    })
 }
 
 fn peer_sync_path_host(path: &str) -> Option<&str> {
@@ -487,6 +507,7 @@ pub enum ApiRequest {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     PeerSync(PeerSyncRequest),
+    ReloadRuntimeView,
 }
 
 #[derive(Debug, Clone)]
@@ -516,6 +537,7 @@ impl ApiRequest {
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
             Self::PeerSync(request) => RequestEnvelope::PeerSync(request),
+            Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
         }
     }
 }
@@ -540,6 +562,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
             RequestEnvelope::PeerSync(request) => Self::PeerSync(request),
+            RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
         }
     }
 }
@@ -559,34 +582,12 @@ impl ApiResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticatedIngress {
     Local,
     /// A peer that completed the HTTPS adapter's mutual-TLS and exact-pin
     /// checks. The application router receives no socket or peer configuration.
     Peer,
-    /// Explicit plaintext-test provenance. This is not peer authentication.
-    UntrustedSmoke(UntrustedSmokeProvenance),
-    /// A plaintext diagnostic request without declared source provenance.
-    /// It is never peer authentication and cannot carry a write.
-    AnonymousSmoke,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UntrustedSmokeProvenance {
-    declared_source_host: HostName,
-}
-
-impl UntrustedSmokeProvenance {
-    pub const fn new(declared_source_host: HostName) -> Self {
-        Self {
-            declared_source_host,
-        }
-    }
-
-    pub const fn declared_source_host(&self) -> &HostName {
-        &self.declared_source_host
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -599,6 +600,14 @@ impl RequestDeadline {
 
     pub fn expired(self) -> bool {
         Instant::now() >= self.0
+    }
+
+    /// Returns the budget left for the next operation in this request.
+    ///
+    /// Adapters must consume this value rather than minting a fresh timeout:
+    /// one ingress request has one absolute completion deadline.
+    pub fn remaining(self) -> Option<Duration> {
+        self.0.checked_duration_since(Instant::now())
     }
 }
 
@@ -625,12 +634,10 @@ mod tests {
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
         read_http_response, write_http_request, write_http_response,
     };
-    use crate::ack::AckRequest;
     use crate::clear::{ClearOutcome, ClearQuery, RemovedByClass};
     use crate::doctor::DoctorQuery;
     use crate::error::AtmError;
     use crate::protocol::{PeerSyncRequest, RequestEnvelope, ResponseEnvelope};
-    use crate::schema::AtmMessageId;
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
@@ -649,6 +656,22 @@ mod tests {
         .expect("decode HTTP request");
 
         assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn authenticated_runtime_reload_uses_the_shared_http_contract() {
+        let request = RequestEnvelope::ReloadRuntimeView;
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write runtime reload request");
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode runtime reload request");
+
+        assert!(matches!(decoded, ApiRequest::ReloadRuntimeView));
     }
 
     #[test]
@@ -717,8 +740,8 @@ mod tests {
     }
 
     #[test]
-    fn normal_send_and_ack_share_one_http_write_resource() {
-        let send = RequestEnvelope::Write(Box::new(
+    fn http_decode_uses_method_and_path_to_choose_write_variant() {
+        let request = RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 std::env::temp_dir(),
                 std::env::temp_dir(),
@@ -733,35 +756,20 @@ mod tests {
             )
             .expect("send request"),
         ));
-        let ack = RequestEnvelope::Write(Box::new(
-            AckRequest {
-                home_dir: std::env::temp_dir(),
-                current_dir: std::env::temp_dir(),
-                caller_identity: TEST_SENDER.parse().expect("sender"),
-                caller_chat_id: None,
-                caller_team: TEST_TEAM.parse().expect("team"),
-                message_id: AtmMessageId::new(),
-                reply_body: "acknowledged".to_string(),
-            }
-            .into_write_request(),
-        ));
+        let mut bytes = Vec::new();
 
-        for (request, is_ack) in [(send, false), (ack, true)] {
-            let mut bytes = Vec::new();
-            write_http_request(&mut bytes, &request).expect("write HTTP request");
-            let raw = String::from_utf8(bytes.clone()).expect("HTTP UTF-8");
-            assert!(raw.starts_with("POST /v1/atm/messages HTTP/1.1"));
-            let decoded = decode_request(
-                read_http_request(&mut bytes.as_slice())
-                    .expect("read HTTP request")
-                    .expect("request"),
-            )
-            .expect("decode HTTP request");
-            assert!(matches!(
-                decoded,
-                ApiRequest::Write(request) if request.acknowledges_message_id.is_some() == is_ack
-            ));
-        }
+        write_http_request(&mut bytes, &request).expect("write HTTP request");
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode HTTP request");
+
+        assert!(matches!(
+            decoded,
+            ApiRequest::Write(request) if request.acknowledges_message_id.is_none()
+        ));
     }
 
     #[test]

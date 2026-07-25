@@ -1,0 +1,156 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-IMPORTANT-003>
+  a triage:Finding ;
+  triage:findingId "AI22-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "is_peer_receipt and is_same_host_peer_receipt are two overlapping, unlinked boolean predicates with no single source of truth" ;
+  triage:description "crates/atm-core/src/send/mod.rs defines both PreparedWrite::is_peer_receipt (~305-314: authenticated_source_host.is_some() || origin_message_id.is_some()) and the free function is_same_host_peer_receipt (~569-575: authenticated_source_host == to.host). Both classify overlapping aspects of the same underlying concept (is this write a peer receipt, and is it a same-host one) via independently-written boolean expressions instead of one being derived from the other or both being derived from a single shared classification type, risking future drift between them. Independently found by rust-best-practices-agent (RBP-F001, Important) and ruthless-boundary-qa (RBQA-F005, Minor) -- merged here as one finding at the higher of the two reported severities." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "structure" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/4> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
+  triage:promoteTo <urn:atm:triage:worktree/s23/b88ca016> .
+
+# Occurrences on s22
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 311 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 540 ;
+  triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 579 ;
+  triage:snippet "if message.prepared.is_peer_receipt() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+# Occurrences on s23
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 311 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 540 ;
+  triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 569 ;
+  triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 579 ;
+  triage:snippet "if message.prepared.is_peer_receipt() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/integrate/e52fffb6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .

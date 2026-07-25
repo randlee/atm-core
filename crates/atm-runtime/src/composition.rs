@@ -120,6 +120,26 @@ pub fn assemble_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly
 pub fn validate_enabled_peer_configuration(
     store: &(dyn PeerConfigStore + Send + Sync),
 ) -> Result<(), AtmError> {
+    validate_enabled_peer_configuration_for_reload(store)?;
+    let enabled = store
+        .list_interfaces()?
+        .into_iter()
+        .filter(|interface| interface.enabled)
+        .collect::<Vec<_>>();
+    for interface in enabled {
+        TcpListener::bind(interface.bind_addr).map_err(|error| {
+            AtmError::bind_preflight(format!(
+                "HTTPS bind preflight failed for {}: {error}",
+                interface.bind_addr
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+pub fn validate_enabled_peer_configuration_for_reload(
+    store: &(dyn PeerConfigStore + Send + Sync),
+) -> Result<(), AtmError> {
     for peer in store.list_trusted_peers()? {
         if peer.enabled && peer.fingerprint.as_str().trim().is_empty() {
             return Err(AtmError::peer_config_validation(
@@ -146,14 +166,6 @@ pub fn validate_enabled_peer_configuration(
         return Err(AtmError::peer_config_validation(
             "enabled HTTPS interfaces require a non-empty certificate fingerprint and key reference",
         ));
-    }
-    for interface in enabled {
-        TcpListener::bind(interface.bind_addr).map_err(|error| {
-            AtmError::bind_preflight(format!(
-                "HTTPS bind preflight failed for {}: {error}",
-                interface.bind_addr
-            ))
-        })?;
     }
     Ok(())
 }

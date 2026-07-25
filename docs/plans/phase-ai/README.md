@@ -18,10 +18,10 @@ test adapter ──────────────┘
 
 `/v1/atm/messages`, `/v1/atm/message/{message-id}`,
 `/v1/atm/message/{message-id}/read`, and `/v1/atm/doctor` are the durable
-initial resource roots. `POST /v1/atm/messages` carries both send and ack
-writes; an ack sets `acknowledges_message_id` and never selects another
-endpoint or pipeline. The post-write router is the sole owner of
-local-versus-remote nudge routing.
+initial resource roots.
+An acknowledgement endpoint builds a write with `acknowledges_message_id`; no
+separate acknowledgment pipeline exists. The post-write router is the sole
+owner of local-versus-remote nudge routing.
 
 An optional chat-id is part of a sender/recipient address, not a daemon session
 or message-thread field: `hendrix:12345@hermes`. Storage preserves it in its
