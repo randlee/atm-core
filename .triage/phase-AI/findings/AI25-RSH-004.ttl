@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RSH-004>
   a triage:Finding ;
   triage:findingId "AI25-RSH-004" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Reload blocks the local-IPC accept loop during trust refresh" ;
   triage:description "During refresh_https_trust, the local-IPC accept loop is blocked. EXPLICITLY FLAGGED BY THE REVIEWER AS A PRE-EXISTING PATTERN, NOT A REGRESSION -- for awareness only. Not urgent; pre-existing pattern may recur elsewhere reload-adjacent code is added. Distinct from AI25-RSH-001 (unbounded DNS resolution stall)." ;
   triage:phaseId "phase-AI" ;

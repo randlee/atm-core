@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-IMPORTANT-001>
   a triage:Finding ;
   triage:findingId "AI21-IMPORTANT-001" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "HttpsTransport uses parallel optional fields instead of an enum" ;
   triage:description "crates/atm-daemon/src/https_transport.rs:135-157,176-211 — HttpsTransport uses three parallel optional fields (identity, plaintext_source_host) with runtime ok_or_else invariant recovery instead of an enum-with-payload, inconsistent with the sibling ListenerSecurity enum a few lines below that already does this correctly. Reported by rust-best-practices-agent (RBP-F001), verified directly by quality-mgr." ;
   triage:phaseId "phase-AI" ;

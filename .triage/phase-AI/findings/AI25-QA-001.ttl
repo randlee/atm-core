@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-QA-001>
   a triage:Finding ;
   triage:findingId "AI25-QA-001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Missing test coverage for the ambiguous-DNS-match (fail-closed multi-match) branch" ;
   triage:description "resolve_peer_authority's multi-match rejection (crates/atm-daemon/src/https_transport.rs:90) is implemented correctly (fail-closed: both 0-match and multi-match are rejected before any TLS/route attempt) but has zero test coverage; only single-match and no-match paths are tested." ;
   triage:category "test-coverage" ;

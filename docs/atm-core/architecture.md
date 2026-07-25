@@ -317,8 +317,7 @@ Required HTTP direction:
 - adapters validate HTTP method/resource/body limits before JSON decode and
   call the shared `ApiRouter`
 - UDS, loopback TCP, and HTTPS implementations vary only in socket and ingress
-  authentication; they share `POST /v1/atm/messages` as one HTTP write resource
-  and one `WriteRequest`; `acknowledges_message_id` never selects another route
+  authentication; they share one HTTP resource contract and `WriteRequest`
 - the canonical daemon wire contract is documented in
   [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md)
 - the same HTTP API governs same-host local IPC and cross-host daemon-to-daemon

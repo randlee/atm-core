@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RSH-003>
   a triage:Finding ;
   triage:findingId "AI25-RSH-003" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "5s reconciliation-pass deadline is silently unenforceable because it doesn't cover the resolver call" ;
   triage:description "The documented 5s reconciliation-pass deadline is silently unenforceable because it doesn't cover the resolver call added in AI.25 -- an unbounded DNS resolution can blow past the stated 5s deadline entirely." ;
   triage:phaseId "phase-AI" ;

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-QA1-F001>
+  a triage:Finding ;
+  triage:findingId "AI28-QA1-F001" ;
+  triage:title "Fabricated next_attempt_at in record() — incorrect value shipped to atm doctor" ;
+  triage:description "crates/atm-daemon/src/peer_drain_coordinator.rs's record() function discards the real Instant computed in failed() (Instant::now() + slot.backoff, correctly used internally for actual scheduling) and instead emits: next_attempt_at: next.map(|_| IsoTimestamp::now()). This is always the current moment ('now') regardless of the real 60s-15min backoff window the coordinator is actually enforcing. This value is serialized verbatim into atm doctor --json's PeerLinkStatus.next_attempt_at, actively misleading operators and tools reading it during an active backoff period. This is functionally a REOPENING of AI27-RBQA-F001 ('unused placeholder' → 'wrong value shipped to users'), not a full resolution as originally claimed. No existing test (peer_observability.rs) catches this because tests only hand-construct PeerDeliveryEvent objects with next_attempt_at: None, never exercising the real coordinator path. Fix required: thread the real backoff Duration/Instant into record() and emit the correctly-computed next_attempt_at value." ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:reopens "AI27-RBQA-F001" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F001/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F001/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "record() emits: next_attempt_at: next.map(|_| IsoTimestamp::now())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

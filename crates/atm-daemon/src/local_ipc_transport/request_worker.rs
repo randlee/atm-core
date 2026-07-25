@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use atm_core::api::{
     ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
@@ -180,6 +181,7 @@ fn dispatch_request(
     Ok(await_dispatch_response(
         request_id,
         execution_risk,
+        deadline,
         result_rx,
     ))
 }
@@ -249,9 +251,11 @@ fn read_bounded_http_request(
 fn await_dispatch_response(
     request_id: RequestId,
     execution_risk: RequestExecutionRisk,
+    deadline: RequestDeadline,
     result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
 ) -> ResponseEnvelope {
-    match result_rx.recv_timeout(REQUEST_DEADLINE) {
+    let remaining = deadline.remaining().unwrap_or(Duration::ZERO);
+    match result_rx.recv_timeout(remaining) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(error),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -260,7 +264,7 @@ fn await_dispatch_response(
                 action = "dispatch",
                 outcome = "deadline_exceeded",
                 request_id = %request_id,
-                deadline_ms = REQUEST_DEADLINE.as_millis(),
+                deadline_ms = remaining.as_millis(),
                 "daemon request dispatcher exceeded the runtime deadline"
             );
             dispatch_timeout_response(execution_risk)

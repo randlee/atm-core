@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI24-IMPORTANT-001>
   a triage:Finding ;
   triage:findingId "AI24-IMPORTANT-001" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
   triage:title "HTTP_ROUTE_SURFACE const array not mechanically derived from live dispatcher, route drift possible without CI failure" ;
   triage:description "New test openapi_routes_match_live_router_surface (added for AI23-IMPORTANT-008 fix) cross-checks openapi.yaml against a HTTP_ROUTE_SURFACE const array, a real improvement over the prior snapshot-only diff. However, HTTP_ROUTE_SURFACE is still hand-authored, not mechanically derived from the live decode_route_request match arms in crates/atm-core/src/api.rs. A future new route added to the real dispatcher without a matching HTTP_ROUTE_SURFACE entry would still ship undocumented with no CI failure." ;
   triage:category "maintainability" ;
