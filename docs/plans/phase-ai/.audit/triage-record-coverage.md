@@ -21,7 +21,7 @@ ID, because aliases are not safe for automated closure.
 | AICH-S3 QA-1 | `ai23-qa1-verdict.txt` | 10 | Present | None |
 | AICH-S3 round 2 | `ai23-round2-verdict.md` | 3 open + carried aliases | Present | Closure/status semantics require review; no new missing canonical ID found |
 | AICH-S4 FIX-1 | `ai24-fix-batch-verdict.md` | Original + 3 regressions + 2 important | Present | Several records remain open despite later closure claims |
-| AICH-S4 FIX-2 | `ai24-fix2-verdict.md` | 5 referenced records | Present | `AI24-BLOCK-001/002/003` remain open despite “closed” verdict text |
+| AICH-S4 FIX-2 | `ai24-fix2-verdict.md` | 10+ referenced records | Present | Three new AI24 blocks, two AI24 importants, five carry-forward records, and RSH-002 are present; the three AI24 blocks remain open despite “closed” verdict text |
 | AICH-S4 FIX-3 | `ai24-fix3-verdict.md` | 5 referenced records | Present | `AI24-IMPORTANT-001` remains open despite “closed”; residual records have mixed severity/status |
 | AICH-S5 QA-1 | `ai25-qa1-verdict.md` | Canonical QA-1 set | Present | None material; one process note was explicitly not a code finding |
 | AICH-S5 FIX-1 | `ai25-fix1-recheck-verdict.md` | Recheck findings | Partial | `AI25-RBQA-F003` covers the bind-preflight regression; exact aliases `ATM-QA-101/102/103/104/105` are absent, with underlying issues only semantically mapped; `ATM-QA-102` was improperly closed by rescoping |
