@@ -522,13 +522,22 @@ fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<I
 }
 
 fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
-    format!("{host}:{port}")
-        .to_socket_addrs()
-        .map_err(|_| AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}")))?
+    let peer = TrustedPeer {
+        host: host.parse().map_err(|source| {
+            AtmError::daemon_unavailable_with_cause("invalid configured HTTPS peer host", source)
+        })?,
+        fingerprint: "resolver-only".parse().map_err(|source| {
+            AtmError::daemon_unavailable_with_cause("invalid resolver authority", source)
+        })?,
+        enabled: true,
+        https_port: std::num::NonZeroU16::new(port)
+            .ok_or_else(|| AtmError::validation("configured HTTPS peer port was zero"))?,
+    };
+    resolve_peer_addresses(&peer, HTTPS_TIMEOUT)?
+        .into_iter()
         .next()
-        .ok_or_else(|| {
-            AtmError::daemon_unavailable(format!("HTTPS peer {host} resolved to no addresses"))
-        })
+        .map(|ip| SocketAddr::new(ip, port))
+        .ok_or_else(|| AtmError::daemon_unavailable("HTTPS peer resolved to no addresses"))
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {

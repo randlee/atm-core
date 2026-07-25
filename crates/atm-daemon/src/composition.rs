@@ -14,7 +14,10 @@ use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
 use atm_core::ApiRouter;
 use atm_core::error::AtmError;
 use atm_daemon_bootstrap::assemble_host_runtime;
-use atm_runtime::{RuntimeAssembly, validate_enabled_peer_configuration};
+use atm_runtime::{
+    RuntimeAssembly, validate_enabled_peer_configuration,
+    validate_enabled_peer_configuration_for_reload,
+};
 use atm_storage::PeerConfigStore;
 use std::fs::OpenOptions;
 #[cfg(test)]
@@ -296,7 +299,7 @@ impl RuntimeComposition {
     }
 
     fn refresh_https_trust(&self) -> Result<(), AtmError> {
-        validate_enabled_peer_configuration(self.peer_config_store.as_ref())?;
+        validate_enabled_peer_configuration_for_reload(self.peer_config_store.as_ref())?;
         let peers = self.peer_config_store.list_trusted_peers()?;
         if let Some(listeners) = self
             .https_listeners
