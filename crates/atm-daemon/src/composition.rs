@@ -296,6 +296,7 @@ impl RuntimeComposition {
     }
 
     fn refresh_https_trust(&self) -> Result<(), AtmError> {
+        validate_enabled_peer_configuration(self.peer_config_store.as_ref())?;
         let peers = self.peer_config_store.list_trusted_peers()?;
         if let Some(listeners) = self
             .https_listeners

@@ -8,6 +8,7 @@
 use std::fmt;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
@@ -79,7 +80,10 @@ pub(crate) fn resolve_peer_authority(
     let matches = peers
         .iter()
         .filter(|peer| peer.enabled)
-        .filter(|peer| resolve_peer_addresses(peer).is_ok_and(|addresses| addresses.contains(&ip)))
+        .filter(|peer| {
+            resolve_peer_addresses(peer, HTTPS_TIMEOUT)
+                .is_ok_and(|addresses| addresses.contains(&ip))
+        })
         .cloned()
         .collect::<Vec<_>>();
     match matches.as_slice() {
@@ -483,13 +487,38 @@ fn complete_handshake(
     Ok(())
 }
 
-fn resolve_peer_addresses(peer: &TrustedPeer) -> Result<Vec<IpAddr>, AtmError> {
-    format!("{}:{}", peer.host, peer.https_port)
-        .to_socket_addrs()
-        .map_err(|_source| {
-            AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {}", peer.host))
+fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<IpAddr>, AtmError> {
+    let authority = format!("{}:{}", peer.host, peer.https_port);
+    let (sender, receiver) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("atm-peer-dns".to_string())
+        .spawn(move || {
+            let _ = sender.send(
+                authority
+                    .to_socket_addrs()
+                    .map(|a| a.map(|address| address.ip()).collect::<Vec<_>>()),
+            );
         })
-        .map(|addresses| addresses.map(|address| address.ip()).collect())
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to start bounded HTTPS DNS resolution",
+                source,
+            )
+        })?;
+    receiver
+        .recv_timeout(timeout)
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "HTTPS DNS resolution timed out; verify peer forward DNS or retry",
+                source,
+            )
+        })?
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to resolve configured HTTPS peer; verify forward DNS",
+                source,
+            )
+        })
 }
 
 fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
@@ -735,6 +764,15 @@ mod tests {
     fn literal_ip_without_authority_fails_closed() {
         let target = "192.0.2.1".parse().expect("target");
         assert!(super::resolve_peer_authority(&target, &[trusted("localhost")]).is_err());
+    }
+
+    #[test]
+    fn literal_ip_with_ambiguous_authority_fails_closed() {
+        let target = "127.0.0.1".parse().expect("target");
+        assert!(
+            super::resolve_peer_authority(&target, &[trusted("localhost"), trusted("localhost")])
+                .is_err()
+        );
     }
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
