@@ -208,9 +208,10 @@ an exception.
   persistence method, and `PostWriteRouter`; no adapter has a write, ACK, or
   nudge implementation of its own.
 - A host-qualified CLI `atm send`/`atm ack` targets the same TCP HTTP listener
-  and HTTP write resource as a remote daemon. UDS, if retained for unqualified
-  local clients, is a byte-stream adapter to that resource only and cannot
-  satisfy the advertised-IP route proof.
+  and HTTP write resource as a remote daemon. UDS is retained for
+  unqualified local clients on platforms that support it; it is a byte-stream
+  adapter to that resource only and cannot satisfy the advertised-IP route
+  proof.
 - The advertised/bound virtual-Ethernet IP proof observes
   `ApiRouter::route(..., Peer, ...)`, proves the message/reply ULID in the
   receiver inbox, and proves its nudge after that row is readable. It is not

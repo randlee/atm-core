@@ -26,7 +26,10 @@ historical diagnostics, not passing evidence.
    `scripts/smoke/combine_inbound_peer_smoke.py`,
    `scripts/smoke/analyze_logs.py`, and the `templates/smoke-report/*.xhtml.j2`
    sc-compose templates. Do not create a second shell runner or hand-written
-   HTML report.
+   HTML report. Those assets originate from
+   `evidence/phase-ai-crosshost-smoke@3f08041e18cb32dee34e7555bd2cc2c4b51ca938`;
+   AI.21-pre adopts them by normal implementation change rather than merging
+   that investigation branch.
 2. Add `.claude/skills/daemon-switch/scripts/daemon-switch.py` as a new
    deliverable. It must query the active CLI/daemon pair, switch both to a
    branch release pair, and restore the platform's current installed pair

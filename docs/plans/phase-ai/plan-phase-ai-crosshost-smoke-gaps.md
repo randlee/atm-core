@@ -40,9 +40,9 @@ unconfirmed; none is release evidence.
 ## Dependencies
 
 ```text
-AI.21-pre evidence harness ─┬─> AI.22 self-send guard ─> AI.23 shared write endpoint ─> AI.24 ACK receipt proof
-                            ├─> AI.25 peer authority ────────────────────────────────┐
-                            └─> AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery
+AI.21-pre evidence harness ─> AI.22 self-send guard ─> AI.23 shared write endpoint ─┬─> AI.24 ACK receipt proof
+                                                                                       ├─> AI.25 peer authority ────────────┐
+                                                                                       └─> AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery
 AI.30 schema/HTTP compatibility ───────────────────────────────────────────────┘
 AI.24 + AI.25–AI.28 + AI.30 ─> AI.29 physical rerun
 ```

@@ -18,11 +18,12 @@ blocks: AI.22, AI.25, AI.26, AI.27, AI.28, AI.29
 
 ## Closure
 
-The mixed `evidence/phase-ai-crosshost-smoke` investigation branch is reduced
-to one small, reviewable implementation branch: a supported Python/sc-compose
-smoke harness and an explicit non-durable plaintext peer-wire profile for
-diagnosis. QA can run this branch's release daemon on real hosts before any
-AI.22+ behavior change. Nothing else from the evidence branch is adopted.
+The mixed `evidence/phase-ai-crosshost-smoke` investigation branch (commit
+`3f08041e18cb32dee34e7555bd2cc2c4b51ca938`) is reduced to one small,
+reviewable implementation branch: a supported Python/sc-compose smoke harness
+and an explicit non-durable plaintext peer-wire profile for diagnosis. QA can
+run this branch's release daemon on real hosts before any AI.22+ behavior
+change. Nothing else from the evidence branch is adopted.
 
 ## Deliverables
 
@@ -110,10 +111,11 @@ AI.22+ behavior change. Nothing else from the evidence branch is adopted.
    untrusted provenance, router identity, runner JSON validation, XHTML
    escaping, stale/missing pane rejection, and bounded log redaction.
 2. `just lint` and `just test` at the exact release-built commit.
-3. On every participating host, use daemon-switch to run the branch CLI and
-   daemon pair, then run the Python host runner in mTLS and plaintext-test
-   modes. Combine the panes with `sc-compose`; retain the combined XHTML and
-   sanitized JSON/log artifacts.
+3. AI.29 supplies `daemon-switch.py`; after that sprint has shipped it, use it
+   on every participating host to run the branch CLI and daemon pair, then run
+   the Python host runner in mTLS and plaintext-test modes. Combine the panes
+   with `sc-compose`; retain the combined XHTML and sanitized JSON/log
+   artifacts. AI.21-pre does not claim daemon-switch is already available.
 4. QA runs the same release daemon and runner, not a test fixture or the old
    evidence branch daemon. At handoff the branch daemon remains running for
    QA; restore the installed pair only after QA records final completion.
