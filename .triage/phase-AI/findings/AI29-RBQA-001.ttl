@@ -9,26 +9,29 @@
   triage:phaseId "phase-AI" ;
   triage:category "RBQA" ;
   triage:severity "Blocking" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:repeatable false ;
-  triage:foundIn "AICH-S10" ;
+  triage:foundIn triage:AICH-S10 ;
   triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBQA-001_40ed45e2> ;
-  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+  triage:closedAt "2026-07-25T19:48:57Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "RuntimeConfigDoctor::inspect_config (crates/atm-runtime/src/composition.rs:78-87) now only calls load_atm_config when config_current_dir is Some. RuntimeAssembly::for_daemon() (composition.rs:183-187) unconditionally installs RuntimeConfigDoctor::default() with config_current_dir: None. Wired at single production entry crates/atm-daemon/src/composition.rs:186 inside new_with_runtime_assembly before any dispatcher use. Verified by regression test daemon_config_doctor_does_not_read_a_caller_workspace (crates/atm-runtime/src/composition.rs:237-260)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBQA-001_d36709b1> ;
+  triage:fixedOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
 
-<urn:atm:triage:occurrence_AI29-RBQA-001_40ed45e2>
+<urn:atm:triage:occurrence_AI29-RBQA-001_d36709b1>
   a triage:Occurrence ;
   triage:file "crates/atm-runtime/src/composition.rs" ;
   triage:snippet "RuntimeConfigDoctor::inspect_config reads .atm.toml unguarded by WorkspaceConfigAccess" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:headSha "40ed45e2" ;
-  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+  triage:headSha "d36709b1" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
 
-<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2>
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:headSha "40ed45e2" ;
+  triage:headSha "d36709b1" ;
   triage:orderIndex 29 .
