@@ -14,7 +14,11 @@
   triage:sweepScope "file_only" ;
   triage:category "architecture" ;
   triage:severity "Blocking" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-25T19:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified via 'git grep -n replay_store -- *.rs': 0 matches on integrate/phase-AI HEAD. The retired replay_store construct is completely absent from all Rust source files." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-003/s24/1> ;
@@ -26,8 +30,8 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 220 ;
   triage:snippet "fn successful_peer_write_does_not_automatically_replay_stored_messages()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "7bb63e01" ;
   triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .

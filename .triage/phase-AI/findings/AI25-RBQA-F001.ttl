@@ -14,7 +14,11 @@
   triage:sweepScope "file_only" ;
   triage:category "RBQA" ;
   triage:severity "Blocking" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-25T19:42:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified: refresh_https_trust calls validate_enabled_peer_configuration_for_reload at crates/atm-daemon/src/composition.rs:209 within the runtime reload hook setup." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T02:25:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F001/pAI-s25/1> ;
@@ -24,10 +28,10 @@
 <urn:atm:triage:occurrence/AI25-RBQA-F001/pAI-s25/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 298 ;
-  triage:snippet "fn refresh_https_trust(&self) -> Result<(), AtmError> {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 209 ;
+  triage:snippet "validate_enabled_peer_configuration_for_reload(reload_peer_store.as_ref())?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
