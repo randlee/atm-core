@@ -21,6 +21,7 @@ Audit guidance and scope are in [README.md](README.md).
 | 2026-07-25 17:12 | Built QA evidence projections | Created the authoritative JSON master index and PST CSV projection. The CSV has one row per located QA run with separate blocker/important/minor columns; unresolved assignment/result gaps remain explicit. | [qa-evidence-master.json](qa-evidence-master.json); [qa-assignment-results.csv](qa-assignment-results.csv) |
 | 2026-07-25 17:13 | Parallel verification dispatched | Background agents are independently checking graph/triage scripts and validating the JSON/CSV projection while the high-level audit remains in this log. | Agent reports pending; script verification remains separate from evidence-table review |
 | 2026-07-25 17:19 | Completed parallel script verification | Background verifier fixed `--validate-only` argument handling, hardened assignee/triage error paths, and added tests. Graph/triage suite: 43 passed; Python compile checks passed. Changes committed on `develop` as `621fd911`. | `.claude/skills/graph-orchestration/`; `scripts/triage_carry_forward.py`; verifier report |
+| 2026-07-25 17:20 | Hardened query-runner CLI error boundary | Follow-up verifier change converts malformed graph/SPARQL exceptions to one-line `ERROR` output and adds regression tests. Full graph/triage suite reached 45 passed; Python compile checks passed. Follow-up committed on `develop` as `2ace0c66`. | `.claude/skills/graph-orchestration/scripts/query_runner.py`; `test_queries.py` |
 
 ## Investigation rule
 
