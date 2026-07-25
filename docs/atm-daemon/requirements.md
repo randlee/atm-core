@@ -154,29 +154,40 @@ Initial crate requirement IDs:
   receipt, remote acknowledgement state, or duplicate-delivery subsystem.
   Satisfies:
   `REQ-CORE-TRANSPORT-003`, `REQ-CORE-TRANSPORT-004`.
-- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` may invoke the one bounded peer
-  reconciliation scan defined by `PeerSyncPolicy` after a successful peer
-  write or on an explicit operator request. The query belongs to the storage
-  trait and submits unchanged canonical records to the ordinary HTTPS adapter;
-  it must not create a queue, outbox, retry worker, checkpoint, receipt, or
-  per-message delivery state. Each scan uses the durable 100-message-default
-  cap; automatic scans are at most once per peer per 60 seconds through a
-  bounded non-durable cooldown with no payload/message-ID state. Satisfies:
-  `REQ-CORE-TRANSPORT-003A`.
+- `REQ-DAEMON-TRANSPORT-002D` `atm-daemon` owns one bounded non-durable
+  single-flight drain coordinator per canonical trusted hostname. It queries
+  canonical outbound records through storage traits, opens one ordinary HTTPS
+  connection, and submits existing `WriteRequest`s oldest-first through the
+  normal peer endpoint. A generation signal closes the final-scan/release race.
+  The coordinator contains no message ID, payload, cursor, receipt, queue, or
+  per-message delivery state. It schedules only eligible backlog recovery no
+  earlier than 60 seconds after failure with capped exponential backoff, never
+  a ping/empty-peer monitor. `atm peer sync` uses this same coordinator.
+  Satisfies: `REQ-CORE-TRANSPORT-003A`, `REQ-CORE-TRANSPORT-003B`.
 - `REQ-DAEMON-TRANSPORT-002A` `atm-daemon` owns loading and enforcing durable
   cross-host HTTPS bind, certificate, and peer-trust records. Satisfies:
   `REQ-CORE-TRANSPORT-002A`.
 - `REQ-DAEMON-TRANSPORT-002B` `atm-daemon` enforces mTLS plus a durable
-  deny-by-default exact peer-identity and certificate-fingerprint allowlist
-  before routing. Satisfies:
+  deny-by-default registered-hostname and certificate-fingerprint allowlist
+  before routing. It resolves direct IP targets only as ADR-040 permits and
+  never persists DNS aliases. Satisfies:
   `REQ-CORE-TRANSPORT-002B`.
+- `REQ-DAEMON-TRANSPORT-002B1` `atm-daemon` accepts the explicit
+  non-durable `--peer-wire-security plaintext-test` process mode only for
+  debug/smoke diagnosis. It disables peer TLS/pin/allowlist checks without
+  changing HTTP routing, canonical writes, persistence, or post-write routing;
+  declared source-host data is untrusted smoke provenance. Normal startup is
+  mTLS, never falls back to plaintext, and doctor/logs must expose the active
+  mode. Satisfies: `REQ-CORE-TRANSPORT-002B1`.
 - `REQ-DAEMON-TRANSPORT-002C` localhost and a daemon's own advertised address
   are ordinary HTTPS peer targets; no loopback-only transport branch exists.
   Satisfies:
   `REQ-CORE-TRANSPORT-002C`.
-- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the concrete timeout budget
-  policy for HTTP(S), store busy timeout, ingest batch, and doctor query
-  operations. Satisfies:
+- `REQ-DAEMON-TRANSPORT-003` `atm-daemon` owns the one absolute request
+  deadline budget for HTTP(S), store busy timeout, ingest batch, and doctor
+  query operations. It propagates the remaining request budget to HTTPS and
+  returns the ADR-041 typed outcome rather than misclassifying a live daemon
+  as unavailable. Satisfies:
   `REQ-CORE-TRANSPORT-005`, `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-TRANSPORT-004` request work launched from the daemon server path
   must remain tracked by runtime drain ownership until it finishes or is

@@ -11,8 +11,11 @@
 
 ATM uses one daemon HTTP router. Unix local clients use HTTP over UDS and may
 use HTTP over loopback TCP; Windows local clients use HTTP over loopback TCP
-only. Remote peers use HTTPS over TCP. Every transport calls the same router
-and the same application handlers.
+only. Normal remote peers use HTTPS over TCP. The explicit daemon-only
+`--peer-wire-security plaintext-test` profile may carry that same remote HTTP
+resource over TCP solely for smoke diagnosis; it is not peer authentication or
+a second API. Every transport calls the same router and the same application
+handlers.
 
 The initial stable application surface is resource-oriented REST under
 `/v1/atm`:
@@ -32,6 +35,16 @@ implementation. The HTTP wire body is never a generic
 body with the route's HTTP status. An acknowledgement endpoint builds the same
 internal canonical write whose `acknowledges_message_id: Option<MessageId>` is
 populated. It is not a separate envelope, transport, or persistence path.
+
+The HTTP API has an independent strict SemVer identity. Its major equals the
+`/v{major}` path segment. Same-major minor additions are compatible and patch
+releases are corrective only: servers accept omitted additive request fields
+using documented defaults and ignore unknown additive fields; clients tolerate
+additive response fields and error details. A client may require an explicitly
+advertised capability for a new operation, but it must not reject an otherwise
+supported existing operation solely because the peer reports a different minor
+or patch. Product release versions are diagnostic metadata, not HTTP
+compatibility input.
 
 The canonical write request contains ADR-037's structured caller and
 destination `AgentAddress`: `agent`, optional `chat_id`, `team`, and optional
@@ -64,12 +77,14 @@ The HTTP adapter owns HTTP status/header translation and ingress authentication
 only. Local loopback TCP authenticates with a daemon-created, owner-readable
 runtime endpoint record and a 32-byte base64url capability in
 `X-ATM-Local-Capability`; it binds only a loopback address. Unix UDS uses
-owner-only endpoint permissions. HTTPS uses mTLS plus the exact allowlist. The
-router receives `AuthenticatedIngress::Local` only after local capability or
-UDS ownership authentication, and `AuthenticatedIngress::Peer` only after
-mTLS verification; socket family and address never classify an ingress. The
-adapter cannot perform recipient routing, storage mutation, acknowledgement
-mutation, or nudging.
+owner-only endpoint permissions. Normal HTTPS uses mTLS plus the exact
+allowlist. The router receives `AuthenticatedIngress::Local` only after local
+capability or UDS ownership authentication, and `AuthenticatedIngress::Peer`
+only after mTLS verification. The explicit plaintext-test profile may supply
+separately typed untrusted smoke provenance, which cannot authorize a
+recipient or claim peer authentication. Socket family and address never
+classify an ingress. The adapter cannot perform recipient routing, storage
+mutation, acknowledgement mutation, or nudging.
 
 Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and
 loopback-TCP HTTP. Windows has no alternate local transport or address-derived

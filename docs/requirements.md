@@ -381,6 +381,10 @@ Product requirement ID:
   distribution infrastructure must be made explicit in the repo-owned release
   plan before `1.0` release automation is considered complete.
 
+- `REQ-P-RELEASE-007` ATM release identifiers must be strict SemVer. The
+  project supports opt-in prerelease builds such as `1.3.2-beta.1` and
+  `1.3.2-alpha.1`; prereleases are never the default customer channel.
+
 Required behavior:
 - the `1.0` release must publish the retained CLI and core crates under the
   legacy crates.io package names:
@@ -410,6 +414,34 @@ Required behavior:
 - release readiness proof for `winget` must validate successful submission or
   manifest update dispatch; it cannot require same-day installability because
   Microsoft review introduces a normal 1-2 day publication lag
+- the normal Homebrew `atm` formula tracks stable releases only; prereleases
+  are published, when approved, through an explicit opt-in `atm-beta` formula
+  in the project-owned tap
+
+### 2.4 HTTP Compatibility Scope
+
+Product requirement ID:
+
+- `REQ-P-HTTP-COMPAT-001` The daemon HTTP API has a strict, independently
+  declared SemVer version. Product release versions identify builds only; they
+  are never the CLI-to-daemon compatibility gate.
+
+Required behavior:
+
+- `/v{major}/atm` and the HTTP API's declared SemVer have the same major;
+  different major versions fail before a write with a typed compatibility
+  error
+- the compatibility preflight compares the explicit CLI/daemon schema version
+  and HTTP API major, not `atm` or `atm-daemon` product release strings
+- an additive endpoint, optional JSON field, response field, or error detail
+  increments the HTTP API minor version and must preserve successful
+  communication for clients and servers sharing the same major; patch versions
+  are corrective only and do not add or remove contract elements
+- requests accept omitted additive fields with documented defaults and servers
+  ignore unknown additive fields; an operation requiring a new capability must
+  declare that requirement rather than relying on a minor-version mismatch
+- OpenAPI, generated clients, and compatibility tests are the authoritative
+  proof of this contract
 
 ## 3. External Contracts
 
@@ -1075,7 +1107,9 @@ Retired from the current implementation:
   persist the canonical sender identity in SQLite-owned state and use it for
   validation, self-send checks, routing, and audit behavior
 - reject canonical same-team self-addressed sends before any persistence or
-  `--dry-run` success reporting
+  `--dry-run` success reporting only when the resolved destination has no
+  host; every syntactically valid host-qualified destination continues to the
+  ordinary host-routing contract
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -1620,15 +1654,18 @@ Acknowledge a pending-ack message in the caller's own inbox and send a visible r
   - remove `pendingAckAt`
   - set `acknowledgedAt`
   - append a reply message to the original sender's inbox unless the
-    acknowledged pending-ack message is already self-addressed to the current actor
+    acknowledged pending-ack message is an unqualified same-agent/same-team
+    historical self-addressed message
 - preserve `acknowledgesMessageId` on the emitted reply
 - hardcode `requires_ack = false` on the emitted reply
 - do not allow an acknowledgement reply to request acknowledgement itself
 - reject duplicate acknowledgement of an already acknowledged message
 - run matching `[[atm.post_send_hooks]]` rules after a successful ack, using the reply message as the hook subject
-- when the pending-ack message is self-addressed to the current actor, mark it
-  acknowledged, suppress reply emission, and report the suppression explicitly
-  in the ack output contract
+- when the pending-ack message is an unqualified same-agent/same-team
+  historical self-addressed message, mark it acknowledged, suppress reply
+  emission, and report the suppression explicitly in the ack output contract.
+  A host-qualified source is never this suppression case: it produces the
+  ordinary canonical ACK reply write.
 
 Phase R continuation semantics:
 - one successful acknowledgement clears the chain-level acknowledgement
@@ -1729,8 +1766,8 @@ JSON output must include:
 - `reply_disposition`
   - `kind = "sent"` with `reply_message_id` and `reply_target` when a reply
     message was emitted
-  - `kind = "suppressed_self_ack"` when the historical pending-ack message was
-    self-addressed and no reply message was emitted
+  - `kind = "suppressed_self_ack"` only when the historical pending-ack
+    message was unqualified same-agent/same-team and no reply was emitted
 - `reply_text` (validated reply body; retained even when self-ack suppression
   prevents reply emission)
 - `task_id` (optional String, present when the source message has `taskId`)
@@ -3594,7 +3631,9 @@ mail correctness.
   Required behavior:
   - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
     Windows same-host clients use HTTP over loopback TCP only
-  - remote peers use HTTPS over TCP
+  - normal remote peers use HTTPS over TCP; the explicit daemon-only
+    `plaintext-test` smoke profile is governed by
+    `REQ-CORE-TRANSPORT-002B1` and cannot create a second HTTP route
   - all production adapters call one HTTP router and the same application handlers
   - the stable initial resources are `/v1/atm/messages`,
     `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and
@@ -3663,19 +3702,19 @@ mail correctness.
     - whitespace
     - wildcard or pattern characters that could be interpreted by current or
       future parsers, including at minimum `*`, `?`, `[` and `]`
-  - the supported remote-send CLI forms are exactly:
-    - `atm send <agent>@<team>.<host> ...`
-    - `atm send <agent>@<team> --host <host> ...`
-  - those two forms are logically equivalent and must normalize into one typed
-    request field for the remote host
+  - the supported remote-send CLI form is exactly
+    `atm send <agent>@<team>.<host> ...`; host qualification is part of the
+    typed address grammar, not a second flag or alternate route
   - because team names cannot contain `.`, the inline form splits at the first
     `.` after `@`; the remainder is the host and may be a DNS name or IP
     address containing additional periods
-  - mixed inline-host plus `--host` input is rejected instead of silently
-    preferring one source
   - one post-write router selects local nudge for an empty destination host and
     the HTTPS adapter for every present destination host, including `localhost`
     and the daemon's own advertised or bound IP address
+  - local CLI HTTP, host-qualified same-host HTTP, and remote peer HTTP submit
+    the same canonical write resource and request schema; TLS/authentication
+    is adapter work before that resource, never a second write endpoint,
+    persistence path, ACK path, or nudge path
   - every canonical write orders idempotent persistence, optional receiver-side
     acknowledgement mutation, and exactly one post-write router dispatch;
     nudge or peer delivery must never occur before persistence
@@ -3685,6 +3724,14 @@ mail correctness.
   - the canonical local write may persist the sender's immutable outbound
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
+  - when a host-qualified same-host peer receipt encounters that daemon's own
+    identical retained origin ULID, storage logs the duplicate attempt and
+    skips the second database write without altering origin destination-host
+    metadata; ordinary inbound recipient delivery continues to its post-write
+    local nudge and must not re-enter peer delivery. A later ACK to that
+    retained record derives its host-qualified reply target from the preserved
+    origin destination metadata and still creates the ordinary canonical ACK
+    write
 
 - `REQ-CORE-TRANSPORT-002A` Cross-host HTTPS listener, local certificate, and
   peer-trust configuration must use durable storage-backed state rather than
@@ -3698,16 +3745,58 @@ mail correctness.
   - if no enabled interface rows exist, no cross-host listener binds
   - environment variables must not configure cross-host networking or trust
 
+- `REQ-CORE-TRANSPORT-002D` A peer authority is one durable registered DNS
+  hostname, HTTPS port, and pinned certificate fingerprint.
+
+  Required behavior:
+  - a hostname target exact-matches one registered authority name; its durable
+    HTTPS port selects the endpoint
+  - a literal IP target is accepted only when a bounded fresh DNS lookup of
+    exactly one registered hostname contains that address
+  - resolved addresses are not stored in SQLite or another durable alias store
+  - zero or multiple matching registered names fail closed before TLS or route
+  - reverse DNS is forbidden; an IP-only registration never authorizes a name
+  - every registered hostname must be forward-resolvable by the peers that
+    use it; a changing VPN or Wi-Fi address is updated by the host's normal
+    DNS/DDNS mechanism, never by ATM reverse lookup or a SQLite IP alias
+  - several account-owned daemons may use the same current host IP only when
+    each authority has a distinct `(hostname, port)` endpoint and certificate
+    pin; an OS bind collision fails closed and must not select another port
+  - trust add, replace, and revoke refresh the one live daemon's verifier
+    atomically without starting a second daemon
+
 - `REQ-CORE-TRANSPORT-002B` Cross-host inbound authorization must use mTLS and
   a durable deny-by-default exact peer allowlist before routing.
 
   Required behavior:
-  - inbound peers are rejected unless their authenticated host identity and
-    pinned certificate fingerprint match one enabled record
+  - inbound peers are rejected unless their declared stable host identity,
+    configured HTTPS port, and pinned certificate fingerprint match one
+    enabled record; the TCP source IP is routing information only
   - wildcard, prefix/suffix, subnet-derived, and regex trust are forbidden
   - rejection happens before router, mailbox, acknowledgement, or roster work
   - doctor output must surface listener, certificate, and trust state without
     exposing private key material
+
+- `REQ-CORE-TRANSPORT-002B1` A daemon may run an explicit, process-local
+  plaintext peer-wire profile only for debug/smoke diagnosis.
+
+  Required behavior:
+  - default and every normal release invocation use mTLS plus the exact peer
+    allowlist; no TLS, certificate, or allowlist failure may fall back to
+    plaintext
+  - only `atm-daemon --peer-wire-security plaintext-test` enables plaintext;
+    the setting is non-durable, not environment-driven, and a restart without
+    that argument restores mTLS
+  - plaintext-test uses the same HTTP resource, `WriteRequest`, router,
+    persistence, and post-write path as mTLS. It must not introduce a
+    plaintext-only message shape, route, nudge, or acknowledgement path
+  - plaintext-test does not authenticate or authorize a peer. A declared
+    source-host is untrusted smoke provenance only and must not be presented as
+    authenticated, used to authorize a recipient, or treated as production
+    trust evidence
+  - doctor, retained logs, smoke JSON, and XHTML label the active wire-security
+    mode. Plaintext-test evidence never satisfies mTLS/allowlist acceptance
+    criteria
 
 - `REQ-CORE-TRANSPORT-002C` Same-host proof must use the ordinary remote-host
   contract and must not be implemented as a special loopback-only send mode.
@@ -3717,6 +3806,9 @@ mail correctness.
     any other remote host proof
   - `localhost` and the host's own advertised or bound IP address are valid
     ordinary remote-host targets
+  - the required same-host transport proof targets the daemon's advertised or
+    bound virtual-Ethernet IP over TCP; a `localhost` row is address-grammar
+    coverage only and cannot substitute for that proof
   - same-host proof must not require a dedicated wire field, request flag, or
     special-case routing branch outside the normal remote-host classifier
   - successful same-host rows do not by themselves authorize second-host
@@ -3729,7 +3821,11 @@ mail correctness.
     acknowledgement state, or duplicate-delivery subsystem may exist
   - an unavailable peer returns one normal transport error for the attempted
     write; retry is an ordinary repeat of the immutable message identity
-  - duplicate arrival is idempotent at storage by the existing message ULID
+  - duplicate arrival is idempotent at storage by the existing message ULID;
+    an identical already-delivered remote duplicate has no side effect, while
+    the narrow same-host retained-origin receipt defined by
+    `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
+    inbound recipient nudge without a second database write
   - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
     reconciliation scan; it creates no delivery state
 
@@ -3740,8 +3836,10 @@ mail correctness.
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
     `max_batch_messages` control the feature; zero age disables it by default
     and the batch cap defaults to 100
-  - an operator can enable policy and request a one-shot sync; after a normal
-    HTTPS write succeeds the daemon may run the same bounded sync for that peer
+  - an operator can enable policy and request a one-shot sync. Automatic work
+    is signalled only by a locally persisted host-qualified write or an
+    unconfirmed peer delivery; ordinary peer success does not create a probe
+    loop or a second scheduler
   - storage queries locally persisted outbound records for the exact peer newer
     than the configured age and returns their original ULID and immutable
     payload through a storage trait
@@ -3749,12 +3847,14 @@ mail correctness.
     receiver-specific replay path exists
   - no outbox, replay store, retry queue, background monitor, checkpoint,
     cursor, receipt, retry budget, or per-message delivery state is allowed
-  - an exact duplicate ULID/payload is a no-op; same ULID with different
-    immutable data returns a typed conflict, logs the discrepancy, preserves
-    the original record, and has no side effect or panic
-  - automatic sync is limited to one peer batch per 60 seconds using a bounded
-    in-memory peer cooldown with no payload or message-ID state; explicit sync
-    runs one batch immediately and neither path retries or backs off
+  - an exact duplicate ULID/payload is a no-op except for the
+    same-host-retained-origin receipt defined by `REQ-CORE-TRANSPORT-002`,
+    which logs a skipped write and continues its inbound nudge without a
+    database write; same ULID with different immutable data returns a typed
+    conflict, logs the discrepancy, preserves the original record, and has no
+    side effect or panic
+  - explicit sync runs one bounded pass through the same per-host coordinator
+    as automatic recovery; it introduces no second transport or write route
 
 - `REQ-CORE-TRANSPORT-004` A remote write succeeds only after the remote daemon
   accepts the canonical write request.
@@ -3772,16 +3872,21 @@ mail correctness.
     `acknowledges_message_id` populated; its state transition occurs only in
     the receiver's shared write handler
   - the origin-created message ULID and all immutable fields are preserved on
-    the receiver; exact duplicates do not repeat a nudge or acknowledgement
-    transition, while a conflicting payload for the same ULID is a typed error
+    the receiver; exact already-delivered remote duplicates do not repeat a
+    nudge or acknowledgement transition. The same-host retained-origin
+    receipt is the narrow exception defined by `REQ-CORE-TRANSPORT-002`: it
+    logs the skipped database write and continues the inbound nudge without a
+    second record or peer re-delivery. A conflicting payload for the same ULID
+    is a typed error
 
 - `REQ-CORE-TRANSPORT-005` The daemon runtime must use concrete timeout and
   capacity limits for transport/store/health operations.
 
   Required behavior:
-  - same-host daemon request deadline: `3s`
-  - per-leg HTTPS connect/read/write deadline: `5s`
-  - remote synchronous wait deadline: `10s`
+  - every request has one absolute `RequestDeadline`; local HTTP, router,
+    dispatcher, post-write router, and HTTPS consume only its remaining budget
+  - no peer connect, TLS, request, or response leg may create a longer
+    independent deadline below dispatcher scope
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
@@ -3802,6 +3907,59 @@ mail correctness.
   - HTTP request bodies are capped at `1_048_576` bytes and rejected before decode; UDS,
     loopback TCP, and HTTPS shutdown stop accepts then drain or cancel tracked requests within
     the one documented daemon shutdown deadline
+
+- `REQ-CORE-TRANSPORT-005A` A remote write is confirmed only after the peer
+  daemon returns canonical HTTP acceptance.
+
+  Required behavior:
+  - origin persistence is observable separately and is never labelled sent
+  - deadline, disconnect, or failed response after dispatch returns the typed
+    `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
+    local daemon accepted the request
+  - accepted work remains runtime-tracked and is cancelled on deadline expiry
+    or local disconnect; detached delivery is forbidden
+  - the possible remote side effect is resolved only by repeating the same
+    immutable ULID through ordinary idempotent write handling
+  - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
+    `peer_delivery_unconfirmed`; terminal handler/response-write failures are
+    retained structured events
+
+- `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
+  recent immutable outbound writes after connectivity loss without delivery
+  state.
+
+  Required behavior:
+  - policy selects a bounded send window and batch; zero window disables it
+  - exactly one non-durable drain lease exists per canonical peer hostname;
+    it owns storage paging, one connection, ordered sends, and final rescan,
+    but contains no message ID, payload, cursor, receipt, or attempt history
+  - every drain advances a transient exclusive `(created_at, message_ulid)`
+    lower bound through pages of at most `max_batch_messages`, ordered
+    oldest-first, until an empty page, transport failure, or cancellation. It
+    sends ordinary canonical writes sequentially on one HTTP(S) connection;
+    no batch request shape or recovery-only endpoint is allowed. The lower
+    bound is dropped with the in-memory lease and is never durable state
+  - every newly persisted outbound write signals a per-host generation. The
+    drain must re-scan before lease release if that generation changes, and a
+    post-release signal starts the next lease; no write may be lost in the
+    final-scan/release race
+  - the post-write router has one `PeerDeliveryCoordinator::deliver_after_persist`
+    handoff for host-qualified writes. It serializes a foreground write behind
+    the same host lease and existing older backlog; it must not open a second
+    socket or bypass ordered canonical records. A request-local wait ends at
+    its existing deadline and is never durable or per-message delivery state
+  - first recovery attempt is no earlier than 60 seconds; later failures use
+    exponential backoff capped at 15 minutes
+  - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
+    cursor, receipt, payload cache, per-message attempt state, or alternate
+    write route is allowed
+  - empty window, policy disable, or peer revoke stops scheduling
+  - retained events distinguish scheduled, attempted, confirmed, and
+    unconfirmed recovery without body or certificate material
+  - doctor exposes a bounded, secret-free per-host link projection: quality,
+    last success/failure, last typed error, next attempt, drain state, and
+    bounded candidate count. It is observability only, not durable delivery
+    state
 
 ### 22.5 Direct Post-Send And Native Agent Path
 

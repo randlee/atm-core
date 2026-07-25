@@ -35,7 +35,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-024 — NudgeTemplateOverrideStore Storage Ownership Relocation](./ADR-024-nudge-template-override-storage-ownership-relocation.md)
 - [ADR-025 — Installed User Documentation Surface](./ADR-025-installed-user-documentation-surface.md)
 - [ADR-026 — Host Singleton And Durable State Root](./ADR-026-host-singleton-and-durable-state-root.md)
-- [ADR-027 — Client/Daemon Version Compatibility](./ADR-027-client-daemon-version-compatibility.md)
+- [ADR-027 — Client/Daemon Schema Compatibility](./ADR-027-client-daemon-version-compatibility.md)
 - [ADR-028 — Cross-Host Interface Control Plane (superseded by ADR-034)](./ADR-028-cross-host-interface-control-plane.md)
 - [ADR-029 — Cross-Host Host Authorization (superseded by ADR-034)](./ADR-029-cross-host-host-authorization.md)
 - [ADR-030 — Cross-Host Transport Security Sequencing (superseded by ADR-034)](./ADR-030-cross-host-transport-security-phase.md)
@@ -47,6 +47,9 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-036 — Storage Boundary And Composition Topology](./ADR-036-storage-boundary-and-composition-topology.md)
 - [ADR-037 — Chat Address Identity](./ADR-037-chat-address-identity.md)
 - [ADR-039 — Python Graft Host Binding](./ADR-039-python-graft-host-binding.md)
+- [ADR-040 — Peer Authority Resolution](./ADR-040-peer-authority-resolution.md)
+- [ADR-041 — End-To-End Peer Write Outcome](./ADR-041-end-to-end-peer-write-outcome.md)
+- [ADR-042 — SemVer Release And HTTP Compatibility](./ADR-042-semver-release-and-http-compatibility.md)
 
 ## Extracted Crate-Local ADRs
 
