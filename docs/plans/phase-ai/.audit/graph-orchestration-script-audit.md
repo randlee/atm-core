@@ -186,6 +186,7 @@ The ATM mailbox pass now provides the assignment/result evidence needed to
 reconstruct QA timing without using branch names as provenance. The
 machine-readable index is [qa-evidence-master.json](qa-evidence-master.json);
 the Excel-facing projection is [qa-assignment-results.csv](qa-assignment-results.csv).
+The verdict-to-record reconciliation is [triage-record-coverage.md](triage-record-coverage.md).
 Both are bounded to the AICH work-start time (`2026-07-25T04:15:13Z`). The
 master records message IDs and both shared ATM and local temp paths. The CSV
 uses fixed PST (`UTC-08:00`) and separate blocker/important/minor columns.
