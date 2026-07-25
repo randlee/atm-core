@@ -65,6 +65,23 @@ Exclude unrelated Phase AI sprints, findings, branches, and ATM messages.
 5. Compare `develop` and `integrate/phase-AI` at pinned commit SHAs. Note
    scripts present only on one ref and fixes that have not been merge-forwarded.
 
+## QA evidence tables
+
+- [qa-evidence-master.json](qa-evidence-master.json) is the authoritative,
+  machine-friendly index. It has one object per located QA/recheck run and
+  includes ATM message IDs, UTC/PST timestamps, shared ATM paths, local temp
+  scratchpad paths, verdicts, counts, and count-basis notes.
+- [qa-assignment-results.csv](qa-assignment-results.csv) is the Excel-facing
+  projection of the master index. It has one row per located QA run and
+  separate `blockers`, `important`, and `minor` columns.
+- CSV timestamps use fixed PST (`UTC-08:00`) as requested, including the July
+  records; they are not daylight-saving-adjusted PDT values. Blank cells mean
+  the source verdict did not provide a defensible split count.
+- Counts are not silently normalized across verdict styles: the CSV's
+  `count_basis` identifies itemized, headline, open-gate, or reviewer-aggregate
+  counts. A missing assignment or result is recorded in the master table's
+  `coverage_gaps` rather than inferred from a branch name.
+
 ## Current audit baseline
 
 - Audit branch: `audit/phase-ai`
