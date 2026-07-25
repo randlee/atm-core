@@ -33,7 +33,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, resolve_peer_authority};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -588,9 +588,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 .emit_local_post_write(&self.service_runtime, &post_send_emitter);
             return Ok(());
         };
-        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
-            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
-        })?;
+        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
         let transport = self
             .https_transport
             .lock()

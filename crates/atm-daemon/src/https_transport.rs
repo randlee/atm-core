@@ -6,7 +6,7 @@
 //! replay state.
 
 use std::fmt;
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -58,6 +58,39 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         peer: &TrustedPeer,
         deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
+}
+
+/// Resolves a delivery target to one configured hostname authority. Literal
+/// addresses are only aliases of exactly one fresh forward-DNS result; they
+/// never become durable peer records and reverse DNS is deliberately absent.
+pub(crate) fn resolve_peer_authority(
+    target: &atm_core::types::HostName,
+    peers: &[TrustedPeer],
+) -> Result<TrustedPeer, AtmError> {
+    if let Some(peer) = peers
+        .iter()
+        .find(|peer| peer.enabled && peer.host == *target)
+    {
+        return Ok(peer.clone());
+    }
+    let ip: IpAddr = target.as_str().parse().map_err(|_| {
+        AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {target}"))
+    })?;
+    let matches = peers
+        .iter()
+        .filter(|peer| peer.enabled)
+        .filter(|peer| resolve_peer_addresses(peer).is_ok_and(|addresses| addresses.contains(&ip)))
+        .cloned()
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [peer] => Ok(peer.clone()),
+        [] => Err(AtmError::daemon_unavailable(format!(
+            "literal peer IP {target} matches no trusted hostname"
+        ))),
+        _ => Err(AtmError::validation(format!(
+            "literal peer IP {target} matches multiple trusted hostnames"
+        ))),
+    }
 }
 
 struct TlsIdentity {
@@ -444,16 +477,23 @@ fn complete_handshake(
     Ok(())
 }
 
-fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
-    use std::net::ToSocketAddrs;
-    let mut addresses = format!("{host}:{port}")
+fn resolve_peer_addresses(peer: &TrustedPeer) -> Result<Vec<IpAddr>, AtmError> {
+    format!("{}:{}", peer.host, peer.https_port)
         .to_socket_addrs()
         .map_err(|_source| {
-            AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}"))
-        })?;
-    addresses.next().ok_or_else(|| {
-        AtmError::daemon_unavailable(format!("HTTPS peer {host} resolved to no addresses"))
-    })
+            AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {}", peer.host))
+        })
+        .map(|addresses| addresses.map(|address| address.ip()).collect())
+}
+
+fn resolve_peer_address(host: &str, port: u16) -> Result<SocketAddr, AtmError> {
+    format!("{host}:{port}")
+        .to_socket_addrs()
+        .map_err(|_| AtmError::daemon_unavailable(format!("failed to resolve HTTPS peer {host}")))?
+        .next()
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable(format!("HTTPS peer {host} resolved to no addresses"))
+        })
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
@@ -653,6 +693,33 @@ mod tests {
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
     };
+
+    fn trusted(host: &str) -> TrustedPeer {
+        TrustedPeer {
+            host: host.parse().expect("host"),
+            fingerprint: "00".repeat(32).parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+        }
+    }
+
+    #[test]
+    fn literal_ip_selects_its_single_forward_dns_authority() {
+        let target = "127.0.0.1".parse().expect("target");
+        assert_eq!(
+            super::resolve_peer_authority(&target, &[trusted("localhost")])
+                .expect("authority")
+                .host
+                .as_str(),
+            "localhost"
+        );
+    }
+
+    #[test]
+    fn literal_ip_without_authority_fails_closed() {
+        let target = "192.0.2.1".parse().expect("target");
+        assert!(super::resolve_peer_authority(&target, &[trusted("localhost")]).is_err());
+    }
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
