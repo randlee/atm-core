@@ -107,6 +107,14 @@ an existing operation. Removing or changing a field, status meaning,
 authorization rule, or handler mapping needs a new API major and ADR review.
 Product release versions are diagnostic only and are not HTTP admission input.
 
+## Peer authority
+
+Cross-host authority is configured as a hostname, HTTPS port, and certificate
+pin. The daemon resolves the hostname freshly for each new connection; resolved
+addresses are neither returned by doctor nor persisted. A literal-IP delivery
+target is accepted only when it currently resolves from exactly one configured
+hostname authority. The configured hostname and port remain the TLS authority.
+
 ## Deferred scope
 
 Browser session authentication/authorization UI, CORS policy, static assets,

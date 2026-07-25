@@ -10,7 +10,7 @@ depends_on: AI.21-pre, AI.22, AI.23, AI.11–AI.16
 
 ## Release candidate
 
-- First commit: set every releasable ATM assembly to `1.3.2-beta-25`; record
+- First commit: set every releasable ATM assembly to `1.3.2-beta.25`; record
   matching client/daemon values from `atm doctor --json` in runtime evidence.
 
 ## Closure
