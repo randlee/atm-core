@@ -222,8 +222,9 @@ Initial crate requirement IDs:
   next-attempt time, and backoff for bounded canonical-record scans.
   Storage idempotency is by immutable message ULID. An identical
   already-delivered remote duplicate is a no-op; the narrow same-host peer
-  receipt of a retained origin record logs its skipped database write and
-  continues the ordinary inbound nudge without a second record or peer
+  receipt of a retained origin record logs `peer_duplicate_write_skipped`
+  with its ULID, source/destination host, `database_write=skipped`, and
+  `delivery=continued`; it continues the ordinary inbound nudge without a second record or peer
   re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
   canonical write. A failed remote attempt creates no remote recipient row or

@@ -577,6 +577,15 @@ impl MessageWriter for DaemonRequestDispatcher {
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
         if message.prepared.is_peer_receipt() {
+            if message.prepared.is_same_store_peer_receipt() {
+                let mut event = self.runtime_health_observability.event(
+                    "peer_duplicate_write_skipped",
+                    "ok",
+                    "peer duplicate write skipped; continuing the ordinary local post-write action",
+                );
+                event.message_id = Some(message.prepared.persisted_message_id());
+                self.runtime_health_observability.emit_event_or_warn(event);
+            }
             let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
             let post_send_emitter =
@@ -967,10 +976,12 @@ impl ApiRouter for DaemonRequestDispatcher {
         if let RequestEnvelope::Write(write) = &request {
             match ingress {
                 AuthenticatedIngress::Local
-                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_some()
+                        || write.origin_timestamp.is_some() =>
                 {
                     return Err(AtmError::validation(
-                        "local write requests must not supply origin message metadata",
+                        "local write requests must not supply authenticated peer provenance or origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Peer

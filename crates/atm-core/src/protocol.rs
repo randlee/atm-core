@@ -362,10 +362,10 @@ mod tests {
     #[test]
     fn release_version_accepts_semver_prereleases_and_rejects_non_semver() {
         assert_eq!(
-            ReleaseVersion::parse("v1.3.2-beta-23")
+            ReleaseVersion::parse("v1.3.2-beta-24")
                 .expect("prerelease version")
                 .to_string(),
-            "1.3.2-beta-23"
+            "1.3.2-beta-24"
         );
         assert!(ReleaseVersion::parse("1.3").is_err());
     }
