@@ -32,6 +32,7 @@ parking_lot = "0.12"
 ulid.workspace = true
 base64.workspace = true
 getrandom.workspace = true
+semver.workspace = true
 
 [dev-dependencies]
 fs2 = "0.4"

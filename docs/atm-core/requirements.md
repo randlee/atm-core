@@ -208,7 +208,8 @@ Initial crate requirement IDs:
   localhost and the daemon's own advertised or bound IP. Same-host transport
   proof uses that advertised/bound virtual-Ethernet IP over TCP; localhost is
   grammar coverage only. Local CLI HTTP, same-host TCP HTTP, and remote peer
-  HTTP decode the same `WriteRequest` through one HTTP write resource; adapter
+  HTTP decode the same `WriteRequest` through `POST /v1/atm/messages`, the one
+  HTTP write resource for send and ACK; adapter
   authentication/provenance cannot select another write, ACK, persistence, or
   nudge path. When same-host peer ingress skips a duplicate origin write, a
   later ACK derives its reply host from that retained origin destination

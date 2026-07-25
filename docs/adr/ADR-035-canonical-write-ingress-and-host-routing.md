@@ -15,6 +15,8 @@ one storage method. The handler orders work exactly as: idempotent persistence,
 optional receiver-side acknowledgement transition, then one post-write event.
 An event cannot precede a visible persisted write. Inbound HTTPS has no
 cross-host-specific mailbox, acknowledgement, or nudge branch.
+All of those writes use the one HTTP resource `POST /v1/atm/messages`; an ACK
+sets `acknowledges_message_id` and cannot select an ACK-specific endpoint.
 
 Routing is decided exactly once by the post-write event router:
 
