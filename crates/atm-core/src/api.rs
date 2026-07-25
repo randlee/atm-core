@@ -24,6 +24,142 @@ pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 pub const HTTP_API_VERSION: u16 = 1;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
+const MESSAGES_PATH: &str = "/v1/atm/messages";
+const INSPECT_PATH: &str = "/v1/atm/messages/inspect";
+const READ_PATH: &str = "/v1/atm/messages/read";
+const DOCTOR_PATH: &str = "/v1/atm/doctor";
+const PEER_SYNC_PREFIX: &str = "/v1/atm/peers/";
+const COMPATIBILITY_PATH: &str = "/v1/atm/compatibility";
+const HEARTBEAT_PATH: &str = "/v1/atm/heartbeat";
+
+/// One registered HTTP route, published from the same constants as request encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HttpRoute {
+    pub method: &'static str,
+    pub path_template: &'static str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HttpRouteKind {
+    Write,
+    List,
+    Clear,
+    Inspect,
+    Receive,
+    Doctor,
+    PeerSync,
+    Compatibility,
+    Heartbeat,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HttpRouteSpec {
+    kind: HttpRouteKind,
+    route: HttpRoute,
+}
+
+// This one table is consumed by both outbound request construction and inbound
+// decoding. Adding a route cannot make it to one direction without the other.
+const HTTP_ROUTE_SPECS: &[HttpRouteSpec] = &[
+    HttpRouteSpec {
+        kind: HttpRouteKind::List,
+        route: HttpRoute {
+            method: "GET",
+            path_template: MESSAGES_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Write,
+        route: HttpRoute {
+            method: "POST",
+            path_template: MESSAGES_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Clear,
+        route: HttpRoute {
+            method: "DELETE",
+            path_template: MESSAGES_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Inspect,
+        route: HttpRoute {
+            method: "POST",
+            path_template: INSPECT_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Receive,
+        route: HttpRoute {
+            method: "POST",
+            path_template: READ_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Doctor,
+        route: HttpRoute {
+            method: "GET",
+            path_template: DOCTOR_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::PeerSync,
+        route: HttpRoute {
+            method: "POST",
+            path_template: "/v1/atm/peers/{peer}/sync",
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Compatibility,
+        route: HttpRoute {
+            method: "POST",
+            path_template: COMPATIBILITY_PATH,
+        },
+    },
+    HttpRouteSpec {
+        kind: HttpRouteKind::Heartbeat,
+        route: HttpRoute {
+            method: "POST",
+            path_template: HEARTBEAT_PATH,
+        },
+    },
+];
+
+/// Registered HTTP route inventory for documentation conformance tests.
+pub fn http_route_surface() -> impl Iterator<Item = HttpRoute> {
+    HTTP_ROUTE_SPECS.iter().map(|spec| spec.route)
+}
+
+fn route_spec(kind: HttpRouteKind) -> HttpRouteSpec {
+    *HTTP_ROUTE_SPECS
+        .iter()
+        .find(|spec| spec.kind == kind)
+        .expect("every HTTP route kind has one shared route specification")
+}
+
+fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {
+    match request {
+        RequestEnvelope::Write(_) => HttpRouteKind::Write,
+        RequestEnvelope::List(_) => HttpRouteKind::List,
+        RequestEnvelope::Peek(_) => HttpRouteKind::Inspect,
+        RequestEnvelope::Receive(_) => HttpRouteKind::Receive,
+        RequestEnvelope::Clear(_) => HttpRouteKind::Clear,
+        RequestEnvelope::Doctor(_) => HttpRouteKind::Doctor,
+        RequestEnvelope::PeerSync(_) => HttpRouteKind::PeerSync,
+        RequestEnvelope::CompatibilityPreflight(_) => HttpRouteKind::Compatibility,
+        RequestEnvelope::Heartbeat(_) => HttpRouteKind::Heartbeat,
+    }
+}
+
+fn route_kind_for_http(method: &str, path: &str) -> Option<HttpRouteKind> {
+    HTTP_ROUTE_SPECS.iter().find_map(|spec| {
+        (spec.route.method == method
+            && (spec.route.path_template == path
+                || (spec.kind == HttpRouteKind::PeerSync && peer_sync_path_host(path).is_some())))
+        .then_some(spec.kind)
+    })
+}
 
 type EncodedHttpResponse = (u16, &'static str, Vec<u8>, Option<String>);
 
@@ -42,21 +178,12 @@ impl HttpRequest {
 }
 
 pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
-    match request {
-        // Send and acknowledgement are the same canonical write resource.
-        // `acknowledges_message_id` is payload data, never an endpoint choice.
-        RequestEnvelope::Write(_) => ("POST", "/v1/atm/messages".to_string()),
-        RequestEnvelope::List(_) => ("GET", "/v1/atm/messages".to_string()),
-        RequestEnvelope::Peek(_) => ("POST", "/v1/atm/messages/inspect".to_string()),
-        RequestEnvelope::Receive(_) => ("POST", "/v1/atm/messages/read".to_string()),
-        RequestEnvelope::Clear(_) => ("DELETE", "/v1/atm/messages".to_string()),
-        RequestEnvelope::Doctor(_) => ("GET", "/v1/atm/doctor".to_string()),
-        RequestEnvelope::PeerSync(request) => {
-            ("POST", format!("/v1/atm/peers/{}/sync", request.peer))
-        }
-        RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
-        RequestEnvelope::Heartbeat(_) => ("POST", "/v1/atm/heartbeat".to_string()),
-    }
+    let spec = route_spec(route_kind_for_request(request));
+    let path = match request {
+        RequestEnvelope::PeerSync(request) => format!("{PEER_SYNC_PREFIX}{}/sync", request.peer),
+        _ => spec.route.path_template.to_string(),
+    };
+    (spec.route.method, path)
 }
 
 pub fn write_http_request(
@@ -264,32 +391,35 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
 }
 
 fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequest, AtmError> {
-    match (method, path) {
-        ("POST", "/v1/atm/messages") => serde_json::from_slice(body)
+    let route = route_kind_for_http(method, path).ok_or_else(|| {
+        AtmError::validation(format!("unsupported daemon HTTP route {method} {path}"))
+    })?;
+    match route {
+        HttpRouteKind::Write => serde_json::from_slice(body)
             .map(|value| ApiRequest::Write(Box::new(value)))
             .map_err(|source| invalid_route_body("write", source)),
-        ("GET", "/v1/atm/messages") => serde_json::from_slice(body)
+        HttpRouteKind::List => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::List(value))))
             .map_err(|source| invalid_route_body("messages list", source)),
-        ("POST", "/v1/atm/messages/inspect") => serde_json::from_slice(body)
+        HttpRouteKind::Inspect => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Peek(value))))
             .map_err(|source| invalid_route_body("message inspect", source)),
-        ("POST", "/v1/atm/messages/read") => serde_json::from_slice(body)
+        HttpRouteKind::Receive => serde_json::from_slice(body)
             .map(|value| ApiRequest::Messages(Box::new(MessageCollectionRequest::Receive(value))))
             .map_err(|source| invalid_route_body("message read", source)),
-        ("DELETE", "/v1/atm/messages") => serde_json::from_slice(body)
+        HttpRouteKind::Clear => serde_json::from_slice(body)
             .map(ApiRequest::Clear)
             .map_err(|source| invalid_route_body("messages clear", source)),
-        ("GET", "/v1/atm/doctor") => serde_json::from_slice(body)
+        HttpRouteKind::Doctor => serde_json::from_slice(body)
             .map(ApiRequest::Doctor)
             .map_err(|source| invalid_route_body("doctor", source)),
-        ("POST", "/v1/atm/compatibility") => serde_json::from_slice(body)
+        HttpRouteKind::Compatibility => serde_json::from_slice(body)
             .map(ApiRequest::CompatibilityPreflight)
             .map_err(|source| invalid_route_body("compatibility", source)),
-        ("POST", "/v1/atm/heartbeat") => serde_json::from_slice(body)
+        HttpRouteKind::Heartbeat => serde_json::from_slice(body)
             .map(ApiRequest::Heartbeat)
             .map_err(|source| invalid_route_body("heartbeat", source)),
-        ("POST", path) if peer_sync_path_host(path).is_some() => {
+        HttpRouteKind::PeerSync => {
             let request: PeerSyncRequest = serde_json::from_slice(body)
                 .map_err(|source| invalid_route_body("peer sync", source))?;
             if peer_sync_path_host(path) != Some(request.peer.as_str()) {
@@ -299,9 +429,6 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
             }
             Ok(ApiRequest::PeerSync(request))
         }
-        _ => Err(AtmError::validation(format!(
-            "unsupported daemon HTTP route {method} {path}"
-        ))),
     }
 }
 

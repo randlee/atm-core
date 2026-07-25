@@ -263,6 +263,18 @@ impl AtmError {
         Self::new(AtmErrorCode::MessageValidationFailed, message)
     }
 
+    /// Builds a validation error whose recovery is specific to the rejected CLI input.
+    pub fn validation_with_recovery(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self {
+            code: AtmErrorCode::MessageValidationFailed,
+            message: format!("{}\n  Recovery: {}", message.into(), recovery.into()),
+            cause: None,
+        }
+    }
+
     pub fn local_http_capability_invalid(message: impl Into<String>) -> Self {
         Self::new(AtmErrorCode::LocalHttpCapabilityInvalid, message)
     }

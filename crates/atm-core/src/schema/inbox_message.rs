@@ -37,6 +37,22 @@ pub(crate) fn authenticated_source_host(
         .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
 }
 
+/// Returns the destination host retained on an origin message that awaits
+/// ordinary peer delivery. This is routing metadata, never peer provenance.
+pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(PEER_OUTBOUND_KEY) else {
+        return Ok(None);
+    };
+    let host = value
+        .as_object()
+        .and_then(|object| object.get("host"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| AtmError::mailbox_read("persisted peer outbound host is invalid"))?;
+    host.parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted peer outbound host is invalid"))
+}
+
 /// Persists only adapter-authenticated source-host metadata; callers must not
 /// copy this value from an untrusted request payload.
 pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Option<HostName>) {

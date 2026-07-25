@@ -938,8 +938,8 @@ mod tests {
         assert!(write.authenticated_source_host.is_none());
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
-            write.to.as_ref().expect("destination").host,
-            Some("example.invalid".parse().expect("destination host"))
+            write.to.as_ref().expect("destination").host(),
+            Some(&"example.invalid".parse().expect("destination host"))
         );
         assert!(matches!(
             router.ingress.lock().expect("recorded ingress").as_ref(),
@@ -1113,8 +1113,8 @@ mod tests {
         assert_eq!(write.authenticated_source_host, Some(peer.host.clone()));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
-            write.to.as_ref().expect("destination").host,
-            Some("192.168.128.82".parse().expect("advertised IP"))
+            write.to.as_ref().expect("destination").host(),
+            Some(&"192.168.128.82".parse().expect("advertised IP"))
         );
         assert!(write.acknowledges_message_id.is_none());
         let ApiRequest::Write(ack) = &requests[1] else {

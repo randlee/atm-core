@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -152,7 +152,15 @@ pub(crate) struct DaemonRequestDispatcher {
     peer_wire_security: PeerWireSecurity,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
+    peer_sync_progress: std::sync::Mutex<HashMap<atm_core::types::HostName, PeerSyncProgress>>,
+}
+
+/// Transient per-daemon guard for explicit sync requests. It is intentionally
+/// not durable transport state: a completed pass clears its watermark.
+#[derive(Default)]
+struct PeerSyncProgress {
+    next_allowed_at: Option<std::time::Instant>,
+    delivered_request_json: BTreeSet<String>,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -430,7 +438,7 @@ impl DaemonRequestDispatcher {
             peer_wire_security,
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -577,6 +585,15 @@ impl MessageWriter for DaemonRequestDispatcher {
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
         if message.prepared.is_peer_receipt() {
+            if message.prepared.is_same_store_peer_receipt() {
+                let mut event = self.runtime_health_observability.event(
+                    "peer_duplicate_write_skipped",
+                    "ok",
+                    "peer duplicate write skipped; continuing the ordinary local post-write action",
+                );
+                event.message_id = Some(message.prepared.persisted_message_id());
+                self.runtime_health_observability.emit_event_or_warn(event);
+            }
             let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
             let post_send_emitter =
@@ -590,7 +607,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .outbound_request
             .to
             .as_ref()
-            .and_then(|address| address.host.as_ref())
+            .and_then(|address| address.host())
         else {
             let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
@@ -618,53 +635,25 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             HttpsRequestDeadline::default(),
         ) {
             Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => self
-                .reconcile_after_success(host, &peer, transport.as_ref(), true)
-                .map(|_| ()),
+            // The just-delivered immutable write is already the canonical peer
+            // action. Replaying recent outbound records here re-delivered the
+            // same-store receipt and amplified its nudge. Reconciliation is
+            // explicit through the PeerSync resource below.
+            Ok(_) => Ok(()),
             Err(error) => Err(error),
         }
     }
 }
 
 impl DaemonRequestDispatcher {
-    fn reconcile_after_success(
+    fn reconcile_peer(
         &self,
         peer_host: &atm_core::types::HostName,
         peer: &atm_storage::TrustedPeer,
         transport: &dyn HttpsMessageTransport,
-        apply_cooldown: bool,
+        policy: atm_storage::PeerSyncPolicy,
+        delivered_request_json: &mut BTreeSet<String>,
     ) -> Result<u16, AtmError> {
-        let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
-        policy.validate()?;
-        if policy.max_message_age.is_zero() {
-            return Ok(0);
-        }
-        if apply_cooldown {
-            let now = std::time::Instant::now();
-            let mut cooldown = self
-                .peer_sync_cooldown
-                .lock()
-                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
-            if cooldown
-                .get(peer_host)
-                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
-            {
-                return Ok(0);
-            }
-            // This is only a short-lived rate limiter, never delivery state.
-            // Evicting the oldest entry bounds memory without affecting message data.
-            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
-            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
-                && !cooldown.contains_key(peer_host)
-                && let Some(oldest) = cooldown
-                    .iter()
-                    .min_by_key(|(_, instant)| **instant)
-                    .map(|(host, _)| host.clone())
-            {
-                cooldown.remove(&oldest);
-            }
-            cooldown.insert(peer_host.clone(), now);
-        }
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
             chrono::Utc::now()
                 - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
@@ -676,14 +665,15 @@ impl DaemonRequestDispatcher {
             not_before,
             policy.max_batch_messages,
         )?;
-        let delivered = u16::try_from(writes.len()).map_err(|_| {
-            AtmError::validation("peer sync selection exceeded its configured batch limit")
-        })?;
         // The peer transport contract honors this deadline. Keeping the whole
         // pass bounded means shutdown never waits on an unbounded reconciliation
         // loop or creates an independent worker/state machine.
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let mut delivered = 0_u16;
         for stored in writes {
+            if delivered_request_json.contains(&stored.request_json) {
+                continue;
+            }
             if std::time::Instant::now() >= deadline {
                 return Err(AtmError::daemon_unavailable(
                     "peer reconciliation exceeded its bounded request deadline",
@@ -694,6 +684,10 @@ impl DaemonRequestDispatcher {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
                 })?;
             transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+            delivered_request_json.insert(stored.request_json);
+            delivered = delivered.checked_add(1).ok_or_else(|| {
+                AtmError::validation("peer sync selection exceeded its configured batch limit")
+            })?;
         }
         Ok(delivered)
     }
@@ -703,6 +697,14 @@ impl DaemonRequestDispatcher {
             .peer_config_store
             .trusted_peer(&request.peer)?
             .ok_or_else(|| AtmError::peer_config_validation("unknown trusted peer"))?;
+        let policy = self.peer_config_store.peer_sync_policy(&request.peer)?;
+        policy.validate()?;
+        if policy.max_message_age.is_zero() {
+            return Ok(PeerSyncOutcome {
+                peer: request.peer,
+                delivered: 0,
+            });
+        }
         let transport = self
             .https_transport
             .lock()
@@ -711,44 +713,34 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        let delivered =
-            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        let mut progress = self
+            .peer_sync_progress
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("peer sync progress lock poisoned"))?;
+        let state = progress.entry(request.peer.clone()).or_default();
+        let now = std::time::Instant::now();
+        if state.next_allowed_at.is_some_and(|next| now < next) {
+            return Ok(PeerSyncOutcome {
+                peer: request.peer,
+                delivered: 0,
+            });
+        }
+        // Explicit sync is operator-controlled, but a tight local retry loop
+        // must not amplify wire delivery. A partial pass retains only the
+        // immutable requests already accepted; a completed pass clears it.
+        state.next_allowed_at = Some(now + Duration::from_secs(60));
+        let delivered = self.reconcile_peer(
+            &request.peer,
+            &peer,
+            transport.as_ref(),
+            policy,
+            &mut state.delivered_request_json,
+        )?;
+        state.delivered_request_json.clear();
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reconcile_after_success_for_test(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
-        self.reconcile_after_success(peer_host, peer, transport, true)
-            .map(|_| ())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn seed_peer_sync_cooldown_for_test(
-        &self,
-        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
-    ) {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .extend(entries);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn peer_sync_cooldown_for_test(
-        &self,
-    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .clone()
     }
 }
 
@@ -967,10 +959,12 @@ impl ApiRouter for DaemonRequestDispatcher {
         if let RequestEnvelope::Write(write) = &request {
             match ingress {
                 AuthenticatedIngress::Local
-                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_some()
+                        || write.origin_timestamp.is_some() =>
                 {
                     return Err(AtmError::validation(
-                        "local write requests must not supply origin message metadata",
+                        "local write requests must not supply authenticated peer provenance or origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Peer
@@ -1132,7 +1126,7 @@ impl DaemonRequestDispatcher {
             peer_wire_security: PeerWireSecurity::MutualTls,
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
+            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
         }
     }
 }

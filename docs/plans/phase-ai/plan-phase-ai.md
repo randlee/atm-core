@@ -182,7 +182,7 @@ integration; they do not alter it.
 | AI.21-pre | `feature/pAI-s21pre-crosshost-evidence-harness` | Supported Python/XHTML peer-smoke harness and explicit test-only plaintext wire profile |
 | AI.22 | `feature/pAI-s22-loopback-self-send-exemption` | Host-qualified destinations bypass only the unqualified identity self-send guard; advertised-IP is the required same-host TCP proof |
 | AI.23 | `feature/pAI-s23-crosshost-shared-write-path` | Local CLI, own-IP, and peer traffic converge at one HTTP `WriteRequest` endpoint, dispatcher, persistence method, and post-write router; release `1.3.2-beta-23` |
-| AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route |
+| AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route; release `1.3.2-beta-24` |
 | AI.25 | `feature/pAI-s25-peer-authority-resolution` | DNS-backed hostname/pin peer authority and live trust refresh |
 | AI.26 | `feature/pAI-s26-peer-write-deadline` | One propagated peer-write deadline and cancellation contract |
 | AI.27 | `feature/pAI-s27-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |
