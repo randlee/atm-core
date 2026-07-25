@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI26-ATMQA-002>
+  a triage:Finding ;
+  triage:findingId "AI26-ATMQA-002" ;
+  triage:title "Required deterministic delayed-peer/cancellation/retry/tracked-work tests from sprint-ai-26 were not added" ;
+  triage:description "Quality-mgr independently reviewed feature/pAI-s26-peer-write-deadline @ dc079fff8a96a5441e1eda3c790383670589f2f9 (AICH-S6, sprint-ai-26 peer-write-deadline). docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md's Required validation section calls for: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. The actual diff only: (1) adjusted 2 pre-existing tests' expected error code (DaemonUnavailable -> RemoteDeliveryUnconfirmed) in tests/runtime_root.rs:324 and tests/runtime_root/peer_reconciliation.rs:80, and (2) added 2 small unit tests in https_transport.rs (request_deadline_is_one_absolute_budget, expired_peer_budget_reports_remote_delivery_unconfirmed) that test the RequestDeadline/remaining_budget helpers directly, not an end-to-end delayed-peer scenario. No new deterministic test simulates a delayed peer response to prove budget propagation end-to-end, no disconnect-mid-flight test, no cancellation-race test, no retry-with-original-ULID test, and no new runtime tracked-work test was added. This gap is the same class of gap that let the AI26-ATMQA-001 handshake-mapping bug through untested." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s26/dc079fff> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/dc079fff> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/dc079fff> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Required: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Not added." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s26/dc079fff> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Required: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Not added (inherited from s26)." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "dc079fff" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/dc079fff> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/b520061e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b520061e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .
