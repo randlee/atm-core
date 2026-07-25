@@ -869,6 +869,60 @@ mod tests {
     }
 
     #[test]
+    fn live_trust_refresh_keeps_one_listener_reachable() {
+        let certificate = test_certificate();
+        let identity = TlsIdentity::load(&certificate).expect("load test identity");
+        let router = Arc::new(RecordingRouter::default());
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("bind"),
+                advertise_host: "localhost".parse().expect("host"),
+                enabled: true,
+            }],
+            &certificate,
+            vec![trusted("localhost")],
+            router.clone(),
+        )
+        .expect("one listener");
+        let address = listener.listeners[0].address;
+        listener
+            .refresh_trusted_peers(vec![TrustedPeer {
+                host: "localhost".parse().expect("host"),
+                fingerprint: certificate.fingerprint.clone(),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("port"),
+            }])
+            .expect("refresh verifier");
+        assert_eq!(
+            listener.listeners[0].address, address,
+            "refresh must retain the one daemon listener"
+        );
+        let config = client_config(
+            &identity,
+            &TrustedPeer {
+                host: "localhost".parse().expect("host"),
+                fingerprint: certificate.fingerprint.clone(),
+                enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("port"),
+            },
+        )
+        .expect("client config");
+        let stream = TcpStream::connect(address).expect("same listener reachable");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("refreshed trust handshake");
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        write_http_request(&mut tls, &request).expect("write request");
+        let _ = read_http_response(&mut tls, &request).expect("shared response");
+        assert!(router.routed.load(Ordering::SeqCst));
+        listener.shutdown().expect("shutdown");
+    }
+
+    #[test]
     fn shutdown_joins_an_incomplete_peer_request_within_its_deadline() {
         let certificate = test_certificate();
         let listener = HttpsListenerSet::bind_enabled(
