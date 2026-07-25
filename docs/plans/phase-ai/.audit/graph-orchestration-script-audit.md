@@ -180,6 +180,19 @@ location or commit-author time.
    is only a lower bound for record creation. The actual QA observation time
    and authoritative sprint assignment must come from the planned QA evidence.
 
+### QA assignment/result evidence index
+
+The ATM mailbox pass now provides the assignment/result evidence needed to
+reconstruct QA timing without using branch names as provenance. The
+machine-readable index is [qa-evidence-master.json](qa-evidence-master.json);
+the Excel-facing projection is [qa-assignment-results.csv](qa-assignment-results.csv).
+Both are bounded to the AICH work-start time (`2026-07-25T04:15:13Z`). The
+master records message IDs and both shared ATM and local temp paths. The CSV
+uses fixed PST (`UTC-08:00`) and separate blocker/important/minor columns.
+Seventeen runs were located across AICH-S1 through AICH-S9; AICH-S10 has no
+assignment/result in the scoped mailbox queries. Missing paths or unsplit
+counts remain explicit rather than inferred.
+
 ## Recommended next actions
 
 1. Choose and document one canonical finding schema, or add an explicit
