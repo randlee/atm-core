@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI30-MINOR-002>
   a triage:Finding ;
   triage:findingId "AI30-MINOR-002" ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
   triage:title "Hardcoded /tmp/alternate.sock in unit test — CLOSED" ;
   triage:description "crates/atm-core/src/protocol.rs:523 — hardcoded `/tmp/alternate.sock` in unit test. Closed by commit 77252eca: replaced with tempfile::TempDir::new() and relative path override. Independently verified by req-qa (code inspection: daemon_socket_path_ignores_atm_home and daemon_socket_path_rejects_override now use TempDir) and rust-qa-agent (cargo test --workspace passes, cross-platform compliance verified)." ;
   triage:phaseId "phase-AI" ;

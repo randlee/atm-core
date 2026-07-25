@@ -1,0 +1,67 @@
+# cursor.sparql — Returns the current sprint cursor.
+#
+# A sprint is "ready" iff:
+#   1. It has no truly in-flight Assignment (dev has been assigned but has NOT
+#      yet sent ANY Completion after that Assignment), AND
+#   2. It has no valid Completion.
+#
+# KEY DISTINCTION — in-flight vs. completed-but-invalidated:
+#   - In-flight: Assignment exists, dev has not sent any Completion after it.
+#     → Skip. Dev is still working.
+#   - Assignment + Completion (invalid) + no new Assignment: dev sent a
+#     Completion but QA filed a blocking finding that postdates it. Dev is
+#     done; team-lead must re-dispatch. → Cursor returns this sprint.
+#   - Assignment + Completion (invalid) + new Assignment in-flight: re-dispatch
+#     already issued, dev working again. → Skip.
+#
+# A Completion is VALID iff no blocking finding for that sprint was filed
+# with foundAt > completedAt. A blocking finding postdating a Completion
+# invalidates it, snapping the cursor back to that sprint.
+#
+# Returns: zero rows (all sprints complete or in-flight) or one row
+#   (?sprint, ?order, ?criteria)
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?sprint ?order ?criteria WHERE {
+  ?sprint a triage:Sprint ;
+          triage:inPhase $PHASE ;
+          triage:order ?order ;
+          triage:criteria ?criteria .
+
+  # Skip sprints with a truly in-flight Assignment:
+  # Assignment exists AND dev has not sent ANY Completion after it yet.
+  FILTER NOT EXISTS {
+    ?a a triage:Assignment ;
+       triage:ofSprint ?sprint ;
+       triage:assignedAt ?at .
+
+    # Truly in-flight: no Completion at all after this Assignment
+    FILTER NOT EXISTS {
+      ?c a triage:Completion ;
+         triage:ofSprint ?sprint ;
+         triage:at ?ct .
+      FILTER (?ct > ?at)
+    }
+  }
+
+  # Skip sprints with a valid Completion
+  # (valid = no blocking finding postdates the Completion)
+  FILTER NOT EXISTS {
+    ?c a triage:Completion ;
+       triage:ofSprint ?sprint ;
+       triage:at ?ct .
+
+    FILTER NOT EXISTS {
+      ?f a triage:Finding ;
+         triage:foundIn ?sprint ;
+         triage:severity "blocking" ;
+         triage:foundAt ?ft .
+      FILTER (?ft > ?ct)
+    }
+  }
+}
+ORDER BY ?order
+LIMIT 1

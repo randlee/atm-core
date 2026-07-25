@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RSH-002>
   a triage:Finding ;
   triage:findingId "AI25-RSH-002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Unbounded O(N) DNS fan-out across all enabled trusted peers when resolving a literal-IP target" ;
   triage:description "When resolving a literal IP target, the resolver fans out an unbounded O(N) DNS lookup across ALL enabled trusted peers (rather than a scoped lookup), compounding the unbounded-DNS-call risk described in AI25-RSH-001. Each iteration calls resolve_peer_addresses(peer).is_ok_and(...) which invokes to_socket_addrs() for every enabled peer." ;
   triage:phaseId "phase-AI" ;

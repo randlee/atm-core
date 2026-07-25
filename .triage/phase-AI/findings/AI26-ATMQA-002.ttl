@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI26-ATMQA-002>
   a triage:Finding ;
   triage:findingId "AI26-ATMQA-002" ;
+  triage:foundAt "2026-07-25T07:54:44Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
   triage:title "Required deterministic delayed-peer/cancellation/retry/tracked-work tests from sprint-ai-26 were not added" ;
   triage:description "Quality-mgr independently reviewed feature/pAI-s26-peer-write-deadline @ dc079fff8a96a5441e1eda3c790383670589f2f9 (AICH-S6, sprint-ai-26 peer-write-deadline). docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md's Required validation section calls for: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Follow-up pass (AICH-S6-FIX-1, 2026-07-25T15:12Z) on feature/pAI-s27-peer-delivery-observability @ f7b779ab50ea8ff6f35ab02388b7dab23df9c3db shows: 4 of 5 named properties are now covered by genuine tests (budget propagation, disconnect, retry-with-original-ULID, runtime tracked-work). The 5th property — local-side cancellation race test — is STILL MISSING. This gap is a specific missing test: no deterministic test simulates local-side cancellation (connection close / caller-side deadline expiry) while a delayed peer delivery is in-flight, asserting that the tracked dispatch worker is cancelled/joined rather than silently detached or falsely reporting success. This test implements sprint AI.26's acceptance criterion 3 ('a cancellation race cannot claim remote success') and ADR-041's cancellation-safety claim at the delayed-peer level." ;
   triage:phaseId "phase-AI" ;

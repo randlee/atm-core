@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI24-IMPORTANT-002>
   a triage:Finding ;
   triage:findingId "AI24-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
   triage:title "PeerSync cooldown does not distinguish rate-limited outcome from legitimate zero-message sync; global lock serializes cross-peer reconciliation" ;
   triage:description "crates/atm-daemon/src/runtime_health.rs: per-peer cooldown state exists (peer_sync_progress: Mutex<HashMap<HostName, PeerSyncProgress>>, lines ~155/720) and self-clears after 60s. However when the cooldown is active, sync_peer returns Ok(PeerSyncOutcome{delivered:0}) (runtime_health.rs:722-727) which is identical in shape to a legitimate zero-message sync or a disabled-policy no-op -- callers cannot distinguish 'rate-limited' from 'nothing to deliver'. An existing test (peer_reconciliation.rs:218-229) asserts on this ambiguous shape for both cases. Additionally, sync_peer holds the single peer_sync_progress MutexGuard across the ENTIRE reconcile_peer call, which performs blocking network I/O (up to 5s per peer) -- despite cooldown state being per-peer, the lock scope is global, so an explicit sync for peer B can stall behind peer A's in-flight reconciliation. Verified as NOT adequately fixed at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt by arch-qa (FAIL), rust-service-hardening-agent (important), and req-qa (flags same fact) -- 3-reviewer convergence. Prior state: this finding was dispatched in AICH-S4-FIX-3 as one of 3 targeted findings; the per-peer keying/cooldown-self-clear was implemented but the ambiguous-outcome-signal and lock-scope requirements were not met." ;
   triage:phaseId "phase-AI" ;

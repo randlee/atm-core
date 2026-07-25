@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-003>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-003" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
   triage:title "is_peer_receipt and is_same_host_peer_receipt are two overlapping, unlinked boolean predicates with no single source of truth" ;
   triage:description "crates/atm-core/src/send/mod.rs defines both PreparedWrite::is_peer_receipt (~305-314: authenticated_source_host.is_some() || origin_message_id.is_some()) and the free function is_same_host_peer_receipt (~569-575: authenticated_source_host == to.host). Both classify overlapping aspects of the same underlying concept (is this write a peer receipt, and is it a same-host one) via independently-written boolean expressions instead of one being derived from the other or both being derived from a single shared classification type, risking future drift between them. Independently found by rust-best-practices-agent (RBP-F001, Important) and ruthless-boundary-qa (RBQA-F005, Minor) -- merged here as one finding at the higher of the two reported severities." ;
   triage:phaseId "phase-AI" ;

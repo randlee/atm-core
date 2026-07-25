@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-005>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-005" ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
   triage:title "SendCommand::message_validation_error discards tailored recovery guidance in favor of a generic fallback" ;
   triage:description "SendCommand::message_validation_error (crates/atm/src/commands/send.rs, lines 62-67) takes a _recovery: impl Into<String> parameter but never uses it. Three call sites in build_message_source (lines 114-117, 121-124, 139-142) each pass tailored recovery guidance that gets silently discarded — the resulting error only carries the message, and recovery resolves through error_catalog::request_guidance to a generic fallback ('Correct the invalid ATM request or state before retrying.') instead of the tailored text passed at each call site." ;
   triage:phaseId "phase-AI" ;

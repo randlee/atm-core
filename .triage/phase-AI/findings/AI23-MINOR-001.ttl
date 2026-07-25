@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-MINOR-001>
   a triage:Finding ;
   triage:findingId "AI23-MINOR-001" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "ReleaseVersion::parse discards semver's own diagnostic detail via .is_err() instead of .map_err()" ;
   triage:description "crates/atm-core/src/protocol.rs:88-93: `if semver::Version::parse(value).is_err() { return Err(...) }` discards semver::Error's specific parse-failure description and the resulting AtmError message only echoes the raw input value, not why parsing failed. Recommend `.map_err(|source| AtmError::new(..., format!(\"invalid ATM release version `{value}`: {source}\")))` to fold in semver's own diagnostic." ;
   triage:phaseId "phase-AI" ;

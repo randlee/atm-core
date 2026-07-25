@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI24-BLOCK-003>
   a triage:Finding ;
   triage:findingId "AI24-BLOCK-003" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
   triage:title "AICH-S4-FIX-1 batch reintroduces retired peer-delivery construct replay_store" ;
   triage:description "rust-qa-agent bisected: test workspace_source_must_not_reintroduce_retired_peer_delivery_constructs passes at af2fbb83 (the commit immediately preceding the AICH-S4-FIX-1 batch) but fails at HEAD (7bb63e01). A retired construct named replay_store was reintroduced in crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs, added as part of this batch's idempotency-fix test additions (for the AI22-BLOCK-004 fix). Confirmed via direct bisection against the pre-batch commit, not a stale/flaky test." ;
   triage:phaseId "phase-AI" ;

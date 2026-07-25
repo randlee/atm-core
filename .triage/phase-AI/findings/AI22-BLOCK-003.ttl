@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-BLOCK-003>
   a triage:Finding ;
   triage:findingId "AI22-BLOCK-003" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
   triage:title "AuthenticatedIngress::Local does not reject a locally-supplied authenticated_source_host, allowing forged peer provenance" ;
   triage:description "crates/atm-daemon/src/runtime_health.rs DaemonRequestDispatcher::route (~954-1006): the AuthenticatedIngress::Local match arm (~969-974) only rejects origin_message_id/origin_timestamp being set, unlike the Peer/UntrustedSmoke arms (~976-992) which additionally check authenticated_source_host. A local caller (e.g. via local_ipc_transport/request_worker.rs, which decodes wire JSON with no normalization before dispatching with AuthenticatedIngress::Local, lines ~197) can therefore supply an authenticated_source_host field with no real mTLS handshake, forging peer provenance. Downstream consumers of this field include is_same_host_peer_receipt (send/mod.rs) and resolve_acknowledgement_write (ack/mod.rs:422, which reads the persisted sourceHost field to pick the ack-reply destination host)." ;
   triage:phaseId "phase-AI" ;
