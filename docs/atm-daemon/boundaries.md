@@ -135,6 +135,23 @@ Notes:
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
 
+## PeerHttpAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
+
+Purpose:
+- Own the current HTTP(S) socket/TLS adapter in `atm_daemon::https_transport`.
+
+Notes:
+- `HttpsTransport` and `HttpsListenerSet` own socket/TLS adaptation, HTTP
+  translation, and peer ingress authentication only.
+- This adapter cannot persist, queue, retry, route, or nudge. It has no
+  storage, payload, receipt, or delivery-state capability.
+- `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and
+  retired `peer_transport` module below; the historical name must not be
+  reused for this HTTP adapter.
+
 ## Historical: PeerClientTransportAdapter (retired)
 
 `PeerClientTransport`, its `peer_transport` module, and the corresponding

@@ -542,7 +542,7 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_transport`
+- `peer_http_adapter`
   - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
     route, or nudge
 - `peer_recovery`
@@ -737,8 +737,6 @@ Architectural rules:
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
 - remote synchronous wait deadline: `10s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
@@ -749,6 +747,10 @@ Required timeout defaults:
   they must not violate the floor contract:
   - global minimum timeout floor: `250ms`
   - same-host request and daemon-health minimum floor: `1s`
+
+TCP/TLS connect, handshake, request, and read/write activity consume the one
+absolute remote request deadline. They have no independent timeout floor or
+ceiling that can outlive or override that deadline.
 
 Shutdown sub-deadline rationale:
 - these per-component bounds sit under the existing daemon shutdown ceilings so
