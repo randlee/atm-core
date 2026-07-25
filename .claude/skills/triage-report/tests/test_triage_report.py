@@ -19,8 +19,8 @@ def _inputs(tmp_path: Path):
     (structure_dir / "structure.ttl").write_text(
         PREFIX
         + "triage:PhaseAICH a triage:Phase .\n"
-        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/s1.md\" .\n"
-        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria \"docs/s2.md\" .\n"
+        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-21-pre.md\" .\n"
+        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-22.md\" .\n"
     )
     (structure_dir / "events.ttl").write_text(
         PREFIX
@@ -54,7 +54,7 @@ def test_latest_authoritative_qa_and_gates(tmp_path):
     assert second["previous_sprints_merged"] is True
     assert second["ok_to_merge"] is True
     assert "| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |" in report["table"]
-    assert "❌" in report["table"] and "🏁" in report["table"]
+    assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
 
 
 def test_unknown_merge_is_fail_closed(tmp_path):
@@ -85,3 +85,32 @@ def test_malformed_structure_is_report_error(tmp_path):
         assert "malformed Turtle" in str(exc)
     else:
         raise AssertionError("malformed structure must fail")
+
+
+def test_malformed_metadata_is_report_error(tmp_path):
+    root, qa, _ = _inputs(tmp_path)
+    metadata = root / "bad-metadata.json"
+    metadata.write_text(json.dumps({"sprints": [{"id": "AICH-S1", "ci_status": True}]}))
+    try:
+        triage_report.build_report(root, "AICH", qa, metadata)
+    except triage_report.ReportError as exc:
+        assert "ci_status" in str(exc)
+    else:
+        raise AssertionError("malformed metadata must fail")
+
+
+def test_duplicate_structure_orders_are_report_error(tmp_path):
+    root, _, _ = _inputs(tmp_path)
+    structure = root / ".sprints" / "AICH" / "structure.ttl"
+    structure.write_text(
+        PREFIX
+        + "triage:PhaseAICH a triage:Phase .\n"
+        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/s1.md\" .\n"
+        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/s2.md\" .\n"
+    )
+    try:
+        triage_report.build_report(root, "AICH")
+    except triage_report.ReportError as exc:
+        assert "orders must be unique" in str(exc)
+    else:
+        raise AssertionError("duplicate sprint orders must fail")

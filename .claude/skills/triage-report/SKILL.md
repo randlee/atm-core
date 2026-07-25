@@ -56,13 +56,19 @@ The JSON contains `mode`, `phase`, `sprint_rows`, `integration_row`, and
 
 ```bash
 python3 -m pip install --upgrade 'sc-compose>=1.2,<1.3'
-sc-compose render .claude/skills/triage-report/report.md.j2 \
+sc-compose render --root . --file .claude/skills/triage-report/report.md.j2 \
   --var-file <(python3 .claude/skills/triage-report/scripts/triage_report.py \
     --phase AICH --format vars)
 ```
 
 Use the same `--mode detailed --format vars` projection with
 `report-detailed.md.j2` for the detailed template view.
+
+```bash
+sc-compose render --root . --file .claude/skills/triage-report/report-detailed.md.j2 \
+  --var-file <(python3 .claude/skills/triage-report/scripts/triage_report.py \
+    --phase AICH --mode detailed --format vars)
+```
 
 `--format vars` is a scalar-only projection of the same canonical result for
 the `sc-compose` var-file boundary. The report script remains the calculation

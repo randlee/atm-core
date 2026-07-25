@@ -145,20 +145,37 @@ def _json(path: Path) -> Any:
 def _sprints(structure: Graph, phase: str) -> list[dict[str, Any]]:
     result = []
     for subject in structure.subjects(RDF.type, TRIAGE.Sprint):
-        phase_ref = next(structure.objects(subject, TRIAGE.inPhase), None)
-        if phase_ref is not None and _local(phase_ref) != f"Phase{phase}":
+        phase_refs = list(structure.objects(subject, TRIAGE.inPhase))
+        if len(phase_refs) != 1:
+            raise ReportError(f"{_local(subject)} must have exactly one triage:inPhase")
+        if _local(phase_refs[0]) != f"Phase{phase}":
             continue
-        order = next(structure.objects(subject, TRIAGE.order), None)
+        order_values = list(structure.objects(subject, TRIAGE.order))
+        criteria_values = list(structure.objects(subject, TRIAGE.criteria))
+        if len(order_values) != 1:
+            raise ReportError(f"{_local(subject)} must have exactly one triage:order")
+        if len(criteria_values) != 1:
+            raise ReportError(f"{_local(subject)} must have exactly one triage:criteria")
+        order_text = str(order_values[0]).strip()
+        if not re.fullmatch(r"[0-9]+", order_text):
+            raise ReportError(f"{_local(subject)} triage:order must be an integer")
+        try:
+            order = int(order_text)
+        except ValueError as exc:
+            raise ReportError(f"{_local(subject)} triage:order must be an integer") from exc
         result.append(
             {
                 "id": _local(subject),
-                "order": int(order) if order is not None else 10**9,
-                "criteria": str(next(structure.objects(subject, TRIAGE.criteria), "")),
+                "order": order,
+                "criteria": str(criteria_values[0]),
             }
         )
     if not result:
         raise ReportError(f"{structure}: no sprints declared for phase {phase}")
-    return sorted(result, key=lambda row: (row["order"], row["id"]))
+    result.sort(key=lambda row: (row["order"], row["id"]))
+    if any(left["order"] == right["order"] for left, right in zip(result, result[1:])):
+        raise ReportError(f"{phase}: sprint orders must be unique")
+    return result
 
 
 def _dev_states(events: Graph | None) -> dict[str, dict[str, Any]]:
@@ -189,11 +206,15 @@ def _dev_states(events: Graph | None) -> dict[str, dict[str, Any]]:
 
 
 def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
-    if not isinstance(master, dict):
+    if master is None:
         return {}
+    if not isinstance(master, dict) or not isinstance(master.get("runs"), list):
+        raise ReportError("QA evidence master must contain a runs array")
     latest: dict[str, dict[str, Any]] = {}
     for run in master.get("runs", []):
-        if not isinstance(run, dict) or run.get("run_type", "qa") != "qa":
+        if not isinstance(run, dict):
+            raise ReportError("QA evidence master runs entries must be objects")
+        if run.get("run_type", "qa") != "qa":
             continue
         sprint = run.get("aich_sprint")
         if not sprint:
@@ -207,11 +228,15 @@ def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
 
 
 def _metadata(metadata: Any) -> dict[str, dict[str, Any]]:
-    values = metadata.get("sprints", []) if isinstance(metadata, dict) else []
+    if metadata is None:
+        return {}
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("sprints"), list):
+        raise ReportError("metadata must contain a sprints array")
+    values = metadata["sprints"]
     result: dict[str, dict[str, Any]] = {}
     for item in values:
         if not isinstance(item, dict) or not item.get("id"):
-            continue
+            raise ReportError("metadata.sprints entries must be objects with an id")
         key = str(item["id"])
         if key in result:
             raise ReportError(f"metadata contains duplicate sprint {key}")
@@ -231,10 +256,8 @@ def _phase_sprint(criteria: str) -> str | None:
     return f"AI.{match.group(1)}{'-pre' if match.group(2) else ''}"
 
 
-def _status_icon(status: str | None, merged: bool | None) -> str:
-    if merged is True:
-        return ICONS["merged"]
-    normalized = (status or "").lower().replace("-", "_")
+def _status_icon(status: str | None) -> str:
+    normalized = status.lower().replace("-", "_") if isinstance(status, str) else ""
     if normalized in {"pass", "passed", "success", "green", "ok"}:
         return ICONS["done"]
     if normalized in {"fail", "failed", "failure", "red"}:
@@ -257,8 +280,35 @@ def _gate_icon(value: bool | None) -> str:
 def _pr_cell(meta: dict[str, Any]) -> str:
     number = meta.get("pr_number")
     if isinstance(number, int) and not isinstance(number, bool):
-        return f"#{number}"
+        return f"#{number}{' ' + ICONS['merged'] if meta.get('merged') is True else ''}"
     return "—"
+
+
+def _source_path(path: Path | None, root: Path) -> str | None:
+    if path is None:
+        return None
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return f"<external>/{path.name}"
+
+
+def _validate_metadata(item: dict[str, Any], sprint: str) -> None:
+    for field in ("branch", "head_sha", "target_branch", "pr_url", "ci_status", "ci_url", "merge_commit", "merged_at_utc", "assignment_ack_message_id", "assignment_ack_time_utc"):
+        if item.get(field) is not None and not isinstance(item[field], str):
+            raise ReportError(f"metadata {sprint}.{field} must be a string or null")
+    if item.get("pr_number") is not None and (not isinstance(item["pr_number"], int) or isinstance(item["pr_number"], bool)):
+        raise ReportError(f"metadata {sprint}.pr_number must be an integer or null")
+    if item.get("merged") is not None and not isinstance(item["merged"], bool):
+        raise ReportError(f"metadata {sprint}.merged must be boolean or null")
+
+
+def _validate_qa(run: dict[str, Any] | None, sprint: str) -> None:
+    if run is None:
+        return
+    for field in ("blockers", "important", "minor"):
+        if field in run and run[field] is not None and (not isinstance(run[field], int) or isinstance(run[field], bool) or run[field] < 0):
+            raise ReportError(f"QA run {sprint}.{field} must be a non-negative integer or null")
 
 
 def build_report(
@@ -299,6 +349,8 @@ def build_report(
     meta = _metadata(metadata_data)
     dev = _dev_states(events)
     data_gaps: list[str] = []
+    if events is None:
+        data_gaps.append(f"events file not found: {events_path}")
     if qa_data is None:
         data_gaps.append(f"QA evidence master not found: {qa_master}")
     if metadata is None:
@@ -311,6 +363,8 @@ def build_report(
         sid = sprint["id"]
         run = qa.get(sid)
         item = meta.get(sid, {})
+        _validate_metadata(item, sid)
+        _validate_qa(run, sid)
         counts = {name: _count(run, name) for name in ("blockers", "important", "minor")}
         verdict = str(run.get("verdict", "")) if run else None
         if not verdict and run and isinstance(run.get("pass"), bool):
@@ -318,8 +372,11 @@ def build_report(
         dev_state = dev.get(sid, {})
         completion = dev_state.get("completion_dt")
         assignment = dev_state.get("assignment_dt")
-        dev_done = completion is not None and (assignment is None or completion >= assignment)
+        orphan_completion = completion is not None and assignment is None
+        dev_done = completion is not None and assignment is not None and completion >= assignment
         dev_status = "done" if dev_done else ("in_progress" if assignment else None)
+        if orphan_completion:
+            data_gaps.append(f"{sid}: completion exists without an assignment")
         known_counts = all(value is not None for value in counts.values())
         quality_gate = (all(value == 0 for value in counts.values()) if known_counts else None)
         ready = None if counts["blockers"] is None else counts["blockers"] == 0
@@ -332,7 +389,15 @@ def build_report(
                 "dev_completion_at_utc": dev_state.get("completion_at"),
                 "qa": {
                     "run_id": run.get("run_id") if run else None,
+                    "assignment_time_utc": run.get("assignment_time_utc") if run else None,
+                    "assignment_time_pst": run.get("assignment_time_pst") if run else None,
+                    "assignment_message_id": run.get("assignment_message_id") if run else None,
+                    "result_message_id": run.get("result_message_id") if run else None,
                     "result_time_utc": run.get("result_time_utc") if run else None,
+                    "result_time_pst": run.get("result_time_pst") if run else None,
+                    "assignment_shared_path": run.get("assignment_shared_path") if run else None,
+                    "result_shared_path": run.get("result_shared_path") if run else None,
+                    "result_temp_path": run.get("result_temp_path") if run else None,
                     "verdict": verdict or None,
                     "pass": run.get("pass") if run else None,
                     "blockers": counts["blockers"],
@@ -358,8 +423,15 @@ def build_report(
         )
         if run is None:
             data_gaps.append(f"{sid}: no authoritative QA run")
+        else:
+            for field in ("blockers", "important", "minor"):
+                if counts[field] is None:
+                    data_gaps.append(f"{sid}: QA {field} count is missing or null")
         if sid not in meta:
             data_gaps.append(f"{sid}: no explicit PR/CI/branch/merge metadata")
+        for field in ("branch", "head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged", "assignment_ack_message_id", "assignment_ack_time_utc"):
+            if item.get(field) is None:
+                data_gaps.append(f"{sid}: metadata {field} is missing or null")
 
     for index, row in enumerate(rows):
         previous = rows[:index]
@@ -380,7 +452,7 @@ def build_report(
         row["dev_icon"] = ICONS.get(row["dev_status"], "—")
         qa_value = row["qa"]["verdict"]
         row["qa_icon"] = "✅" if qa_value and qa_value.upper() == "PASS" else (ICONS["fail"] if qa_value else "—")
-        row["ci_icon"] = _status_icon(row["ci_status"], row["merged"])
+        row["ci_icon"] = _status_icon(row["ci_status"])
         row["ready_icon"] = _gate_icon(row["ready_to_merge"])
         row["ok_icon"] = _gate_icon(row["ok_to_merge"])
 
@@ -403,7 +475,9 @@ def build_report(
             f"{q['important'] if q['important'] is not None else '?'} / "
             f"{q['minor'] if q['minor'] is not None else '?'}  "
             f"Ready: {row['ready_icon']}  OK: {row['ok_icon']}\n"
-            f"Branch: {row['branch'] or 'unknown'}  Commit: {row['head_sha'] or 'unknown'}"
+            f"QA assignment PST: {q['assignment_time_pst'] or 'unknown'}  result PST: {q['result_time_pst'] or 'unknown'}\n"
+            f"Branch: {row['branch'] or 'unknown'}  Commit: {row['head_sha'] or 'unknown'}\n"
+            f"PR URL: {row['pr_url'] or 'unknown'}"
         )
     integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
     table = (
@@ -416,7 +490,7 @@ def build_report(
         "mode": "table",
         "phase": phase_name,
         "plan_phase": plan_phase,
-        "timezone": "UTC (source timestamps); render PST separately when required",
+        "timezone": "PST (UTC-08:00; fixed offset) for QA display; UTC is retained for source timestamps",
         "generated_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "rows": rows,
         "sprint_rows": "\n".join(lines),
@@ -425,11 +499,11 @@ def build_report(
         "table": table,
         "data_gaps": data_gaps,
         "sources": {
-            "integration_root": str(root),
+            "integration_root": ".",
             "structure": str(structure_path.relative_to(root)),
             "events": str(events_path.relative_to(root)) if events_path.is_file() else None,
-            "qa_master": str(qa_master.relative_to(root)) if qa_master.is_relative_to(root) else str(qa_master),
-            "metadata": str(metadata.relative_to(root)) if metadata and metadata.is_relative_to(root) else (str(metadata) if metadata else None),
+            "qa_master": _source_path(qa_master, root),
+            "metadata": _source_path(metadata, root),
         },
     }
 
