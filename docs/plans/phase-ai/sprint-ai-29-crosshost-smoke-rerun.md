@@ -30,11 +30,14 @@ historical diagnostics, not passing evidence.
    `evidence/phase-ai-crosshost-smoke@3f08041e18cb32dee34e7555bd2cc2c4b51ca938`;
    AI.21-pre adopts them by normal implementation change rather than merging
    that investigation branch.
-2. Add `.claude/skills/daemon-switch/scripts/daemon-switch.py` as a new
-   deliverable. It must query the active CLI/daemon pair, switch both to a
-   branch release pair, and restore the platform's current installed pair
-   without a hard-coded path. The runner invokes it only as documented setup;
-   it remains lifecycle-free.
+2. Forward-merge the existing `develop` daemon-switch skill —
+   `.claude/skills/daemon-switch/SKILL.md` and
+   `.claude/skills/daemon-switch/scripts/daemon-switch.py` — into the Phase
+   AI branch line. This is branch hygiene, not net-new tool authorship. The
+   existing tool queries the active CLI/daemon pair, switches both to a branch
+   release pair, and restores the platform's current installed pair without a
+   hard-coded path. The runner invokes it only as documented setup; it remains
+   lifecycle-free.
 3. Require the Python runner on each participating host to produce the
    AI.21-pre-format sanitized
    JSON result and one XHTML pane. Each pane contains: exact commit and
@@ -69,16 +72,17 @@ historical diagnostics, not passing evidence.
 - Extend only AI.21-pre's `scripts/smoke/run_inbound_peer_smoke.py`,
   `combine_inbound_peer_smoke.py`, `analyze_logs.py`, example JSON, and the
   existing `templates/smoke-report/*.xhtml.j2` templates.
-- Use the new AI.29 `.claude/skills/daemon-switch/scripts/daemon-switch.py`
-  deliverable for branch-pair selection and mandatory post-smoke restore; the
-  runner itself remains lifecycle-free.
+- Use the daemon-switch skill forward-merged from `develop` for branch-pair
+  selection and mandatory post-smoke restore; the runner itself remains
+  lifecycle-free.
 - Add no product transport route, test-only daemon, or shell-report fallback.
 
 ## Acceptance criteria
 
 - Every positive case has matching sender request and receiver persisted ULID.
-- `daemon-switch.py` queries, switches, and restores the CLI/daemon pair on
-  macOS, Linux, and Windows without a hard-coded install path.
+- The existing, forward-merged `daemon-switch.py` queries, switches, and
+  restores the CLI/daemon pair on macOS, Linux, and Windows without a
+  hard-coded install path.
 - The combined XHTML report has one valid, current pane per required host and
   every required table row is PASS; its logs and assessment are sufficient to
   diagnose any failing row without reading unbounded daemon logs.

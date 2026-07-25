@@ -111,11 +111,12 @@ change. Nothing else from the evidence branch is adopted.
    untrusted provenance, router identity, runner JSON validation, XHTML
    escaping, stale/missing pane rejection, and bounded log redaction.
 2. `just lint` and `just test` at the exact release-built commit.
-3. AI.29 supplies `daemon-switch.py`; after that sprint has shipped it, use it
-   on every participating host to run the branch CLI and daemon pair, then run
-   the Python host runner in mTLS and plaintext-test modes. Combine the panes
-   with `sc-compose`; retain the combined XHTML and sanitized JSON/log
-   artifacts. AI.21-pre does not claim daemon-switch is already available.
+3. `daemon-switch.py` and its `SKILL.md` already exist on `develop`.
+   AI.29 forward-merges that existing skill into the Phase AI branch line; it
+   does not author a new tool. After that merge, use the skill on every
+   participating host to run the branch CLI and daemon pair, then run the
+   Python host runner in mTLS and plaintext-test modes. Combine the panes with
+   `sc-compose`; retain the combined XHTML and sanitized JSON/log artifacts.
 4. QA runs the same release daemon and runner, not a test fixture or the old
    evidence branch daemon. At handoff the branch daemon remains running for
    QA; restore the installed pair only after QA records final completion.
