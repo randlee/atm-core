@@ -50,7 +50,7 @@ from pathlib import Path
 
 try:
     from rdflib import Graph, URIRef, Namespace
-    from rdflib.namespace import XSD
+    from rdflib.namespace import RDF, XSD
 except ImportError:
     print("ERROR: rdflib not installed. Run: pip3 install rdflib", file=sys.stderr)
     sys.exit(1)
@@ -83,12 +83,77 @@ def load_graph(ttl_dir: str) -> Graph:
     g.parse(str(structure), format="turtle")
     if events.exists():
         g.parse(str(events), format="turtle")
+
+    # Collect the set of triage:Sprint subjects declared by *this phase's*
+    # structure.ttl (+ events.ttl, though sprints are only ever declared in
+    # structure.ttl in practice). This is the authoritative membership set
+    # used below to scope findings — it is derived from the graph itself,
+    # not from directory names or naming conventions, so it can't be
+    # defeated by a future phase reusing an unprefixed or colliding local
+    # sprint label.
+    known_sprints = set(g.subjects(RDF.type, TRIAGE.Sprint))
+
     # Load triage findings from repo root .triage/ (relative to TTL dir's parent)
     # Walk up from ttl_dir to find repo root (contains .triage/)
+    #
+    # Findings are filed under `.triage/<phase_id>/findings/*.ttl`, where
+    # `<phase_id>` (e.g. "phase-AI") is a project-phase directory that does
+    # not necessarily match the `PHASE_LOCAL` sprint-batch label (e.g.
+    # "AICH") passed to this script — there is no discoverable
+    # findings-path-to-phase mapping in structure.ttl today (no
+    # `triage:findingsPath` or similar property), so we cannot statically
+    # narrow the *glob* to "the one right directory" for a given phase.
+    #
+    # Directory-name matching was considered and rejected as the scoping
+    # mechanism: it's convention-dependent (relies on `phase-AI` matching
+    # `AICH`-prefixed sprint labels) and nothing enforces it — a future
+    # phase could reuse an unprefixed or colliding local sprint label with
+    # no directory-name collision to catch it, silently attaching a stray
+    # well-formed finding to the wrong phase's sprint and corrupting cursor
+    # resolution.
+    #
+    # Instead, each findings file is parsed into its own temporary Graph
+    # first (still isolated in try/except, see below), and only the triples
+    # belonging to findings whose `triage:foundIn` object is in
+    # `known_sprints` (this phase's *actual* declared triage:Sprint
+    # subjects, read directly from structure.ttl/events.ttl above) are
+    # merged into `g`. This is real membership scoping, not a naming
+    # convention: it is enforced by graph structure, so it cannot be
+    # defeated by directory or label collisions. Findings whose
+    # `triage:foundIn` points at a sprint outside this set are dropped
+    # silently — they're simply out of scope for this phase, not an error.
+    #
+    # A single malformed (non-Turtle) findings file anywhere in the repo
+    # must also not abort the entire parse and crash cursor resolution for
+    # every phase, including ones with no relationship to the offending
+    # file — hence the per-file try/except below, which remains necessary
+    # defense-in-depth independent of the scoping filter.
     repo_root = _find_repo_root(base)
     if repo_root:
         for findings_file in sorted(repo_root.glob(".triage/*/findings/*.ttl")):
-            g.parse(str(findings_file), format="turtle")
+            file_graph = Graph()
+            try:
+                file_graph.parse(str(findings_file), format="turtle")
+            except Exception as exc:  # noqa: BLE001 - isolate one bad file, keep loading others
+                print(
+                    f"WARNING: skipping malformed findings file {findings_file}: {exc}",
+                    file=sys.stderr,
+                )
+                continue
+
+            in_scope_findings = {
+                finding
+                for finding in file_graph.subjects(TRIAGE.foundIn, None)
+                if file_graph.value(finding, TRIAGE.foundIn) in known_sprints
+            }
+            if not in_scope_findings:
+                continue
+            for finding in in_scope_findings:
+                for triple in file_graph.triples((finding, None, None)):
+                    g.add(triple)
+                for resolution in file_graph.subjects(TRIAGE.resolves, finding):
+                    for triple in file_graph.triples((resolution, None, None)):
+                        g.add(triple)
     return g
 
 
