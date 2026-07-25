@@ -4,59 +4,98 @@
 <urn:atm:triage:finding/AI23-IMPORTANT-004>
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-004" ;
-  triage:title "ADR-033 HTTP endpoint route table disagrees with requirements.md/http-api.md/actual encode_response code" ;
-  triage:description "docs/adr/ADR-033-http-endpoint-contract.md (lines ~23-29, status Accepted) describes a route family with no per-message path parameter at all (/messages, /messages/inspect, /messages DELETE, /messages/read, /doctor). This disagrees with docs/requirements.md (lines ~3641-3643: /v1/atm/messages, /v1/atm/message/{message-id}, /v1/atm/message/{message-id}/read), docs/plans/phase-ai/README.md (same singular/{message-id} shape), docs/atm-daemon/http-api.md, and the actual Location header construction in crates/atm-core/src/api.rs (lines 361/367: format!(\"/v1/atm/message/{}\", value.message_id)) which uses a real per-message id path segment. These cannot both be the accepted contract -- one has drifted. AI.23's sprint doc 'Required Document Updates' section lists ADR-034/ADR-035 but not ADR-033, so this drift is currently unowned by any sprint." ;
+  triage:title "ADR-033/http-api.md/openapi.yaml route tables still drift from api.rs live routes, specifically peer-sync" ;
+  triage:description "Round-2 followup_pass. Prior QA-1 record documented route table discrepancies between ADR-033 Decision and actual implementation. Round 2 confirms persistent drift: ADR-033 Decision (lines 20-30) lists 6 resource types but omits /v1/atm/peers/{peer}/sync entirely, plus /v1/atm/compatibility and /v1/atm/heartbeat. ADR-033 also incorrectly documents GET /message/{message-id} as a registered route; quality-mgr confirmed via direct code read that lines 361/367 show this is a Location header string value in encode_response (HTTP 201 Created response), not a decode_route_request route. No GET /message/{message-id} route exists in decode_route_request (lines 266-306). http-api.md Resource contract table (lines 52-61) now documents compatibility and heartbeat (+2 from prior) but still omits peer-sync entirely. openapi.yaml (lines 8-69) documents compatibility and heartbeat but has no /peers/{peer}/sync path. Actual api.rs implementation (endpoint_for lines 44-60 and decode_route_request lines 266-306) supports 9 routes: Write, List, Peek, Receive, Clear, Doctor, CompatibilityPreflight, Heartbeat, and PeerSync (lines 292-301). rust-qa-agent round-2 claim that ADR-033:29 documents GET /message/{message-id} matching api.rs:361,367 is unsupported by code: quality-mgr direct read confirmed :361,367 are Location header values, not a route. Finding remains OPEN on worktree feature/pAI-s23-crosshost-shared-write-path at c528137cd07c8c329572cdb8e852faffb3fc9c94." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "REQ" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "documentation" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-24T23:23:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/3> ;
-  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
-  triage:promoteTo <urn:atm:triage:worktree/AI23/b88ca016> .
+  triage:triagedAt "2026-07-24T23:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/6> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
 
-<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/1>
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/1>
   a triage:Occurrence ;
   triage:file "docs/adr/ADR-033-http-endpoint-contract.md" ;
-  triage:line 23 ;
-  triage:snippet "| Resource | Initial operations | / | `/messages` | `GET` list/query, `POST` canonical send/ack write |" ;
+  triage:line 20 ;
+  triage:snippet "The initial stable application surface is resource-oriented REST under `/v1/atm`: ... Decision table lines 23-30 lists only 6 resources (/messages, /messages/inspect, /messages/read, /message/{message-id}, /doctor) and omits /v1/atm/peers/{peer}/sync, /v1/atm/compatibility, /v1/atm/heartbeat" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AI.23" ;
-  triage:headSha "b88ca016" ;
-  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
 
-<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/2>
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/2>
   a triage:Occurrence ;
-  triage:file "docs/requirements.md" ;
-  triage:line 3641 ;
-  triage:snippet "- the stable initial resources are `/v1/atm/messages`, `/v1/atm/message/{message-id}`, `/v1/atm/message/{message-id}/read`, and `/v1/atm/doctor`;" ;
+  triage:file "docs/adr/ADR-033-http-endpoint-contract.md" ;
+  triage:line 29 ;
+  triage:snippet "| `/message/{message-id}` | `GET` canonical message resource returned by `Location` after a write |" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AI.23" ;
-  triage:headSha "b88ca016" ;
-  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:note "This route does not exist as a GET endpoint. api.rs:361/367 show /v1/atm/message/{message_id} is a Location header in HTTP 201 Created response (encode_response), not a decode_route_request route. Quality-mgr confirmed via direct code read." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
 
-<urn:atm:triage:occurrence/AI23-IMPORTANT-004/AI23/3>
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 52 ;
+  triage:snippet "Resource contract table (lines 52-61) documents /v1/atm/messages, /v1/atm/messages/inspect, /v1/atm/messages/read, /v1/atm/doctor, /v1/atm/compatibility, /v1/atm/heartbeat but omits /v1/atm/peers/{peer}/sync entirely" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/4>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/openapi.yaml" ;
+  triage:line 8 ;
+  triage:snippet "paths block (lines 8-69) documents /messages, /messages/inspect, /messages/read, /doctor, /compatibility, /heartbeat but has no /peers/{peer}/sync path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/5>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/api.rs" ;
-  triage:line 361 ;
-  triage:snippet "Some(format!(\"/v1/atm/message/{}\", value.message_id))" ;
+  triage:line 44 ;
+  triage:snippet "endpoint_for function (lines 44-60) implements 9 live routes including RequestEnvelope::PeerSync at lines 54-56 returning (POST, /v1/atm/peers/{peer}/sync)" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "AI.23" ;
-  triage:headSha "b88ca016" ;
-  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:note "This is the live implementation showing that peer-sync route IS implemented in the daemon." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
 
-<urn:atm:triage:worktree/AI23/b88ca016>
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/pAI-s23/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 266 ;
+  triage:snippet "decode_route_request function (lines 266-306) implements 9 live routes; peer-sync route handler at lines 292-301 handles (POST, path) where peer_sync_path_host(path).is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:note "This confirms peer-sync is a live, implemented route that deserializes PeerSyncRequest and validates the path hostname matches request.peer." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:worktree/pAI-s23/c528137cd07c8c329572cdb8e852faffb3fc9c94>
   a triage:WorktreeSnapshot ;
-  triage:branch "AI.23" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "b88ca016" ;
-  triage:orderIndex 23 .
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:orderIndex 0 .

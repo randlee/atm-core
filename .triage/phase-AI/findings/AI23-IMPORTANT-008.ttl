@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-008>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-008" ;
+  triage:title "openapi_surface test never cross-checks live api.rs routes against openapi.yaml, letting route drift ship silently" ;
+  triage:description "Surfaced by arch-qa during the AI.23 round-2 recheck. The only automated gate over docs/atm-daemon/openapi.yaml is crates/atm/tests/openapi_surface.rs, which only diffs the YAML against its own prior baseline snapshot (around line 88) - it never cross-checks the live route table in crates/atm-core/src/api.rs (endpoint_for and decode_route_request match arms) against openapi.yaml or ADR-033. This is a structural gap: it is why the PeerSync route in api.rs was able to ship with no corresponding OpenAPI entry, ADR-033 row, or http-api.md row, completely undetected by CI." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "testing" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23-crosshost-shared-write-path/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23-crosshost-shared-write-path/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "live_surface() function and openapi_surface_is_additions_only() test only compares YAML to baseline, never cross-checks live routes in crates/atm-core/src/api.rs (endpoint_for and decode_route_request)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137cd07c8c329572cdb8e852faffb3fc9c94>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:orderIndex 0 .

@@ -4,45 +4,38 @@
 <urn:atm:triage:finding/AI23-BLOCK-001>
   a triage:Finding ;
   triage:findingId "AI23-BLOCK-001" ;
-  triage:title "Sub-task 4 own-IP/advertised-IP peer-TCP write proof not implemented" ;
-  triage:description "Sprint AI.23 sub-task 4 requires a daemon-pair integration helper proving a write addressed to <self>@<team>.<advertised-ip> enters the peer HTTP listener and executes ApiRouter::route(..., Peer, ...), with a required structural boundary test that localhost/own-IP are not matched by a dedicated production branch before the peer adapter. This is also an explicit acceptance criterion. Commit 80da43238523398d4a5eede54c41b5bdcef1df96 implements sub-tasks 1/2/3/5 but contains no advertised_ip/own-IP daemon-pair helper, test, or boundary check anywhere in the tree." ;
+  triage:title "Round-2 fix does not satisfy sprint's runtime-evidence acceptance bar for advertised-IP peer-TCP write proof" ;
+  triage:description "arch-ctm's round-2 fix commit c528137cd07c8c329572cdb8e852faffb3fc9c94 on feature/pAI-s23-crosshost-shared-write-path added test advertised_ip_peer_send_and_ack_reach_the_shared_router (lines 1035-1132 in crates/atm-daemon/src/https_transport.rs) to close this finding. The test correctly proves a narrower claim: TLS-verified peer identity overwrites/never-trusts a spoofed source host (authenticated_source_host == Some(peer.host), ingress == AuthenticatedIngress::Peer). This narrower claim was independently validated and closed prior findings RBQA-F001 and RSH-002. However, the test uses RecordingRouter (a unit-only test double that records requests and returns hardcoded AtmError::validation response, never invoking the real DaemonRequestDispatcher, never persisting, providing no ULID readback, no nudge proof). The sprint doc acceptance criteria explicitly state: 'not satisfied by localhost, raw TCP connect, sender-side persistence, or a fake transport' and 'Unit-only router spies cannot close the runtime-evidence acceptance item'. Sub-task 4 requires a daemon-pair helper against the real advertised/bound virtual-Ethernet IP with receiver-side ULID readback and post-persistence nudge proof, which this test does not provide." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "REQ" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
-  triage:sweepScope "workspace" ;
+  triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
-  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
-  triage:openOn <urn:atm:triage:worktree/AI25/b5eec1bf> ;
-  triage:promoteTo <urn:atm:triage:worktree/AI25/b5eec1bf> .
+  triage:openOn <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94/1> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
 
-<urn:atm:triage:worktree/AI23/b88ca016>
+<urn:atm:triage:occurrence/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1036 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:notes "Test proves narrower claim (TLS identity verification) but not broader acceptance bar (runtime integration with real advertised IP, persistence, ULID readback, nudge proof). Acceptance criteria require daemon-pair helper with receiver-side readback." .
+
+<urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94>
   a triage:WorktreeSnapshot ;
-  triage:branch "AI.23" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:headSha "b88ca016" ;
-  triage:orderIndex 23 ;
-  triage:patternMatches 0 ;
-  triage:status "absent" .
-
-<urn:atm:triage:worktree/AI24/fc9832b3>
-  a triage:WorktreeSnapshot ;
-  triage:branch "AI.24" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "fc9832b3" ;
-  triage:orderIndex 24 ;
-  triage:patternMatches 0 ;
-  triage:status "absent" .
-
-<urn:atm:triage:worktree/AI25/b5eec1bf>
-  a triage:WorktreeSnapshot ;
-  triage:branch "AI.25" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b5eec1bf" ;
-  triage:orderIndex 25 ;
-  triage:patternMatches 0 ;
-  triage:status "absent" .
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:orderIndex 0 ;
+  triage:patternMatches 1 ;
+  triage:status "open" .
