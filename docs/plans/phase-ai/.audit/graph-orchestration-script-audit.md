@@ -66,6 +66,20 @@ The same graph entrypoint cannot be run from `integrate/phase-AI` because
 `.claude/skills/graph-orchestration/scripts/next-dev-task` is absent on that
 ref.
 
+### AICH validation
+
+`validate-structure.sparql` was run against the AICH `structure.ttl` plus
+`events.ttl` using the develop-side validator:
+
+- SPARQL violations: `0`
+- sprint count: `10`
+- orders: contiguous `1..10`
+- criteria paths: `10/10` exist
+
+This supplemental criteria/order check is recorded because the validator query
+itself only checks duplicate orders and missing `triage:criteria`/
+`triage:order` properties; it does not check path resolution or contiguity.
+
 ### Triaging-findings carry-forward
 
 Both refs pass the three unit tests in `scripts/test_triage_carry_forward.py`.
