@@ -131,7 +131,7 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         self.db.with_connection(|connection| {
             let mut statement = connection
                 .prepare(
-                    "SELECT host, fingerprint, enabled
+                    "SELECT host, fingerprint, enabled, https_port
                      FROM peer_trusted_peers ORDER BY host",
                 )
                 .map_err(|error| self.db.error("failed to prepare trusted-peer query", error))?;
@@ -141,16 +141,20 @@ impl PeerConfigStore for SqlitePeerConfigStore {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, i64>(2)?,
+                        row.get::<_, u16>(3)?,
                     ))
                 })
                 .map_err(|error| self.db.error("failed to query trusted peers", error))?
                 .map(|row| {
-                    let (host, fingerprint, enabled) =
+                    let (host, fingerprint, enabled, https_port) =
                         row.map_err(|error| self.db.error("failed to read trusted peer", error))?;
                     Ok(TrustedPeer {
                         host: parse_host(&host)?,
                         fingerprint: parse_fingerprint(fingerprint)?,
                         enabled: enabled != 0,
+                        https_port: NonZeroU16::new(https_port).ok_or_else(|| {
+                            atm_storage::AtmError::validation("stored HTTPS peer port was zero")
+                        })?,
                     })
                 })
                 .collect()
@@ -161,18 +165,21 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         let peer = self.db.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT fingerprint, enabled FROM peer_trusted_peers WHERE host = ?1",
+                    "SELECT fingerprint, enabled, https_port FROM peer_trusted_peers WHERE host = ?1",
                     params![host.as_str()],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, u16>(2)?)),
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to load trusted peer", error))
         })?;
-        peer.map(|(fingerprint, enabled)| {
+        peer.map(|(fingerprint, enabled, https_port)| {
             Ok(TrustedPeer {
                 host: host.clone(),
                 fingerprint: parse_fingerprint(fingerprint)?,
                 enabled: enabled != 0,
+                https_port: NonZeroU16::new(https_port).ok_or_else(|| {
+                    atm_storage::AtmError::validation("stored HTTPS peer port was zero")
+                })?,
             })
         })
         .transpose()
@@ -183,12 +190,17 @@ impl PeerConfigStore for SqlitePeerConfigStore {
         self.db.with_connection(|connection| {
             connection
                 .execute(
-                    "INSERT INTO peer_trusted_peers(host, fingerprint, enabled)
-                     VALUES (?1, ?2, ?3)
+                    "INSERT INTO peer_trusted_peers(host, fingerprint, enabled, https_port)
+                     VALUES (?1, ?2, ?3, ?4)
                      ON CONFLICT(host) DO UPDATE SET
                          fingerprint = excluded.fingerprint,
-                         enabled = excluded.enabled",
-                    params![peer.host.as_str(), fingerprint, i64::from(peer.enabled)],
+                         enabled = excluded.enabled, https_port = excluded.https_port",
+                    params![
+                        peer.host.as_str(),
+                        fingerprint,
+                        i64::from(peer.enabled),
+                        peer.https_port.get()
+                    ],
                 )
                 .map(|_| ())
                 .map_err(|error| self.db.error("failed to save trusted peer", error))
@@ -305,6 +317,7 @@ mod tests {
                 host: "peer.example".parse().expect("host"),
                 fingerprint: "sha256:peer".parse().expect("fingerprint"),
                 enabled: true,
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
             })
             .expect("save peer");
 

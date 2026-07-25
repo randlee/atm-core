@@ -570,6 +570,7 @@ pub struct TrustedPeer {
     pub host: HostName,
     pub fingerprint: CertificateFingerprint,
     pub enabled: bool,
+    pub https_port: NonZeroU16,
 }
 
 /// Per-peer, operator-controlled bound for one reconciliation scan.
