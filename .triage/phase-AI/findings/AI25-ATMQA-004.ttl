@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-ATMQA-004>
   a triage:Finding ;
   triage:findingId "AI25-ATMQA-004" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "PeerConfigDoctorReport exposes only aggregate counts + fingerprint, never hostname/port" ;
   triage:description "crates/atm-core/src/doctor/report.rs: PeerConfigDoctorReport struct (lines ~111-120) exposes only aggregate counts + fingerprint, never the peer hostname or configured port that the AI.25 Implementation map requires. Negative constraints (no private-key/resolved-IP leakage) ARE satisfied. Reported by req-qa (ATM-QA-004) during AICH-S5 QA-1 against feature/pAI-s25-peer-authority-resolution." ;
   triage:phaseId "phase-AI" ;

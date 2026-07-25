@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI23-IMPORTANT-004>
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-004" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
   triage:title "ADR-033/http-api.md/openapi.yaml route tables still drift from api.rs live routes, specifically peer-sync" ;
   triage:description "Round-2 followup_pass. Prior QA-1 record documented route table discrepancies between ADR-033 Decision and actual implementation. Round 2 confirms persistent drift: ADR-033 Decision (lines 20-30) lists 6 resource types but omits /v1/atm/peers/{peer}/sync entirely, plus /v1/atm/compatibility and /v1/atm/heartbeat. ADR-033 also incorrectly documents GET /message/{message-id} as a registered route; quality-mgr confirmed via direct code read that lines 361/367 show this is a Location header string value in encode_response (HTTP 201 Created response), not a decode_route_request route. No GET /message/{message-id} route exists in decode_route_request (lines 266-306). http-api.md Resource contract table (lines 52-61) now documents compatibility and heartbeat (+2 from prior) but still omits peer-sync entirely. openapi.yaml (lines 8-69) documents compatibility and heartbeat but has no /peers/{peer}/sync path. Actual api.rs implementation (endpoint_for lines 44-60 and decode_route_request lines 266-306) supports 9 routes: Write, List, Peek, Receive, Clear, Doctor, CompatibilityPreflight, Heartbeat, and PeerSync (lines 292-301). Re-triage followup_pass round 2 (2026-07-25): finding remains OPEN on all 4 active branches (s21/42fbd9fa, s22/a5aa6813, s23/c528137c, s24/af2fbb83). No fixes applied, no merge-forward needed. Promotion target updated to s24 (highest open branch)." ;
   triage:phaseId "phase-AI" ;

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RBQA-F001>
   a triage:Finding ;
   triage:findingId "AI25-RBQA-F001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Live-reload trust swap bypasses the startup validation invariant" ;
   triage:description "crates/atm-daemon/src/composition.rs:298 (refresh_https_trust) never calls validate_enabled_peer_configuration -- the same invariant check compose_runtime() enforces at process startup (composition.rs:640-675). A reload can silently install a peer-config state (e.g. an enabled peer/interface missing a fingerprint) that startup would have rejected outright. This is a real duplicated-decision-logic gap, not a race -- the atomic verifier swap itself (PinnedClientVerifier::replace) is safe. No test exercises reload against an invalid config. Reported by ruthless-boundary-qa during AICH-S5 QA-1 against branch feature/pAI-s25-peer-authority-resolution @ b49f08407b8f5b150ae9210f64f4f34aa6beb152." ;
   triage:phaseId "phase-AI" ;

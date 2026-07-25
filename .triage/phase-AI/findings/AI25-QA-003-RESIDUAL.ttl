@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-QA-003-RESIDUAL>
   a triage:Finding ;
   triage:findingId "AI25-QA-003-RESIDUAL" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "winget manifest InstallerUrl still references stale v1.3.1 release artifact" ;
   triage:description "commit 4f4ee581 fixed the original AI25-QA-003 by bumping ManifestVersion and PackageVersion in .winget/randlee.agent-team-mail.yaml to 1.3.2-beta.25, but left InstallerUrl (line 24) pointing at .../releases/download/v1.3.1/atm_1.3.1_x86_64-pc-windows-msvc.zip. just lint's .just/check_version_sync.py version check fails: 'InstallerUrl version (1.3.1) does not match workspace version (1.3.2-beta.25)'. Directly reproducible failure of the FIX-2 acceptance criterion 'just lint all pass clean', confirmed by an independent quality-mgr recheck of just lint on feature/pAI-s25-peer-authority-resolution @ 0265c94f (every other of ~20 checks passed; only version failed)." ;
   triage:phaseId "phase-AI" ;

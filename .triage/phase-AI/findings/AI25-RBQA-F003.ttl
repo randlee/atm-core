@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-RBQA-F003>
   a triage:Finding ;
   triage:findingId "AI25-RBQA-F003" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Reused startup bind-preflight validator will break every live reload" ;
   triage:description "FIX-1 (commit 2a422872) correctly made refresh_https_trust call validate_enabled_peer_configuration before installing new trust material — this closes the original RBQA-F001 gap (reload skipping the startup validation invariant). However, validate_enabled_peer_configuration (crates/atm-runtime/src/composition.rs:120-158) is documented in its own doc-comment as a startup-only bind preflight, and it literally calls TcpListener::bind(interface.bind_addr) for every enabled interface (line 151). At startup this is safe (nothing bound yet). At reload time, HttpsListenerSet already holds an active bound listener on that same address for the daemon lifetime; a second bind() on an address this process is already listening on will fail (no SO_REUSEPORT). Net effect: every live-reload cycle while any HTTPS interface is enabled will now fail in the bind-preflight step. The existing test live_trust_refresh_keeps_one_listener_reachable does NOT catch this because it calls HttpsListenerSet::refresh_trusted_peers directly, bypassing refresh_https_trust entirely. Required correction: split validate_enabled_peer_configuration into (a) config-shape validation (safe to reuse at reload) and (b) a bind-preflight step invoked only at startup. refresh_https_trust should call only (a)." ;
   triage:triageMode "initial_pass" ;

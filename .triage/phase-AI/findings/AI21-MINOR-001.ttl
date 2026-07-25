@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI21-MINOR-001>
   a triage:Finding ;
   triage:findingId "AI21-MINOR-001" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
   triage:title "New validation error messages lack concrete remediation guidance" ;
   triage:description "composition.rs:299, https_transport.rs:488, runtime_health.rs:984 — new validation error messages lack concrete remediation (header name, config file, restart-without-flag guidance). Reported by rust-best-practices-agent (RBP-F003)." ;
   triage:phaseId "phase-AI" ;

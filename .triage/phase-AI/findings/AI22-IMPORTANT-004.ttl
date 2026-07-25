@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI22-IMPORTANT-004>
   a triage:Finding ;
   triage:findingId "AI22-IMPORTANT-004" ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
   triage:title "AgentAddress permits invalid host-without-team state, panics via Display::fmt Err rather than surfacing typed error" ;
   triage:description "AgentAddress (crates/atm-core/src/address.rs) has all-public fields and represents an invalid combination (host present, team absent) that the type does not prevent at construction. Any caller can build AgentAddress { team: None, host: Some(_), .. } directly, bypassing FromStr's validation. Display::fmt only guards this case by returning Err(fmt::Error); blanket ToString/format! machinery calls .expect(...) on the Display::fmt result, so any code calling .to_string() or format!(\"{}\", addr) on such a value panics rather than surfacing a typed error. Verified across all open branches." ;
   triage:category "architecture" ;

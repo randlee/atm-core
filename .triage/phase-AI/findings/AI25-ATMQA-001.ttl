@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI25-ATMQA-001>
   a triage:Finding ;
   triage:findingId "AI25-ATMQA-001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
   triage:title "Required integration test for live trust refresh is absent" ;
   triage:description "The sprint doc's own Required Validation section (docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md:101-103) explicitly requires an integration test proving 'one daemon remains' / trust state is live-refreshed correctly after a trust mutation. A repo-wide grep for refresh_https_trust / refresh_trusted_peers finds only their definitions and single internal call sites -- zero test references anywhere. The acceptance criterion is therefore unverifiable from repository evidence." ;
   triage:phaseId "phase-AI" ;
