@@ -430,14 +430,13 @@ fn handle_peer_connection(
     write_http_response(&mut tls, &response)
 }
 
-/// The authenticated HTTPS adapter has already selected this daemon. It drops
-/// only the transport destination before submitting the same canonical write
-/// request used by local UDS and graft clients.
+/// The authenticated HTTPS adapter has already selected this daemon. It marks
+/// the request as peer ingress while retaining its origin destination so the
+/// canonical writer can classify same-host duplicate receipts. The post-write
+/// router uses that authenticated marker to prevent peer ingress from being
+/// delivered outbound again.
 fn normalize_peer_write_for_local_delivery(request: &mut ApiRequest, source_host: HostName) {
     if let ApiRequest::Write(write) = request {
-        if let Some(destination) = write.to.as_mut() {
-            destination.host = None;
-        }
         write.authenticated_source_host = Some(source_host);
     }
 }
@@ -1131,7 +1130,11 @@ mod tests {
         };
         assert_eq!(write.authenticated_source_host, Some(peer.host));
         assert_eq!(write.origin_message_id, Some(origin_message_id));
-        assert!(write.to.expect("destination").host.is_none());
+        assert_eq!(
+            write.to.expect("destination").host,
+            Some("example.invalid".parse().expect("origin destination host")),
+            "peer ingress retains the origin host for same-host receipt classification"
+        );
         listener.shutdown().expect("shutdown listener");
     }
 

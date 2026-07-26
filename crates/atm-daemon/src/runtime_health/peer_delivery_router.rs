@@ -17,6 +17,22 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         message: &mut MessageRecord,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
+        if message.outbound_request.authenticated_source_host.is_some() {
+            tracing::info!(
+                subsystem = "runtime_health",
+                action = "post_write",
+                outcome = "peer_ingress_local_post_write",
+                message_id = ?message.outbound_request.origin_message_id,
+                "authenticated peer receipt uses the canonical local post-write route"
+            );
+            let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+            let emitter = DaemonPostSendHookEmitter::new(Arc::clone(&graft_port));
+            message
+                .prepared
+                .emit_local_post_write(&self.service_runtime, &emitter);
+            return Ok(());
+        }
         let Some(host) = message
             .outbound_request
             .to

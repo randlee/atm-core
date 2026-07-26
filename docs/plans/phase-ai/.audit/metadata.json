@@ -1,0 +1,162 @@
+{
+  "format": "phase-ai-metadata/v1",
+  "notes": "PR/branch/CI/merge snapshot for AICH sprints, hand-verified against gh pr view/checks and git merge-base ancestry on 2026-07-26. AI.25/26/27 branches were merged at 16:26Z (#631/#632/#633) then advanced past that commit and reopened as recovery-replay PRs at 22:38Z (#640/#641/#642, per arch-ctm's lineage check) — the current head is unmerged, so each sprint record reflects the current (unmerged) attempt with the historical merge preserved under delivery_attempts, not merged:true.",
+  "sprints": [
+    {
+      "id": "AICH-S1",
+      "branch": "feature/pAI-s21pre-crosshost-evidence-harness",
+      "head_sha": "7cf131fa4d989fa341d81aabc91986227bac95ef",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 624,
+      "pr_url": "https://github.com/randlee/atm-core/pull/624",
+      "ci_status": "pass",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S2",
+      "branch": "feature/pAI-s22-loopback-self-send-exemption",
+      "head_sha": "58f8bd5fc70ecdf48c55fdecece0f8a0c9acb1b6",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 628,
+      "pr_url": "https://github.com/randlee/atm-core/pull/628",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S3",
+      "branch": "feature/pAI-s23-crosshost-shared-write-path",
+      "head_sha": "f5a7d92e098bb6b079499c913f222e873af8e156",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 629,
+      "pr_url": "https://github.com/randlee/atm-core/pull/629",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S4",
+      "branch": "feature/pAI-s24-host-qualified-ack-receipt",
+      "head_sha": "912ffe89d8029e8d867a613b94bbecda4a2314c6",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 630,
+      "pr_url": "https://github.com/randlee/atm-core/pull/630",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S5",
+      "branch": "feature/pAI-s25-peer-authority-resolution",
+      "head_sha": "9dfc8de1d94d83fe12266fd517d516f33e753740",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 640,
+      "pr_url": "https://github.com/randlee/atm-core/pull/640",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null,
+      "delivery_attempts": [
+        {"pr_number": 631, "head_sha": "b520061e69802d7a49a6f3c90175c82638190423", "merged": true, "merged_at_utc": "2026-07-25T16:26:53Z"},
+        {"pr_number": 640, "head_sha": "9dfc8de1d94d83fe12266fd517d516f33e753740", "merged": false, "note": "recovery replay, opened 2026-07-25T22:38Z after branch ref was advanced past the merged commit"}
+      ]
+    },
+    {
+      "id": "AICH-S6",
+      "branch": "feature/pAI-s26-peer-write-deadline",
+      "head_sha": "28190ce19fc3a67aa44cbeffe7e1cb52845f6bbc",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 641,
+      "pr_url": "https://github.com/randlee/atm-core/pull/641",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null,
+      "delivery_attempts": [
+        {"pr_number": 632, "head_sha": "dc079fff8a96a5441e1eda3c790383670589f2f9", "merged": true, "merged_at_utc": "2026-07-25T16:26:53Z"},
+        {"pr_number": 641, "head_sha": "28190ce19fc3a67aa44cbeffe7e1cb52845f6bbc", "merged": false, "note": "recovery replay, opened 2026-07-25T22:38Z after branch ref was advanced past the merged commit"}
+      ]
+    },
+    {
+      "id": "AICH-S7",
+      "branch": "feature/pAI-s27-peer-delivery-observability",
+      "head_sha": "bed01b4d8962cc66353bf42b6df7b8057c92d4ee",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 642,
+      "pr_url": "https://github.com/randlee/atm-core/pull/642",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null,
+      "delivery_attempts": [
+        {"pr_number": 633, "head_sha": "5e91a889d6164da4769f18c55a541347146e84d1", "merged": true, "merged_at_utc": "2026-07-25T16:26:52Z"},
+        {"pr_number": 642, "head_sha": "bed01b4d8962cc66353bf42b6df7b8057c92d4ee", "merged": false, "note": "recovery replay, opened 2026-07-25T22:38Z after branch ref was advanced past the merged commit"}
+      ]
+    },
+    {
+      "id": "AICH-S8",
+      "branch": "feature/pAI-s28-bounded-peer-recovery",
+      "head_sha": "8e6c533a2d37cc85b57d4f62091a5f1e7ac7da76",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 634,
+      "pr_url": "https://github.com/randlee/atm-core/pull/634",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S9",
+      "branch": "feature/pAI-s30-semver-http-compatibility",
+      "head_sha": "9fd44444ad6ed3c5c13329e8f3f6305973812b4a",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 623,
+      "pr_url": "https://github.com/randlee/atm-core/pull/623",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    },
+    {
+      "id": "AICH-S10",
+      "branch": "feature/pAI-s29-crosshost-smoke-rerun",
+      "head_sha": "415a2db1067cd8290357e12f446f174978b63450",
+      "target_branch": "integrate/phase-AI",
+      "pr_number": 638,
+      "pr_url": "https://github.com/randlee/atm-core/pull/638",
+      "ci_status": "fail",
+      "merge_commit": null,
+      "merged": false,
+      "merged_at_utc": null,
+      "assignment_ack_message_id": null,
+      "assignment_ack_time_utc": null
+    }
+  ],
+  "coverage_gaps": [
+    "Stale recovery-replay PRs not used as canonical: #640 (AI.25, branch dup of merged #631), #641 (AI.26, dup of merged #632), #642 (AI.27, dup of merged #633) — none of their head SHAs are ancestors of integrate/phase-AI HEAD; recommend closing them to stop the branch-name collision.",
+    "assignment_ack_message_id / assignment_ack_time_utc not populated for any sprint — no producer wired yet."
+  ]
+}

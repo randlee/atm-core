@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST>
   a triage:Finding ;
   triage:findingId "AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "No mechanical allowlist of approved command entrypoints — raw socket success is never a passing case is a doc-only claim" ;
   triage:description "In scripts/smoke/run_peer_pair.py, nothing enforces an allowlist on case[\"command\"][0], so a raw-socket-probe script could pass as a required case. \"Public CLI/graft-client only, no private storage helpers\" is documented only in docs/peer-pair-smoke.md:51, not mechanically enforced. Source: quality-mgr QA-1 verdict on PR #609, /Users/randlee/.config/atm/share/atm-dev/qa-ai13-qa1-verdict.md." ;
   triage:phaseId "phase-AI" ;
@@ -124,62 +126,62 @@
 <urn:atm:triage:worktree/s12>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/s13>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "c7b4455" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s14>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s15>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s16>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s17>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s18>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 6 .
 
 <urn:atm:triage:worktree/s19>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/s20>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "propagated_from_upstream" ;
   triage:orderIndex 8 .

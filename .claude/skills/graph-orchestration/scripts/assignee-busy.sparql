@@ -1,0 +1,37 @@
+# assignee-busy.sparql — Is this assignee already working on something?
+#
+# An assignee is BUSY iff they have a truly in-flight Assignment in this
+# phase: an Assignment exists for them and no Completion for that
+# Assignment's sprint postdates it.
+#
+# This is deliberately independent of cursor.sparql / sprint order. It does
+# not matter which sprint the cursor says is "ready" — if the assignee
+# already has open work, they must finish it before receiving anything
+# else. Team-lead must run this and get zero rows before appending any new
+# Assignment event for a given assignee, regardless of cursor output.
+#
+# Returns: zero rows (assignee is free) or one row per open sprint
+#   (?sprint, ?assignedAt)
+# Parameters: $PHASE, $ASSIGNEE (a plain literal, e.g. "arch-ctm")
+
+PREFIX triage: <urn:atm:triage:>
+PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?sprint ?assignedAt WHERE {
+  ?sprint a triage:Sprint ;
+          triage:inPhase $PHASE .
+
+  ?a a triage:Assignment ;
+     triage:ofSprint ?sprint ;
+     triage:assignedTo $ASSIGNEE ;
+     triage:assignedAt ?assignedAt .
+
+  # Truly in-flight: no Completion at all after this Assignment
+  FILTER NOT EXISTS {
+    ?c a triage:Completion ;
+       triage:ofSprint ?sprint ;
+       triage:at ?ct .
+    FILTER (?ct > ?assignedAt)
+  }
+}
+ORDER BY ?assignedAt

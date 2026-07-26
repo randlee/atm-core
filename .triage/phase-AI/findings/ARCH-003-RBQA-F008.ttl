@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ARCH-003-RBQA-F008>
   a triage:Finding ;
   triage:findingId "ARCH-003-RBQA-F008" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "Stale present-tense Policy Placement governance prose adjacent to retired sections" ;
   triage:description "QA-4 on PR #590 (fix/daemon-pre-ag-deletion-reset) found docs/atm-daemon/boundaries.md's Policy Placement section (originally ~lines 331-357) still stated present-tense SourceIngress/ProjectionExport governance language plus a forward-looking 'Phase Yb adds:' block, immediately adjacent to two sibling sections already corrected to retired/local-IPC-only framing by an earlier fix round. Same class of stale prose as the original ARCH-001/RBQA-F006 finding but missed by that round's diff scope." ;
   triage:phaseId "phase-AI" ;
@@ -35,13 +37,13 @@
 <urn:atm:triage:worktree/pAI-1/f56ce35e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "f56ce35e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/d316f0b4>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "d316f0b4" ;
   triage:orderIndex 0 .
