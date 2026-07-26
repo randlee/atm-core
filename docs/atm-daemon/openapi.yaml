@@ -47,14 +47,6 @@ paths:
       responses:
         '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
         default: { $ref: '#/components/responses/AtmError' }
-  /message/{messageId}/ack:
-    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
-    post:
-      operationId: acknowledgeMessage
-      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
-      responses:
-        '201': { description: Ack message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
   /doctor:
     get:
       operationId: doctor
@@ -86,14 +78,6 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatRequest' } } } }
       responses:
         '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
-  /peers/{peer}/sync:
-    parameters: [ { $ref: '#/components/parameters/Peer' } ]
-    post:
-      operationId: synchronizePeer
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncRequest' } } } }
-      responses:
-        '200': { description: Peer synchronization result, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
   /runtime/reload:
     post:
@@ -165,6 +149,7 @@ components:
       properties:
         peer: { type: string }
         delivered: { type: integer, minimum: 0 }
+        disposition: { type: string, enum: [completed, disabled, rate_limited] }
     Message:
       type: object
       required: [message_id, from, to, body]

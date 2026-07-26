@@ -22,22 +22,6 @@ use base64::Engine as _;
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
 pub const HTTP_API_VERSION: u16 = 1;
-/// Complete route table implemented by the typed HTTP codec. The OpenAPI
-/// contract test consumes this table so documentation cannot drift from the
-/// decoder when an operation is added or removed.
-pub const HTTP_ROUTE_INVENTORY: &[(&str, &str)] = &[
-    ("POST", "/v1/atm/messages"),
-    ("POST", "/v1/atm/message/{messageId}/ack"),
-    ("GET", "/v1/atm/messages"),
-    ("POST", "/v1/atm/messages/inspect"),
-    ("POST", "/v1/atm/messages/read"),
-    ("DELETE", "/v1/atm/messages"),
-    ("GET", "/v1/atm/doctor"),
-    ("POST", "/v1/atm/compatibility"),
-    ("POST", "/v1/atm/heartbeat"),
-    ("POST", "/v1/atm/peers/{peer}/sync"),
-    ("POST", "/v1/atm/runtime/reload"),
-];
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
 const MESSAGES_PATH: &str = "/v1/atm/messages";

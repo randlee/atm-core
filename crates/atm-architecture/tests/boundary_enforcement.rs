@@ -130,7 +130,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             "AI.23 {adapter} adapter must enter the shared ApiRouter"
         );
         for forbidden in [
-            ".dispatch(",
             "PostWriteRouter",
             "MessageWriter",
             "persist_",

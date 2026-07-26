@@ -48,22 +48,6 @@
         }
       }
     },
-    "/message/{messageId}/ack": {
-      "post": {
-        "operation_id": "acknowledgeMessage",
-        "request_required": false,
-        "responses": {
-          "201": {
-            "error": false,
-            "schema": "#/components/schemas/Message"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
-    },
     "/messages": {
       "delete": {
         "operation_id": "clearMessages",
@@ -155,6 +139,22 @@
           }
         }
       }
+    },
+    "/runtime/reload": {
+      "post": {
+        "operation_id": "reloadRuntimeView",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -236,6 +236,7 @@
     "PeerSyncOutcome": {
       "properties": [
         "delivered",
+        "disposition",
         "peer"
       ],
       "required": [

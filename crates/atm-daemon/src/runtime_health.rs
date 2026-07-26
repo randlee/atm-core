@@ -20,9 +20,9 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
-        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse, next_request_id,
+        CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
+        ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
@@ -33,9 +33,9 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, resolve_peer_authority};
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
-use crate::post_send_emitter::DaemonPostSendHookEmitter;
+mod post_write_router;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -152,7 +152,9 @@ pub(crate) struct DaemonRequestDispatcher {
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    peer_sync_progress: std::sync::Mutex<HashMap<atm_core::types::HostName, PeerSyncProgress>>,
+    peer_sync_progress: std::sync::Mutex<
+        HashMap<atm_core::types::HostName, Arc<std::sync::Mutex<PeerSyncProgress>>>,
+    >,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: PeerDeliveryProjection,
 }
@@ -602,119 +604,6 @@ impl MessageWriter for DaemonRequestDispatcher {
     }
 }
 
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
-        if message.prepared.is_peer_receipt() {
-            if message.prepared.is_same_store_peer_receipt() {
-                let mut event = self.runtime_health_observability.event(
-                    "peer_duplicate_write_skipped",
-                    "ok",
-                    "peer duplicate write skipped; continuing the ordinary local post-write action",
-                );
-                event.message_id = Some(message.prepared.persisted_message_id());
-                self.runtime_health_observability.emit_event_or_warn(event);
-            }
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        }
-        let Some(host) = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host())
-        else {
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        };
-        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
-        let request_id = next_request_id();
-        let message_id = message.outbound_request.origin_message_id;
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: crate::peer_delivery_observability::PeerDeliveryEventKind::WritePersisted,
-            request_id,
-            message_id,
-            peer: peer.host.clone(),
-            error_code: None,
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
-            })?;
-        match transport.deliver(
-            message.outbound_request.clone(),
-            &peer,
-            HttpsRequestDeadline::default(),
-        ) {
-            Ok(ResponseEnvelope::Error(error)) => {
-                self.record_peer_delivery_event(PeerDeliveryEvent {
-                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
-                    request_id,
-                    message_id,
-                    peer: peer.host,
-                    error_code: Some(error.code()),
-                    candidate_count: Some(1),
-                    next_attempt_at: None,
-                });
-                Err(error)
-            }
-            // The just-delivered immutable write is already the canonical peer
-            // action. Replaying recent outbound records here re-delivered the
-            // same-store receipt and amplified its nudge. Reconciliation is
-            // explicit through the PeerSync resource below.
-            Ok(_) => {
-                self.record_peer_delivery_event(PeerDeliveryEvent {
-                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryConfirmed,
-                    request_id,
-                    message_id,
-                    peer: peer.host,
-                    error_code: None,
-                    candidate_count: Some(1),
-                    next_attempt_at: None,
-                });
-                Ok(())
-            }
-            Err(error) => {
-                let error = if error.is_daemon_unavailable() {
-                    AtmError::remote_delivery_unconfirmed(format!(
-                        "local persistence completed but peer delivery was not confirmed: {}",
-                        error.message()
-                    ))
-                } else {
-                    error
-                };
-                self.record_peer_delivery_event(PeerDeliveryEvent {
-                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
-                    request_id,
-                    message_id,
-                    peer: peer.host,
-                    error_code: Some(error.code()),
-                    candidate_count: Some(1),
-                    next_attempt_at: None,
-                });
-                Err(error)
-            }
-        }
-    }
-}
-
 impl DaemonRequestDispatcher {
     fn reconcile_peer(
         &self,
@@ -773,6 +662,7 @@ impl DaemonRequestDispatcher {
             return Ok(PeerSyncOutcome {
                 peer: request.peer,
                 delivered: 0,
+                disposition: PeerSyncDisposition::Disabled,
             });
         }
         let transport = self
@@ -783,16 +673,22 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        let mut progress = self
+        let progress = self
             .peer_sync_progress
             .lock()
+            .map_err(|_| AtmError::daemon_unavailable("peer sync progress map lock poisoned"))?
+            .entry(request.peer.clone())
+            .or_insert_with(|| Arc::new(std::sync::Mutex::new(PeerSyncProgress::default())))
+            .clone();
+        let mut state = progress
+            .lock()
             .map_err(|_| AtmError::daemon_unavailable("peer sync progress lock poisoned"))?;
-        let state = progress.entry(request.peer.clone()).or_default();
         let now = std::time::Instant::now();
         if state.next_allowed_at.is_some_and(|next| now < next) {
             return Ok(PeerSyncOutcome {
                 peer: request.peer,
                 delivered: 0,
+                disposition: PeerSyncDisposition::RateLimited,
             });
         }
         // Explicit sync is operator-controlled, but a tight local retry loop
@@ -810,6 +706,7 @@ impl DaemonRequestDispatcher {
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
+            disposition: PeerSyncDisposition::Completed,
         })
     }
 }
