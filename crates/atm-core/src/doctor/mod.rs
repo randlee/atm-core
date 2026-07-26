@@ -750,7 +750,7 @@ mod tests {
                     .parse::<CertificateFingerprint>()
                     .expect("fingerprint"),
                 enabled: true,
-                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
             }])
         }
 

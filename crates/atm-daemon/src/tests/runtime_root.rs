@@ -19,7 +19,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::HttpsMessageTransport;
 mod peer_observability;
 mod peer_reconciliation;
 use crate::test_support::{
@@ -101,7 +101,7 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.delivered
             .lock()
@@ -125,7 +125,7 @@ impl HttpsMessageTransport for FailingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.attempted
             .lock()
@@ -144,7 +144,7 @@ impl HttpsMessageTransport for RejectingHttpsDelivery {
         &self,
         _request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         Ok(ResponseEnvelope::Error(AtmError::validation(
             "remote roster rejected the recipient",

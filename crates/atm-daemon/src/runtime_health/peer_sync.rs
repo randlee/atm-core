@@ -5,7 +5,8 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest};
 use atm_storage::{PeerSyncPolicy, TrustedPeer};
 
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::HttpsMessageTransport;
+use atm_core::api::RequestDeadline;
 
 use super::DaemonRequestDispatcher;
 
@@ -37,13 +38,13 @@ impl DaemonRequestDispatcher {
             not_before,
             policy.max_batch_messages,
         )?;
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = RequestDeadline::after(Duration::from_secs(5));
         let mut delivered = 0_u16;
         for stored in writes {
             if delivered_request_json.contains(&stored.request_json) {
                 continue;
             }
-            if std::time::Instant::now() >= deadline {
+            if deadline.expired() {
                 return Err(AtmError::daemon_unavailable(
                     "peer reconciliation exceeded its bounded request deadline",
                 ));
@@ -51,7 +52,7 @@ impl DaemonRequestDispatcher {
             let request = serde_json::from_str(&stored.request_json).map_err(|_source| {
                 AtmError::mailbox_read("stored immutable peer outbound write is invalid")
             })?;
-            transport.deliver(request, peer, HttpsRequestDeadline::default())?;
+            transport.deliver(request, peer, deadline)?;
             delivered_request_json.insert(stored.request_json);
             delivered = delivered.checked_add(1).ok_or_else(|| {
                 AtmError::validation("peer sync selection exceeded its configured batch limit")

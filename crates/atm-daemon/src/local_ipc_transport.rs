@@ -33,8 +33,8 @@ use std::thread;
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 use accept_loop::{
-    handle_shutdown_probe, maybe_reload_runtime_view, reject_connection_when_capped,
-    spawn_connection_worker, take_accept_error,
+    handle_shutdown_probe, reject_connection_when_capped, spawn_connection_worker,
+    take_accept_error,
 };
 use request_worker::handle_connection;
 #[cfg(test)]
@@ -65,7 +65,6 @@ pub(crate) const DISPATCH_PANIC_RECOVERED_MESSAGE: &str =
     "daemon local IPC dispatch worker panicked before completing; transport thread recovered";
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
-    reload_requested: AtomicBool,
     // Mutex-backed slot: AtmError is non-Copy so cannot be stored atomically without unsafe;
     // single-error semantics do not benefit from a channel because the scoped waiter thread
     // cannot outlive the owner.
@@ -73,19 +72,6 @@ struct ServeLoopSignals {
 }
 
 impl ServeLoopSignals {
-    fn request_reload(&self) {
-        // SeqCst keeps the lifecycle waiter wakeup and the direct accept-loop
-        // reload observation in one total order, so a just-issued reload cannot
-        // be observed after a later accept-error/shutdown transition.
-        self.reload_requested.store(true, Ordering::SeqCst);
-    }
-
-    fn take_reload(&self) -> bool {
-        // SeqCst pairs with request_reload() so the direct serve loop never
-        // reorders a consumed reload flag around accept-error/shutdown state.
-        self.reload_requested.swap(false, Ordering::SeqCst)
-    }
-
     fn record_accept_error(&self, error: AtmError) -> Result<(), AtmError> {
         let mut slot = self.accept_error.lock().map_err(|_| {
             AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
@@ -346,7 +332,7 @@ impl PreparedRuntimeServer {
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
-        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError> + Send,
         PublishReady: Fn() -> Result<(), AtmError>,
     {
         self.serve_with_deadlines_and_accept_probe(dispatcher, hooks)
@@ -359,7 +345,7 @@ impl PreparedRuntimeServer {
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
-        ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+        ReloadRuntimeView: Fn() -> Result<(), AtmError> + Send,
         PublishReady: Fn() -> Result<(), AtmError>,
     {
         let RuntimeServeHooks {
@@ -421,7 +407,7 @@ fn serve_runtime_scope<'scope, BeginShutdown, ReloadRuntimeView, PublishReady>(
 ) -> Result<(), AtmError>
 where
     BeginShutdown: Fn() -> Result<(), AtmError>,
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+    ReloadRuntimeView: Fn() -> Result<(), AtmError> + Send + 'scope,
     PublishReady: Fn() -> Result<(), AtmError>,
 {
     let ServeRuntimeScopeContext {
@@ -443,16 +429,14 @@ where
         reload_runtime_view,
         publish_ready,
     } = context;
-    let (shutdown_beacon, signals) = (
-        Arc::new(ShutdownBeacon::default()),
-        Arc::new(ServeLoopSignals::default()),
-    );
+    let (shutdown_beacon, signals) = new_serve_loop_state();
     let lifecycle_waiter = spawn_runtime_lifecycle_waiter(
         scope,
         &signals,
         &shutdown_beacon,
         &lifecycle_control,
         endpoint_path,
+        reload_runtime_view,
     )?;
     #[cfg(unix)]
     let (tcp_stop, tcp_server) = start_tcp_loopback_server(
@@ -475,7 +459,7 @@ where
         #[cfg(test)]
         accept_error_inject,
     );
-    let serve_error = capture_serve_error(scope, &mut accept_context, &reload_runtime_view);
+    let serve_error = capture_serve_error(scope, &mut accept_context);
     #[cfg(unix)]
     tcp_stop.store(true, Ordering::SeqCst);
     let shutdown_error = finalize_runtime_scope(
@@ -493,6 +477,13 @@ where
     #[cfg(unix)]
     let shutdown_error = shutdown_error.or(tcp_error);
     finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
+    (
+        Arc::new(ShutdownBeacon::default()),
+        Arc::new(ServeLoopSignals::default()),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -523,19 +514,24 @@ where
     )
 }
 
-fn spawn_runtime_lifecycle_waiter<'scope>(
+fn spawn_runtime_lifecycle_waiter<'scope, ReloadRuntimeView>(
     scope: &'scope thread::Scope<'scope, '_>,
     signals: &Arc<ServeLoopSignals>,
     shutdown_beacon: &Arc<ShutdownBeacon>,
     lifecycle: &LifecycleControlSourceAdapter,
     endpoint_path: &Path,
-) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError> {
+    reload_runtime_view: ReloadRuntimeView,
+) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError> + Send + 'scope,
+{
     spawn_lifecycle_waiter(
         scope,
         Arc::clone(signals),
         Arc::clone(shutdown_beacon),
         lifecycle.clone(),
         endpoint_path.to_path_buf(),
+        reload_runtime_view,
     )
 }
 
@@ -599,27 +595,27 @@ fn finish_tcp_loopback_server(
         .map(Result::err)
 }
 
-fn capture_serve_error<'scope, ReloadRuntimeView>(
+fn capture_serve_error<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     accept_context: &mut AcceptLoopContext<'_>,
-    reload_runtime_view: &ReloadRuntimeView,
-) -> Option<AtmError>
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
-    match run_accept_loop(scope, accept_context, reload_runtime_view) {
+) -> Option<AtmError> {
+    match run_accept_loop(scope, accept_context) {
         Ok(serve_error) => serve_error,
         Err(error) => Some(error),
     }
 }
 
-fn spawn_lifecycle_waiter<'scope, 'env>(
+fn spawn_lifecycle_waiter<'scope, 'env, ReloadRuntimeView>(
     scope: &'scope thread::Scope<'scope, 'env>,
     signals: Arc<ServeLoopSignals>,
     shutdown_beacon: Arc<ShutdownBeacon>,
     lifecycle_control: LifecycleControlSourceAdapter,
     endpoint_path: PathBuf,
-) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError> {
+    reload_runtime_view: ReloadRuntimeView,
+) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError> + Send + 'scope,
+{
     thread::Builder::new()
         .name("local-ipc-lifecycle-waiter".to_string())
         .spawn_scoped(scope, move || {
@@ -651,17 +647,20 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
                     return;
                 }
                 if lifecycle_control.take_reload_requested() {
-                    signals.request_reload();
-                    if let Err(_error) = wake_listener_until(&endpoint_path, REQUEST_DEADLINE) {
-                        record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
-                        let _ = signals.record_accept_error(
-                            AtmError::daemon_lifecycle_wedge(
-                                "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
-                            )
-
-                            ,
-                        );
-                        return;
+                    match reload_runtime_view() {
+                        Ok(()) => tracing::info!(
+                            subsystem = "local_ipc_transport",
+                            action = "reload_runtime_view",
+                            "lifecycle-control-triggered config/roster reload applied outside the accept loop"
+                        ),
+                        Err(error) => tracing::warn!(
+                            subsystem = "local_ipc_transport",
+                            action = "reload_runtime_view",
+                            outcome = "rejected",
+                            error_code = %error.code(),
+                            error_message = %error.message(),
+                            "lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
+                        ),
                     }
                 }
             }
@@ -673,41 +672,30 @@ fn spawn_lifecycle_waiter<'scope, 'env>(
         })
 }
 
-fn run_accept_loop<'scope, ReloadRuntimeView>(
+fn run_accept_loop<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     context: &mut AcceptLoopContext<'_>,
-    reload_runtime_view: &ReloadRuntimeView,
-) -> Result<Option<AtmError>, AtmError>
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
+) -> Result<Option<AtmError>, AtmError> {
     let mut terminate_probe_pending = false;
     loop {
-        match prepare_accept_iteration(context, reload_runtime_view)? {
+        match prepare_accept_iteration(context)? {
             AcceptLoopOutcome::Continue => continue,
             AcceptLoopOutcome::Break(error) => return Ok(error),
-            AcceptLoopOutcome::Dispatch(stream) => match handle_accepted_stream(
-                scope,
-                stream,
-                context,
-                reload_runtime_view,
-                &mut terminate_probe_pending,
-            )? {
-                AcceptLoopOutcome::Continue => continue,
-                AcceptLoopOutcome::Break(error) => return Ok(error),
-                AcceptLoopOutcome::Dispatch(_) => unreachable!("dispatch stream consumed"),
-            },
+            AcceptLoopOutcome::Dispatch(stream) => {
+                match handle_accepted_stream(scope, stream, context, &mut terminate_probe_pending)?
+                {
+                    AcceptLoopOutcome::Continue => continue,
+                    AcceptLoopOutcome::Break(error) => return Ok(error),
+                    AcceptLoopOutcome::Dispatch(_) => unreachable!("dispatch stream consumed"),
+                }
+            }
         }
     }
 }
 
-fn prepare_accept_iteration<ReloadRuntimeView>(
+fn prepare_accept_iteration(
     context: &mut AcceptLoopContext<'_>,
-    reload_runtime_view: &ReloadRuntimeView,
-) -> Result<AcceptLoopOutcome, AtmError>
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
+) -> Result<AcceptLoopOutcome, AtmError> {
     let reap_summary = match context.registry.reap_finished_dispatches() {
         Ok(summary) => summary,
         Err(error) => {
@@ -731,9 +719,6 @@ where
         context.shutdown_beacon,
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
-    }
-    if maybe_reload_runtime_view(context.signals, reload_runtime_view, context.observability) {
-        return Ok(AcceptLoopOutcome::Continue);
     }
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
@@ -766,26 +751,18 @@ where
     }
 }
 
-fn handle_accepted_stream<'scope, ReloadRuntimeView>(
+fn handle_accepted_stream<'scope>(
     scope: &'scope thread::Scope<'scope, '_>,
     mut stream: LocalSocketStream,
     context: &AcceptLoopContext<'_>,
-    reload_runtime_view: &ReloadRuntimeView,
     terminate_probe_pending: &mut bool,
-) -> Result<AcceptLoopOutcome, AtmError>
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
+) -> Result<AcceptLoopOutcome, AtmError> {
     if let Some(error) = take_accept_error(
         context.signals,
         context.lifecycle_control,
         context.shutdown_beacon,
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
-    }
-    if maybe_reload_runtime_view(context.signals, reload_runtime_view, context.observability) {
-        drop(stream);
-        return Ok(AcceptLoopOutcome::Continue);
     }
     if context.lifecycle_control.terminate_requested() || context.shutdown_beacon.is_tripped() {
         return handle_shutdown_probe(

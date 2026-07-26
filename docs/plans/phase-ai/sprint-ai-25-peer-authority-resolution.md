@@ -1,6 +1,6 @@
 ---
 title: AI.25 DNS-backed peer authority
-status: proposed
+status: complete
 branch: feature/pAI-s25-peer-authority-resolution
 target: integrate/phase-AI
 depends_on: AI.21-pre, AI.22, AI.23, AI.11–AI.16
