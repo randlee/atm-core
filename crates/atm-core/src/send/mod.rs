@@ -321,8 +321,7 @@ impl PreparedWrite {
     /// address—to choose the one local-vs-peer action.
     #[must_use]
     pub fn is_peer_receipt(&self) -> bool {
-        self.outbound_request.authenticated_source_host.is_some()
-            || self.outbound_request.origin_message_id.is_some()
+        has_authenticated_peer_provenance(&self.outbound_request)
     }
 }
 
@@ -594,6 +593,12 @@ fn prepare_persisted_write<
     })
 }
 
+fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+    request.authenticated_source_host.is_some()
+        && request.origin_message_id.is_some()
+        && request.origin_timestamp.is_some()
+}
+
 #[cfg(test)]
 fn send_mail_with_runtime_impl<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
@@ -798,7 +803,7 @@ fn prepare_send_context<
         runtime,
         target,
         &recipient,
-        request.authenticated_source_host.is_some(),
+        has_authenticated_peer_provenance(request),
     )?;
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,

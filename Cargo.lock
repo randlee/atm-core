@@ -40,6 +40,7 @@ dependencies = [
  "interprocess",
  "libc",
  "parking_lot",
+ "semver",
  "serde",
  "serde_json",
  "serial_test",

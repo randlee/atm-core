@@ -2,7 +2,8 @@ use super::*;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{
-    PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope, SendResponseEnvelope,
+    PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest, RequestEnvelope, ResponseEnvelope,
+    SendResponseEnvelope,
 };
 use atm_core::read::ReadQuery;
 use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
@@ -18,7 +19,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::https_transport::HttpsMessageTransport;
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
 mod peer_observability;
 mod peer_reconciliation;
 use crate::test_support::{
@@ -100,7 +101,7 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
+        _deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.delivered
             .lock()
@@ -124,7 +125,7 @@ impl HttpsMessageTransport for FailingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
+        _deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.attempted
             .lock()
@@ -143,7 +144,7 @@ impl HttpsMessageTransport for RejectingHttpsDelivery {
         &self,
         _request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
+        _deadline: HttpsRequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         Ok(ResponseEnvelope::Error(AtmError::validation(
             "remote roster rejected the recipient",

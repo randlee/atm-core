@@ -73,8 +73,8 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         .expect("install failing transport");
     let error = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(ack.clone())))
-        .expect_err("failed remote acknowledgement must return the transport error");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        .expect_err("failed remote acknowledgement must report unconfirmed peer delivery");
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing
             .attempted
@@ -196,8 +196,10 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         ResponseEnvelope::PeerSync(PeerSyncOutcome {
             peer: returned_peer,
             delivered,
+            disposition,
         }) => {
             assert_eq!(returned_peer, peer);
+            assert_eq!(disposition, PeerSyncDisposition::Completed);
             assert_eq!(
                 delivered, 1,
                 "the explicit path honors the durable batch cap"
