@@ -10,7 +10,7 @@ phase: AI
 sprint: AI.23
 worktree: ../atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path
 branch: feature/pAI-s23-crosshost-shared-write-path
-status: in_review
+status: complete
 estimated_scope: one canonical write endpoint, ingress convergence, and structural enforcement
 ```
 
