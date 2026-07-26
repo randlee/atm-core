@@ -35,10 +35,6 @@ derived link-quality projection without a second delivery-state store.
        WritePersisted,
        PeerDeliveryConfirmed,
        PeerDeliveryUnconfirmed,
-       PeerRecoveryScheduled,
-       PeerRecoveryAttempt,
-       PeerRecoveryConfirmed,
-       PeerRecoveryUnconfirmed,
    }
 
    pub struct PeerDeliveryEvent {
@@ -47,15 +43,14 @@ derived link-quality projection without a second delivery-state store.
        pub message_id: Option<MessageId>,
        pub peer: HostName,
        pub error_code: Option<AtmErrorCode>,
-       pub candidate_count: Option<u32>,
-       pub next_attempt_at: Option<IsoTimestamp>,
    }
    ```
 
    `RemoteDeliveryUnconfirmed` from AI.26 is the synchronous API error when
    peer acceptance is unknown. `peer_delivery_unconfirmed` is this sprint's
-   retained terminal event for that same result. AI.28 uses the four
-   `peer_recovery_*` variants only for its later bounded recovery attempts.
+   retained terminal event for that same result. AI.28 introduces its own four
+   `peer_recovery_*` variants and recovery-only event fields when bounded
+   recovery exists; AI.27 exposes no unused recovery event surface.
    The event deliberately contains the registered hostname only: never a
    certificate pin, private-key reference, body, or resolved IP.
 3. Add the following bounded, in-memory projection to the daemon runtime and

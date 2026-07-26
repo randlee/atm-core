@@ -45,8 +45,6 @@ impl DaemonRequestDispatcher {
             message_id,
             peer,
             error_code,
-            candidate_count: Some(1),
-            next_attempt_at: None,
         });
     }
 
@@ -96,14 +94,6 @@ impl DaemonRequestDispatcher {
                 Ok(())
             }
             Err(error) => {
-                let error = if error.is_daemon_unavailable() {
-                    AtmError::remote_delivery_unconfirmed(format!(
-                        "local persistence completed but peer delivery was not confirmed: {}",
-                        error.message()
-                    ))
-                } else {
-                    error
-                };
                 self.record_peer_outcome(
                     PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
                     request_id,
