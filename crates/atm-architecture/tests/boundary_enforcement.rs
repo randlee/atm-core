@@ -286,7 +286,7 @@ fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
     let root = workspace_root();
     let adapter = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
     let router =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_write_router.rs"));
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
     let authority =
         read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_authority.rs"));
 
@@ -964,7 +964,7 @@ impl HostRoutingVisitor {
     fn is_post_write_router_helper(&self, name: &str) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new(
-                "crates/atm-daemon/src/runtime_health/post_write_router.rs",
+                "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
             )) && matches!(name, "emit_local_post_write" | "deliver_to_peer")
         })
     }
