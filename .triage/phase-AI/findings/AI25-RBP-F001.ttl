@@ -14,9 +14,12 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656, AICH-S11-QA-PREAI27 batch). Independently re-verified: https_transport.rs:179 ServerName::try_from now uses .map_err(|source| ...).with_cause(source), preserving the underlying InvalidDnsNameError cause -- the last remaining discard site in the file. CI green (gh pr checks 656, 8/8). QA report posted to PR #656. s21pre/s22/s23/s24 occurrences remain on stale, never-merged forked branches with no bearing on the merge path to integrate/phase-AI." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s23/1> ;
@@ -151,12 +154,25 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 179 ;
   triage:snippet "ServerName::try_from(host.clone()).map_err(|_source| { AtmError::validation(...) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed on fix/close-out-pre-ai27-findings @ a5659742, see finding-level closureNote. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "35cb19f8" ;
   triage:note "Consolidated from s26. ServerName::try_from still discards the underlying cause with |_source| pattern, though other error sites (TcpStream::connect_timeout, ClientConnection::new, PEM load) have been fixed to use daemon_unavailable_with_cause." ;
   triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 179 ;
+  triage:snippet "ServerName::try_from(host.clone()).map_err(|source| { AtmError::validation(...).with_cause(source) })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656; cause now preserved via .with_cause(source). CI green (8/8)." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
 
 # 2026-07-26 (quality-mgr, AICH-S5-QA-5): re-verified against feature/pAI-s25-peer-authority-resolution
 # @ 96377687 (PR #640, merge of fix/pAI-s25-local-findings @ 3265270e), independently confirmed by
@@ -181,6 +197,13 @@
   triage:path "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "96377687" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .
 
 <urn:atm:triage:worktree/integrate/8750587b>
   a triage:WorktreeSnapshot ;

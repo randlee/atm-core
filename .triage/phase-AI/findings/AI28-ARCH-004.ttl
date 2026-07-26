@@ -12,8 +12,11 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. worker_clone identifier is gone; renamed to worker_coordinator() (fn definition line 404, used at line 554)." ;
   triage:foundIn triage:AICH-S8 ;
   triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
   triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
@@ -26,10 +29,11 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 1 ;
   triage:snippet "let worker_clone = ...; // misleading name — does not represent an actual thread clone" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "7163648b" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Renamed to worker_coordinator(). Verified on current head c0445b1a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
 
 <urn:atm:triage:worktree/pAI-s28/7163648b>

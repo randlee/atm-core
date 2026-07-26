@@ -12,8 +12,11 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a (not accepted from arch-ctm's e1b754b5/b7d84882 self-report). failed<T>() now calls retry_timestamp(delay) (line 60 definition, called at line 352) deriving the event timestamp from the real scheduled backoff Duration rather than IsoTimestamp::now(). Direct tests scheduled_timestamp_reports_the_real_backoff_not_the_current_instant (line 700) and failed_recovery_records_the_real_next_attempt_timestamp (line 707) confirmed present and cover this." ;
   triage:foundIn triage:AICH-S8 ;
   triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
   triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
@@ -27,10 +30,11 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 1 ;
   triage:snippet "record() emits: next_attempt_at: next.map(|_| IsoTimestamp::now())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "7163648b" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at e1b754b5/b7d84882: real retry_timestamp(delay) now used. Verified on current head c0445b1a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
 
 <urn:atm:triage:worktree/pAI-s28/7163648b>

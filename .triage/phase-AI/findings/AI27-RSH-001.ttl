@@ -12,9 +12,11 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
-  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. AICH-S7-QA-FIX-2: independently re-verified arch-ctm's 12d1e1b0 self-report against the real diff -- new ProjectedPeerLinkStatus{status,sequence}/PeerDeliveryProjectionState{statuses: BTreeMap<HostName,ProjectedPeerLinkStatus>, next_sequence: u64} replaces the silent-drop-at-256 behavior with real oldest-entry eviction, confirmed by new test projection_evicts_the_oldest_status_when_at_capacity (inserts 257 entries, confirms peer-0 evicted, peer-256 retained, count stays 256). Confirmed on feature/pAI-s27-peer-delivery-observability current head 4315ad0a." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
@@ -28,10 +30,11 @@
   triage:file "crates/atm-daemon/src/peer_delivery_observability.rs" ;
   triage:line 97 ;
   triage:snippet "const MAX_PEER_LINK_STATUS_ENTRIES: usize = 256; if statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES && !statuses.contains_key(&event.peer) { ...return; } -- silent drop, no LRU eviction" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at 12d1e1b0: real oldest-entry eviction via PeerDeliveryProjectionState/ProjectedPeerLinkStatus sequence tracking. Verified on current head 4315ad0a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
