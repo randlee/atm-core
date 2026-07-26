@@ -21,7 +21,19 @@
   triage:foundIn triage:AICH-S5 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/pAI-s25/96377687> ;
+  triage:triageRecordVersion "2" .
+
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): PARTIALLY fixed on feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640). lint_boundaries.py now validates ownership.io_owns/io_forbidden as
+# well-formed, non-empty string lists (schema-shape only). Independently confirmed by
+# ruthless-boundary-qa that there is still NO generic mapping from io_forbidden tag values
+# (recipient_routing, sqlite, delivery_queue, retry_state, nudge_emission, ...) to source-code
+# patterns checked against the owning module -- the only thing catching the AI25-RBQA-F004 leak
+# class is a single hardcoded AST test (boundary_enforcement.rs::
+# ai25_peer_authority_selection_is_not_owned_by_the_https_adapter), not a general mechanism.
+# Kept OPEN (not closed) -- reclassified as the narrower "lint_gap: io_forbidden not semantically
+# enforced" scope requested in the finding's own title.
 
 <urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1>
   a triage:Occurrence ;
@@ -61,3 +73,15 @@
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "bc1346e4" ;
   triage:orderIndex 26 .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F002-new/pAI-s25/96377687>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 1040 ;
+  triage:snippet "io_owns, io_owns_errors = validate_list_field(data, (\"ownership\", \"io_owns\"), ...) // schema-shape validation only, no source-pattern cross-check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): independently re-verified by quality-mgr and ruthless-boundary-qa. REQUIRED_BOUNDARY_FIELDS now includes (ownership, io_owns)/(ownership, io_forbidden) and validates them as well-formed lists, but there is still no mechanism mapping io_forbidden tag values to source-code patterns checked against the owning module -- grep of lint_boundaries.py for the literal tag values (recipient_routing, sqlite, delivery_queue, retry_state, nudge_emission) returns zero matches outside the schema validator. The only enforcement for the AI25-RBQA-F004 leak class is a single hardcoded AST test, not a generic gate. Recommend adding a tag-to-pattern table (similar to how references.forbidden already works) so this closes for the general case, not just this one incident." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/96377687> .

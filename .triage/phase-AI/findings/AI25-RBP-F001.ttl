@@ -30,6 +30,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s29/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s30/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/96377687> ;
   triage:highestFixedBranch "integrate/phase-AI" ;
   triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
@@ -191,6 +192,30 @@
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "77252eca" ;
   triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): re-verified against feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640, merge of fix/pAI-s25-local-findings @ 3265270e), independently confirmed by
+# ruthless-boundary-qa. All map_err sites in https_transport.rs that wrap a real std::error::Error
+# source use daemon_unavailable_with_cause, including resolve_peer_addresses (619-653) and
+# resolve_peer_address (656-678). Fix persists on this branch/commit.
+<urn:atm:triage:occurrence/AI25-RBP-F001/s25/96377687>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 656 ;
+  triage:snippet "fn resolve_peer_address(...) -> Result<SocketAddr, AtmError> { ... .map_err(|source| { AtmError::daemon_unavailable_with_cause(...) }) } // cause preserved, confirmed at 96377687" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): re-verified at 96377687, independently confirmed by ruthless-boundary-qa. Fix persists. NOTE: this finding's own occurrence history shows it reopened on s26-s30 (forked before the fix landed) -- a merge-forward propagation gap, not a regression in this diff. Team-lead should confirm s26-s30 rebase/merge-forward from this fix." ;
+  triage:occursIn <urn:atm:triage:worktree/s25/96377687> .
+
+<urn:atm:triage:worktree/s25/96377687>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/integrate/8750587b>
   a triage:WorktreeSnapshot ;

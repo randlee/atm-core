@@ -22,12 +22,13 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/96377687> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s24/ac465283> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s25/a489691b> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
-  triage:highestOpenBranch "feature/pAI-s26-peer-write-deadline" .
+  triage:highestOpenBranch "feature/pAI-s26-peer-write-deadline" ;
+  triage:highestFixedBranch "feature/pAI-s25-peer-authority-resolution" .
 
 <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s23/1>
   a triage:Occurrence ;
@@ -113,6 +114,34 @@
   triage:headSha "8750587b" ;
   triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: resolve_peer_authority still lives in https_transport.rs at line 51; the boundary-policy violation this finding describes is unchanged." ;
   triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): fixed on feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640, merge of fix/pAI-s25-local-findings @ 3265270e), independently confirmed
+# by ruthless-boundary-qa. resolve_peer_authority extracted into new dedicated module
+# crates/atm-daemon/src/runtime_health/peer_authority.rs; https_transport.rs no longer contains
+# any recipient-routing logic; post_write_router.rs is the sole caller and imports from the new
+# location. New AST guard test added (boundary_enforcement.rs::
+# ai25_peer_authority_selection_is_not_owned_by_the_https_adapter) prevents regression. Top-level
+# status remains "open" only because s23/s24/s26 forked before this fix and still carry the
+# violation on their own not-yet-merged branches (cascade, not a defect in this diff).
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/96377687>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_authority.rs" ;
+  triage:line 1 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority(...) // moved out of https_transport.rs into a dedicated module, sole caller post_write_router.rs updated" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): independently re-verified by quality-mgr and ruthless-boundary-qa. resolve_peer_authority no longer exists in https_transport.rs (grep confirmed); lives in new runtime_health/peer_authority.rs; post_write_router.rs is the only workspace caller and imports the new location. Boundary violation resolved on this branch." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/96377687> .
+
+<urn:atm:triage:worktree/pAI-s25/96377687>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/integrate/8750587b>
   a triage:WorktreeSnapshot ;
