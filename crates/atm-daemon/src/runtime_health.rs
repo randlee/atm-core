@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -60,6 +60,15 @@ static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<
 
 const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
+
+fn lock_runtime_mutex<'a, T>(
+    mutex: &'a Mutex<T>,
+    resource: &'static str,
+) -> Result<MutexGuard<'a, T>, AtmError> {
+    mutex
+        .lock()
+        .map_err(|_| AtmError::daemon_unavailable(format!("{resource} lock poisoned")))
+}
 
 #[derive(Debug, Clone)]
 struct DaemonGraftPostSendPort {
@@ -467,19 +476,13 @@ impl DaemonRequestDispatcher {
         &self,
         transport: Arc<dyn HttpsMessageTransport>,
     ) -> Result<(), AtmError> {
-        let mut slot = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        let mut slot = lock_runtime_mutex(&self.https_transport, "HTTPS peer transport slot")?;
         *slot = Some(transport);
         Ok(())
     }
 
     pub(crate) fn clear_https_transport(&self) -> Result<(), AtmError> {
-        let mut slot = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
+        let mut slot = lock_runtime_mutex(&self.https_transport, "HTTPS peer transport slot")?;
         *slot = None;
         Ok(())
     }
@@ -706,19 +709,14 @@ impl DaemonRequestDispatcher {
         &self,
         hook: RuntimeReloadHook,
     ) -> Result<(), AtmError> {
-        let mut slot = self.runtime_reload_hook.lock().map_err(|_| {
-            AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned")
-        })?;
+        let mut slot = lock_runtime_mutex(&self.runtime_reload_hook, "daemon runtime reload hook")?;
         *slot = Some(hook);
         Ok(())
     }
 
     fn refresh_https_trust(&self) -> Result<(), AtmError> {
-        let hook = self
-            .runtime_reload_hook
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("daemon runtime reload hook lock poisoned"))?
-            .clone();
+        let hook =
+            lock_runtime_mutex(&self.runtime_reload_hook, "daemon runtime reload hook")?.clone();
         if let Some(hook) = hook {
             hook()?;
         }

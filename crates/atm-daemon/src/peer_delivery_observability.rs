@@ -52,6 +52,10 @@ pub(crate) struct PeerDeliveryEvent {
 
 #[derive(Debug, Default)]
 pub(crate) struct PeerDeliveryProjection {
+    // Each event or doctor read takes this lock only long enough to update or
+    // clone one small, bounded map. Writes must serialize the sequence number;
+    // an RwLock would add contention and poisoning surface without a material
+    // read-side benefit for this low-frequency observability projection.
     statuses: Mutex<PeerDeliveryProjectionState>,
 }
 
