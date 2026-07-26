@@ -121,6 +121,23 @@ def wait_for_message(atm: str, team: str, expected: str, timeout: float = 12.0) 
     return None
 
 
+def reply_message_id(value: Any) -> str:
+    """Read the reply ULID from the public ``atm ack --json`` contract."""
+    if not isinstance(value, dict):
+        raise SmokeError("acknowledgement did not return a JSON object")
+    disposition = value.get("reply_disposition")
+    if not isinstance(disposition, dict) or disposition.get("kind") != "sent":
+        raise SmokeError("acknowledgement did not report a sent reply")
+    reply_id = disposition.get("reply_message_id")
+    if not isinstance(reply_id, str) or not reply_id:
+        raise SmokeError("acknowledgement response omitted reply_message_id")
+    return reply_id
+
+
+def message_has_text(message: dict[str, Any] | None, expected: str) -> bool:
+    return message is not None and message.get("text") == expected
+
+
 def advertised_host(atm: str) -> str:
     override = os.environ.get("ATM_SMOKE_ADVERTISED_HOST", "").strip()
     if override:
@@ -193,24 +210,36 @@ def artifact_segment(value: str, label: str) -> str:
 def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: str, host: str) -> None:
     target = f"{identity}@{team}.{host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    sent = command([atm, "send", target, f"smoke-{host}-{stamp}", "--json"])
+    body = f"smoke-{host}-{stamp}"
+    sent = command([atm, "send", target, body, "--json"])
     try:
         sent_id = message_id(parse_json(sent, f"send to {host}"))
         visible = wait_for_message(atm, team, sent_id)
-        add_case(cases, f"{host} send/read", visible is not None, sent_id if visible else "message not visible")
+        received = message_has_text(visible, body)
+        add_case(cases, f"{host} send/read/content", received, sent_id if received else "message body was not received exactly")
     except SmokeError as error:
-        add_case(cases, f"{host} send/read", False, str(error))
-    required = command([atm, "send", target, f"smoke-ack-{host}-{stamp}", "--requires-ack", "--json"])
+        add_case(cases, f"{host} send/read/content", False, str(error))
+    required_body = f"smoke-ack-{host}-{stamp}"
+    required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
     try:
         required_id = message_id(parse_json(required, f"ack-required send to {host}"))
         message = wait_for_message(atm, team, required_id)
         pending = bool(message and message.get("requires_ack", message.get("requiresAck")) is True)
-        add_case(cases, f"{host} requires-ack/read", pending, required_id if pending else "pending acknowledgement message not visible")
+        received = pending and message_has_text(message, required_body)
+        add_case(cases, f"{host} requires-ack delivery/content", received, required_id if received else "pending acknowledgement message or body was not received")
         if pending:
-            acknowledgement = command([atm, "ack", "--team", team, required_id, f"smoke acknowledgement {stamp}", "--json"])
-            add_case(cases, f"{host} acknowledgement", acknowledgement["exit_code"] == 0, acknowledgement["stderr"].strip() or required_id)
+            reply_body = f"smoke acknowledgement {stamp}"
+            acknowledgement = command([atm, "ack", "--team", team, required_id, reply_body, "--json"])
+            reply_id = reply_message_id(parse_json(acknowledgement, f"acknowledgement of {required_id}"))
+            reply = wait_for_message(atm, team, reply_id)
+            reply_received = (
+                message_has_text(reply, reply_body)
+                and reply is not None
+                and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == required_id
+            )
+            add_case(cases, f"{host} acknowledgement reply delivery/content", reply_received, reply_id if reply_received else "acknowledgement reply was not delivered exactly")
     except SmokeError as error:
-        add_case(cases, f"{host} requires-ack/read", False, str(error))
+        add_case(cases, f"{host} requires-ack delivery/content", False, str(error))
 
 
 def remote_inbound(cases: list[dict[str, Any]], atm: str, identity: str, team: str, local_host: str, peers: list[str]) -> None:

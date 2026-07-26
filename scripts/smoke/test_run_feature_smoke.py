@@ -91,6 +91,20 @@ class FeatureSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_SMOKE_RUN_ID"):
             RUNNER.artifact_segment("../other-run", "ATM_SMOKE_RUN_ID")
 
+    def test_ack_reply_contract_requires_a_sent_reply_ulid(self):
+        self.assertEqual(
+            RUNNER.reply_message_id(
+                {"reply_disposition": {"kind": "sent", "reply_message_id": "01TEST"}}
+            ),
+            "01TEST",
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "sent reply"):
+            RUNNER.reply_message_id({"reply_disposition": {"kind": "failed"}})
+
+    def test_message_has_text_requires_exact_body(self):
+        self.assertTrue(RUNNER.message_has_text({"text": "exact"}, "exact"))
+        self.assertFalse(RUNNER.message_has_text({"text": "different"}, "exact"))
+
 
 if __name__ == "__main__":
     unittest.main()
