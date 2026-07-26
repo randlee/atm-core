@@ -96,7 +96,12 @@ def require_public_client_command(value: Any, name: str) -> list[str]:
             f"({', '.join(sorted(PUBLIC_CLIENT_COMMANDS))})"
         )
     resolved = shutil.which(command[0])
-    expected = shutil.which(executable)
+    install_root = os.environ.get("ATM_SMOKE_INSTALL_ROOT")
+    expected = (
+        str(Path(install_root) / "bin" / executable)
+        if install_root
+        else shutil.which(executable)
+    )
     if resolved is None or expected is None:
         fail(f"config field `{name}` cannot resolve public ATM client `{command[0]}`")
     try:

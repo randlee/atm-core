@@ -52,7 +52,19 @@ pub(crate) struct PeerDeliveryEvent {
 
 #[derive(Debug, Default)]
 pub(crate) struct PeerDeliveryProjection {
-    statuses: Mutex<BTreeMap<HostName, PeerLinkStatus>>,
+    statuses: Mutex<PeerDeliveryProjectionState>,
+}
+
+#[derive(Debug, Default)]
+struct PeerDeliveryProjectionState {
+    statuses: BTreeMap<HostName, ProjectedPeerLinkStatus>,
+    next_sequence: u64,
+}
+
+#[derive(Debug)]
+struct ProjectedPeerLinkStatus {
+    status: PeerLinkStatus,
+    sequence: u64,
 }
 
 impl PeerDeliveryProjection {
@@ -85,8 +97,9 @@ impl PeerDeliveryProjection {
             .into_iter()
             .map(|peer| {
                 statuses
+                    .statuses
                     .get(&peer.host)
-                    .cloned()
+                    .map(|tracked| tracked.status.clone())
                     .unwrap_or_else(|| PeerLinkStatus::misconfigured(peer.host))
             })
             .collect()
@@ -103,15 +116,31 @@ impl PeerDeliveryProjection {
             );
             return;
         };
-        if statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES && !statuses.contains_key(&event.peer) {
-            tracing::warn!(subsystem = "runtime_health", action = "peer_delivery_projection", outcome = "capacity_exceeded", peer = %event.peer, cap = MAX_PEER_LINK_STATUS_ENTRIES, "peer delivery health projection is bounded; retaining event without a new status row");
-            return;
+        statuses.next_sequence = statuses.next_sequence.wrapping_add(1);
+        let sequence = statuses.next_sequence;
+        if statuses.statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES
+            && !statuses.statuses.contains_key(&event.peer)
+        {
+            let oldest_peer = statuses
+                .statuses
+                .iter()
+                .min_by_key(|(_, tracked)| tracked.sequence)
+                .map(|(peer, _)| peer.clone());
+            if let Some(oldest_peer) = oldest_peer {
+                statuses.statuses.remove(&oldest_peer);
+                tracing::warn!(subsystem = "runtime_health", action = "peer_delivery_projection", outcome = "capacity_evicted_oldest", evicted_peer = %oldest_peer, peer = %event.peer, cap = MAX_PEER_LINK_STATUS_ENTRIES, "peer delivery health projection evicted its oldest status row");
+            }
         }
-        let status = statuses
+        let tracked = statuses
+            .statuses
             .entry(event.peer.clone())
-            .or_insert_with(|| PeerLinkStatus::misconfigured(event.peer.clone()));
-        status.candidate_count = event.candidate_count;
-        apply_event_to_status(status, event);
+            .or_insert_with(|| ProjectedPeerLinkStatus {
+                status: PeerLinkStatus::misconfigured(event.peer.clone()),
+                sequence,
+            });
+        tracked.sequence = sequence;
+        tracked.status.candidate_count = event.candidate_count;
+        apply_event_to_status(&mut tracked.status, event);
     }
 }
 
@@ -179,5 +208,45 @@ fn peer_link_quality_for_error(error_code: Option<AtmErrorCode>) -> PeerLinkQual
         }
         Some(AtmErrorCode::PeerConfigValidationFailed) => PeerLinkQuality::Misconfigured,
         Some(_) | None => PeerLinkQuality::Degraded,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::protocol::next_request_id;
+
+    #[test]
+    fn projection_evicts_the_oldest_status_when_at_capacity() {
+        let projection = PeerDeliveryProjection::default();
+        for index in 0..=256 {
+            projection.project(PeerDeliveryEvent {
+                kind: PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                request_id: next_request_id(),
+                message_id: None,
+                peer: format!("peer-{index}.example.test")
+                    .parse()
+                    .expect("valid peer host"),
+                error_code: None,
+            });
+        }
+
+        let statuses = projection.statuses.lock().expect("projection lock");
+        assert_eq!(statuses.statuses.len(), 256);
+        assert!(
+            !statuses.statuses.contains_key(
+                &"peer-0.example.test"
+                    .parse::<HostName>()
+                    .expect("valid peer host")
+            ),
+            "the oldest status must be evicted rather than silently dropping the new peer"
+        );
+        assert!(
+            statuses.statuses.contains_key(
+                &"peer-256.example.test"
+                    .parse::<HostName>()
+                    .expect("valid peer host")
+            )
+        );
     }
 }

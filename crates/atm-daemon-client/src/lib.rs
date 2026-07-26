@@ -737,13 +737,14 @@ impl DaemonSupervisor {
         F: FnMut() -> Result<(), AtmError>,
     {
         self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
-        let mut child = match self.spawn_daemon() {
+        let child = match self.spawn_daemon() {
             Ok(child) => child,
             Err(error) => {
                 self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
                 return Err(error);
             }
         };
+        let mut cleanup = FailedAutoStartChild::new(child);
         self.emit_trace(
             traceability,
             "daemon_auto_start",
@@ -757,8 +758,8 @@ impl DaemonSupervisor {
             poll_interval,
             traceability,
         );
-        if result.is_err() {
-            reap_failed_auto_start(&mut child);
+        if result.is_ok() {
+            cleanup.disarm();
         }
         result
     }
@@ -777,9 +778,17 @@ impl DaemonSupervisor {
         let halfway_deadline = Instant::now() + (publish_timeout / 2);
         let mut halfway_reported = false;
         let mut current_poll_interval = poll_interval;
+        let mut last_connect_error = None;
         while Instant::now() < deadline {
-            if self.try_connect_with_traceability(try_connect, traceability, "pending") {
-                return Ok(());
+            match try_connect() {
+                Ok(()) => {
+                    self.emit_trace(traceability, "daemon_connect", "connected", None);
+                    return Ok(());
+                }
+                Err(error) => {
+                    self.emit_trace(traceability, "daemon_connect", "pending", Some(&error));
+                    last_connect_error = Some(error);
+                }
             }
             if !halfway_reported && Instant::now() >= halfway_deadline {
                 tracing::warn!(
@@ -802,8 +811,13 @@ impl DaemonSupervisor {
             thread::sleep(current_poll_interval.min(remaining));
             current_poll_interval = next_auto_start_poll_interval(current_poll_interval);
         }
+        let detail = last_connect_error
+            .as_ref()
+            .map_or_else(String::new, |error| {
+                format!("; last local IPC failure: {error}")
+            });
         let error = AtmError::daemon_auto_start_failed(format!(
-            "failed to connect to daemon local IPC endpoint at {} after auto-start",
+            "failed to connect to daemon local IPC endpoint at {} after auto-start{detail}",
             self.endpoint.display()
         ));
         self.emit_trace(
@@ -867,6 +881,29 @@ fn reap_failed_auto_start(child: &mut Child) {
     }
     if let Err(error) = child.wait() {
         tracing::warn!(error = %error, "failed to reap daemon child after auto-start timeout");
+    }
+}
+
+/// Reaps only the daemon process spawned by this CLI invocation unless its
+/// publication succeeds.  Keeping this guard live across the wait also covers
+/// an unexpected unwind in tracing or connection polling.
+struct FailedAutoStartChild(Option<Child>);
+
+impl FailedAutoStartChild {
+    fn new(child: Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn disarm(&mut self) {
+        self.0.take();
+    }
+}
+
+impl Drop for FailedAutoStartChild {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.as_mut() {
+            reap_failed_auto_start(child);
+        }
     }
 }
 
@@ -970,8 +1007,6 @@ mod tests {
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
-    #[cfg(unix)]
-    use super::reap_failed_auto_start;
     use super::{
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
@@ -980,6 +1015,8 @@ mod tests {
         next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
         resolve_daemon_local_ipc_endpoint_from_home,
     };
+    #[cfg(unix)]
+    use super::{FailedAutoStartChild, reap_failed_auto_start};
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
@@ -1311,6 +1348,26 @@ mod tests {
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
     }
 
+    #[test]
+    fn publish_wait_retains_the_last_local_ipc_failure_in_its_timeout_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let supervisor = supervisor(&tempdir);
+        let error = supervisor
+            .wait_for_published_daemon(
+                &mut || Err(AtmError::daemon_unavailable("fixture connection refused")),
+                Instant::now() + Duration::from_millis(2),
+                Duration::from_millis(2),
+                Duration::from_millis(1),
+                None,
+            )
+            .expect_err("unreachable daemon must exhaust the publish wait");
+
+        assert!(
+            error.message().contains("fixture connection refused"),
+            "the timeout must retain the last local IPC diagnostic"
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn failed_auto_start_reaps_the_daemon_child() {
@@ -1324,6 +1381,28 @@ mod tests {
         assert!(
             child.try_wait().expect("inspect reaped child").is_some(),
             "failed auto-start must reap its child"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn auto_start_guard_reaps_the_daemon_child_on_unwind_scope_exit() {
+        let child = super::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn daemon child fixture");
+        let pid = child.id().to_string();
+
+        drop(FailedAutoStartChild::new(child));
+
+        assert!(
+            !super::Command::new("kill")
+                .args(["-0", &pid])
+                .output()
+                .expect("check child process")
+                .status
+                .success(),
+            "dropping the failed-auto-start guard must reap its child"
         );
     }
 }
