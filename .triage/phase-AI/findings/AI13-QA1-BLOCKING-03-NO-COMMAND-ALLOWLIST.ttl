@@ -14,9 +14,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s13/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s14/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s15/1> ;
@@ -25,23 +25,23 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s20/1> ;
-  triage:openOn <urn:atm:triage:worktree/s13> ;
-  triage:openOn <urn:atm:triage:worktree/s14> ;
-  triage:openOn <urn:atm:triage:worktree/s15> ;
-  triage:openOn <urn:atm:triage:worktree/s16> ;
-  triage:openOn <urn:atm:triage:worktree/s17> ;
-  triage:openOn <urn:atm:triage:worktree/s18> ;
-  triage:openOn <urn:atm:triage:worktree/s19> ;
-  triage:openOn <urn:atm:triage:worktree/s20> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20> .
+  triage:fixedOn <urn:atm:triage:worktree/s13> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14> ;
+  triage:fixedOn <urn:atm:triage:worktree/s15> ;
+  triage:fixedOn <urn:atm:triage:worktree/s16> ;
+  triage:fixedOn <urn:atm:triage:worktree/s17> ;
+  triage:fixedOn <urn:atm:triage:worktree/s18> ;
+  triage:fixedOn <urn:atm:triage:worktree/s19> ;
+  triage:fixedOn <urn:atm:triage:worktree/s20> .
 
 <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-03-NO-COMMAND-ALLOWLIST/s13/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "c7b4455" ;
   triage:occursIn <urn:atm:triage:worktree/s13> .
@@ -51,8 +51,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s14> .
@@ -62,8 +63,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s15> .
@@ -73,8 +75,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s16> .
@@ -84,8 +87,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s17> .
@@ -95,8 +99,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s18> .
@@ -106,8 +111,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s19> .
@@ -117,8 +123,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 62 ;
   triage:snippet "def require_command(value: Any, name: str) -> list[str]: if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value): fail(...) — validates only argv structure, not command allowlist" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 36 PUBLIC_CLIENT_COMMANDS allowlist defined, lines 85-89 enforce it in require_public_client_command()). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "propagated_from_upstream" ;
   triage:occursIn <urn:atm:triage:worktree/s20> .

@@ -19,17 +19,18 @@
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH/s20/1> ;
-  triage:openOn <urn:atm:triage:worktree/s19-docs/bedc1bf1> ;
-  triage:openOn <urn:atm:triage:worktree/s20-docs/32af5bb1> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20-docs/32af5bb1> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH/s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/s27-active/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27-active/35cb19f8> .
 
 <urn:atm:triage:occurrence/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH/s19/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
   triage:line 14 ;
   triage:snippet "AI.19 | `FROZEN` | `5947858a406fbfc8b8f07487880fa13ff53bbb1e` freezes..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s19-hermes-graft-integration superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "bedc1bf1" ;
   triage:occursIn <urn:atm:triage:worktree/s19-docs/bedc1bf1> .
@@ -39,8 +40,9 @@
   triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
   triage:line 14 ;
   triage:snippet "AI.19 | `FROZEN` | `5947858a406fbfc8b8f07487880fa13ff53bbb1e` freezes..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s20-hermes-bridge-deployment superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "32af5bb1" ;
   triage:occursIn <urn:atm:triage:worktree/s20-docs/32af5bb1> .
@@ -58,3 +60,21 @@
   triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "32af5bb1" ;
   triage:orderIndex 20 .
+
+<urn:atm:triage:occurrence/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
+  triage:line 14 ;
+  triage:snippet "AI.19 | `FROZEN` | `5947858a406fbfc8b8f07487880fa13ff53bbb1e` freezes `crates/atm-graft-python/python/atm_graft_hermes_bridge.py`; configuration inputs are `ATM_IDENTITY`, `ATM_TEAM`, and optional `ATM_CHAT_ID` when constructing the typed caller, plus per-profile `PyGraftSessionOptions`; readiness probes are `just test-hermes-graft-bridge` and `PyGraftSession.snapshot()`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:occursIn <urn:atm:triage:worktree/s27-active/35cb19f8> .
+
+<urn:atm:triage:worktree/s27-active/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

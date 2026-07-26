@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AICH-S11-PROCESS-001>
+  a triage:Finding ;
+  triage:findingId "AICH-S11-PROCESS-001" ;
+  triage:title "AICH-S11 close-out PRs #651, #652, #654, #655 all target develop directly instead of integrate/phase-AI" ;
+  triage:description "Per CLAUDE.md phase-integration-branch strategy, all sprint/fix PRs must target the phase's integration branch (integrate/phase-AI) and only the final phase-completion PR merges integrate/phase-AI -> develop. PR #651 (fix/findings-closeout), #652 (fix/close-out-round2-easy), #654 (fix/close-out-round2-hard), and #655 (fix/close-out-boundary-lint-mapping) all have baseRefName=develop. git merge-base confirms #651/#652 were cut from develop's history (24ca4192), not from integrate/phase-AI (fdde3ea9), i.e. they bypassed the phase integration branch entirely; #654/#655 confirmed via gh pr view to have the same baseRefName=develop. Flagged directly by the user (Rand) on 2026-07-26 during PR #654/#655 close-out review; scope expanded by quality-mgr on independent check of the other two open PRs in the same close-out lineage." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "branch-creation-process" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Team-lead confirmed via git merge-base this was never a branch/rebase lineage bypass -- all 5 close-out branches correctly forked from integrate/phase-AI's tip (full phase-AI history present as ancestor). Root cause was a gh pr create --base develop arg mistake, fixed via gh pr edit --base integrate/phase-AI on all 5 PRs. Independently reconfirmed: gh pr view now shows baseRefName=integrate/phase-AI for #651/652/653/654/655, and post-retarget diff scope matches what was previously verified (654: 13 files, 655: 3 files) -- no unexpected scope change from the base correction." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S11 ;
+  triage:foundAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr651> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr652> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr654> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr655> ;
+  triage:notes "Related gap: PR #651 has zero PR comments -- no quality-mgr QA report was ever posted for it, despite team-lead task tracking showing AICH-S11-QA-BATCH-1 as completed. Going forward, quality-mgr must reject any team-lead QA dispatch that does not supply a concrete PR number rather than proceeding on an assumed/implicit reference." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr651>
+  a triage:Occurrence ;
+  triage:file "N/A -- branch/PR-level process finding" ;
+  triage:line 0 ;
+  triage:snippet "PR #651 (fix/findings-closeout) baseRefName=develop; merge-base with develop=24ca4192, merge-base with integrate/phase-AI=fdde3ea9 -- branched from develop, not integrate/phase-AI" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/findings-closeout" ;
+  triage:notes "Also: zero QA comments posted on this PR; AICH-S11-QA-BATCH-1 tracked as completed without a posted report." .
+
+<urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr652>
+  a triage:Occurrence ;
+  triage:file "N/A -- branch/PR-level process finding" ;
+  triage:line 0 ;
+  triage:snippet "PR #652 (fix/close-out-round2-easy) baseRefName=develop -- same bypass pattern as PR #651" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" .
+
+<urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr654>
+  a triage:Occurrence ;
+  triage:file "N/A -- branch/PR-level process finding" ;
+  triage:line 0 ;
+  triage:snippet "PR #654 (fix/close-out-round2-hard) baseRefName=develop -- same bypass pattern" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-hard" .
+
+<urn:atm:triage:occurrence/AICH-S11-PROCESS-001/pr655>
+  a triage:Occurrence ;
+  triage:file "N/A -- branch/PR-level process finding" ;
+  triage:line 0 ;
+  triage:snippet "PR #655 (fix/close-out-boundary-lint-mapping) baseRefName=develop -- same bypass pattern" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-boundary-lint-mapping" .

@@ -161,9 +161,11 @@ lint target='all':
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
-# Run the Phase Z smoke harness.
-smoke level='normal':
-    {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts
+# Run one named smoke feature. `localhost` and `local-ip` exercise the
+# currently-running branch daemon; `crosshost` adds each SSH hostname after
+# those local rows pass. Fixture levels retain their existing names.
+smoke feature='normal' *hosts:
+    {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
 
 # Generate architecture visualization artifacts.
 view target='all':

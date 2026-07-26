@@ -18,6 +18,7 @@
   triage:foundIn triage:AICH-S3 ;
   triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s23-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/integrate-8750587b> ;
   triage:triageRecordVersion "1" .
 
 # Deliverable-missing occurrence on s23: no explicit named test for host-routing precedence
@@ -39,3 +40,23 @@
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "985a6d46" ;
   triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/ATM-QA-003/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 167 ;
+  triage:snippet "canonical_write_router_has_one_host_routing_decision() (167-227) covers routing precedence but is not an explicit AI.23-named localhost/own-IP-vs-peer-adapter test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: a NEW test ai23_ingress_adapters_cannot_own_write_side_effects() now exists (boundary_enforcement.rs:318), but it asserts ingress adapters don't own write side effects -- a related but DIFFERENT invariant from this finding's ask (an explicit test proving localhost/own-IP never match the peer-adapter routing branch). This finding's specific gap is not yet closed by that test; still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

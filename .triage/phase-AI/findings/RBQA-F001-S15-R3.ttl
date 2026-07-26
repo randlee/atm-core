@@ -14,29 +14,28 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "repo-wide" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T20:17:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s15/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s19/1> ;
-  triage:openOn <urn:atm:triage:worktree/s15/12f4b96e> ;
-  triage:openOn <urn:atm:triage:worktree/s16/34e055b9> ;
-  triage:openOn <urn:atm:triage:worktree/s17/2825b1c0> ;
-  triage:openOn <urn:atm:triage:worktree/s18/a3cfdaa6> ;
-  triage:openOn <urn:atm:triage:worktree/s19/e88825a7> ;
-  triage:fixedOn <urn:atm:triage:worktree/s20/bed07594> ;
-  triage:promoteTo <urn:atm:triage:worktree/s19/e88825a7> .
+  triage:fixedOn <urn:atm:triage:worktree/s15/12f4b96e> ;
+  triage:fixedOn <urn:atm:triage:worktree/s16/34e055b9> ;
+  triage:fixedOn <urn:atm:triage:worktree/s17/2825b1c0> ;
+  triage:fixedOn <urn:atm:triage:worktree/s18/a3cfdaa6> ;
+  triage:fixedOn <urn:atm:triage:worktree/s19/e88825a7> .
 
 <urn:atm:triage:occurrence/RBQA-F001-S15-R3/s15/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 74 ;
   triage:snippet "require_semantic_verification(case, case_name, ...) does not enforce that expected_json references case-specific data like $message_ulid" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 233-234 resolved_expectation() now handles $message_ulid substitution, lines 109-123 enforce required assertions per case). Stale occurrence from superseded branch pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s15-windows-peer-smoke" ;
   triage:headSha "12f4b96e" ;
   triage:occursIn <urn:atm:triage:worktree/s15/12f4b96e> .
@@ -46,8 +45,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 74 ;
   triage:snippet "require_semantic_verification(case, case_name, ...) does not enforce that expected_json references case-specific data like $message_ulid" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 233-234 resolved_expectation() now handles $message_ulid substitution, lines 109-123 enforce required assertions per case). Stale occurrence from superseded branch pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s16-offline-reconciliation" ;
   triage:headSha "34e055b9" ;
   triage:occursIn <urn:atm:triage:worktree/s16/34e055b9> .
@@ -57,8 +57,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 74 ;
   triage:snippet "require_semantic_verification(case, case_name, ...) does not enforce that expected_json references case-specific data like $message_ulid" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 233-234 resolved_expectation() now handles $message_ulid substitution, lines 109-123 enforce required assertions per case). Stale occurrence from superseded branch pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s17-hermes-chat-identity" ;
   triage:headSha "2825b1c0" ;
   triage:occursIn <urn:atm:triage:worktree/s17/2825b1c0> .
@@ -68,8 +69,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 74 ;
   triage:snippet "require_semantic_verification(case, case_name, ...) does not enforce that expected_json references case-specific data like $message_ulid" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 233-234 resolved_expectation() now handles $message_ulid substitution, lines 109-123 enforce required assertions per case). Stale occurrence from superseded branch pAI-s18-graft-python-bindings; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s18-graft-python-bindings" ;
   triage:headSha "a3cfdaa6" ;
   triage:occursIn <urn:atm:triage:worktree/s18/a3cfdaa6> .
@@ -79,8 +81,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 74 ;
   triage:snippet "require_semantic_verification(case, case_name, ...) does not enforce that expected_json references case-specific data like $message_ulid" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 233-234 resolved_expectation() now handles $message_ulid substitution, lines 109-123 enforce required assertions per case). Stale occurrence from superseded branch pAI-s19-hermes-graft-integration; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s19-hermes-graft-integration" ;
   triage:headSha "e88825a7" ;
   triage:occursIn <urn:atm:triage:worktree/s19/e88825a7> .

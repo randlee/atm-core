@@ -14,14 +14,13 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:triageClosureTime "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/3> ;
-  triage:openOn <urn:atm:triage:worktree/s17/5560bf8d> ;
-  triage:promoteTo <urn:atm:triage:worktree/s17/5560bf8d> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/3> .
 
 <urn:atm:triage:occurrence/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH/s17/1>
   a triage:Occurrence ;
@@ -29,8 +28,9 @@
   triage:line 33 ;
   triage:snippet "AtmError::validation(" ;
   triage:context "mutual exclusivity check: --as and --chat-id" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 33-35 now correctly uses AtmError::caller_context_request_invalid() for mutual exclusivity error. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .
@@ -41,8 +41,9 @@
   triage:line 99 ;
   triage:snippet "AtmError::validation(" ;
   triage:context "mutation caller context validation: impersonation check" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 98-100 now correctly uses AtmError::caller_context_request_invalid() for impersonation error. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .
@@ -53,8 +54,9 @@
   triage:line 192 ;
   triage:snippet "AtmError::validation(format!" ;
   triage:context "environment variable UTF-8 validation: ATM_CHAT_ID" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 194-197 now correctly uses AtmError::caller_context_request_invalid() for ATM_CHAT_ID UTF-8 validation. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:occursIn <urn:atm:triage:worktree/s17/5560bf8d> .

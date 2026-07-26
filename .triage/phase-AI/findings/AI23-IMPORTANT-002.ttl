@@ -20,18 +20,18 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI24/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI26/1> ;
-  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
-  triage:openOn <urn:atm:triage:worktree/AI24/fc9832b3> ;
-  triage:openOn <urn:atm:triage:worktree/AI26/b5eec1bf> ;
-  triage:promoteTo <urn:atm:triage:worktree/AI26/b5eec1bf> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> .
 
 <urn:atm:triage:occurrence/AI23-IMPORTANT-002/AI23/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 348 ;
   triage:snippet "spawn_request_worker(stream, &security, &router, &requests)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.23 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.23" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
@@ -41,8 +41,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 384 ;
   triage:snippet "std::thread::Builder::new().name(\"atm-peer-http-request\".to_string()).spawn({...})" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.23 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.23" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
@@ -52,8 +53,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 270 ;
   triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.24 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.24" ;
   triage:headSha "fc9832b3" ;
   triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
@@ -63,8 +65,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 306 ;
   triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.24 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.24" ;
   triage:headSha "fc9832b3" ;
   triage:occursIn <urn:atm:triage:worktree/AI24/fc9832b3> .
@@ -74,8 +77,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 270 ;
   triage:snippet "spawn_request_worker(stream, &config, &router, &requests, &peer_verifier)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.26 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.26" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
@@ -85,11 +89,25 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 306 ;
   triage:snippet "std::thread::Builder::new().name(\"atm-https-peer-request\".to_string()).spawn({...})" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch AI.26 superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "AI.26" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/AI26/b5eec1bf> .
+
+# 2026-07-26 (quality-mgr, stale branch reconciliation): consolidated open occurrence from superseded branches onto s27.
+<urn:atm:triage:occurrence/AI23-IMPORTANT-002/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 398 ;
+  triage:snippet "std::thread::Builder::new().name(\"atm-peer-http-request\".to_string()).spawn({...})" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:note "Consolidated from superseded branches AI.23/AI.24/AI.26. The unbounded thread spawning in the peer listener's accept_loop (spawn_request_worker at line 398) persists on s27: no concurrency limit, JoinHandles accumulate in Arc<Mutex<Vec<...>>> until full listener shutdown." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
 
 <urn:atm:triage:worktree/AI23/b88ca016>
   a triage:WorktreeSnapshot ;
@@ -111,3 +129,10 @@
   triage:path "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "b5eec1bf" ;
   triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 7 .

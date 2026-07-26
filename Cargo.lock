@@ -31,6 +31,7 @@ dependencies = [
 name = "agent-team-mail-core"
 version = "1.3.2-beta-30"
 dependencies = [
+ "atm-error",
  "atm-runtime-test-support",
  "atm-storage",
  "base64",
@@ -187,6 +188,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-error"
+version = "1.3.2-beta.25"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "atm-graft"
 version = "1.3.2-beta-30"
 dependencies = [
@@ -227,6 +236,7 @@ dependencies = [
 name = "atm-storage"
 version = "1.3.2-beta-30"
 dependencies = [
+ "atm-error",
  "chrono",
  "serde",
  "serde_json",

@@ -14,17 +14,14 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "repo-wide" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:openOn <urn:atm:triage:worktree/s15/12f4b96e> ;
-  triage:openOn <urn:atm:triage:worktree/s16/34e055b> ;
-  triage:openOn <urn:atm:triage:worktree/s17/2825b1c> ;
-  triage:openOn <urn:atm:triage:worktree/s18/a3cfdaa> ;
-  triage:openOn <urn:atm:triage:worktree/s19/e88825a> ;
-  triage:promoteTo <urn:atm:triage:worktree/s19/e88825a> ;
-  triage:highestOpenBranch "pAI-s19-hermes-graft-integration" ;
-  triage:highestOpenSha "e88825a" ;
-  triage:triagedAt "2026-07-22T00:00:00Z" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:fixedOn <urn:atm:triage:worktree/s15/12f4b96e> ;
+  triage:fixedOn <urn:atm:triage:worktree/s16/34e055b> ;
+  triage:fixedOn <urn:atm:triage:worktree/s17/2825b1c> ;
+  triage:fixedOn <urn:atm:triage:worktree/s18/a3cfdaa> ;
+  triage:fixedOn <urn:atm:triage:worktree/s19/e88825a> ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-S15-R3/s15/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-S15-R3/s16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002-S15-R3/s17/1> ;
@@ -36,8 +33,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 83 ;
   triage:snippet "def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 98-106 handle absent cardinality flag, lines 253-261 detect absence-of-mutation). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s15-windows-peer-smoke" ;
   triage:headSha "12f4b96e" ;
   triage:occursIn <urn:atm:triage:worktree/s15/12f4b96e> .
@@ -47,8 +45,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 83 ;
   triage:snippet "def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 98-106 handle absent cardinality flag, lines 253-261 detect absence-of-mutation). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s16-offline-reconciliation" ;
   triage:headSha "34e055b" ;
   triage:occursIn <urn:atm:triage:worktree/s16/34e055b> .
@@ -58,8 +57,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 83 ;
   triage:snippet "def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 98-106 handle absent cardinality flag, lines 253-261 detect absence-of-mutation). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s17-hermes-chat-identity" ;
   triage:headSha "2825b1c" ;
   triage:occursIn <urn:atm:triage:worktree/s17/2825b1c> .
@@ -69,8 +69,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 83 ;
   triage:snippet "def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 98-106 handle absent cardinality flag, lines 253-261 detect absence-of-mutation). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s18-graft-python-bindings" ;
   triage:headSha "a3cfdaa" ;
   triage:occursIn <urn:atm:triage:worktree/s18/a3cfdaa> .
@@ -80,8 +81,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 83 ;
   triage:snippet "def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 98-106 handle absent cardinality flag, lines 253-261 detect absence-of-mutation). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "pAI-s19-hermes-graft-integration" ;
   triage:headSha "e88825a" ;
   triage:occursIn <urn:atm:triage:worktree/s19/e88825a> .

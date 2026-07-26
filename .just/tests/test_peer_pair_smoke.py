@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -115,8 +116,11 @@ class PeerPairSmokeTests(unittest.TestCase):
             config = sample_config(Path(temp) / "daemon.log")
             duplicate = next(case for case in config["cases"] if case["id"] == "duplicate_ulid")
             del duplicate["verification"]["assertions"]["single_record_retained"]
-            with self.assertRaisesRegex(RuntimeError, "single_record_retained"):
-                RUNNER.validate(config)
+            public_atm = Path(temp) / "atm"
+            public_atm.touch()
+            with patch.object(RUNNER.shutil, "which", return_value=str(public_atm)):
+                with self.assertRaisesRegex(RuntimeError, "single_record_retained"):
+                    RUNNER.validate(config)
 
     def test_semantic_verification_uses_real_read_outcome_paths(self):
         case = {

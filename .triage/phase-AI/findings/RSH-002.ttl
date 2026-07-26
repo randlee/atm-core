@@ -21,11 +21,10 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s24/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s24/6d8ee8c3> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/6d8ee8c3> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/35cb19f8> .
 
 <urn:atm:triage:occurrence/RSH-002/pAI-s21pre/1>
   a triage:Occurrence ;
@@ -33,8 +32,9 @@
   triage:line 686 ;
   triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?;" ;
   triage:description "reconcile_after_success delivery loop aborts on first transport error without tracking partial success" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s21pre-crosshost-evidence-harness superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
@@ -45,8 +45,9 @@
   triage:line 696 ;
   triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?;" ;
   triage:description "reconcile_after_success delivery loop aborts on first transport error without tracking partial success" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s22-loopback-self-send-exemption superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
@@ -57,8 +58,9 @@
   triage:line 696 ;
   triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?;" ;
   triage:description "reconcile_after_success delivery loop aborts on first transport error without tracking partial success" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s23-crosshost-shared-write-path superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
@@ -69,8 +71,9 @@
   triage:line 677 ;
   triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?;" ;
   triage:description "reconcile_peer delivery loop aborts on first transport error without tracking partial success" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s24-host-qualified-ack-receipt superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "6d8ee8c3" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s24/6d8ee8c3> .
@@ -96,9 +99,49 @@
   triage:headSha "c528137c" ;
   triage:orderIndex 3 .
 
+<urn:atm:triage:occurrence/RSH-002/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_sync.rs" ;
+  triage:line 47 ;
+  triage:snippet "transport.deliver(request, peer, deadline)?;" ;
+  triage:description "reconcile_peer delivery loop aborts on first transport error; delivered_request_json set is local to sync_peer call, so retries re-transmit already-delivered messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/35cb19f8> .
+
 <urn:atm:triage:worktree/pAI-s24/6d8ee8c3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "6d8ee8c3" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/RSH-002/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 658 ;
+  triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?; // still fails fast, no partial-success tracking on multi-message reconcile loop" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch integrate/phase-AI superseded by s27 work; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. Verified: reconcile_peer delivery loop still aborts on first transport error without persistent cross-call tracking of delivered messages. (2026-07-26)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: reconcile_peer's delivery loop is unchanged by the AI.23 provenance fix; the fail-fast/no-partial-success-tracking behavior this finding describes still reproduces at runtime_health.rs:658 (line drifted from the stale s23 snapshot's line 686/572)." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
