@@ -957,6 +957,35 @@ fn retired_error_contract_guard_exempts_only_its_own_fixture() {
 }
 
 #[test]
+fn atm_error_code_registry_is_shared_below_storage_and_core() {
+    let root = workspace_root();
+    let registry = read_source(&root.join("crates/atm-error/src/error_codes.rs"));
+    let storage_facade = read_source(&root.join("crates/atm-storage/src/error_codes.rs"));
+    let core_facade = read_source(&root.join("crates/atm-core/src/error_codes.rs"));
+
+    assert!(
+        registry.contains("pub enum AtmErrorCode"),
+        "the neutral atm-error crate must own the concrete registry"
+    );
+    assert!(
+        storage_facade.contains("pub use atm_error"),
+        "atm-storage must consume the shared registry instead of defining a copy"
+    );
+    assert!(
+        core_facade.contains("pub use atm_error"),
+        "atm-core must consume the same shared registry"
+    );
+    assert!(
+        !storage_facade.contains("pub enum AtmErrorCode"),
+        "atm-storage must not reintroduce an owned AtmErrorCode definition"
+    );
+    assert!(
+        !core_facade.contains("pub enum AtmErrorCode"),
+        "atm-core's facade must not duplicate the registry either"
+    );
+}
+
+#[test]
 fn only_the_error_contract_module_may_define_an_atm_error_literal() {
     let root = workspace_root();
     let contract_module = root.join("crates/atm-storage/src/error.rs");
