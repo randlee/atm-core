@@ -14,7 +14,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T20:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNotes "Independently verified on integrate/phase-AI HEAD (6348a112): peer_delivery_router.rs was refactored/renamed to crates/atm-daemon/src/runtime_health/post_write_router.rs, which now calls the canonical message.prepared.is_peer_receipt() accessor directly (post_write_router.rs:25,34) instead of the ad-hoc inline authenticated_source_host check. The remaining open occurrences below (s23-s30) are all pre-fix snapshots on branches that either already merged (s23-s26, PRs #629/#630/#640/#641) or are still in flight (s27-s30); the fix is real and current on the integration line. Closing all as superseded -- no further Crimson dispatch needed for this finding." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T18:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s23/1> ;
@@ -60,8 +64,9 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 20 ;
   triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "team-lead: fix confirmed present on integrate/phase-AI HEAD via post_write_router.rs refactor; this branch already merged." ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "acaa2a43" ;
   triage:occursIn <urn:atm:triage:worktree/s23/acaa2a43> .
@@ -72,8 +77,9 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 20 ;
   triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "team-lead: fix confirmed present on integrate/phase-AI HEAD via post_write_router.rs refactor; this branch already merged." ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "7f85b1e6" ;
   triage:occursIn <urn:atm:triage:worktree/s24/7f85b1e6> .
@@ -84,8 +90,9 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 20 ;
   triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "team-lead: fix confirmed present on integrate/phase-AI HEAD via post_write_router.rs refactor; this branch already merged." ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "66775a09" ;
   triage:occursIn <urn:atm:triage:worktree/s25/66775a09> .
@@ -96,8 +103,9 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 20 ;
   triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "team-lead: fix confirmed present on integrate/phase-AI HEAD via post_write_router.rs refactor; this branch already merged." ;
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "2dc8d98b" ;
   triage:occursIn <urn:atm:triage:worktree/s26/2dc8d98b> .
