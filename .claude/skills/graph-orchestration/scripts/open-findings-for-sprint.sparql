@@ -30,7 +30,7 @@ SELECT ?finding ?findingId ?severity ?rawSeverity ?foundAt ?description WHERE {
   )
   BIND(LCASE(STR(?rawSeverity)) AS ?normalizedSeverity)
   BIND(
-    IF(?normalizedSeverity = "blocking", "blocking",
+    IF(?normalizedSeverity IN ("blocking", "critical"), "blocking",
       IF(?normalizedSeverity = "important", "important",
         IF(?normalizedSeverity = "minor", "minor", "invalid")
       )

@@ -154,8 +154,10 @@ triage:blocking a triage:Finding ; triage:findingId "B-1" ; triage:foundIn triag
     triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ; triage:severity "BLOCKING" ; triage:description "blocking" .
 triage:resolved a triage:Finding ; triage:findingId "R-1" ; triage:foundIn triage:S1 ;
     triage:foundAt "2026-07-01T08:00:00Z"^^xsd:dateTime ; triage:severity "Blocking" ; triage:status "fixed" ; triage:description "resolved" .
+triage:critical a triage:Finding ; triage:findingId "C-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; triage:severity "critical" ; triage:description "critical" .
 triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage:S1 ;
-    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; triage:severity "critical" ; triage:description "invalid severity" .
+    triage:foundAt "2026-07-01T13:00:00Z"^^xsd:dateTime ; triage:severity "medium" ; triage:description "invalid severity" .
 """
         rows = sparql(
             "open-findings-for-sprint.sparql",
@@ -163,8 +165,9 @@ triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage
             findings,
         )
         assert [(str(row[1]), str(row[2]), str(row[3])) for row in rows] == [
-            ("U-1", "invalid", "critical"),
+            ("U-1", "invalid", "medium"),
             ("B-1", "blocking", "BLOCKING"),
+            ("C-1", "blocking", "critical"),
             ("I-1", "important", "Important"),
             ("M-1", "minor", "MINOR"),
         ]
