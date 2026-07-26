@@ -87,7 +87,10 @@ pub(crate) fn resolve_peer_authority(
         return Ok(peer.clone());
     }
     let ip: IpAddr = target.as_str().parse().map_err(|_| {
-        AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {target}"))
+        AtmError::validation_with_recovery(
+            format!("no trusted HTTPS peer is configured for {target}"),
+            "register the peer hostname first, then send to that hostname or one of its current forward-DNS addresses",
+        )
     })?;
     let enabled_peers = peers.iter().filter(|peer| peer.enabled).collect::<Vec<_>>();
     if enabled_peers.len() > MAX_LITERAL_IP_AUTHORITY_CANDIDATES {
@@ -224,8 +227,11 @@ impl HttpsMessageTransport for HttpsTransport {
                     )
                 })?;
                 let connection =
-                    ClientConnection::new(Arc::new(config), server_name).map_err(|_source| {
-                        AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS client")
+                    ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
+                        AtmError::daemon_unavailable_with_cause(
+                            "failed to initialize HTTPS peer TLS client",
+                            source,
+                        )
                     })?;
                 let mut tls = StreamOwned::new(connection, stream);
                 complete_handshake_with_deadline(&mut tls, deadline)?;
@@ -688,7 +694,12 @@ fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<Sock
         .into_iter()
         .next()
         .map(|ip| SocketAddr::new(ip, port))
-        .ok_or_else(|| AtmError::daemon_unavailable("HTTPS peer resolved to no addresses"))
+        .ok_or_else(|| {
+            AtmError::validation_with_recovery(
+                "HTTPS peer resolved to no addresses",
+                "verify the registered hostname has a current A or AAAA record, then retry",
+            )
+        })
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
@@ -993,6 +1004,16 @@ mod tests {
         let remaining = super::remaining_budget(deadline).expect("fresh deadline has budget");
         assert!(remaining <= Duration::from_secs(5));
         assert!(remaining > Duration::ZERO);
+    }
+
+    #[test]
+    fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
+        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
+            .expect_err("an expired shared request budget must fail before peer delivery");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
+        );
     }
 
     #[test]

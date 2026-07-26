@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use atm_core::api::RequestDeadline;
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, next_request_id};
@@ -9,7 +10,6 @@ use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKin
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 
 use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
-use atm_core::api::RequestDeadline;
 
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(
