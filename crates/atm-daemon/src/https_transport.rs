@@ -863,12 +863,19 @@ mod tests {
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
         read_http_response, write_http_request, write_http_request_with_headers,
     };
+    use atm_core::boundary::RosterHarness;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
+    use atm_core::graft::{
+        GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
+    };
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-    use atm_core::schema::AtmMessageId;
-    use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::HostName;
+    use atm_core::read::ReadQuery;
+    use atm_core::schema::{AgentMember, AtmMessageId};
+    use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
+    use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, TeamName};
+    use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
     };
@@ -885,6 +892,8 @@ mod tests {
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
+
+    use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
     use super::{
         HttpsListenerSet, TlsIdentity, client_config, complete_handshake, normalize_fingerprint,
@@ -1068,6 +1077,170 @@ mod tests {
             router.ingress.lock().expect("recorded ingress").as_ref(),
             Some(AuthenticatedIngress::UntrustedSmoke(_))
         ));
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() {
+        crate::tests::install_retained_runtime_factory();
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let workspace_dir = tempdir.path().join("workspace");
+        let db_path = tempdir.path().join("mail.db");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        crate::tests::write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[atm.graft]\nenabled = true\n",
+        )
+        .expect("write graft configuration");
+
+        let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+        let roster = [ROLE_TEAM_LEAD, "qa-a"]
+            .iter()
+            .map(|name| {
+                let mut member = AgentMember::with_name((*name).parse().expect("member"));
+                member.home_dir = workspace_dir.clone().into();
+                let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
+                    team.clone(),
+                    member,
+                );
+                record.harness = RosterHarness::CodexCli;
+                record
+            })
+            .collect::<Vec<_>>();
+        open_sqlite_boundary(&db_path)
+            .expect("sqlite boundary")
+            .roster_store_arc()
+            .replace_roster(&team, &roster)
+            .expect("install roster");
+
+        let recipient: AgentName = "qa-a".parse().expect("recipient");
+        let receiver_path = graft_receiver_record_path_from_home(&workspace_dir, &team, &recipient);
+        let graft_listener =
+            GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
+        let (nudge_tx, nudge_rx) = std::sync::mpsc::sync_channel(1);
+        let graft_thread = std::thread::spawn(move || {
+            let mut stream = loop {
+                if let Some(stream) = graft_listener.poll_accept().expect("poll graft receiver") {
+                    break stream;
+                }
+                std::thread::yield_now();
+            };
+            let request = graft_listener
+                .read_request(&mut stream, Duration::from_secs(5))
+                .expect("read graft nudge");
+            nudge_tx.send(request.event).expect("capture graft nudge");
+            graft_listener
+                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                .expect("ack graft nudge");
+        });
+
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            (
+                "ATM_CONFIG_HOME",
+                Some(tempdir.path().to_str().expect("utf8 config home")),
+            ),
+            (
+                SQLITE_RUNTIME_PATH_ENV,
+                Some(db_path.to_str().expect("utf8 db path")),
+            ),
+            ("HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("USERPROFILE", None),
+        ]);
+        let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
+            atm_home.clone(),
+            RuntimeStatusCache::new(),
+            db_path,
+        ));
+        let certificate = test_certificate();
+        let peer = TrustedPeer {
+            host: "localhost".parse().expect("peer host"),
+            fingerprint: certificate.fingerprint.clone(),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("peer port"),
+        };
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("advertised-IP bind"),
+                advertise_host: peer.host.clone(),
+                enabled: true,
+            }],
+            &certificate,
+            vec![peer.clone()],
+            dispatcher.clone(),
+        )
+        .expect("start real HTTPS peer listener");
+        let address = listener.listeners[0].address;
+        let identity = TlsIdentity::load(&certificate).expect("load client identity");
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let stream = TcpStream::connect(address).expect("connect advertised IP listener");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("mutual TLS handshake");
+        let origin_id = AtmMessageId::new();
+        let request = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("sender"),
+                "qa-a@test-team.127.0.0.1",
+                team.clone(),
+                SendMessageSource::Inline("advertised-IP real peer write".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("peer write")
+            .with_origin_metadata(origin_id, IsoTimestamp::now()),
+        ));
+        write_http_request(&mut tls, &request).expect("write peer request");
+        let response = read_http_response(&mut tls, &request).expect("read peer response");
+        assert!(matches!(response, ResponseEnvelope::Send(_)));
+
+        let nudge = nudge_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("peer receipt must nudge after persistence");
+        assert_eq!(nudge.recipient, recipient);
+        assert_eq!(nudge.description, "advertised-IP real peer write");
+        let origin_id_filter = origin_id.to_string();
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    recipient,
+                    None,
+                    team,
+                    ReadSelection::All,
+                    false,
+                    false,
+                    Some(&origin_id_filter),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("recipient read query"),
+            ))
+            .expect("read persisted recipient record");
+        let ResponseEnvelope::Receive(outcome) = response else {
+            panic!("expected recipient inbox read response");
+        };
+        assert_eq!(
+            outcome.count, 1,
+            "recipient can read the persisted peer write"
+        );
+        graft_thread.join().expect("join graft receiver");
         listener.shutdown().expect("shutdown listener");
     }
 

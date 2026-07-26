@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -46,6 +47,13 @@ REQUIRED_ASSERTIONS = {
     "unavailable_peer": frozenset({"no_prohibited_delivery_state"}),
     "untrusted_or_allowlist_rejection": frozenset({"rejected_before_routing"}),
     "failed_remote_ack": frozenset({"ack_source_unchanged", "no_remote_ack_state"}),
+}
+MESSAGE_BOUND_ASSERTIONS = {
+    "local_smoke": frozenset({"receiver_visible"}),
+    "send_read_nudge": frozenset({"receiver_visible", "nudge_visible"}),
+    "reverse_send_read_nudge": frozenset({"receiver_visible", "nudge_visible"}),
+    "requires_ack_reply": frozenset({"ack_reply_visible"}),
+    "duplicate_ulid": frozenset({"receiver_visible"}),
 }
 
 
@@ -80,13 +88,23 @@ def require_command(value: Any, name: str) -> list[str]:
 
 
 def require_public_client_command(value: Any, name: str) -> list[str]:
-    command = require_command(value, name)
+    command = list(require_command(value, name))
     executable = Path(command[0]).name.lower()
     if executable not in PUBLIC_CLIENT_COMMANDS:
         fail(
             f"config field `{name}` must invoke a public ATM client "
             f"({', '.join(sorted(PUBLIC_CLIENT_COMMANDS))})"
         )
+    resolved = shutil.which(command[0])
+    expected = shutil.which(executable)
+    if resolved is None or expected is None:
+        fail(f"config field `{name}` cannot resolve public ATM client `{command[0]}`")
+    try:
+        if not Path(resolved).resolve().samefile(Path(expected).resolve()):
+            fail(f"config field `{name}` does not resolve to the configured public ATM client")
+    except OSError as error:
+        fail(f"config field `{name}` cannot verify public ATM client identity: {error}")
+    command[0] = str(Path(expected).resolve())
     return command
 
 
@@ -121,6 +139,12 @@ def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_lo
         if not isinstance(assertion_name, str) or not assertion_name:
             fail(f"config field `{name}.verification.assertions` has an invalid name")
         require_semantic_assertion(assertion, f"{name}.verification.assertions.{assertion_name}")
+    for assertion_name in MESSAGE_BOUND_ASSERTIONS.get(case["id"], frozenset()):
+        if assertions[assertion_name].get("equals") != "$message_ulid":
+            fail(
+                f"config field `{name}.verification.assertions.{assertion_name}.equals` "
+                "must bind to `$message_ulid`"
+            )
     forbidden_log_entries = verification.get("forbidden_daemon_log_entries", [])
     if not isinstance(forbidden_log_entries, list) or not all(
         isinstance(entry, str) and entry for entry in forbidden_log_entries
@@ -268,6 +292,12 @@ def verify_semantics(
             )
     if forbidden := verification.get("forbidden_daemon_log_entries", []):
         after = log_snapshot(daemon_log_file)
+        if not after.startswith(daemon_log_before):
+            outcome["failures"].append(
+                "daemon log rotated or truncated during semantic verification; refusing an unverified delta"
+            )
+            outcome["daemon_log_delta"] = sanitize(after)[-8192:]
+            return outcome
         delta = after[len(daemon_log_before):]
         for entry in forbidden:
             if entry in delta:

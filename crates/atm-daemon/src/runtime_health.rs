@@ -476,6 +476,19 @@ impl DaemonRequestDispatcher {
             .record(event, &self.runtime_health_observability);
     }
 
+    #[cfg(test)]
+    pub(crate) fn expire_peer_sync_cooldown_for_test(&self, peer: &atm_core::types::HostName) {
+        let progress = self
+            .peer_sync_progress
+            .lock()
+            .expect("peer sync progress map")
+            .get(peer)
+            .expect("the first sync creates peer progress")
+            .clone();
+        progress.lock().expect("peer sync progress").next_allowed_at =
+            Some(std::time::Instant::now() - Duration::from_secs(1));
+    }
+
     pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
         self.peer_delivery_projection
             .statuses(self.peer_config_store.as_ref())

@@ -5,6 +5,7 @@ import importlib.util
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 def load_runner():
@@ -17,17 +18,30 @@ def load_runner():
 
 
 RUNNER = load_runner()
-SUCCESS = ["python3", "-c", "raise SystemExit(0)"]
-REJECTED = [
-    "python3",
-    "-c",
-    "import sys; print('ATM_REJECTED', file=sys.stderr); raise SystemExit(2)",
-]
+SUCCESS = ["atm", "success"]
+REJECTED = ["atm", "reject"]
 VERIFY_MESSAGE = [
     "python3",
     "-c",
     "import json; print(json.dumps({'message': {'message_id': '01TEST'}}))",
 ]
+
+
+def public_atm_command(command, _timeout):
+    if command[1:] == ["reject"]:
+        return {"command": command, "exit_code": 2, "stdout": "", "stderr": "ATM_REJECTED"}
+    if command[1:] == ["verify"]:
+        return {
+            "command": command,
+            "exit_code": 0,
+            "stdout": (
+                '{"runtime_status":{"readiness":"ready"},'
+                '"message":{"message_id":"01TEST","requires_ack":true},'
+                '"match_count":1,"additional_match_count":0,"count":0}'
+            ),
+            "stderr": "",
+        }
+    return {"command": command, "exit_code": 0, "stdout": "", "stderr": ""}
 
 
 class PeerPairSemanticVerificationTests(unittest.TestCase):
@@ -38,7 +52,11 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             log.write_text("ready\n", encoding="utf-8")
             config = sample_config(log)
 
-            self.assertEqual(RUNNER.execute(config, root / "evidence", 2), 0)
+            with (
+                patch.object(RUNNER.shutil, "which", return_value="/bin/echo"),
+                patch.object(RUNNER, "run_command", side_effect=public_atm_command),
+            ):
+                self.assertEqual(RUNNER.execute(config, root / "evidence", 2), 0)
             evidence = (root / "evidence" / "peer-smoke-evidence.json").read_text(
                 encoding="utf-8"
             )
@@ -68,6 +86,43 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("forbidden post-rejection", result["failures"][0])
 
+    def test_rejection_fails_closed_when_daemon_log_rotates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / "daemon.log"
+            log.write_text("new log after rotation\n", encoding="utf-8")
+            case = {
+                "message_ulid": "01TEST",
+                "verification": {
+                    "assertions": {
+                        "receiver_visible": {
+                            "command": VERIFY_MESSAGE,
+                            "json_path": "message.message_id",
+                            "equals": "$message_ulid",
+                        }
+                    },
+                    "forbidden_daemon_log_entries": ["peer delivery"],
+                },
+            }
+
+            result = RUNNER.verify_semantics(case, 2, "old log before rotation\n", str(log))
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("rotated or truncated", result["failures"][0])
+
+    def test_validation_rejects_constant_message_assertion(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            log = root / "daemon.log"
+            log.write_text("ready\n", encoding="utf-8")
+            config = sample_config(log)
+            config["cases"][1]["verification"]["assertions"]["receiver_visible"]["equals"] = "01TEST"
+
+            with (
+                patch.object(RUNNER.shutil, "which", return_value="/bin/echo"),
+                self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"),
+            ):
+                RUNNER.validate(config)
+
 
 def sample_config(log: Path):
     cases = []
@@ -85,11 +140,8 @@ def sample_config(log: Path):
             "command": REJECTED if typed_error else SUCCESS,
             "verification": {
                 "assertions": {
-                    "receiver_visible": {
-                        "command": VERIFY_MESSAGE,
-                        "json_path": "message.message_id",
-                        "equals": "$message_ulid",
-                    }
+                    assertion_name: assertion_definition(assertion_name)
+                    for assertion_name in RUNNER.REQUIRED_ASSERTIONS[case_id]
                 },
             },
         }
@@ -112,6 +164,25 @@ def sample_config(log: Path):
         "identities": {"sender": "a@t", "recipient": "b@t"},
         "cases": cases,
     }
+
+
+def assertion_definition(name: str):
+    command = ["atm", "verify"]
+    if name == "daemon_ready":
+        return {"command": command, "json_path": "runtime_status.readiness", "equals": "ready"}
+    if name in {"receiver_visible", "nudge_visible", "ack_reply_visible"}:
+        return {"command": command, "json_path": "message.message_id", "equals": "$message_ulid"}
+    if name == "single_record_retained":
+        return {"command": command, "json_path": "match_count", "equals": 1}
+    if name == "no_repeat_nudge":
+        return {"command": command, "json_path": "additional_match_count", "equals": 0}
+    if name in {"no_ack_mutation", "no_remote_ack_state"}:
+        return {"command": command, "json_path": "message.acknowledgedAt", "absent": True}
+    if name in {"no_prohibited_delivery_state", "rejected_before_routing"}:
+        return {"command": command, "json_path": "count", "equals": 0}
+    if name == "ack_source_unchanged":
+        return {"command": command, "json_path": "message.requires_ack", "equals": True}
+    raise AssertionError(f"missing fixture for {name}")
 
 
 if __name__ == "__main__":
