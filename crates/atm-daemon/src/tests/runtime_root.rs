@@ -123,6 +123,16 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
 #[derive(Default)]
 struct FailingHttpsDelivery {
     attempted: std::sync::Mutex<Vec<WriteRequest>>,
+    unavailable: bool,
+}
+
+impl FailingHttpsDelivery {
+    fn daemon_unavailable() -> Self {
+        Self {
+            attempted: std::sync::Mutex::new(Vec::new()),
+            unavailable: true,
+        }
+    }
 }
 
 impl HttpsMessageTransport for FailingHttpsDelivery {
@@ -136,9 +146,15 @@ impl HttpsMessageTransport for FailingHttpsDelivery {
             .lock()
             .expect("peer transport recording lock")
             .push(request);
-        Err(AtmError::daemon_unavailable(
-            "intentional peer transport failure",
-        ))
+        if self.unavailable {
+            Err(AtmError::daemon_unavailable(
+                "intentional local transport failure",
+            ))
+        } else {
+            Err(AtmError::remote_delivery_unconfirmed(
+                "intentional peer transport uncertainty",
+            ))
+        }
     }
 }
 
