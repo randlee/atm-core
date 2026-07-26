@@ -306,6 +306,14 @@ fn render_doctor_peer_config(peer_config: &atm_core::doctor::PeerConfigDoctorRep
             failure.code, failure.message
         ));
     }
+    for peer in &peer_config.trusted_peers {
+        rendered.push_str(&format!(
+            "\n  peer {}:{} ({})",
+            peer.host,
+            peer.https_port,
+            if peer.enabled { "enabled" } else { "disabled" }
+        ));
+    }
     rendered
 }
 
@@ -893,11 +901,16 @@ mod tests {
             certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
             trusted_peer_count: 3,
             enabled_trusted_peer_count: 2,
-            trusted_peers: vec![],
+            trusted_peers: vec![atm_core::doctor::PeerAuthorityDoctorReport {
+                host: "peer.example.test".to_string(),
+                https_port: 43101,
+                enabled: true,
+            }],
             validation_failure: None,
         });
 
         assert!(rendered.contains("sha256:public-fingerprint"));
+        assert!(rendered.contains("peer.example.test:43101 (enabled)"));
         assert!(!rendered.contains("private_key_ref"));
         assert!(!rendered.contains("keychain:secret"));
     }

@@ -33,6 +33,10 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+/// Literal-IP authority resolution is deliberately bounded. Operators should
+/// address a registered hostname directly when their authority set exceeds
+/// this control-plane safety cap.
+const MAX_LITERAL_IP_AUTHORITY_CANDIDATES: usize = 32;
 const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// The peer wire-security setting. Mutual TLS is the production default.
@@ -85,9 +89,17 @@ pub(crate) fn resolve_peer_authority(
     let ip: IpAddr = target.as_str().parse().map_err(|_| {
         AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {target}"))
     })?;
-    let matches = peers
-        .iter()
-        .filter(|peer| peer.enabled)
+    let enabled_peers = peers.iter().filter(|peer| peer.enabled).collect::<Vec<_>>();
+    if enabled_peers.len() > MAX_LITERAL_IP_AUTHORITY_CANDIDATES {
+        return Err(AtmError::validation_with_recovery(
+            format!(
+                "literal peer IP {target} cannot be resolved across more than {MAX_LITERAL_IP_AUTHORITY_CANDIDATES} enabled trusted peers"
+            ),
+            "send to the registered hostname directly or reduce the enabled trusted-peer set",
+        ));
+    }
+    let matches = enabled_peers
+        .into_iter()
         .filter(|peer| {
             resolve_peer_addresses(peer, HTTPS_TIMEOUT)
                 .is_ok_and(|addresses| addresses.contains(&ip))
@@ -96,12 +108,14 @@ pub(crate) fn resolve_peer_authority(
         .collect::<Vec<_>>();
     match matches.as_slice() {
         [peer] => Ok(peer.clone()),
-        [] => Err(AtmError::daemon_unavailable(format!(
-            "literal peer IP {target} matches no trusted hostname"
-        ))),
-        _ => Err(AtmError::validation(format!(
-            "literal peer IP {target} matches multiple trusted hostnames"
-        ))),
+        [] => Err(AtmError::validation_with_recovery(
+            format!("literal peer IP {target} matches no trusted hostname"),
+            "register the peer hostname, verify its forward DNS includes this IP, or send to the registered hostname",
+        )),
+        _ => Err(AtmError::validation_with_recovery(
+            format!("literal peer IP {target} matches multiple trusted hostnames"),
+            "send to the intended registered hostname or correct the overlapping forward DNS records",
+        )),
     }
 }
 
@@ -920,6 +934,16 @@ mod tests {
             super::resolve_peer_authority(&target, &[trusted("localhost"), trusted("localhost")])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn literal_ip_authority_resolution_has_a_bounded_candidate_set() {
+        let target = "127.0.0.1".parse().expect("target");
+        let peers = (0..=super::MAX_LITERAL_IP_AUTHORITY_CANDIDATES)
+            .map(|_| trusted("localhost"))
+            .collect::<Vec<_>>();
+
+        assert!(super::resolve_peer_authority(&target, &peers).is_err());
     }
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};

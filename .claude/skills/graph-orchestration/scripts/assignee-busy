@@ -17,7 +17,9 @@
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-  echo >&2 "Usage: assignee-busy <PHASE_LOCAL> <TTL_DIR> <ASSIGNEE>"
+  message="Usage: assignee-busy <PHASE_LOCAL> <TTL_DIR> <ASSIGNEE>"
+  echo >&2 "$message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"usage\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
   exit 1
 fi
 
@@ -28,7 +30,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
 
 if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
-  echo >&2 "ERROR: rdflib not found. Install with: pip3 install rdflib"
+  message="rdflib not found. Install with: pip3 install rdflib"
+  echo >&2 "ERROR: $message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"dependency\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
   exit 1
 fi
 

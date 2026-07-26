@@ -14,42 +14,48 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
-  triage:highestOpenBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:highestFixedBranch "none" ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:promoteToBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2> ;
-  triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
-  triage:promoteTo <urn:atm:triage:worktree/s24/c326cbe7> .
+  triage:fixedOn <urn:atm:triage:worktree/s24/1daef214> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/1daef214> .
 
 <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 704 ;
   triage:snippet "if policy.max_message_age.is_zero() { return Ok(PeerSyncOutcome { delivered: 0 })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "c326cbe7" ;
-  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
 
 <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 716 ;
   triage:snippet "let mut progress = self.peer_sync_progress.lock()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "c326cbe7" ;
-  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
 
-<urn:atm:triage:worktree/s24/c326cbe7>
+<urn:atm:triage:worktree/s24/1daef214>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "c326cbe7" ;
+  triage:headSha "1daef214" ;
   triage:orderIndex 4 .
