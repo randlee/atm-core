@@ -138,6 +138,18 @@ def test_live_ttl_counts_do_not_require_qa_snapshot(tmp_path):
     assert "QA evidence master not found" in report["data_gaps"][0]
 
 
+def test_report_ignores_unrelated_project_phase_findings(tmp_path):
+    """A historical malformed phase cannot block the current phase report."""
+    root, qa = _inputs(tmp_path)
+    unrelated = root / ".triage" / "phase-U" / "findings"
+    unrelated.mkdir(parents=True)
+    (unrelated / "legacy.ttl").write_text("finding_id: legacy\n")
+
+    report = triage_report.build_report(root, "AICH", qa)
+
+    assert report["rows"][0]["qa"]["blockers"] == 1
+
+
 def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
     root, qa = _inputs(tmp_path)
     findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
@@ -170,6 +182,7 @@ def test_malformed_structure_is_report_error(tmp_path):
     root = tmp_path / "repo"
     phase = root / ".sprints" / "AICH"
     phase.mkdir(parents=True)
+    (root / ".triage").mkdir()
     (phase / "structure.ttl").write_text("not turtle [")
     try:
         triage_report.build_report(root, "AICH")

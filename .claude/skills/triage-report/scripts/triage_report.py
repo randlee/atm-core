@@ -295,39 +295,6 @@ def _source_path(path: Path | None, root: Path) -> str | None:
         return f"<external>/{path.name}"
 
 
-def _findings_dir(root: Path, plan_phase: str | None) -> Path:
-    """Resolve the phase findings directory without guessing across phases."""
-    if not plan_phase:
-        raise ReportError(
-            "cannot locate findings: sprint criteria do not declare a plan phase"
-        )
-    suffix = plan_phase.removeprefix("phase-")
-    candidates = [
-        root / ".triage" / plan_phase,
-        root / ".triage" / f"phase-{suffix.upper()}",
-        root / ".triage" / f"phase-{suffix}",
-    ]
-    existing: list[Path] = []
-    # macOS's default filesystem is case-insensitive even though Path keeps
-    # the spelling supplied by the caller; compare case-folded real paths.
-    existing_real: set[str] = set()
-    for candidate in candidates:
-        findings = candidate / "findings"
-        if findings.is_dir():
-            resolved = findings.resolve()
-            identity = str(resolved).casefold()
-            if identity not in existing_real:
-                existing_real.add(identity)
-                existing.append(resolved)
-    if len(existing) != 1:
-        listed = ", ".join(str(item) for item in existing) or "none"
-        raise ReportError(
-            f"cannot determine unique findings directory for {plan_phase}: "
-            f"found {len(existing)} ({listed})"
-        )
-    return existing[0]
-
-
 def _run_findings_validator(
     root: Path,
     findings_dir: Path,
@@ -396,9 +363,9 @@ def _run_findings_validator(
 def _graph_runner():
     """Load graph-orchestration's public graph/query helpers once.
 
-    The report must use the same finding membership and resolution semantics as
-    dispatch.  Loading that module is preferable to a parallel Turtle loader or
-    a report-specific copy of ``open-findings-for-sprint.sparql``.
+    The report must use the same current-integration resolver, finding scope,
+    and resolution semantics as dispatch. Loading that module is preferable to
+    a parallel Turtle loader or report-specific query logic.
     """
     runner_path = (
         Path(__file__).resolve().parents[2]
@@ -414,7 +381,11 @@ def _graph_runner():
     return module
 
 
-def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+def _live_counts(
+    phase_path: Path,
+    findings_dir: Path,
+    sprints: list[dict[str, Any]],
+) -> dict[str, dict[str, int]]:
     """Return unresolved B/I/M counts using graph-orchestration's query.
 
     This is the report's gate source.  QA evidence records review provenance;
@@ -428,7 +399,7 @@ def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, d
         / "open-findings-for-sprint.sparql"
     )
     try:
-        graph = runner.load_graph(str(phase_path))
+        graph = runner.load_graph(str(phase_path), findings_dir=findings_dir)
     except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
         raise ReportError(f"could not load live finding graph: {exc}") from exc
 
@@ -593,7 +564,14 @@ def build_report(
     if _RDFLIB_ERROR:
         raise ReportError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
     root = Path(integration_root).resolve()
-    phase_name, phase_path = _phase_dir(root, phase)
+    phase_name, requested_phase_path = _phase_dir(root, phase)
+    runner = _graph_runner()
+    try:
+        source = runner.resolve_phase_source(phase_name, str(requested_phase_path))
+    except Exception as exc:  # noqa: BLE001 - normalize shared source errors
+        raise ReportError(f"could not resolve current integration phase source: {exc}") from exc
+    root = source.root
+    phase_path = source.ttl_dir
     structure_path = phase_path / "structure.ttl"
     events_path = phase_path / "events.ttl"
     structure = _parse_ttl(structure_path)
@@ -616,10 +594,10 @@ def build_report(
     qa_data = _json(qa_master)
     # Validate raw findings before calculating a single row.  This prevents
     # query_runner's phase scoping from hiding malformed or orphan records.
-    findings_dir = _findings_dir(root, plan_phase)
+    findings_dir = source.findings_dir
     validation = _run_findings_validator(root, findings_dir, structure_path, events_path)
     qa = _qa_runs(qa_data)
-    live_counts = _live_counts(phase_path, sprints)
+    live_counts = _live_counts(phase_path, findings_dir, sprints)
     github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []

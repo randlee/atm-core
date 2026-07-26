@@ -48,6 +48,9 @@ Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
 import importlib.util
 import sys
 import json
+import re
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -61,8 +64,8 @@ TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
 
 
-def _find_repo_root(start: Path):
-    """Walk up from start to find the directory containing .triage/"""
+def _find_repo_root(start: Path) -> Path | None:
+    """Walk up from ``start`` to the repository's ``.triage`` directory."""
     current = start.resolve()
     for _ in range(10):  # max 10 levels up
         if (current / ".triage").exists():
@@ -74,42 +77,126 @@ def _find_repo_root(start: Path):
     return None
 
 
-IGNORE_FILE_NAME = ".graph-orchestration-ignore"
+@dataclass(frozen=True)
+class PhaseSource:
+    """Canonical current-integration inputs for one graph phase."""
+
+    root: Path
+    ttl_dir: Path
+    findings_dir: Path
+    branch: str | None
 
 
-def _load_ignored_phase_dirs(repo_root: Path) -> set:
-    """Read repo_root/.triage/.graph-orchestration-ignore into a set of names.
+def _integration_worktrees(repo_root: Path, phase_dir_name: str) -> list[tuple[Path, str]]:
+    """Return integration worktrees that own ``.sprints/<phase_dir_name>``."""
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
 
-    This is a purely optional, best-effort efficiency/noise-reduction layer:
-    it lets known-dead legacy phase directories (whose findings files use an
-    old pre-Turtle format and will never be migrated) be skipped entirely
-    before ever attempting to open or parse a file under them, avoiding both
-    wasted I/O and a repeated stderr `WARNING: skipping malformed findings
-    file ...` on every single invocation.
+    matches: list[tuple[Path, str]] = []
+    worktree: Path | None = None
+    branch: str | None = None
+    for line in [*result.stdout.splitlines(), ""]:
+        if line.startswith("worktree "):
+            worktree = Path(line.removeprefix("worktree "))
+        elif line.startswith("branch refs/heads/"):
+            branch = line.removeprefix("branch refs/heads/")
+        elif not line.strip():
+            if (
+                worktree is not None
+                and branch is not None
+                and branch.startswith("integrate/phase-")
+                and (worktree / ".sprints" / phase_dir_name / "structure.ttl").is_file()
+            ):
+                matches.append((worktree.resolve(), branch))
+            worktree = None
+            branch = None
+    return matches
 
-    It is NOT a correctness mechanism and must never be treated as one: the
-    membership-based scoping in `load_graph()` (via `known_sprints` /
-    `triage:foundIn`) is what actually prevents cross-phase contamination,
-    for *every* findings directory, including ones not listed here. Absence
-    of a directory from this ignore list — or absence of the file itself —
-    changes nothing about correctness, only about how much redundant parsing
-    and warning noise is produced for directories known in advance to be
-    dead.
+
+def _project_phase_from_ttl(ttl_dir: Path, fallback: str) -> str:
+    """Derive the plan phase only for isolated non-git test fixtures."""
+    graph = Graph()
+    try:
+        graph.parse(ttl_dir / "structure.ttl", format="turtle")
+    except Exception:  # The normal structure gate reports this after resolution.
+        return f"phase-{fallback}"
+    phases = {
+        match.group(1)
+        for criteria in graph.objects(None, TRIAGE.criteria)
+        if (match := re.search(r"docs/plans/(phase-[^/]+)/", str(criteria)))
+    }
+    return phases.pop() if len(phases) == 1 else f"phase-{fallback}"
+
+
+def resolve_phase_source(phase_local: str, requested_ttl_dir: str) -> PhaseSource:
+    """Resolve a phase to its sole current ``integrate/phase-*`` worktree.
+
+    Sprint worktrees are never a query source: their copied TTL can be stale.
+    The integration branch name is also the project triage namespace, so this
+    resolver selects exactly ``.triage/<phase-name>/findings`` rather than
+    scanning every historical phase.  Non-git unit fixtures retain a direct
+    local fallback using ``phase-<PHASE_LOCAL>``.
     """
-    ignore_path = repo_root / ".triage" / IGNORE_FILE_NAME
-    if not ignore_path.exists():
-        return set()
+    requested = Path(requested_ttl_dir).resolve()
+    if not (requested / "structure.ttl").is_file():
+        raise RuntimeError(f"structure.ttl not found at {requested / 'structure.ttl'}")
+    repo_root = _find_repo_root(requested)
+    if repo_root is None:
+        raise RuntimeError("cannot locate repository root containing .triage")
 
-    names = set()
-    for line in ignore_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        names.add(line)
-    return names
+    candidates = _integration_worktrees(repo_root, requested.name)
+    if candidates:
+        if len(candidates) != 1:
+            names = ", ".join(f"{branch} ({path})" for path, branch in candidates)
+            raise RuntimeError(
+                f"cannot determine one current integration source for {requested.name}: {names}"
+            )
+        root, branch = candidates[0]
+        phase_name = branch.rsplit("/", 1)[-1]
+        return PhaseSource(
+            root=root,
+            ttl_dir=root / ".sprints" / requested.name,
+            findings_dir=root / ".triage" / phase_name / "findings",
+            branch=branch,
+        )
+
+    # Test fixtures are deliberately not git worktrees.  Do not make a
+    # production branch silently fall back to its potentially stale TTL.
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        project_phase = _project_phase_from_ttl(requested, phase_local)
+        return PhaseSource(
+            root=repo_root,
+            ttl_dir=requested,
+            findings_dir=repo_root / ".triage" / project_phase / "findings",
+            branch=None,
+        )
+    raise RuntimeError(
+        f"no integrate/phase-* worktree owns .sprints/{requested.name}; refusing stale branch data"
+    )
 
 
-def load_graph(ttl_dir: str, *, include_findings: bool = True) -> Graph:
+def load_graph(
+    ttl_dir: str | Path,
+    *,
+    findings_dir: Path | None = None,
+    include_findings: bool = True,
+) -> Graph:
     g = Graph()
     base = Path(ttl_dir)
     structure = base / "structure.ttl"
@@ -121,74 +208,18 @@ def load_graph(ttl_dir: str, *, include_findings: bool = True) -> Graph:
     if events.exists():
         g.parse(str(events), format="turtle")
 
-    # Collect the set of triage:Sprint subjects declared by *this phase's*
-    # structure.ttl (+ events.ttl, though sprints are only ever declared in
-    # structure.ttl in practice). This is the authoritative membership set
-    # used below to scope findings — it is derived from the graph itself,
-    # not from directory names or naming conventions, so it can't be
-    # defeated by a future phase reusing an unprefixed or colliding local
-    # sprint label.
     known_sprints = set(g.subjects(RDF.type, TRIAGE.Sprint))
 
     if not include_findings:
         return g
 
-    # Load triage findings from repo root .triage/ (relative to TTL dir's parent)
-    # Walk up from ttl_dir to find repo root (contains .triage/)
-    #
-    # Findings are filed under `.triage/<phase_id>/findings/*.ttl`, where
-    # `<phase_id>` (e.g. "phase-AI") is a project-phase directory that does
-    # not necessarily match the `PHASE_LOCAL` sprint-batch label (e.g.
-    # "AICH") passed to this script — there is no discoverable
-    # findings-path-to-phase mapping in structure.ttl today (no
-    # `triage:findingsPath` or similar property), so we cannot statically
-    # narrow the *glob* to "the one right directory" for a given phase.
-    #
-    # Directory-name matching was considered and rejected as the scoping
-    # mechanism: it's convention-dependent (relies on `phase-AI` matching
-    # `AICH`-prefixed sprint labels) and nothing enforces it — a future
-    # phase could reuse an unprefixed or colliding local sprint label with
-    # no directory-name collision to catch it, silently attaching a stray
-    # well-formed finding to the wrong phase's sprint and corrupting cursor
-    # resolution.
-    #
-    # Instead, each findings file is parsed into its own temporary Graph
-    # first (still isolated in try/except, see below), and only the triples
-    # belonging to findings whose `triage:foundIn` object is in
-    # `known_sprints` (this phase's *actual* declared triage:Sprint
-    # subjects, read directly from structure.ttl/events.ttl above) are
-    # merged into `g`. This is real membership scoping, not a naming
-    # convention: it is enforced by graph structure, so it cannot be
-    # defeated by directory or label collisions. Findings whose
-    # `triage:foundIn` points at a sprint outside this set are dropped
-    # silently — they're simply out of scope for this phase, not an error.
-    #
-    # A single malformed (non-Turtle) findings file anywhere in the repo
-    # must also not abort the entire parse and crash cursor resolution for
-    # every phase, including ones with no relationship to the offending
-    # file — hence the per-file try/except below, which remains necessary
-    # defense-in-depth independent of the scoping filter.
-    #
-    # Some `.triage/<phase_id>/` directories are permanently closed/dead
-    # legacy phases whose findings files were written in an old pre-Turtle
-    # format and will never be migrated. Repeatedly globbing, opening, and
-    # failing to parse those files on every single invocation is pure,
-    # predictable waste: the outcome never changes. `.triage/.graph-
-    # orchestration-ignore` (see `_load_ignored_phase_dirs`) lets such
-    # directories be named explicitly so they're skipped before `.parse()`
-    # is ever called on them — no warning is printed for these, since the
-    # directory was deliberately and explicitly acknowledged as dead, unlike
-    # an unexpected malformed file that wasn't. This is purely an efficiency
-    # optimization layered on top of the membership-based scoping above; it
-    # does not replace it, and directories absent from the ignore list are
-    # still fully protected by the `known_sprints` membership filter.
-    repo_root = _find_repo_root(base)
-    if repo_root:
-        ignored_phase_dirs = _load_ignored_phase_dirs(repo_root)
-        for findings_file in sorted(repo_root.glob(".triage/*/findings/*.ttl")):
-            phase_dir_name = findings_file.parent.parent.name
-            if phase_dir_name in ignored_phase_dirs:
-                continue
+    if findings_dir is None:
+        repo_root = _find_repo_root(base)
+        if repo_root is None:
+            raise RuntimeError("cannot locate repository root containing .triage")
+        findings_dir = repo_root / ".triage" / f"phase-{base.name}" / "findings"
+    if findings_dir.is_dir():
+        for findings_file in sorted(findings_dir.glob("*.ttl")):
             file_graph = Graph()
             try:
                 file_graph.parse(str(findings_file), format="turtle")
@@ -240,10 +271,14 @@ def run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
     return list(results)
 
 
-def _cli_load_graph(ttl_dir: str, *, include_findings: bool) -> Graph:
+def _cli_load_graph(source: PhaseSource, *, include_findings: bool) -> Graph:
     """Load a graph while keeping malformed input errors CLI-friendly."""
     try:
-        return load_graph(ttl_dir, include_findings=include_findings)
+        return load_graph(
+            source.ttl_dir,
+            findings_dir=source.findings_dir,
+            include_findings=include_findings,
+        )
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001 - CLI boundary
@@ -275,7 +310,7 @@ def _load_validator(script_dir: Path):
     return module
 
 
-def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
+def _validate_findings_before_query(source: PhaseSource, script_dir: Path) -> None:
     """Run raw findings validation before *any* graph query.
 
     ``load_graph`` intentionally scopes findings by ``foundIn``.  Running this
@@ -285,35 +320,19 @@ def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
     allowed by the validator's discriminated result contract.
     """
 
-    repo_root = _find_repo_root(Path(ttl_dir))
-    if repo_root is None:
-        raise RuntimeError(
-            "cannot locate repository root containing .triage; findings validation cannot run"
-        )
-    triage_root = repo_root / ".triage"
-    findings_dirs = sorted(
-        path for path in triage_root.glob("*/findings") if path.is_dir()
-    ) if triage_root.exists() else []
-    # An existing but empty .triage tree is a valid no-findings input.  Passing
-    # the root directory still exercises the validator and gives a structured
-    # error if the directory itself is missing or unreadable.
-    if not findings_dirs:
-        findings_dirs = [triage_root]
-
     validator = _load_validator(script_dir)
-    structure = Path(ttl_dir) / "structure.ttl"
-    events_path = Path(ttl_dir) / "events.ttl"
+    structure = source.ttl_dir / "structure.ttl"
+    events_path = source.ttl_dir / "events.ttl"
     events = events_path if events_path.exists() else None
-
-    for findings_dir in findings_dirs:
+    if source.findings_dir.is_dir():
         result = validator.run_validation(
-            findings_dir=findings_dir,
+            findings_dir=source.findings_dir,
             structure=structure,
             events=events,
             script_dir=script_dir,
         )
         if result.kind == "validation:pass":
-            continue
+            return
         summary = getattr(result, "summary", None)
         counts = (
             f" ({summary.errors} error(s), {summary.warnings} warning(s))"
@@ -321,7 +340,7 @@ def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
             else ""
         )
         print(
-            f"ERROR: findings validation blocked query resolution for {findings_dir}"
+            f"ERROR: findings validation blocked query resolution for {source.findings_dir}"
             f"{counts}",
             file=sys.stderr,
         )
@@ -358,7 +377,8 @@ def main():
     # This is deliberately before structure loading and before --validate-only:
     # every query_runner entry point must prove that raw findings are valid.
     try:
-        _validate_findings_before_query(ttl_dir, script_dir)
+        source = resolve_phase_source(phase_local, ttl_dir)
+        _validate_findings_before_query(source, script_dir)
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001 - CLI boundary
@@ -369,7 +389,7 @@ def main():
     # or incomplete records cannot disappear during phase membership filtering.
     # Once that gate passes, structure validation can report graph-shape errors
     # without being conflated with finding-schema diagnostics.
-    g = _cli_load_graph(ttl_dir, include_findings=not validate_only)
+    g = _cli_load_graph(source, include_findings=not validate_only)
 
     # ── Validate structure before cursor ─────────────────────────────────────
     validate_rows = _cli_run_sparql(

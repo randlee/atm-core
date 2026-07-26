@@ -28,7 +28,7 @@ from pathlib import Path
 
 from rdflib import URIRef, Literal
 
-from query_runner import load_graph, run_sparql, TRIAGE_BASE
+from query_runner import load_graph, resolve_phase_source, run_sparql, TRIAGE_BASE
 
 
 def main() -> int:
@@ -46,7 +46,8 @@ def main() -> int:
 
     phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
     try:
-        g = load_graph(ttl_dir)
+        source = resolve_phase_source(phase_local, ttl_dir)
+        g = load_graph(source.ttl_dir, findings_dir=source.findings_dir)
         rows = run_sparql(
             g,
             script_dir / "assignee-busy.sparql",
