@@ -1,0 +1,101 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F004>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F004" ;
+  triage:title "resolve_peer_authority routing decision lives inside https_transport.rs, which peer-http-adapter.toml declares forbidden for recipient_routing" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S5-QA-2 (AI.25 fix-round-2 recheck, PR #640, commit 5f794c42). The peer-http-adapter.toml boundary policy (boundaries/atm-daemon/peer-http-adapter.toml:20) declares recipient_routing decisions forbidden inside crates/atm-daemon/src/https_transport.rs via io_forbidden=[\"...\", \"recipient_routing\", ...]. However, resolve_peer_authority (the routing-decision function for peer authority resolution added in sprint S25) lives in exactly that file at line 97. This function makes authorization decisions that route a delivery target to one configured hostname authority, which is precisely the type of recipient_routing logic the boundary policy forbids from that module. This is a policy/boundary violation, not a functional bug -- the implementation is correct but placed in a forbidden location. The finding persists across all branches s23-s26 (at varying line numbers due to forward merges and subsequent fixes). All worktrees remain open for this boundary violation." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T12:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/ac465283> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s25/a489691b> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s26/bc1346e4> ;
+  triage:highestOpenBranch "feature/pAI-s26-peer-write-deadline" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/985a6d46> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 94 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/ac465283> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 97 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a489691b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/a489691b> .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 79 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority( target: &atm_core::types::HostName, peers: &[TrustedPeer], ) -> Result<TrustedPeer, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s26/bc1346e4> .
+
+<urn:atm:triage:worktree/pAI-s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/a489691b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a489691b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/bc1346e4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:orderIndex 6 .

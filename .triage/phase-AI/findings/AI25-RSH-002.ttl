@@ -14,29 +14,34 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-002/s25/1> ;
-  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
-  triage:promoteTo <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
-  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime .
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T17:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion 2 .
 
 <urn:atm:triage:occurrence/AI25-RSH-002/s25/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 82 ;
   triage:snippet "filter(|peer| resolve_peer_addresses(peer).is_ok_and(|addresses| addresses.contains(&ip)))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
-  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/5f794c42d449687b6badca46193592f11bc25529> ;
+  triage:fixedAt "2026-07-26T17:00:00Z"^^xsd:dateTime ;
+  triage:fixedBy "quality-mgr" ;
+  triage:fixedVia "MAX_LITERAL_IP_AUTHORITY_CANDIDATES=32 cap at lines 39,111-118 gates O(N) DNS fan-out (lines 119-126); backed by test literal_ip_authority_resolution_has_a_bounded_candidate_set (lines 976-987)" .
 
-<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+<urn:atm:triage:worktree/s25/5f794c42d449687b6badca46193592f11bc25529>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:path "feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
   triage:orderIndex 5 .
 
 # WorktreeSnapshots for branches 1-4 and 6-10 (branch absent state - no occurrence)
