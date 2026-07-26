@@ -29,3 +29,10 @@ This is an ordinary host-qualified peer send: no mock transport, direct
 dispatcher call, or loopback-only route was used. The release test suite also
 exercises the pinned mutual-TLS ingress route in
 `https_transport::tests::exact_pinned_mtls_peer_reaches_the_shared_router`.
+
+**Independence note:** this artifact was authored in the same commit
+(`95dbb094`) as the fix it evidences, so it does not by itself satisfy the
+sprint doc's requirement for a genuinely independent quality-review
+execution (tracked as AI23-BLOCK-003). See
+`advertised-ip-tls-self-send-independent-review.md` in this directory for the
+independently-executed proof that closes that gap.

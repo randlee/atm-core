@@ -15,14 +15,18 @@
 set -euo pipefail
 
 if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo >&2 "Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  message="Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  echo >&2 "$message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"usage\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
   exit 1
 fi
 
 PHASE="$1"
 TTL_DIR="$2"
 if [[ $# -eq 3 && "$3" != "--validate-only" ]]; then
-  echo >&2 "Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  message="Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  echo >&2 "$message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"usage\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +34,9 @@ PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
 
 # Verify Python 3 and rdflib are available
 if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
-  echo >&2 "ERROR: rdflib not found. Install with: pip3 install rdflib"
+  message="rdflib not found. Install with: pip3 install rdflib"
+  echo >&2 "ERROR: $message"
+  printf '%s\n' "{\"schema\":\"graph-orchestration/v1\",\"kind\":\"error\",\"error_code\":\"dependency\",\"message\":\"$message\",\"diagnostics\":[],\"dispatch_blocked\":true}"
   exit 1
 fi
 
