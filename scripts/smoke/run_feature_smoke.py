@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -181,6 +182,13 @@ def render_feature_pane(feature: str, cases: list[dict[str, Any]]) -> str:
     )
 
 
+def artifact_segment(value: str, label: str) -> str:
+    """Return a stable, path-safe run or host label."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value):
+        raise SmokeError(f"{label} must contain only letters, numbers, '.', '_', or '-'")
+    return value
+
+
 def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: str, host: str) -> None:
     target = f"{identity}@{team}.{host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -218,10 +226,15 @@ def remote_inbound(cases: list[dict[str, Any]], atm: str, identity: str, team: s
 
 
 def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
-    directory = ROOT / "reports" / "smoke" / feature
+    run_id = artifact_segment(
+        os.environ.get("ATM_SMOKE_RUN_ID", "").strip()
+        or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "ATM_SMOKE_RUN_ID",
+    )
+    host = artifact_segment(platform.node(), "local host name")
+    directory = ROOT / "reports" / "smoke" / run_id
     directory.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report = directory / f"{stamp}.json"
+    report = directory / f"{host}-{feature}.json"
     passed = all(case["status"] == "PASS" for case in cases)
     report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
     # Reuse the established AI.21-pre XHTML pane template instead of creating
@@ -232,7 +245,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
         {
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "host": platform.node(),
+            "host": host,
             "body_html": render_feature_pane(feature, cases),
         },
         pane,
@@ -246,12 +259,12 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
         },
         report.with_suffix(".html"),
     )
-    panes = sorted(path for path in directory.parent.rglob("*.xhtml") if path.is_file())
+    panes = sorted(path for path in directory.glob("*.xhtml") if path.is_file())
     pane_html = "\n".join(
         "<section><h2>{label}</h2><iframe title=\"{title}\" src=\"{source}\"></iframe></section>".format(
-            label=escape(str(path.relative_to(directory.parent))),
+            label=escape(path.name),
             title=escape(path.stem, quote=True),
-            source=escape(str(path.relative_to(directory.parent)), quote=True),
+            source=escape(path.name, quote=True),
         )
         for path in panes
     )
@@ -262,7 +275,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
         },
-        directory.parent / "index.html",
+        directory / "index.html",
     )
     return report
 

@@ -66,12 +66,13 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_report_writes_browser_frame_for_xhtml_pane(self):
         with tempfile.TemporaryDirectory() as temp:
-            with mock.patch.object(RUNNER, "ROOT", Path(temp)):
-                with mock.patch.object(RUNNER, "compose") as compose:
-                    report = RUNNER.write_report("localhost", [{"name": "doctor", "status": "PASS", "detail": "ready"}])
+            with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "smoke-42"}, clear=False):
+                with mock.patch.object(RUNNER, "ROOT", Path(temp)):
+                    with mock.patch.object(RUNNER, "compose") as compose:
+                        report = RUNNER.write_report("localhost", [{"name": "doctor", "status": "PASS", "detail": "ready"}])
         self.assertEqual(compose.call_count, 3)
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
-        self.assertEqual(compose.call_args_list[2].args[2], report.parents[1] / "index.html")
+        self.assertEqual(compose.call_args_list[2].args[2], report.parent / "index.html")
 
     def test_feature_pane_renders_each_executed_case(self):
         pane = RUNNER.render_feature_pane(
@@ -84,6 +85,10 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertIn("localhost send/read", pane)
         self.assertIn("Doctor passed", pane)
         self.assertNotIn("<td>doctor</td>", pane)
+
+    def test_artifact_segment_rejects_path_traversal(self):
+        with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_SMOKE_RUN_ID"):
+            RUNNER.artifact_segment("../other-run", "ATM_SMOKE_RUN_ID")
 
 
 if __name__ == "__main__":
