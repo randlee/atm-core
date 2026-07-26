@@ -419,6 +419,8 @@ impl std::fmt::Debug for SharedDb {
 }
 
 fn debug_assert_blocking_only(method: &str) {
+    #[cfg(not(debug_assertions))]
+    let _ = method;
     #[cfg(debug_assertions)]
     {
         let current_thread = std::thread::current();

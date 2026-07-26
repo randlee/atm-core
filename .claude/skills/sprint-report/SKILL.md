@@ -19,15 +19,17 @@ Default: `--table`
 
 ## Data Source
 
-**Always use `atm gh pr list` first** - single call, returns all open PRs with CI and merge state:
+Use the canonical triage report. It resolves the current `integrate/phase-*`
+worktree and reads only that phase's Turtle findings; never assemble counts from
+a sprint worktree, a QA snapshot, or a hand-maintained metadata file.
 
 ```bash
-atm gh pr list
+python3 .claude/skills/triage-report/scripts/triage_report.py \
+  --phase AICH --format vars > /tmp/sprint-report.json
 ```
 
-This is faster and sufficient for populating `sprint_rows` and `integration_row`. Only drill into individual `gh run view` calls if you need failure details for a specific job.
-
-**Dogfooding rule**: If `atm gh pr list` output is missing information needed to fill the report (e.g., no per-job failure detail, no QA state, truncated CI summary), **file a GitHub issue** describing what field or format change would make it sufficient, then improve the command. Do not silently work around gaps with extra `gh` CLI calls - surface them as product issues.
+The command includes current GitHub PR/CI state. If its JSON reports a data
+gap, show it as unknown rather than substituting another data source.
 
 ## Render Command
 
@@ -35,7 +37,6 @@ The template path is relative - must run from the **main repo root** (not a work
 
 ```bash
 cd "${CLAUDE_PROJECT_DIR:-$(git worktree list | head -1 | awk '{print $1}')}"
-echo '<json>' > /tmp/sprint-report.json
 sc-compose render .claude/skills/sprint-report/report.md.j2 --var-file /tmp/sprint-report.json
 ```
 

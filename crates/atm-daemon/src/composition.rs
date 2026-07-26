@@ -1,6 +1,8 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
-use crate::https_transport::{HttpsListenerSet, HttpsMessageTransport, HttpsTransport};
+use crate::https_transport::{
+    HttpsListenerSet, HttpsMessageTransport, HttpsTransport, PeerWireSecurity,
+};
 #[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 #[cfg(windows)]
@@ -129,6 +131,7 @@ pub(crate) struct RuntimeComposition {
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    peer_wire_security: PeerWireSecurity,
     // This is deliberately a transport-only capability. The canonical writer
     // chooses when to call it; this composition root never passes storage or
     // post-write state into the HTTPS adapter.
@@ -175,13 +178,19 @@ impl RuntimeComposition {
         let runtime_assembly =
             crate::test_support::sqlite_runtime_assembly_for_test(&runtime_db_path)
                 .map_err(|error| runtime_assembly_failed(error, &composition_observability))?;
-        Self::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
+        Self::new_with_runtime_assembly(
+            home_dir,
+            observability,
+            runtime_assembly,
+            PeerWireSecurity::MutualTls,
+        )
     }
 
     fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
+        peer_wire_security: PeerWireSecurity,
     ) -> Result<Self, AtmError> {
         let runtime_assembly = runtime_assembly.for_daemon();
         let composition_observability =
@@ -228,6 +237,7 @@ impl RuntimeComposition {
             server_transport,
             request_dispatcher,
             peer_config_store,
+            peer_wire_security,
             https_transport: Mutex::new(None),
             https_listeners,
             composition_observability,
@@ -274,17 +284,42 @@ impl RuntimeComposition {
         if !interfaces.iter().any(|interface| interface.enabled) {
             return Ok(());
         }
-        let certificate = self.peer_config_store.local_certificate()?.ok_or_else(|| {
-            AtmError::validation("enabled HTTPS interfaces require a configured local certificate")
-        })?;
-        let https_transport: Arc<dyn HttpsMessageTransport> =
-            Arc::new(HttpsTransport::from_local_certificate(&certificate)?);
-        let listeners = HttpsListenerSet::bind_enabled(
-            &interfaces,
-            &certificate,
-            self.peer_config_store.list_trusted_peers()?,
-            self.request_dispatcher(),
-        )?;
+        let (https_transport, listeners): (Arc<dyn HttpsMessageTransport>, HttpsListenerSet) =
+            match self.peer_wire_security {
+                PeerWireSecurity::MutualTls => {
+                    let certificate =
+                        self.peer_config_store.local_certificate()?.ok_or_else(|| {
+                            AtmError::validation(
+                                "enabled HTTPS interfaces require a configured local certificate",
+                            )
+                        })?;
+                    (
+                        Arc::new(HttpsTransport::from_local_certificate(&certificate)?),
+                        HttpsListenerSet::bind_enabled(
+                            &interfaces,
+                            &certificate,
+                            self.peer_config_store.list_trusted_peers()?,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+                PeerWireSecurity::PlaintextTest => {
+                    let source_host = interfaces
+                        .iter()
+                        .find(|interface| interface.enabled)
+                        .map(|interface| interface.advertise_host.clone())
+                        .ok_or_else(|| {
+                            AtmError::validation("no enabled peer interface is configured")
+                        })?;
+                    (
+                        Arc::new(HttpsTransport::plaintext_test(source_host)),
+                        HttpsListenerSet::bind_plaintext_test(
+                            &interfaces,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+            };
         let mut slot = self.https_listeners.lock().map_err(|_| {
             AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
         })?;
@@ -644,6 +679,7 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 
 pub(crate) fn compose_runtime(
     observability: Arc<dyn DaemonRuntimeObservability>,
+    peer_wire_security: PeerWireSecurity,
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
@@ -665,18 +701,24 @@ pub(crate) fn compose_runtime(
             &SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability)),
         )
     })?;
-    validate_enabled_peer_configuration(runtime_assembly.peer_config_store().as_ref()).map_err(
-        |error| {
-            runtime_assembly_failed(
-                error,
-                &SubsystemObservability::new(
-                    DaemonSubsystem::Composition,
-                    Arc::clone(&observability),
-                ),
-            )
-        },
-    )?;
-    RuntimeComposition::new_with_runtime_assembly(home_dir, observability, runtime_assembly)
+    if peer_wire_security == PeerWireSecurity::MutualTls {
+        validate_enabled_peer_configuration(runtime_assembly.peer_config_store().as_ref())
+            .map_err(|error| {
+                runtime_assembly_failed(
+                    error,
+                    &SubsystemObservability::new(
+                        DaemonSubsystem::Composition,
+                        Arc::clone(&observability),
+                    ),
+                )
+            })?;
+    }
+    RuntimeComposition::new_with_runtime_assembly(
+        home_dir,
+        observability,
+        runtime_assembly,
+        peer_wire_security,
+    )
 }
 
 #[cfg(test)]

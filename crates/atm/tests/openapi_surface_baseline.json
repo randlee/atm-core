@@ -236,6 +236,7 @@
     "PeerSyncOutcome": {
       "properties": [
         "delivered",
+        "disposition",
         "peer"
       ],
       "required": [

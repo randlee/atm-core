@@ -15,7 +15,6 @@ use crate::SubsystemObservability;
 /// receipt state. AI.28 consumes the recovery variants without adding a
 /// second projection writer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // AI.28 emits the retained recovery variants.
 pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,

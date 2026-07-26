@@ -90,6 +90,7 @@ components:
   parameters:
     Agent: { name: agent, in: query, schema: { type: string } }
     ChatId: { name: chat_id, in: query, schema: { type: string } }
+    Peer: { name: peer, in: path, required: true, schema: { type: string } }
   responses:
     AtmError:
       description: ATM error
@@ -148,6 +149,7 @@ components:
       properties:
         peer: { type: string }
         delivered: { type: integer, minimum: 0 }
+        disposition: { type: string, enum: [completed, disabled, rate_limited] }
     Message:
       type: object
       required: [message_id, from, to, body]

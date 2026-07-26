@@ -3,8 +3,6 @@
 
 triage:PhaseAICH a triage:Phase .
 
-triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 0 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .
-
 triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria "docs/plans/phase-ai/sprint-ai-21-pre-crosshost-evidence-harness.md" .
 triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md" .
 triage:AICH-S3 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 3 ; triage:criteria "docs/plans/phase-ai/sprint-ai-23-crosshost-shared-write-path.md" .
@@ -15,3 +13,5 @@ triage:AICH-S7 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 
 triage:AICH-S8 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 8 ; triage:criteria "docs/plans/phase-ai/sprint-ai-28-bounded-peer-recovery.md" .
 triage:AICH-S9 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 9 ; triage:criteria "docs/plans/phase-ai/sprint-ai-30-semver-http-compatibility.md" .
 triage:AICH-S10 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 10 ; triage:criteria "docs/plans/phase-ai/sprint-ai-29-crosshost-smoke-rerun.md" .
+
+triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 11 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .

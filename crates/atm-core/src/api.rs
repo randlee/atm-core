@@ -140,11 +140,21 @@ pub fn http_route_surface() -> impl Iterator<Item = HttpRoute> {
     HTTP_ROUTE_SPECS.iter().map(|spec| spec.route)
 }
 
-fn route_spec(kind: HttpRouteKind) -> HttpRouteSpec {
-    *HTTP_ROUTE_SPECS
-        .iter()
-        .find(|spec| spec.kind == kind)
-        .expect("every HTTP route kind has one shared route specification")
+fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec {
+    // Keep outbound route selection exhaustive: adding a route kind cannot
+    // compile until its shared codec entry is selected here.
+    match kind {
+        HttpRouteKind::List => &HTTP_ROUTE_SPECS[0],
+        HttpRouteKind::Write => &HTTP_ROUTE_SPECS[1],
+        HttpRouteKind::Clear => &HTTP_ROUTE_SPECS[2],
+        HttpRouteKind::Inspect => &HTTP_ROUTE_SPECS[3],
+        HttpRouteKind::Receive => &HTTP_ROUTE_SPECS[4],
+        HttpRouteKind::Doctor => &HTTP_ROUTE_SPECS[5],
+        HttpRouteKind::PeerSync => &HTTP_ROUTE_SPECS[6],
+        HttpRouteKind::RuntimeReload => &HTTP_ROUTE_SPECS[7],
+        HttpRouteKind::Compatibility => &HTTP_ROUTE_SPECS[8],
+        HttpRouteKind::Heartbeat => &HTTP_ROUTE_SPECS[9],
+    }
 }
 
 fn route_kind_for_request(request: &RequestEnvelope) -> HttpRouteKind {

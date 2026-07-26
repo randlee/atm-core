@@ -7,7 +7,7 @@
   triage:foundAt "2026-07-25T06:53:26Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S3 ;
   triage:title "openapi_surface test never cross-checks live api.rs routes against openapi.yaml, letting route drift ship silently" ;
-  triage:description "Surfaced by arch-qa during the AI.23 round-2 recheck. The only automated gate over docs/atm-daemon/openapi.yaml is crates/atm/tests/openapi_surface.rs, which only diffs the YAML against its own prior baseline snapshot (around line 88) - it never cross-checks the live route table in crates/atm-core/src/api.rs (endpoint_for and decode_route_request match arms) against openapi.yaml or ADR-033. This is a structural gap: it is why the PeerSync route in api.rs was able to ship with no corresponding OpenAPI entry, ADR-033 row, or http-api.md row, completely undetected by CI." ;
+  triage:description "Surfaced by arch-qa during the AI.23 round-2 recheck. The only automated gate over docs/atm-daemon/openapi.yaml is crates/atm/tests/openapi_surface.rs, which only diffs the YAML against its own prior baseline snapshot (around line 88) - it never cross-checks the live route table in crates/atm-core/src/api.rs (endpoint_for and decode_route_request match arms) against openapi.yaml or ADR-033. This is a structural gap: it is why the PeerSync route in api.rs was able to ship with no corresponding OpenAPI entry, ADR-033 row, or http-api.md row, completely undetected by CI. Reconfirmed by req-qa round 3 (2026-07-26) on feature/pAI-s23-crosshost-shared-write-path @ 985a6d46. Finding remains open and unaddressed. Correction: extend openapi_surface test to parse crates/atm-core/src/api.rs route table (endpoint_for/decode_route_request/HTTP_ROUTE_INVENTORY constant) and assert every live route has a corresponding openapi.yaml entry." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "followup_pass" ;
   triage:category "testing" ;
@@ -16,14 +16,16 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s21/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s24/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s24/af2fbb83> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
 
@@ -60,6 +62,18 @@
   triage:headSha "c528137c" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
 
+<urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/tests/openapi_surface.rs" ;
+  triage:line 88 ;
+  triage:snippet "openapi_surface_is_additions_only (lines 88-129) diffs openapi.yaml against baseline snapshot only; never cross-checks live route table in crates/atm-core/src/api.rs endpoint_for/decode_route_request" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Req-qa round 3 reconfirmation (2026-07-26): test gap persists. openapi_surface test only diffs YAML against baseline, never parses live route table in api.rs::HTTP_ROUTE_INVENTORY or endpoint_for/decode_route_request. This structural gap enables undocumented routes to ship undetected. Correction: extend test to parse api.rs route table and assert every live route has corresponding openapi.yaml entry." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/985a6d46> .
+
 <urn:atm:triage:occurrence/AI23-IMPORTANT-008/pAI-s24/1>
   a triage:Occurrence ;
   triage:file "crates/atm/tests/openapi_surface.rs" ;
@@ -90,6 +104,13 @@
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s24/af2fbb83>
