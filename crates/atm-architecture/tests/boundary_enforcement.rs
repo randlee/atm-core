@@ -271,7 +271,7 @@ fn canonical_write_router_has_one_host_routing_decision() {
 #[test]
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
-    let router_path = root.join("crates/atm-daemon/src/runtime_health/post_write_router.rs");
+    let router_path = root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs");
     let source = read_source(&router_path);
     let file = syn::parse_file(&source).unwrap_or_else(|error| {
         panic!("{} must remain valid Rust: {error}", router_path.display())
