@@ -22,8 +22,10 @@ impl DaemonRequestDispatcher {
     ) -> Result<u16, AtmError> {
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
             chrono::Utc::now()
-                - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
-                    AtmError::validation("peer sync maximum message age is out of range")
+                - chrono::Duration::from_std(policy.max_message_age).map_err(|source| {
+                    AtmError::validation(format!(
+                        "peer sync maximum message age is out of range: {source}"
+                    ))
                 })?,
         );
         let writes = self.outbound_message_query.recent_outbound_for_peer(
@@ -41,8 +43,10 @@ impl DaemonRequestDispatcher {
                     "peer reconciliation exceeded its bounded request deadline",
                 ));
             }
-            let request = serde_json::from_str(&stored.request_json).map_err(|_source| {
-                AtmError::mailbox_read("stored immutable peer outbound write is invalid")
+            let request = serde_json::from_str(&stored.request_json).map_err(|source| {
+                AtmError::mailbox_read(format!(
+                    "stored immutable peer outbound write is invalid: {source}"
+                ))
             })?;
             transport.deliver(request, peer, deadline)?;
             delivered_request_json.insert(stored.request_json);
