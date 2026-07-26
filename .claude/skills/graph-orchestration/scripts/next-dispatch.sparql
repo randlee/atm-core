@@ -1,0 +1,62 @@
+# next-dispatch.sparql — candidate sprint selection for the dispatcher.
+#
+# This query deliberately excludes closed, in-flight, and natively blocked
+# sprints.  Python assembles the final tagged result and adds any findings
+# promoted from a closed sprint.
+#
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?sprint ?order ?criteria WHERE {
+  ?sprint a triage:Sprint ;
+           triage:inPhase $PHASE ;
+           triage:order ?order ;
+           triage:criteria ?criteria .
+
+  # QAClosed is terminal for assignment.  A late finding is promoted by the
+  # post-closure-remediation query instead of reopening this sprint.
+  FILTER NOT EXISTS {
+    ?closed a triage:QAClosed ; triage:ofSprint ?sprint .
+  }
+
+  # Assignment without a later Completion is in flight.
+  FILTER NOT EXISTS {
+    ?assignment a triage:Assignment ;
+                triage:ofSprint ?sprint ;
+                triage:assignedAt ?assignedAt .
+    FILTER NOT EXISTS {
+      ?completion a triage:Completion ;
+                  triage:ofSprint ?sprint ;
+                  triage:at ?completedAt .
+      FILTER (?completedAt > ?assignedAt)
+    }
+  }
+
+  # An unresolved blocking finding makes this sprint ineligible.  It is not
+  # reopened by the scheduler; later non-blocked work may proceed.
+  FILTER NOT EXISTS {
+    ?finding a triage:Finding ;
+             triage:foundIn ?sprint ;
+             triage:severity "blocking" .
+    FILTER NOT EXISTS {
+      ?resolution a triage:Resolution ;
+                  triage:resolves ?finding .
+    }
+  }
+
+  # Include new work and completed sprints with open non-blocking findings.
+  FILTER (
+    NOT EXISTS { ?completion a triage:Completion ; triage:ofSprint ?sprint . }
+    || EXISTS {
+      ?finding a triage:Finding ;
+               triage:foundIn ?sprint ;
+               triage:severity ?severity .
+      FILTER (?severity != "blocking")
+      FILTER NOT EXISTS {
+        ?resolution a triage:Resolution ; triage:resolves ?finding .
+      }
+    }
+  )
+}
+ORDER BY ?order

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# next-dev-task — Cursor resolution for graph-orchestration.
+# next-dev-task — Deprecated compatibility projection for graph-orchestration.
 #
 # Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]
 # TTL_DIR: path to .sprints/<PHASE>/ on the integrate/phase-N branch
 #   PHASE_LOCAL  e.g. "F" (expanded to urn:atm:triage:PhaseF)
 #   TTL_DIR      path to directory containing structure.ttl and events.ttl
 #
+# New orchestration must call next-dispatch. This wrapper preserves the old
+# cursor-shaped JSON for callers that have not migrated yet.
 # Returns JSON on stdout:
 #   { "phase": "TRAVERSAL", "vars": { "sprint": "...", "sprint_iri": "...", "sprint_order": N, "criteria_doc": "..." } }
 #   { "phase": "DONE", "vars": {} }
@@ -35,6 +37,6 @@ if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
 fi
 
 if [[ $# -eq 3 ]]; then
-  exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" --validate-only
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" --validate-only --legacy-cursor
 fi
-exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR"
+exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" --legacy-cursor

@@ -1,0 +1,58 @@
+# post-closure-remediation.sparql — derive forward targets for late findings.
+#
+# The Finding's triage:foundIn remains the immutable discovery sprint.  This
+# query only derives later candidate sprints; it does not mutate the finding.
+# Python selects the earliest candidate that is not closed, in flight, or
+# natively blocked.
+#
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?finding ?findingId ?severity ?foundAt ?origin ?originOrder ?closedAt
+       ?candidate ?candidateOrder WHERE {
+  ?origin a triage:Sprint ;
+          triage:inPhase $PHASE ;
+          triage:order ?originOrder .
+  ?closed a triage:QAClosed ;
+          triage:ofSprint ?origin ;
+          (triage:closedAt|triage:at) ?closedAt .
+  ?finding a triage:Finding ;
+           triage:foundIn ?origin ;
+           triage:foundAt ?foundAt .
+  OPTIONAL { ?finding triage:findingId ?findingId . }
+  OPTIONAL { ?finding triage:severity ?severity . }
+  FILTER (?foundAt > ?closedAt)
+  FILTER NOT EXISTS {
+    ?resolution a triage:Resolution ; triage:resolves ?finding .
+  }
+
+  ?candidate a triage:Sprint ;
+             triage:inPhase $PHASE ;
+             triage:order ?candidateOrder .
+  FILTER (?candidateOrder > ?originOrder)
+  FILTER NOT EXISTS {
+    ?candidateClosed a triage:QAClosed ; triage:ofSprint ?candidate .
+  }
+  FILTER NOT EXISTS {
+    ?candidateFinding a triage:Finding ;
+                      triage:foundIn ?candidate ;
+                      triage:severity "blocking" .
+    FILTER NOT EXISTS {
+      ?candidateResolution a triage:Resolution ;
+                           triage:resolves ?candidateFinding .
+    }
+  }
+  FILTER NOT EXISTS {
+    ?candidateAssignment a triage:Assignment ;
+                          triage:ofSprint ?candidate ;
+                          triage:assignedAt ?candidateAssignedAt .
+    FILTER NOT EXISTS {
+      ?candidateCompletion a triage:Completion ;
+                           triage:ofSprint ?candidate ;
+                           triage:at ?candidateCompletedAt .
+      FILTER (?candidateCompletedAt > ?candidateAssignedAt)
+    }
+  }
+}
+ORDER BY ?finding ?candidateOrder

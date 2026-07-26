@@ -670,6 +670,175 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         assert "Usage: next-dev-task" in result.stderr
 
 
+# ── next-dispatch scheduler tests ────────────────────────────────────────────
+
+class TestNextDispatch:
+    def _make_repo(
+        self,
+        tmp_path: Path,
+        structure_ttl: str,
+        events_ttl: str = "",
+        findings: dict[str, str] | None = None,
+    ) -> Path:
+        repo = tmp_path / "repo"
+        ttl_dir = repo / ".sprints" / "F"
+        ttl_dir.mkdir(parents=True)
+        (ttl_dir / "structure.ttl").write_text(structure_ttl)
+        if events_ttl:
+            (ttl_dir / "events.ttl").write_text(events_ttl)
+        (repo / ".triage").mkdir()
+        for name, content in (findings or {}).items():
+            path = repo / ".triage" / "phase-F" / "findings" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        return repo
+
+    def _run(self, repo: Path, *args: str, wrapper: str = "next-dispatch") -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env["GRAPH_ORCH_PYTHON"] = sys.executable
+        return subprocess.run(
+            [str(SCRIPTS / wrapper), *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+    def test_closed_sprint_selects_next_open_sprint(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1"), (2, "S2")]), events)
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "dispatch_task"
+        assert payload["target"]["sprint"] == "S2"
+
+    def test_assignment_after_close_is_refused(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+triage:a1 a triage:Assignment ; triage:ofSprint triage:S1 ;
+    triage:assignedAt "2026-07-01T13:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1"), (2, "S2")]), events)
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "REFUSED: S1 is CLOSED" in result.stderr
+
+    def test_validate_only_also_rejects_assignment_after_close(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+triage:a1 a triage:Assignment ; triage:ofSprint triage:S1 ;
+    triage:assignedAt "2026-07-01T13:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]), events)
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "REFUSED: S1 is CLOSED" in result.stderr
+
+    def test_late_finding_is_promoted_to_next_open_sprint(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        finding = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T13:00:00Z"^^xsd:dateTime ;
+    triage:severity "important" ; triage:description "late QA finding" .
+"""
+        repo = self._make_repo(
+            tmp_path,
+            structure([(1, "S1"), (2, "S2")]),
+            events,
+            {"F-1.ttl": finding},
+        )
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "dispatch_fix"
+        assert payload["target"]["sprint"] == "S2"
+        assert payload["outstanding_finding_ids"] == ["F-1"]
+        assert payload["promotions"][0]["origin_sprint"] == "S1"
+
+    def test_blocked_sprint_is_skipped_without_reopening_closed_sprint(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        finding = PREFIX + """
+triage:f2 a triage:Finding ; triage:findingId "F-2" ;
+    triage:foundIn triage:S2 ;
+    triage:foundAt "2026-07-01T13:00:00Z"^^xsd:dateTime ;
+    triage:severity "blocking" ; triage:description "blocked S2" .
+"""
+        repo = self._make_repo(
+            tmp_path,
+            structure([(1, "S1"), (2, "S2"), (3, "S3")]),
+            events,
+            {"F-2.ttl": finding},
+        )
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "dispatch_task"
+        assert payload["target"]["sprint"] == "S3"
+        assert payload["blocked_sprints"][0]["sprint"] == "S2"
+
+    def test_dispatch_wrapper_rejects_manual_target_override(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        result = self._run(
+            repo,
+            "F",
+            str(repo / ".sprints" / "F"),
+            "--sprint=S1",
+            wrapper="dispatch",
+        )
+        assert result.returncode == 1
+        assert "manual sprint/branch/finding overrides" in result.stderr
+
+    def test_duplicate_qaclosed_events_fail_closed(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+triage:q2 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T13:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]), events)
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+        assert result.returncode == 1
+        assert "duplicate QAClosed" in result.stderr
+
+    def test_late_finding_with_no_descendant_is_not_done(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        finding = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T13:00:00Z"^^xsd:dateTime ;
+    triage:severity "minor" ; triage:description "late finding" .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]), events, {"F-1.ttl": finding})
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "blocked"
+        assert "no eligible open descendant" in payload["reason"]
+
+
 # ── assignee-busy CLI tests ───────────────────────────────────────────────────
 
 class TestAssigneeBusy:

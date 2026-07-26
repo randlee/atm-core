@@ -1,0 +1,20 @@
+# closed-sprint-targets.sparql — assignments that violate QA closure.
+#
+# Assignments made before the closure timestamp are historical evidence and
+# remain valid.  Any assignment at or after QAClosed is a dispatch violation.
+#
+# Parameter: $PHASE (bound via initBindings)
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?assignment ?sprint ?assignedAt ?closedAt WHERE {
+  ?sprint a triage:Sprint ; triage:inPhase $PHASE .
+  ?assignment a triage:Assignment ;
+              triage:ofSprint ?sprint ;
+              triage:assignedAt ?assignedAt .
+  ?closed a triage:QAClosed ;
+          triage:ofSprint ?sprint ;
+          (triage:closedAt|triage:at) ?closedAt .
+  FILTER (?assignedAt >= ?closedAt)
+}
+ORDER BY ?assignedAt ?sprint

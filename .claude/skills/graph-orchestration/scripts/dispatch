@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# dispatch — guarded dispatch wrapper.
+#
+# The scheduler is the only source of truth for sprint/branch/finding targets.
+# Manual overrides are rejected instead of being treated as assertions.
+
+set -euo pipefail
+
+for arg in "$@"; do
+  case "$arg" in
+    --sprint=*|--branch=*|--target=*|--finding-id=*|--finding-ids=*|-s|--sprint|-b|--branch|-t|--target)
+      echo >&2 "REFUSED: manual sprint/branch/finding overrides are not allowed; run next-dispatch"
+      exit 1
+      ;;
+  esac
+done
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo >&2 "Usage: dispatch <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/next-dispatch" "$@"

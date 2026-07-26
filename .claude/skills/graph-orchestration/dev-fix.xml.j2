@@ -1,7 +1,7 @@
 ---
 name: graph-dev-fix
 version: 1.0.0
-description: Fix pass for a sprint node — includes all open findings at the cursor position. Used for both mid-sprint fix passes (TRAVERSAL with findings) and end-of-sprint cleanup (CLEANUP phase).
+description: Fix pass for the exact target and finding IDs returned by next-dispatch. A closed sprint is never reopened and a manually selected target is invalid.
 format: xml
 required_variables:
   - task_id
@@ -24,7 +24,7 @@ defaults:
   cleanup_mode: "false"
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" node="{{ node_id }}" order="{{ node_order }}" assignee="{{ assignee }}" mode="fix"{% if cleanup_mode == "true" %} phase="CLEANUP"{% endif %}>
-  {# When cleanup_mode == "true": this is a CONSOLIDATED phase cleanup on the highest sprint's merged branch.
+  {# When cleanup_mode == "true": this is an explicit CONSOLIDATED phase remediation on the highest sprint's merged branch.
      All prior sprint branches have been merged forward into this branch before dispatch.
      The findings list covers the ENTIRE phase — not just one sprint. Fix all findings here;
      do not return any finding to its origin branch. #}
@@ -55,9 +55,10 @@ defaults:
 
   <workflow>
     <step id="a">ACK this message immediately.</step>
-    <step id="b">Read `{{ criteria_doc }}` before editing. All acceptance criteria must still be met — do not weaken or skip any criterion from the original spec.</step>
-    <step id="c">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
-    <step id="d">Work through every finding in `<open-findings>` in listed order. Fix all. For blocking: address root cause fully. For non-blocking: fix all; skip only on direct conflict with a blocking fix.</step>
+    <step id="b">Before reading code or editing, verify this assignment was produced by `next-dispatch` with `dispatch_fix` for this exact open sprint and the exact finding IDs in `<open-findings>`. If not, stop and report the invalid assignment.</step>
+    <step id="c">Read `{{ criteria_doc }}` before editing. All acceptance criteria must still be met — do not weaken or skip any criterion from the original spec.</step>
+    <step id="d">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
+    <step id="e">Work through every finding in `<open-findings>` in listed order. Fix all. For blocking: address root cause fully. For non-blocking: fix all; skip only on direct conflict with a blocking fix.</step>
   </workflow>
 
   <final-actions>

@@ -1,7 +1,7 @@
 ---
 name: graph-orchestration
-version: 0.5.0
-description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic query loop — cursor → triaging-findings check → dispatch → await Completion → re-query. No agent ever decides phase, cursor position, or done-ness; queries answer all of it. Derived from codex-orchestration; replaces static sprint-doc assignments with a live RDF event log. Adds Assignment events (collision prevention), Completion invalidation (blocking post-Completion finding snaps cursor back), and CLEANUP phase (non-blocking findings after all sprints complete).
+version: 0.6.0
+description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic next-dispatch state machine; no agent may choose a sprint, branch, finding list, or done-ness. QAClosed is immutable, closed targets are refused, and late findings are promoted to the earliest eligible open descendant.
 repo: atm-core
 requires:
   cli:
@@ -34,12 +34,13 @@ depends_on:
 
 Mechanical phase orchestration backed by an append-only RDF event log.
 Every orchestration decision is a SPARQL query result. Agents never decide
-phase, cursor position, or whether a sprint is done.
+phase, dispatch target, finding IDs, or whether a sprint is done. Merge order
+is a separate gate and does not prevent dispatching later non-blocked work.
 
 ## Step 1 — Verify dependencies
 
 Run the dependency preflight as the first executable step, before discovering
-the phase, invoking an agent, reading the cursor, or appending a TTL event:
+the phase, invoking an agent, reading dispatch state, or appending a TTL event:
 
 ```bash
 .claude/skills/graph-orchestration/scripts/preflight
@@ -89,7 +90,8 @@ triage:<PHASE>-S2 a triage:Sprint ; triage:inPhase triage:Phase<PHASE> ; triage:
 # ... one entry per sprint, orders unique and contiguous from 1
 ```
 
-**`.sprints/<PHASE>/events.ttl`** — empty initially; events (Assignments, Completions)
+**`.sprints/<PHASE>/events.ttl`** — empty initially; append-only events
+(Assignments, Completions, and immutable QAClosed records)
 are appended here as sprints progress. Never edited or deleted.
 
 **`ac/<PHASE>S*.md`** — acceptance criteria documents, one per sprint. The
@@ -98,7 +100,7 @@ the phase starts.
 
 Run `validate-structure.sparql` at creation. It must return zero rows.
 
-Before relying on cursor output, validate the raw findings directory as well:
+Before relying on scheduler output, validate the raw findings directory as well:
 
 ```bash
 python3 .claude/skills/graph-orchestration/scripts/validate-findings.py \
@@ -123,7 +125,7 @@ missing input, invalid regex, or a broken query). The CLI exits 0, 1, and 2 for
 those outcomes respectively; `--json` emits the tagged result for callers.
 
 `query_runner.py` invokes this validator before loading the graph, including
-for `--validate-only`; `next-dev-task` therefore cannot resolve a cursor while
+for `--validate-only`; `next-dispatch` therefore cannot resolve a target while
 any `.triage/*/findings` directory contains an error-level diagnostic. It
 validates every findings directory (not only the directory name that appears
 to match the current phase), then scopes findings by the phase's declared
@@ -131,68 +133,60 @@ to match the current phase), then scopes findings by the phase's declared
 records from disappearing in the membership filter. A `validation:fail` blocks
 with exit 1, and a validator execution `error` blocks with exit 2.
 
-## Orchestrator Loop
+## Next-dispatch loop
 
 ```bash
-RESULT=$(next-dev-task F .sprints/F)
-PHASE=$(echo "$RESULT" | jq -r .phase)
+RESULT=$(next-dispatch F .sprints/F)
+ACTION=$(echo "$RESULT" | jq -r .dispatch)
 ```
 
-Four outcomes from the cursor query:
+The result is a discriminated union. The dispatcher is the only authority for
+the target and exact finding IDs:
 
-| `phase` | Meaning |
+| `dispatch` | Meaning |
 |---|---|
-| `TRAVERSAL` | A sprint is ready (no in-flight Assignment, no valid Completion) — check triaging-findings to pick template |
-| `AWAITING` | Cursor is empty but some sprints lack valid Completions — in-flight assignments are being worked |
-| `CLEANUP` | All sprints have valid Completions but open non-blocking findings remain |
-| `DONE` | All sprints have valid Completions and no open non-blocking findings — phase complete |
+| `dispatch_task` | The exact open sprint is eligible for new work. |
+| `dispatch_fix` | The exact open sprint must fix the returned `outstanding_finding_ids`; promoted findings are included. |
+| `awaiting_qa` | Work is assigned or a completion is awaiting QA/QAClosed. |
+| `blocked` | Every remaining open sprint has an unresolved native blocker. |
+| `done` | Every sprint has an immutable QAClosed event and no late finding requires remediation. |
 
-After getting a `TRAVERSAL` result, the orchestrator:
-1. Appends an Assignment event to events.ttl for this sprint
-2. Checks `.triage/` for blocking/important/minor findings (via triaging-findings skill)
-3. Picks the template: no findings → dev-task.xml.j2; blocking findings present → dev-fix.xml.j2
+The wrapper refuses manual sprint, branch, target, or finding overrides. A
+`dispatch_fix` is valid only for the exact target and exact IDs returned by the
+same invocation. Team-lead appends the Assignment only after the required ATM
+acknowledgement, then re-runs `next-dispatch` after every event.
 
+QA closure is terminal for assignment. An assignment at or after
+`triage:closedAt` fails with:
+
+```text
+REFUSED: AICH-S22 is CLOSED. Post-closure findings must target the earliest open descendant or remediation sprint.
 ```
-cursor_result = next-dev-task F .sprints/F
 
-if cursor_result.phase == "DONE":
-    → phase complete, merge
-
-if cursor_result.phase == "AWAITING":
-    → wait for in-flight dev work; poll again after expected delivery
-
-if cursor_result.phase == "CLEANUP":
-    → dispatch dev-fix.xml.j2 for open non-blocking findings
-
-# TRAVERSAL path
-append Assignment event to events.ttl for cursor sprint
-findings = run triaging-findings skill for cursor sprint
-
-if findings has blocking:
-    → dispatch dev-fix.xml.j2
-else:
-    → dispatch dev-task.xml.j2
-```
+Findings retain their immutable `triage:foundIn` origin. If `foundAt` is later
+than QAClosed, `post-closure-remediation.sparql` promotes the finding forward;
+the scheduler never reopens the closed sprint. A blocked sprint is skipped so
+the next eligible non-blocked sprint can proceed.
 
 **Hard rules:**
-- Never cache phase or cursor across events. Re-run `next-dev-task` after every
+- Never cache phase or dispatch target across events. Re-run `next-dispatch` after every
   Completion or Assignment.
 - Never interpret findings in this skill — that is triaging-findings' job. If
   the orchestrator is tempted to reason about the graph, the model is broken —
   file a design issue, do not improvise.
 - QA runs after every dev Completion. Trigger immediately on Completion receipt.
-- A Completion can be invalidated: if QA files a blocking finding with
-  foundAt > completedAt, the Completion is invalid and the cursor snaps back.
-  Team-lead re-dispatches by appending a new Assignment.
-- Default to consolidated CLEANUP on the highest sprint branch. Dispatching
+- A Completion can be followed by findings, but it does not reopen a QAClosed
+  sprint. Late findings are promoted forward and require a returned
+  `dispatch_fix` target.
+- Default to consolidated remediation on the highest sprint branch. Dispatching
   non-blocking findings back to origin branches causes 3–4× more QA cycles —
   avoid unless there is a specific reason (e.g. a finding is isolated to an
   early sprint with no forward merge path).
 - **Team-lead is sole writer of TTL events. Never delegate TTL writes to dev agents.**
 
-## Dev Dispatch (no blocking findings)
+## Dev Dispatch (no outstanding findings)
 
-`next-dev-task` returns the cursor sprint, its order, and its criteria path.
+`next-dispatch` returns the exact sprint, its order, and its criteria path.
 Populate and send `dev-task.xml.j2`:
 
 | j2 variable | Source |
@@ -201,11 +195,11 @@ Populate and send `dev-task.xml.j2`:
 | `sprint_order` | `result.vars.sprint_order` |
 | `criteria_doc` | `result.vars.criteria_doc` |
 
-## Fix Dispatch (blocking findings present)
+## Fix Dispatch (outstanding findings present)
 
-Same cursor sprint, but triaging-findings reports blocking findings on it.
-Use `dev-fix.xml.j2` instead. The findings payload comes from triaging-findings,
-not from events.ttl.
+Use `dev-fix.xml.j2` when `dispatch` is `dispatch_fix`. The findings payload
+comes from `outstanding_finding_ids` in the scheduler result, including any
+forward promotions; it must not be recomputed or edited by an agent.
 
 ## QA Gate
 
@@ -236,8 +230,9 @@ QA rules:
   events.ttl.
 - Merge gate: 0 Blocking + 0 Important + 0 Minor, no exceptions.
 
-After QA completes, re-run `next-dev-task` to get the new cursor, then run
-triaging-findings to determine template selection.
+After QA completes, append QAClosed when the sprint is closed, then re-run
+`next-dispatch`. A QA verdict that remains open is represented by findings and
+will return `dispatch_fix` or a later eligible target.
 
 ## Appending Events
 
@@ -259,7 +254,7 @@ triage:a<N> a triage:Assignment ;
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Assignment <PHASE>-S<n>"
 # Validate after every append
-.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
+.claude/skills/graph-orchestration/scripts/next-dispatch F .sprints/F --validate-only
 
 # Completion — append when team-lead receives dev's ATM completion message
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
@@ -269,7 +264,7 @@ triage:c<N> a triage:Completion ;
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Completion <PHASE>-S<n>"
 # Validate after every append
-.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
+.claude/skills/graph-orchestration/scripts/next-dispatch F .sprints/F --validate-only
 
 # Resolution — append when team-lead confirms a non-blocking finding is fixed
 cat >> .sprints/<PHASE>/events.ttl <<'TTL'
@@ -279,7 +274,7 @@ triage:r<N> a triage:Resolution ;
 TTL
 git add .sprints/<PHASE>/events.ttl && git commit -m "event: Resolution f<N>"
 # Validate after every append
-.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F --validate-only
+.claude/skills/graph-orchestration/scripts/next-dispatch F .sprints/F --validate-only
 ```
 
 **Assignment uniqueness**: Each Assignment must include the dev agent name and
@@ -294,42 +289,56 @@ Invalidation below).
 Findings live exclusively in `.triage/*/findings/*.ttl` and are managed by the
 triaging-findings skill. Do not append raw finding data to events.ttl.
 
+**QA closure — append exactly once when QA accepts the sprint:**
+
+```turtle
+triage:q<N> a triage:QAClosed ;
+    triage:ofSprint triage:Phase<X>-S<n> ;
+    triage:closedAt "<UTC>"^^xsd:dateTime .
+```
+
+`QAClosed` is immutable. Duplicate closure events, missing timestamps, and
+assignments at or after closure are validation errors. Historical assignments
+before closure remain evidence and are not rewritten.
+
 ## sc-compose Integration
 
-`next-dev-task` returns JSON shaped for direct sc-compose consumption:
+`next-dispatch` returns JSON shaped for direct sc-compose consumption:
 
 ```json
 {
-  "phase": "TRAVERSAL",
-  "vars": {
+  "schema": "next-dispatch/v1",
+  "dispatch": "dispatch_fix",
+  "target": {
     "sprint": "S7",
     "sprint_iri": "urn:atm:triage:S7",
     "sprint_order": 1,
     "criteria_doc": "ac/S7.md"
-  }
+  },
+  "outstanding_finding_ids": ["F-123"],
+  "promotions": []
 }
 ```
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
-Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
-consulting triaging-findings:
+Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) follows the
+discriminant; agents must not recompute it from a second graph scan:
 
 ```bash
-RESULT=$(next-dev-task F .sprints/F)
-PHASE_VAL=$(echo "$RESULT" | jq -r .phase)
+RESULT=$(next-dispatch F .sprints/F)
+ACTION=$(echo "$RESULT" | jq -r .dispatch)
 
-if [ "$PHASE_VAL" = "DONE" ]; then
+if [ "$ACTION" = "done" ]; then
   echo "Phase complete."
   exit 0
 fi
 
 # Write graph-derived vars
 echo "$RESULT" | jq .vars > /tmp/graph-vars.json
-SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
+SPRINT=$(echo "$RESULT" | jq -r .target.sprint)
 
-# Check findings via triaging-findings skill (orchestrator step)
-# If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
-TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
+TEMPLATE="dev-fix.xml.j2"
+if [ "$ACTION" = "dispatch_task" ]; then TEMPLATE="dev-task.xml.j2"; fi
 
 # Render via sc-compose (orchestrator supplies remaining vars)
 sc-compose render \
@@ -342,29 +351,24 @@ sc-compose render \
   --var assignee="arch-ctm"
 ```
 
-## Completion Invalidation
+## Completion and closure
 
-A Completion is valid only if no blocking finding for that sprint was filed
-with `foundAt > completedAt`. If QA files a blocking finding after a
-Completion, the Completion is invalidated:
+A Completion records developer delivery; it is not QA acceptance. QA acceptance
+is recorded separately by exactly one immutable `QAClosed` event. A finding
+filed after Completion is open until a Resolution or a later valid fix pass.
+When it is filed after QAClosed, the finding remains tied to its original
+`foundIn` sprint and is promoted by `post-closure-remediation.sparql`.
 
-1. `cursor.sparql` snaps back to that sprint (the truly-in-flight filter
-   does not block — dev has sent a Completion, so the sprint is not in-flight;
-   a new Assignment is required for re-dispatch)
-2. Team-lead appends a new Assignment event to events.ttl for the sprint
-3. Dev fixes the blocker and sends an ATM completion message; team-lead
-   appends a new Completion
-4. Dev merges forward into the next sprint's worktree, picking up any
-   important/minor findings on the way (Step 4 in the j2 template)
+This guarantees QA always has the final word without reopening history. Genuine
+merge order remains strictly ordered, but a later open sprint without native
+blockers can be dispatched while an earlier sprint's merge is pending.
 
-This guarantees QA always has the final word. A sprint is never permanently
-"done" while a blocking finding exists postdating its Completion.
+## Consolidated remediation
 
-## Cleanup Pass
-
-When `next-dev-task` returns `phase: "CLEANUP"`, all sprint Completions are valid
-and CI is green, but open important/minor findings remain. Fix ALL of them in a
-single pass on the highest sprint branch.
+When `next-dispatch` returns `dispatch_fix`, fix the exact returned IDs on the
+returned target. A phase-wide cleanup can still be consolidated on the highest
+merged branch, but it is an explicit merge/assignment decision; it is not a
+hidden `CLEANUP` state and must not alter the scheduler's target.
 
 **Why consolidated:** fixing findings on the branch where they were found causes
 8–12 dev-QA cycles. Fixing all findings on one merged branch reduces this to 2–3.
@@ -378,18 +382,18 @@ This 3–4× speedup is load-bearing — do not deviate.
    - Merge S2 → S3's branch
    - ... up to S(n-1) → S(n)'s branch
 3. Run CI on the merged S(n) branch. Fix any merge conflicts before proceeding.
-4. Collect all open important/minor findings via `open-findings-sprint.sparql`.
-5. Dispatch ONE dev-fix assignment to S(n)'s worktree with the full findings list.
+4. Collect the exact IDs from `next-dispatch`.
+5. Dispatch ONE dev-fix assignment to the returned worktree with that list.
 6. QA reviews the merged branch once.
 
 **Strong default:** Fix important/minor findings on the consolidated highest
-sprint branch during CLEANUP. Dispatching findings back to the branch where
+sprint branch when the integration plan explicitly calls for consolidation. Dispatching findings back to the branch where
 they were found causes 3–4× more QA cycles and is rarely worth it. Only
 deviate if a finding is completely isolated to an early sprint with no
 forward merge dependency and re-merging would be higher churn than fixing
 in place.
 
-**CLEANUP branch variables for sc-compose:**
+**Remediation branch variables for sc-compose:**
 - `worktree_path` = highest-order sprint's worktree
 - `branch` = highest-order sprint's branch
 - `pr_target` = phase integration branch
@@ -406,7 +410,8 @@ graph-orchestration:
 | `triage:Phase` | — | Phase identity node |
 | `triage:Sprint` | `inPhase`, `order`, `criteria` | One per sprint; `order` is unique within a phase |
 | `triage:Assignment` | `ofSprint`, `assignedTo`, `assignedAt` | Appended by team-lead when dispatching; must be unique per sprint |
-| `triage:Completion` | `ofSprint`, `at` | Appended by team-lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
+| `triage:Completion` | `ofSprint`, `at` | Appended by team-lead on receipt of dev's ATM completion message; delivery is distinct from QA closure |
+| `triage:QAClosed` | `ofSprint`, `closedAt` | Immutable terminal QA acceptance; exactly one per sprint |
 | `triage:Resolution` | `resolves`, `resolvedAt` | Appended by team-lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
 Findings are defined by the triaging-findings skill and live in
@@ -419,67 +424,72 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 
 | Script | Purpose |
 |---|---|
-| `next-dev-task` | Entry point: cursor resolution, returns JSON |
+| `next-dispatch` | Canonical entry point: deterministic tagged dispatch result |
+| `dispatch` | Guarded wrapper; refuses manual sprint/branch/finding overrides |
+| `next-dev-task` | Deprecated cursor-shaped compatibility projection |
 | `preflight` | First-step dependency gate; requires CLI + Python binding `sc-compose >= 1.2.0`, `jq`, and `python3` + `rdflib` |
 | `validate-findings.py` | Mandatory raw findings/provenance gate invoked before query resolution |
 | `query_runner.py` | Python SPARQL runner (rdflib) |
+| `next-dispatch.sparql` | Selects earliest open, non-in-flight, non-blocked sprint; parameter: `$PHASE` |
+| `closed-sprint-targets.sparql` | Finds assignments at/after QAClosed; non-zero rows refuse dispatch; parameter: `$PHASE` |
+| `post-closure-remediation.sparql` | Promotes late findings to later eligible descendants without changing `foundIn`; parameter: `$PHASE` |
 | `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |
-| `open-findings-sprint.sparql` | Returns open non-blocking findings across the phase (used for CLEANUP detection); parameter: `$PHASE` |
-| `all-complete.sparql` | Returns sprints lacking a valid Completion; zero rows = all sprints done, proceed to CLEANUP/DONE check; parameter: `$PHASE` |
+| `open-findings-sprint.sparql` | Legacy report of open non-blocking findings; not a dispatch authority; parameter: `$PHASE` |
+| `all-complete.sparql` | Legacy completion report; not a dispatch authority; parameter: `$PHASE` |
 | `validate-structure.sparql` | Phase structure integrity check — zero rows = valid; parameter: `$PHASE` |
 | `test_queries.py` | pytest unit tests for all SPARQL queries (run: `python3 -m pytest scripts/test_queries.py -v`) |
 
 Usage:
 ```bash
-# From repo root — dependency gate must pass before the cursor is queried
+# From repo root — dependency gate must pass before dispatch is queried
 .claude/skills/graph-orchestration/scripts/preflight
-.claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F
+.claude/skills/graph-orchestration/scripts/next-dispatch F .sprints/F
 ```
 
-Output JSON (TRAVERSAL):
+Output JSON (`dispatch_task`):
 ```json
 {
-  "phase": "TRAVERSAL",
-  "vars": {
+  "schema": "next-dispatch/v1",
+  "dispatch": "dispatch_task",
+  "target": {
     "sprint": "PhaseF-S1",
     "sprint_iri": "urn:atm:triage:PhaseF-S1",
     "sprint_order": 1,
     "criteria_doc": "ac/FS1.md"
-  }
+  },
+  "outstanding_finding_ids": [],
+  "promotions": []
 }
 ```
 
-Output JSON (AWAITING):
+Output JSON (`dispatch_fix`):
 ```json
 {
-  "phase": "AWAITING",
-  "vars": {},
-  "_incomplete_sprints": ["urn:atm:triage:PhaseF-S1"]
+  "schema": "next-dispatch/v1",
+  "dispatch": "dispatch_fix",
+  "target": {"sprint": "PhaseF-S1", "sprint_order": 1, "criteria_doc": "ac/FS1.md"},
+  "outstanding_finding_ids": ["F-123"],
+  "promotions": []
 }
 ```
 
-Output JSON (CLEANUP):
+Output JSON (`awaiting_qa`, `blocked`, or `done`):
 ```json
 {
-  "phase": "CLEANUP",
-  "vars": {},
-  "_findings_raw": [...]
-}
-```
-
-Output JSON (DONE):
-```json
-{
-  "phase": "DONE",
-  "vars": {},
-  "_findings_raw": []
+  "schema": "next-dispatch/v1",
+  "dispatch": "awaiting_qa",
+  "target": null,
+  "outstanding_finding_ids": [],
+  "promotions": [],
+  "blocked_sprints": [],
+  "in_flight_sprints": ["PhaseF-S1"]
 }
 ```
 
 ## Assignment Templates
 
-- `dev-task.xml.j2` — initial dev pass (no blocking findings)
-- `dev-fix.xml.j2` — fix pass (blocking findings identified by triaging-findings)
+- `dev-task.xml.j2` — initial dev pass for a `dispatch_task` result
+- `dev-fix.xml.j2` — fix pass only for a `dispatch_fix` result and its exact IDs
 
 QA assignment uses the existing `quality-mgr` prompt directly — no new template.
 

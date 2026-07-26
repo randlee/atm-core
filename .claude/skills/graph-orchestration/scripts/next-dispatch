@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# next-dispatch — canonical deterministic scheduler entry point.
+#
+# Usage: next-dispatch <PHASE_LOCAL> <TTL_DIR> [--validate-only]
+# The target sprint, branch, and finding IDs are always computed from the
+# phase graph.  There are deliberately no manual target overrides.
+
+set -euo pipefail
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo >&2 "Usage: next-dispatch <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  exit 1
+fi
+
+PHASE="$1"
+TTL_DIR="$2"
+if [[ $# -eq 3 && "$3" != "--validate-only" ]]; then
+  echo >&2 "Usage: next-dispatch <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+  exit 1
+fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
+
+if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
+  echo >&2 "ERROR: rdflib not found. Install with: pip3 install rdflib"
+  exit 1
+fi
+
+if [[ $# -eq 3 ]]; then
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" --validate-only
+fi
+exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR"
