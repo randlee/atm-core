@@ -17,6 +17,10 @@ mod daemon_runtime_observability;
 // fork while only one daemon can publish the local IPC endpoint; see
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
+// Resource-cost note (AI21-MINOR-003): the HTTPS accept loop currently uses
+// one OS thread per accepted connection without a configured concurrency cap.
+// This is a known non-blocking hardening item: the mTLS listener limits access
+// to trusted peers, while a bounded worker model remains follow-up work.
 mod https_transport;
 #[cfg_attr(windows, allow(dead_code))]
 mod lifecycle_control;

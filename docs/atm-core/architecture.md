@@ -278,6 +278,25 @@ Phase AC supersession note:
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
   method family
+
+## 2.2 AI.23 Shared-Write Convergence Point
+
+AI.23 establishes one convergence point for every authenticated HTTP write.
+Local CLI HTTP, same-host advertised-IP HTTP, and remote peer HTTPS all decode
+the same transport-neutral `WriteRequest` and enter `ApiRouter::route`. The
+transport adapter owns authentication and ingress provenance only; it must not
+create a second persistence, acknowledgement, or notification path.
+
+`ApiRouter::route` delegates write handling to the daemon's
+`DaemonRequestDispatcher::route_write`, which invokes the canonical
+`MessageWriter::write` persistence operation before
+`PostWriteRouter::dispatch` selects the local nudge or host-qualified peer
+delivery. This ordering is the crate-level shared-write-resource invariant:
+every ingress uses the same dispatcher, persistence boundary, and post-write
+router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
+[`../adr/ADR-033-http-endpoint-contract.md`](../adr/ADR-033-http-endpoint-contract.md),
+and [`boundaries.md`](./boundaries.md) for the corresponding transport and
+boundary contracts.
 - queue inspection must not remain one "read many full messages" surface once
   SQLite-backed mailbox history becomes the ordinary durable source of truth
 
