@@ -590,6 +590,26 @@ class TestNextDevTaskValidation:
         assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout)["phase"] == "VALIDATE_ONLY"
 
+    def test_selected_malformed_findings_return_json_error_union(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1"), (2, "S2")]))
+        malformed = repo / ".triage" / "phase-F" / "findings"
+        malformed.mkdir(parents=True)
+        broken = malformed / "BROKEN-S1.ttl"
+        broken.write_text(
+            PREFIX
+            + "triage:broken a triage:Finding ; triage:foundIn triage:S1 ;\n"
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 2
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "findings_validation"
+        assert payload["dispatch_blocked"] is True
+        assert any("BROKEN-S1.ttl" in item for item in payload["diagnostics"])
+        assert "findings validation blocked query resolution" in result.stderr
+
     def test_cursor_resolution_is_blocked_by_missing_provenance(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
         findings = repo / ".triage" / "phase-F" / "findings"
@@ -603,7 +623,10 @@ class TestNextDevTaskValidation:
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
         assert result.returncode == 1, result.stderr
-        assert result.stdout == ""
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "validation:fail"
+        assert payload["error_code"] == "findings_validation"
+        assert payload["dispatch_blocked"] is True
         assert "findings validation blocked query resolution" in result.stderr
         assert "triage:foundIn" in result.stderr
         assert "triage:foundAt" in result.stderr
@@ -671,7 +694,9 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
 
         assert result.returncode == 1
         assert "ERROR: structure violation" in result.stderr
-        assert result.stdout == ""
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "validation:fail"
+        assert payload["error_code"] == "structure_validation"
 
     def test_malformed_structure_is_reported_without_traceback(self, tmp_path):
         repo = self._make_repo(tmp_path, "not valid Turtle [")
@@ -679,9 +704,11 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
         assert result.returncode == 1
-        assert result.stdout == ""
         assert "Traceback" not in result.stderr
         assert "ERROR: query runner failed to load graph" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "graph_load"
 
     def test_broken_sparql_is_reported_without_traceback(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -712,9 +739,11 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         )
 
         assert result.returncode == 1
-        assert result.stdout == ""
         assert "Traceback" not in result.stderr
         assert "ERROR: query runner failed to run" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "sparql_query"
 
     def test_unknown_optional_argument_is_rejected(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -790,9 +819,12 @@ triage:c1 a triage:Completion ; triage:ofSprint triage:S1 ;
         result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
 
         assert result.returncode == 1
-        assert result.stdout == ""
         assert "Traceback" not in result.stderr
         assert "ERROR:" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "assignee_check"
+        assert payload["dispatch_blocked"] is True
 
 
 if __name__ == "__main__":

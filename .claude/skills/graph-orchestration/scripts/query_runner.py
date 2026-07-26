@@ -64,6 +64,36 @@ TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
 
 
+class ValidationGateError(RuntimeError):
+    """A findings validation result that blocks dispatch but is reportable."""
+
+    def __init__(self, kind: str, message: str, diagnostics: list[str], exit_code: int):
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.diagnostics = diagnostics
+        self.exit_code = exit_code
+
+
+def _error_payload(
+    code: str,
+    message: str,
+    *,
+    diagnostics: list[str] | None = None,
+    kind: str = "error",
+) -> dict:
+    """Return the stable JSON union arm used by every CLI error path."""
+
+    return {
+        "schema": "graph-orchestration/v1",
+        "kind": kind,
+        "error_code": code,
+        "message": message,
+        "diagnostics": list(diagnostics or []),
+        "dispatch_blocked": True,
+    }
+
+
 def _find_repo_root(start: Path) -> Path | None:
     """Walk up from ``start`` to the repository's ``.triage`` directory."""
     current = start.resolve()
@@ -280,9 +310,13 @@ def _cli_load_graph(source: PhaseSource, *, include_findings: bool) -> Graph:
             include_findings=include_findings,
         )
     except SystemExit:
+        message = f"query runner could not load graph at {source.ttl_dir}"
+        print(json.dumps(_error_payload("graph_load", message)))
         raise
     except Exception as exc:  # noqa: BLE001 - CLI boundary
-        print(f"ERROR: query runner failed to load graph: {exc}", file=sys.stderr)
+        message = f"query runner failed to load graph: {exc}"
+        print(f"ERROR: {message}", file=sys.stderr)
+        print(json.dumps(_error_payload("graph_load", message)))
         raise SystemExit(1) from exc
 
 
@@ -291,7 +325,9 @@ def _cli_run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
     try:
         return run_sparql(g, sparql_file, bindings)
     except Exception as exc:  # noqa: BLE001 - CLI boundary
-        print(f"ERROR: query runner failed to run {sparql_file}: {exc}", file=sys.stderr)
+        message = f"query runner failed to run {sparql_file}: {exc}"
+        print(f"ERROR: {message}", file=sys.stderr)
+        print(json.dumps(_error_payload("sparql_query", message)))
         raise SystemExit(1) from exc
 
 
@@ -353,19 +389,33 @@ def _validate_findings_before_query(source: PhaseSource, script_dir: Path) -> No
                 file=sys.stderr,
             )
         if result.kind == "error":
-            raise SystemExit(2)
-        raise SystemExit(1)
+            raise ValidationGateError(
+                "error",
+                "findings validation could not run",
+                list(result.diagnostics),
+                2,
+            )
+        raise ValidationGateError(
+            "validation:fail",
+            "findings validation failed",
+            list(result.diagnostics),
+            1,
+        )
 
 
 def main():
     if len(sys.argv) not in (4, 5) or (
         len(sys.argv) == 5 and sys.argv[4] != "--validate-only"
     ):
-        print(
+        message = (
             "Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> "
-            "[--validate-only]",
+            "[--validate-only]"
+        )
+        print(
+            message,
             file=sys.stderr,
         )
+        print(json.dumps(_error_payload("usage", message)))
         sys.exit(1)
 
     phase_local = sys.argv[1]
@@ -379,10 +429,24 @@ def main():
     try:
         source = resolve_phase_source(phase_local, ttl_dir)
         _validate_findings_before_query(source, script_dir)
+    except ValidationGateError as exc:
+        print(
+            json.dumps(
+                _error_payload(
+                    "findings_validation",
+                    exc.message,
+                    diagnostics=exc.diagnostics,
+                    kind=exc.kind,
+                )
+            )
+        )
+        raise SystemExit(exc.exit_code)
     except SystemExit:
         raise
     except Exception as exc:  # noqa: BLE001 - CLI boundary
-        print(f"ERROR: findings validation could not run: {exc}", file=sys.stderr)
+        message = f"findings validation could not run: {exc}"
+        print(f"ERROR: {message}", file=sys.stderr)
+        print(json.dumps(_error_payload("findings_validation", message)))
         raise SystemExit(2) from exc
 
     # The raw findings gate above runs before structure validation so malformed
@@ -396,8 +460,21 @@ def main():
         g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri}
     )
     if validate_rows:
+        diagnostics = [
+            f"structure violation: {row[0]} — {row[1]}" for row in validate_rows
+        ]
         for row in validate_rows:
             print(f"ERROR: structure violation: {row[0]} — {row[1]}", file=sys.stderr)
+        print(
+            json.dumps(
+                _error_payload(
+                    "structure_validation",
+                    "structure validation failed",
+                    diagnostics=diagnostics,
+                    kind="validation:fail",
+                )
+            )
+        )
         sys.exit(1)
 
     if validate_only:
