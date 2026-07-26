@@ -15,25 +15,25 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "superseded" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-26T09:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
-  triage:closedAt "2026-07-26T10:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T16:35:00Z"^^xsd:dateTime ;
   triage:closedBy "team-lead" ;
   triage:reassignReason "Duplicate of pre-existing repeatable finding AI23-BLOCK-004 (same file/rule); AI23-BLOCK-004 was updated via qa-triage followup pass with s24/s25/s26 occurrences added and is the canonical repeatable-pattern record for this file-size violation." ;
-  triage:closureNote "Raw quality-mgr finding superseded by canonical AI23-BLOCK-004 at team-lead aggregation. No code change performed; record-accuracy/dedup correction only. Fix dispatch for this defect is carried under AI23-BLOCK-004." ;
+  triage:closureNote "Raw quality-mgr finding superseded by canonical AI23-BLOCK-004 at team-lead aggregation, whose s24 occurrence (5_s24_host_qualified_ack) is fixed/closed at 826 non-test lines via peer_sync.rs extraction, verified by quality-mgr's authoritative check_line_counts.py. Prior 'superseded' status left this occurrence open, causing a stale live-blocker double-count on AICH-S4; reconciling occurrence to fixed/closed to match the canonical record. No code change performed; record-accuracy/dedup correction only." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-102/AI24-BLOCK-102-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI24-BLOCK-102/AI24-BLOCK-102-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 1 ;
-  triage:snippet "runtime_health.rs - 1065 non-test lines (exceeds 1000-line RULE-003 limit)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "runtime_health.rs - 1065 non-test lines (exceeds 1000-line RULE-003 limit); fixed under canonical duplicate AI23-BLOCK-004 (now 826 non-test lines via peer_sync.rs extraction)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
   triage:occursIn <urn:atm:triage:worktree/S24/1daef214031fffa82d422862025086ae697b3251> .

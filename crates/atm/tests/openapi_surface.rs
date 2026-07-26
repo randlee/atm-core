@@ -10,6 +10,9 @@ use std::path::PathBuf;
 use serde_json::{Value, json};
 
 const BLESS_ENV: &str = "ATM_OPENAPI_SURFACE_BLESS";
+const OPENAPI_HTTP_METHODS: &[&str] = &[
+    "get", "post", "put", "patch", "delete", "options", "head", "trace",
+];
 
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -128,28 +131,44 @@ fn live_surface() -> Value {
     json!({ "paths": paths, "schemas": schemas })
 }
 
+fn documented_route_surface(document: &Value) -> BTreeSet<(String, String)> {
+    let server_base = document
+        .pointer("/servers/0/url")
+        .and_then(Value::as_str)
+        .expect("OpenAPI document must declare its first server URL")
+        .trim_end_matches('/');
+    assert!(
+        server_base.starts_with('/'),
+        "OpenAPI server URL must be a path for the local daemon contract: {server_base}"
+    );
+
+    object(&document["paths"])
+        .iter()
+        .flat_map(|(path, item)| {
+            OPENAPI_HTTP_METHODS.iter().filter_map(move |method| {
+                item.get(*method)
+                    .map(|_| (method.to_ascii_uppercase(), format!("{server_base}{path}")))
+            })
+        })
+        .collect()
+}
+
 #[test]
 fn openapi_routes_match_live_router_surface() {
     let source = std::fs::read_to_string(document_path()).expect("read OpenAPI contract");
     let document: Value = serde_yaml::from_str(&source).expect("parse OpenAPI YAML");
-    let documented = object(&document["paths"])
-        .iter()
-        .flat_map(|(path, item)| {
-            ["get", "post", "delete"]
-                .into_iter()
-                .filter_map(move |method| {
-                    item.get(method)
-                        .map(|_| (method.to_ascii_uppercase(), format!("/v1/atm{path}")))
-                })
-        })
-        .collect::<BTreeSet<_>>();
+    let documented = documented_route_surface(&document);
     let live = atm_core::api::http_route_surface()
         .map(|route| (route.method.to_owned(), route.path_template.to_owned()))
         .collect::<BTreeSet<_>>();
 
-    assert_eq!(
-        documented, live,
-        "OpenAPI routes must exactly match live routing"
+    let missing_from_openapi = live.difference(&documented).collect::<Vec<_>>();
+    let undocumented_live_routes = documented.difference(&live).collect::<Vec<_>>();
+    assert!(
+        missing_from_openapi.is_empty() && undocumented_live_routes.is_empty(),
+        "OpenAPI routes must exactly match live routing; live routes missing from OpenAPI: \
+         {missing_from_openapi:?}; OpenAPI routes not registered live: \
+         {undocumented_live_routes:?}"
     );
 }
 

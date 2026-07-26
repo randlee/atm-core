@@ -214,6 +214,15 @@ Initial crate requirement IDs:
   later ACK derives its reply host from that retained origin destination
   metadata and still uses the canonical write. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- AI.23 shared-write convergence constraint: all local, same-host, and remote
+  HTTP writes must enter `ApiRouter::route` with the same `WriteRequest`, then
+  pass through `DaemonRequestDispatcher::route_write` and the canonical
+  `MessageWriter::write` persistence boundary. Persistence precedes exactly
+  one `PostWriteRouter::dispatch`; adapters may authenticate and label
+  provenance but may not implement a parallel write, acknowledgement, or
+  nudge path. This is the crate-level refinement of
+  `REQ-CORE-TRANSPORT-001`/`002` and the shared-write-resource contract in
+  [`../architecture.md`](../architecture.md).
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
   per-message delivery state: no replay store, outbox, retry queue, receipt,
   remote ack state, or duplicate-delivery subsystem. The sole permitted

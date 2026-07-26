@@ -18,7 +18,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T15:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
@@ -29,39 +29,41 @@
   triage:openOn <urn:atm:triage:worktree/pAI-s27/d636a522> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s27/d636a522> ;
   triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:supersedes <urn:atm:triage:finding/AI27-ARCH-001> .
+  triage:supersedes <urn:atm:triage:finding/AI27-ARCH-001> ;
+  triage:closedAt "2026-07-26T16:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 628 ;
-  triage:snippet "fn dispatch(&self, message: &mut MessageRecord, deadline: RequestDeadline) -> Result<(), AtmError> { ... } -- 118 lines (628-745), RULE-002 new hard violation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "fn dispatch(&self, message: &mut MessageRecord, deadline: RequestDeadline) -> Result<(), AtmError> { ... } -- 118 lines (628-745), RULE-002 new hard violation. FIXED at 282fad38: dispatch split into runtime_health/post_write_router.rs and runtime_health/peer_sync.rs; no new hard violation per scripts/check-function-length.py." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "d636a522586943f93a63f8083bcec8d888d4cee7" ;
+  triage:headSha "282fad38" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
 
 <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 1 ;
-  triage:snippet "prod=1072 (limit prod<=1000) per .just/check_line_counts.py -- RULE-003 hard violation, regressed vs. s26 (prod=843, passing)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 857 ;
+  triage:snippet "prod=1072 (limit prod<=1000) per .just/check_line_counts.py -- RULE-003 hard violation, regressed vs. s26 (prod=843, passing). FIXED at 282fad38: prod=857 (under limit) after module split (peer_sync.rs prod=120, post_write_router.rs prod=134)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "d636a522586943f93a63f8083bcec8d888d4cee7" ;
+  triage:headSha "282fad38" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
 
 <urn:atm:triage:occurrence/AI27-BLOCK-005/pAI-s27/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs" ;
   triage:line 381 ;
-  triage:snippet "same-peer sync must not wait for the in-flight delivery: AtmError { code: DaemonUnavailable, message: \"peer sync progress lock poisoned...\" } -- panics identically on all 3 OS legs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "same-peer sync must not wait for the in-flight delivery: AtmError { code: DaemonUnavailable, message: \"peer sync progress lock poisoned...\" } -- panics identically on all 3 OS legs. FIXED at 282fad38: sync_peer now drops the progress-map lock before calling reconcile_peer's blocking transport.deliver(); peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery passes (cargo test -p atm-daemon, release, ok) and CI is green on all 3 OS legs (run 30208718630)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "d636a522586943f93a63f8083bcec8d888d4cee7" ;
+  triage:headSha "282fad38" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/d636a522> .
 
 <urn:atm:triage:worktree/pAI-s27/d636a522>

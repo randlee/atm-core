@@ -26,8 +26,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 163 ;
   triage:snippet "delivered_request_json: BTreeSet<String>," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — delivered_request_json is now locally scoped to individual sync_peer calls (peer_sync.rs line 114), not a global/long-lived field. Unbounded growth issue resolved by scope reduction. (2026-07-26)" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s24/c326cbe7> .

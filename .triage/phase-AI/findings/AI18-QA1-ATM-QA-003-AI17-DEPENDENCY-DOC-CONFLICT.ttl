@@ -14,25 +14,23 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:pattern "doc-status-conflict" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-003-AI17-DEPENDENCY-DOC-CONFLICT/S17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-003-AI17-DEPENDENCY-DOC-CONFLICT/S18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-003-AI17-DEPENDENCY-DOC-CONFLICT/S19/1> ;
-  triage:openOn <urn:atm:triage:worktree/S17/85a6fcf6> ;
-  triage:openOn <urn:atm:triage:worktree/S18/b8f46a1a> ;
-  triage:openOn <urn:atm:triage:worktree/S19/2e22b6b4> ;
-  triage:promoteTo <urn:atm:triage:worktree/S19/2e22b6b4> ;
-  triage:triagedAt "2026-07-22T15:01:59Z"^^xsd:dateTime .
+  triage:triagedAt "2026-07-22T15:01:59Z"^^xsd:dateTime ;
+  triage:resolvedAt "2026-07-26T00:00:00Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-003-AI17-DEPENDENCY-DOC-CONFLICT/S17/1>
   a triage:Occurrence ;
   triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
   triage:line 12 ;
   triage:snippet "| AI.17 | `PENDING` | Ambient `ATM_CHAT_ID` resolution..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — line 12 now shows AI.17 as PARTIAL with supporting evidence in lines 23-32; the conflict between readiness doc status and sprint doc has been resolved. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "85a6fcf6" ;
   triage:reason "Sprint frontmatter status: complete but readiness doc shows PENDING" ;
@@ -43,8 +41,9 @@
   triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
   triage:line 12 ;
   triage:snippet "| AI.17 | `PENDING` | Ambient `ATM_CHAT_ID` resolution..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — line 12 now shows AI.17 as PARTIAL with supporting evidence in lines 23-32; the conflict between readiness doc status and sprint doc has been resolved. Stale occurrence from superseded branch feature/pAI-s18-graft-python-bindings; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "b8f46a1a" ;
   triage:reason "Propagated from S17 merge-forward; readiness still PENDING" ;
@@ -55,8 +54,9 @@
   triage:file "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md" ;
   triage:line 12 ;
   triage:snippet "| AI.17 | `PENDING` | Ambient `ATM_CHAT_ID` resolution..." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — line 12 now shows AI.17 as PARTIAL with supporting evidence in lines 23-32; the conflict between readiness doc status and sprint doc has been resolved. Stale occurrence from superseded branch feature/pAI-s19-hermes-graft-integration; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "2e22b6b4" ;
   triage:reason "Propagated from S18 merge-forward; readiness still PENDING" ;

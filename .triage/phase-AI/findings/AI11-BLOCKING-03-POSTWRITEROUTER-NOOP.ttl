@@ -14,7 +14,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/2>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/3> ;
   triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
@@ -30,8 +30,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 578 ;
   triage:snippet "fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { if request.to.as_ref().is_some_and(|address| address.host.is_some()) { return self.dispatch_remote_write(request); }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — code refactored away. dispatch_remote_write function eliminated. route_write (runtime_health.rs line 539) now calls MessageWriter::write, then conditionally calls PostWriteRouter::dispatch. No host-check in route_write; routing decision moved to PostWriteRouter::dispatch (post_write_router.rs line 14-92). Contract now enforced: PostWriteRouter is sole host-routing point. (2026-07-26)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
@@ -41,8 +42,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 640 ;
   triage:snippet "fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { ... transport.deliver(request, &peer, HttpsRequestDeadline::default()) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — dispatch_remote_write function removed. All peer delivery now goes through PostWriteRouter::dispatch (post_write_router.rs line 14). Contract violation fixed: PostWriteRouter is now the sole peer delivery routing point. (2026-07-26)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
@@ -52,8 +54,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 669 ;
   triage:snippet "impl PostWriteRouter for DaemonRequestDispatcher { fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> { debug_assert!(...); let _ = message; Ok(()) } }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — PostWriteRouter::dispatch is no longer a no-op. Current implementation (post_write_router.rs line 14-92) performs full peer delivery routing and observability recording. Trait method signature changed; now receives deadline parameter and performs actual routing work. Contract violation fixed. (2026-07-26)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .

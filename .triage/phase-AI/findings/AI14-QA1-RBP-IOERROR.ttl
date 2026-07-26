@@ -14,8 +14,8 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-IOERROR/s16/1> ;
   triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
@@ -26,8 +26,9 @@
   triage:file "crates/atm-core/src/local_http.rs" ;
   triage:line 185 ;
   triage:snippet "Err(_source) => Err(AtmError::daemon_unavailable(\"failed to read daemon owner record for local HTTP metadata\"))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 166 now uses daemon_unavailable_with_cause() with error source context interpolated. Test owner_record_read_preserves_io_cause verifies error.cause().is_some(). Defect resolved. Stale occurrence from superseded branch s16; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .

@@ -29,8 +29,9 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 106 ;
   triage:snippet "RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- test ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects passes; routing correctly uses MESSAGES_PATH constant (line 77). Stale occurrence from superseded branch s24; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "7bb63e01" ;
   triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .

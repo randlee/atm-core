@@ -14,9 +14,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/12/1> ;
@@ -25,20 +25,17 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/13/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/14/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s11/1205695651> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s13/aecade2a23> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> ;
-  triage:fixedOn <urn:atm:triage:worktree/pAI-s15/56c08886> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s11/1205695651>, <urn:atm:triage:worktree/pAI-s12/b6466aa17d>, <urn:atm:triage:worktree/pAI-s13/aecade2a23>, <urn:atm:triage:worktree/pAI-s14/35e30fd6f1>, <urn:atm:triage:worktree/pAI-s15/56c08886> ;
+  triage:highestFixedBranch "feature/pAI-s15-windows-peer-smoke" .
 
 <urn:atm:triage:occurrence/AI15-QA1-BLOCKING-01-GRAFT-WINDOWS-LOCAL-SOCKET/11/1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 20 ;
   triage:snippet "use interprocess::local_socket::prelude::*;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s11/1205695651> .
@@ -48,8 +45,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 643 ;
   triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "120569565107f958e00ac6d3a7bffa7927f13ae5" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s11/1205695651> .
@@ -59,8 +57,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 20 ;
   triage:snippet "use interprocess::local_socket::prelude::*;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> .
@@ -70,8 +69,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 643 ;
   triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa17d> .
@@ -81,8 +81,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 20 ;
   triage:snippet "use interprocess::local_socket::prelude::*;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a23> .
@@ -92,8 +93,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 643 ;
   triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a23> .
@@ -103,8 +105,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 20 ;
   triage:snippet "use interprocess::local_socket::prelude::*;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs contains no interprocess::local_socket import; unconditional Windows local_socket usage has been removed. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .
@@ -114,8 +117,9 @@
   triage:file "crates/atm-graft/src/runtime.rs" ;
   triage:line 643 ;
   triage:snippet "fn bind_graft_receiver_listener(endpoint_path: &Path) -> Result<LocalSocketListener, AtmError>" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms fn bind_graft_receiver_listener no longer exists in crates/atm-graft/src/runtime.rs; Windows-incompatible local_socket transport has been removed. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "35e30fd6f1405bde0a988ece0acb524987092926" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6f1> .

@@ -31,6 +31,10 @@ constructor/catalog module owns safe operator recovery guidance by
 boundary may log structured diagnostic context before returning `AtmError`, but
 that context is neither serialized nor exposed through a second accessor.
 
+The stable `AtmErrorCode` vocabulary lives in the dependency-light
+`atm-error` crate. Storage and service crates consume and re-export that same
+type; neither layer defines a second registry or creates a dependency cycle.
+
 ## Required invariants
 
 - One error response schema is used by Unix UDS HTTP, loopback-TCP HTTP,

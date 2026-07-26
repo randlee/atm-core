@@ -247,8 +247,12 @@ mod tests {
             .build_message_source()
             .expect_err("stdin/message conflict");
 
-        assert!(file_error.to_string().contains("mutually exclusive"));
-        assert!(message_error.to_string().contains("mutually exclusive"));
+        assert!(file_error.to_string().contains(
+            "Choose exactly one message source: either pass `--stdin` or `--file <path>`"
+        ));
+        assert!(message_error.to_string().contains(
+            "Choose exactly one message source: either pass `--stdin` or provide positional message text"
+        ));
     }
 
     #[test]
@@ -270,7 +274,9 @@ mod tests {
 
         let error = command.build_message_source().expect_err("missing message");
 
-        assert!(error.to_string().contains("provide message text"));
+        assert!(error.to_string().contains(
+            "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`."
+        ));
     }
 
     #[test]

@@ -25,6 +25,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s28/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s29/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/integrate-8750587b> ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:openOn <urn:atm:triage:worktree/s23/acaa2a43> ;
   triage:openOn <urn:atm:triage:worktree/s24/7f85b1e6> ;
   triage:openOn <urn:atm:triage:worktree/s25/66775a09> ;
@@ -34,6 +36,23 @@
   triage:openOn <urn:atm:triage:worktree/s29/7dcf6953> ;
   triage:openOn <urn:atm:triage:worktree/s30/008e58e2> ;
   triage:promoteTo <urn:atm:triage:worktree/s30/008e58e2> .
+
+# Fixed occurrence on integrate/phase-AI: s23's final pre-merge state (PR #629, merge
+# commit 8750587b) fixed this inline check before merging -- integrate/phase-AI HEAD
+# calls the canonical is_peer_receipt() accessor. s24-s30 were forked from an earlier,
+# unfixed s23 commit (acaa2a43) and still carry the ad-hoc inline check forward on
+# their own branches; each must merge-forward this fix independently when they merge.
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.prepared.is_peer_receipt() { // FIXED: calls canonical accessor" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. Independently re-verified: PostWriteRouter::dispatch now calls message.prepared.is_peer_receipt() directly instead of the ad-hoc inline check. s24-s30 occurrences remain open on their own branches (forked from a pre-fix s23 commit) and still require merge-forward." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
 
 # Occurrence on s23
 <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s23/1>
@@ -132,6 +151,13 @@
   triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
 
 # Worktree snapshots
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
+
 <urn:atm:triage:worktree/s23/acaa2a43>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;

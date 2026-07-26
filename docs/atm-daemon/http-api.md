@@ -49,6 +49,12 @@ tracked requests within the daemon shutdown deadline.
 
 ## Resource contract
 
+The route table below mirrors `atm_core::api::http_route_surface()` (backed by
+the `HTTP_ROUTE_SPECS` inventory in `crates/atm-core/src/api.rs`). That
+inventory is the routing source of truth; this document and
+`docs/atm-daemon/openapi.yaml` are checked against it by the OpenAPI surface
+tests.
+
 | Endpoint | Method | Meaning | Shared handler |
 | --- | --- | --- | --- |
 | `/v1/atm/messages` | `GET` | List/query visible messages; non-mutating | read/query |
@@ -56,9 +62,9 @@ tracked requests within the daemon shutdown deadline.
 | `/v1/atm/messages/inspect` | `POST` | Inspect/query messages without mutation | read/query |
 | `/v1/atm/messages` | `DELETE` | Clear selected messages where authorized | clear |
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
-| `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
 | `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
+| `/v1/atm/runtime/reload` | `POST` | Reload the authenticated runtime view after local trust/configuration changes | runtime reload |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
 | `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
 
@@ -68,11 +74,11 @@ filters. `agent=hendrix` searches that base agent across every chat identity;
 selected participant direction when a direction is requested, otherwise to
 either message participant. They do not alter the authenticated caller.
 
-`POST /v1/atm/message/{message-id}/ack` constructs the same `WriteRequest` used by
-`POST /messages`, with only `acknowledges_message_id` populated. The receiver's
-canonical write handler owns both persistence and acknowledgement mutation.
-It carries the message's full chat-qualified source address as the reply
-destination without a separate acknowledgement route.
+An acknowledgement uses the same `WriteRequest` sent to `POST /messages`, with
+only `acknowledges_message_id` populated. The receiver's canonical write
+handler owns both persistence and acknowledgement mutation. The response's
+`Location` header identifies the created message; `/message/{message-id}` is
+not a separately registered route.
 
 ## Response rules
 

@@ -19,6 +19,7 @@
   triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/s23-fixed-adr-openapi> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/s23-open-http-api-md> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/integrate-8750587b> ;
   triage:fixedOn <urn:atm:triage:worktree/pAI-s23/b0781316> ;
   triage:triageRecordVersion "4" .
 
@@ -67,3 +68,23 @@
   triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "985a6d46" ;
   triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 50 ;
+  triage:snippet "## Resource contract table still lists only /v1/atm/messages*, /v1/atm/doctor, /v1/atm/compatibility, /v1/atm/heartbeat -- no peer-sync or runtime/reload rows" ;
+  triage:status "fixed_partial" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b, contains the b0781316 fix already tracked as fixed for ADR-033/openapi.yaml). Independently re-verified: docs/atm-daemon/http-api.md's Resource contract table (line 50) still omits peer-sync and runtime/reload rows. The http-api.md gap remains open on integrate/phase-AI; ADR-033/openapi.yaml portions remain fixed." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

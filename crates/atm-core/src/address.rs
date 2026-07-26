@@ -142,7 +142,14 @@ impl fmt::Display for AgentAddress {
             (Some(team), Some(host)) => write!(f, "{identity}@{team}.{host}"),
             (Some(team), None) => write!(f, "{identity}@{team}"),
             (None, None) => write!(f, "{identity}"),
-            (None, Some(_)) => unreachable!("AgentAddress forbids a host without a team"),
+            // `AgentAddress::new` prevents this state through every safe
+            // construction boundary. Keep the formatter total anyway: a
+            // malformed value must not turn `format!("{}", address)` into a
+            // panic if it is introduced by legacy state or an internal bug.
+            (None, Some(host)) => write!(
+                f,
+                "<invalid-agent-address: {identity} has host {host} without team>"
+            ),
         }
     }
 }
@@ -195,6 +202,27 @@ mod tests {
                 r#"{"agent":"sender","host":"peer.example.test"}"#
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn display_reports_invalid_internal_state_without_panicking() {
+        // This state cannot be constructed through the public API, but the
+        // formatter must remain total if legacy or corrupted state reaches it.
+        let address = AgentAddress {
+            agent: AgentName::from_validated(TEST_SENDER),
+            chat_id: None,
+            team: None,
+            host: Some("peer.example.test".parse().expect("host")),
+        };
+
+        let rendered = std::panic::catch_unwind(|| address.to_string())
+            .expect("invalid address formatting must not panic");
+        assert_eq!(
+            rendered,
+            format!(
+                "<invalid-agent-address: {TEST_SENDER} has host peer.example.test without team>"
+            )
         );
     }
 
