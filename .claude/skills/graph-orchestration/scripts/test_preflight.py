@@ -176,3 +176,4 @@ def test_cli_renders_graph_dev_template(tmp_path):
     assert result.returncode == 0, result.stderr or result.stdout
     rendered = output_path.read_text(encoding="utf-8")
     assert '<atm-task id="GO-TEST" sprint="AICH-S1"' in rendered
+    assert "next-dispatch" in rendered

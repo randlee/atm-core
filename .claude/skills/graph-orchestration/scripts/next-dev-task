@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # next-dev-task — Deprecated compatibility projection for graph-orchestration.
 #
-# Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]
+# Usage: next-dev-task [<PHASE_LOCAL> <TTL_DIR> [--validate-only]]
 # TTL_DIR: path to .sprints/<PHASE>/ on the integrate/phase-N branch
 #   PHASE_LOCAL  e.g. "F" (expanded to urn:atm:triage:PhaseF)
 #   TTL_DIR      path to directory containing structure.ttl and events.ttl
@@ -16,17 +16,11 @@
 
 set -euo pipefail
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo >&2 "Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+if [[ $# -eq 1 && "$1" != "--validate-only" || $# -gt 3 ]]; then
+  echo >&2 "Usage: next-dev-task [<PHASE_LOCAL> <TTL_DIR> [--validate-only]]"
   exit 1
 fi
 
-PHASE="$1"
-TTL_DIR="$2"
-if [[ $# -eq 3 && "$3" != "--validate-only" ]]; then
-  echo >&2 "Usage: next-dev-task <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
-  exit 1
-fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_BIN="${GRAPH_ORCH_PYTHON:-python3}"
 
@@ -36,6 +30,19 @@ if ! "$PYTHON_BIN" -c "import rdflib" 2>/dev/null; then
   exit 1
 fi
 
+if [[ $# -eq 0 ]]; then
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" --current-phase "$SCRIPT_DIR" --legacy-cursor
+fi
+if [[ $# -eq 1 ]]; then
+  exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" --current-phase "$SCRIPT_DIR" --validate-only --legacy-cursor
+fi
+
+PHASE="$1"
+TTL_DIR="$2"
+if [[ $# -eq 3 && "$3" != "--validate-only" ]]; then
+  echo >&2 "Usage: next-dev-task [<PHASE_LOCAL> <TTL_DIR> [--validate-only]]"
+  exit 1
+fi
 if [[ $# -eq 3 ]]; then
   exec "$PYTHON_BIN" "$SCRIPT_DIR/query_runner.py" "$PHASE" "$TTL_DIR" "$SCRIPT_DIR" --validate-only --legacy-cursor
 fi

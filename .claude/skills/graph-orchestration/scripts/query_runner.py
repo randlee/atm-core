@@ -9,7 +9,8 @@ The canonical result is a discriminated union with ``dispatch`` set to one of
 The old cursor-shaped result remains available only to the compatibility
 ``next-dev-task`` wrapper; new orchestration must call ``next-dispatch``.
 
-Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
+Usage: query_runner.py --current-phase <SCRIPT_DIR> [--validate-only]
+   or: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
   PHASE_LOCAL  e.g. "F"
   TTL_DIR      path to .sprints/<PHASE>/ directory on integrate/phase-N branch
   SCRIPT_DIR   path to this script's directory (for .sparql files)
@@ -19,6 +20,7 @@ Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
 import importlib.util
 import sys
 import json
+import platform
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,8 +33,45 @@ except ImportError:
 
 TRIAGE_BASE = "urn:atm:triage:"
 TRIAGE = Namespace(TRIAGE_BASE)
+SPRINT = Namespace("urn:atm:sprint:")
 QA_CLOSED = TRIAGE.QAClosed
 CLOSED_AT = TRIAGE.closedAt
+SEVERITY_ORDER = {"invalid": -1, "blocking": 0, "important": 1, "minor": 2}
+
+
+class DispatchDataError(ValueError):
+    """A data error that must be returned as the dispatch union's error arm."""
+
+    def __init__(self, code: str, message: str, *, findings: list[dict] | None = None):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.findings = findings or []
+
+
+def _normalize_severity(value) -> tuple[str, str]:
+    """Return canonical severity and its original lower-case spelling."""
+
+    raw = str(value or "").strip().lower()
+    if raw == "critical":
+        return "blocking", raw
+    if raw in {"blocking", "important", "minor"}:
+        return raw, raw
+    return "invalid", raw
+
+
+def _finding_output(finding: dict) -> dict:
+    """Convert internal finding state to stable JSON-safe output."""
+
+    return {
+        "finding_iri": finding.get("iri") or finding.get("finding_iri"),
+        "finding_id": finding.get("id") or finding.get("finding_id"),
+        "severity": finding.get("severity"),
+        "raw_severity": finding.get("raw_severity", finding.get("severity")),
+        "status": finding.get("status"),
+        "found_at": finding.get("found_at_raw", finding.get("found_at")),
+        "description": finding.get("description", ""),
+    }
 
 
 def _find_repo_root(start: Path):
@@ -46,6 +85,132 @@ def _find_repo_root(start: Path):
             break
         current = parent
     return None
+
+
+def _repo_root_from_script(script_dir: Path) -> Path:
+    """Resolve the repository root for the no-argument phase API."""
+
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / ".sprints" / "current-phase.ttl").exists():
+            return candidate
+    root = _find_repo_root(script_dir)
+    if root is not None:
+        return root
+    # A worktree may not have a .triage directory yet. The scripts are always
+    # under <repo>/.claude/skills/graph-orchestration/scripts.
+    candidate = script_dir.resolve().parents[3]
+    if (candidate / ".git").exists():
+        return candidate
+    raise RuntimeError(f"cannot locate repository root from {script_dir}")
+
+
+def _load_current_phase(script_dir: Path) -> dict:
+    """Load the repository's committed phase context and host-local overlay.
+
+    ``.sprints/current-phase.ttl`` is the portable source of truth. A
+    gitignored ``.sprints/current-phase.local.ttl`` may add the absolute
+    integration worktree for the current hostname without leaking machine
+    paths into version control.
+    """
+
+    repo_root = _repo_root_from_script(script_dir)
+    config_path = repo_root / ".sprints" / "current-phase.ttl"
+    if not config_path.exists():
+        raise RuntimeError(
+            f"current phase not configured at {config_path}; create it from "
+            ".sprints/current-phase.ttl.example"
+        )
+    graph = Graph()
+    try:
+        graph.parse(str(config_path), format="turtle")
+    except Exception as exc:  # noqa: BLE001 - configuration boundary
+        raise RuntimeError(f"malformed current phase config {config_path}: {exc}") from exc
+
+    contexts = list(graph.subjects(RDF.type, SPRINT.PhaseContext))
+    if len(contexts) != 1:
+        raise RuntimeError(
+            f"{config_path} must declare exactly one sprint:PhaseContext (found {len(contexts)})"
+        )
+    context = contexts[0]
+
+    def required(predicate: URIRef, label: str) -> str:
+        values = list(graph.objects(context, predicate))
+        if len(values) != 1 or not str(values[0]).strip():
+            detail = "missing" if not values else f"ambiguous ({len(values)} values)"
+            raise RuntimeError(f"{config_path} {label} is {detail}")
+        return str(values[0]).strip()
+
+    phase_local = required(SPRINT.phaseLocal, "sprint:phaseLocal")
+    structure_dir = required(SPRINT.structureDir, "sprint:structureDir")
+    structure_path = Path(structure_dir)
+    if structure_path.is_absolute() or ".." in structure_path.parts:
+        raise RuntimeError("sprint:structureDir must be repository-relative")
+    phase_iri_values = list(graph.objects(context, SPRINT.phaseIri))
+    if len(phase_iri_values) > 1:
+        raise RuntimeError(f"{config_path} has ambiguous sprint:phaseIri")
+    phase_iri_value = phase_iri_values[0] if phase_iri_values else None
+    phase_iri = str(phase_iri_value) if phase_iri_value is not None else f"{TRIAGE_BASE}Phase{phase_local}"
+    plan_dir = required(SPRINT.planDir, "sprint:planDir")
+    plan_path = Path(plan_dir)
+    if plan_path.is_absolute() or ".." in plan_path.parts:
+        raise RuntimeError("sprint:planDir must be repository-relative")
+    integration_branch = required(SPRINT.integrationBranch, "sprint:integrationBranch")
+
+    integration_worktree = None
+    local_path = repo_root / ".sprints" / "current-phase.local.ttl"
+    if local_path.exists():
+        local_graph = Graph()
+        try:
+            local_graph.parse(str(local_path), format="turtle")
+        except Exception as exc:  # noqa: BLE001 - configuration boundary
+            raise RuntimeError(f"malformed local phase config {local_path}: {exc}") from exc
+        local_contexts = list(local_graph.subjects(RDF.type, SPRINT.PhaseContext))
+        if len(local_contexts) > 1:
+            raise RuntimeError(
+                f"{local_path} must declare at most one sprint:PhaseContext"
+            )
+        if local_contexts:
+            local_context = local_contexts[0]
+            local_phase = local_graph.value(local_context, SPRINT.phaseLocal)
+            if local_phase is not None and str(local_phase) != phase_local:
+                raise RuntimeError(
+                    f"{local_path} phaseLocal {local_phase} does not match {phase_local}"
+                )
+            hostname = platform.node()
+            for host in local_graph.objects(local_context, SPRINT.hostConfig):
+                host_name = local_graph.value(host, SPRINT.hostname)
+                if host_name is None or str(host_name) != hostname:
+                    continue
+                path_value = local_graph.value(host, SPRINT.integrationWorktree)
+                if path_value is not None:
+                    path = Path(str(path_value)).expanduser()
+                    if not path.is_absolute():
+                        raise RuntimeError(
+                            f"{local_path} integrationWorktree must be absolute"
+                        )
+                    integration_worktree = str(path)
+                    break
+
+    source_root = Path(integration_worktree) if integration_worktree else repo_root
+    ttl_path = source_root / structure_path
+    if not (ttl_path / "structure.ttl").exists():
+        raise RuntimeError(
+            f"current phase structure not found at {ttl_path}; check structureDir "
+            "and the host integrationWorktree overlay"
+        )
+
+    return {
+        "repo_root": repo_root,
+        "phase_local": phase_local,
+        "phase_iri": URIRef(phase_iri),
+        "ttl_dir": str(ttl_path),
+        "structure_dir": str(structure_path),
+        "plan_dir": str(plan_path),
+        "integration_branch": integration_branch,
+        "integration_worktree": integration_worktree,
+        "config": str(config_path),
+    }
 
 
 IGNORE_FILE_NAME = ".graph-orchestration-ignore"
@@ -315,20 +480,30 @@ def _findings_by_sprint(g: Graph) -> dict[URIRef, list[dict]]:
             continue
         raw_found_at = g.value(finding, TRIAGE.foundAt)
         found_at = _timestamp(raw_found_at)
-        severity = str(g.value(finding, TRIAGE.severity) or "").lower()
+        severity, raw_severity = _normalize_severity(g.value(finding, TRIAGE.severity))
         finding_id = g.value(finding, TRIAGE.findingId)
+        status_value = g.value(finding, TRIAGE.status)
         findings.setdefault(sprint, []).append(
             {
                 "iri": str(finding),
                 "id": str(finding_id) if finding_id is not None else None,
                 "severity": severity,
+                "raw_severity": raw_severity,
+                "status": str(status_value) if status_value is not None else None,
                 "found_at": found_at,
                 "found_at_raw": str(raw_found_at) if raw_found_at is not None else None,
                 "description": str(g.value(finding, TRIAGE.description) or ""),
             }
         )
     for values in findings.values():
-        values.sort(key=lambda item: (item["found_at"] or datetime.min.replace(tzinfo=timezone.utc), item["iri"]))
+        values.sort(
+            key=lambda item: (
+                SEVERITY_ORDER[item["severity"]],
+                item["found_at"] or datetime.min.replace(tzinfo=timezone.utc),
+                item["id"] or "",
+                item["iri"],
+            )
+        )
     return findings
 
 
@@ -387,6 +562,38 @@ def _dispatch_result(
         )
 
     findings = _findings_by_sprint(g)
+    invalid_findings = [
+        finding
+        for sprint_findings in findings.values()
+        for finding in sprint_findings
+        if finding["severity"] == "invalid"
+    ]
+    if invalid_findings:
+        ids = ", ".join(item["id"] or item["iri"] for item in invalid_findings)
+        raise DispatchDataError(
+            "INVALID_FINDING_SEVERITY",
+            f"unknown finding severity blocks dispatch: {ids}",
+            findings=invalid_findings,
+        )
+
+    closed_findings = []
+    for sprint, sprint_findings in findings.items():
+        if sprint not in closed:
+            continue
+        closed_at = closed[sprint][1]
+        closed_findings.extend(
+            finding
+            for finding in sprint_findings
+            if finding["found_at"] is None or finding["found_at"] <= closed_at
+        )
+    if closed_findings:
+        ids = ", ".join(item["id"] or item["iri"] for item in closed_findings)
+        raise DispatchDataError(
+            "CLOSED_SPRINT_HAS_UNRESOLVED_FINDINGS",
+            "QAClosed cannot hide unresolved findings discovered on/before closure: " + ids,
+            findings=closed_findings,
+        )
+
     sprints = []
     for sprint in g.subjects(RDF.type, TRIAGE.Sprint):
         if (sprint, TRIAGE.inPhase, phase_iri) not in g:
@@ -425,11 +632,13 @@ def _dispatch_result(
         prior = promotions_by_target.setdefault(candidate, [])
         if any(item["finding_iri"] == str(finding_iri) for item in prior):
             continue
+        promotion_severity, promotion_raw_severity = _normalize_severity(row[2])
         prior.append(
             {
                 "finding_iri": str(finding_iri),
                 "finding_id": str(row[1]) if row[1] else None,
-                "severity": str(row[2] or "").lower(),
+                "severity": promotion_severity,
+                "raw_severity": promotion_raw_severity,
                 "origin_sprint": _local_sprint(str(origin)),
                 "target_sprint": _local_sprint(str(candidate)),
                 "found_at": str(row[3]),
@@ -497,6 +706,7 @@ def _dispatch_result(
             "dispatch": dispatch,
             "target": target,
             "outstanding_finding_ids": [item["id"] for item in all_findings],
+            "outstanding_findings": [_finding_output(item) for item in all_findings],
             "promotions": promoted,
             "blocked_sprints": blocked_sprints,
             "in_flight_sprints": in_flight_sprints,
@@ -531,6 +741,7 @@ def _dispatch_result(
             "dispatch": "blocked",
             "target": None,
             "outstanding_finding_ids": [item["id"] for item in late_without_target if item["id"]],
+            "outstanding_findings": [_finding_output(item) for item in late_without_target],
             "promotions": unresolved_late,
             "blocked_sprints": blocked_sprints,
             "in_flight_sprints": [],
@@ -542,6 +753,7 @@ def _dispatch_result(
             "dispatch": "awaiting_qa",
             "target": None,
             "outstanding_finding_ids": [],
+            "outstanding_findings": [],
             "promotions": unresolved_late,
             "blocked_sprints": blocked_sprints,
             "in_flight_sprints": in_flight_sprints,
@@ -553,6 +765,7 @@ def _dispatch_result(
             "dispatch": "blocked",
             "target": None,
             "outstanding_finding_ids": [],
+            "outstanding_findings": [],
             "promotions": unresolved_late,
             "blocked_sprints": blocked_sprints,
             "in_flight_sprints": [],
@@ -564,6 +777,7 @@ def _dispatch_result(
         "dispatch": "done" if all_closed else "awaiting_qa",
         "target": None,
         "outstanding_finding_ids": [],
+        "outstanding_findings": [],
         "promotions": unresolved_late,
         "blocked_sprints": [],
         "in_flight_sprints": [],
@@ -689,23 +903,67 @@ def _legacy_cursor_result(g: Graph, phase_iri: URIRef, script_dir: Path) -> dict
     return {"phase": "DONE", "vars": {}, "_findings_raw": []}
 
 
+def _attach_phase_context(result: dict, context: dict | None) -> dict:
+    """Add portable phase metadata to scheduler output when config resolved."""
+
+    if context is None:
+        return result
+    result["context"] = {
+        "phase_local": context["phase_local"],
+        "phase_iri": str(context["phase_iri"]),
+        "ttl_dir": context["structure_dir"],
+        "plan_dir": context["plan_dir"],
+        "integration_branch": context["integration_branch"],
+        "integration_worktree": context["integration_worktree"],
+        "source": context["config"],
+    }
+    if isinstance(result.get("vars"), dict):
+        result["vars"].setdefault("phase_local", context["phase_local"])
+        result["vars"].setdefault("ttl_dir", context["structure_dir"])
+    return result
+
+
 def main():
     allowed_flags = {"--validate-only", "--legacy-cursor"}
-    if len(sys.argv) < 4 or len(sys.argv) > 6 or any(flag not in allowed_flags for flag in sys.argv[4:]):
+    current_phase_mode = len(sys.argv) >= 2 and sys.argv[1] == "--current-phase"
+    if current_phase_mode:
+        valid_current = len(sys.argv) in (3, 4) and all(
+            flag in {"--validate-only", "--legacy-cursor"} for flag in sys.argv[3:]
+        )
+    else:
+        valid_current = False
+    if (
+        (not current_phase_mode and (len(sys.argv) < 4 or len(sys.argv) > 6))
+        or (current_phase_mode and not valid_current)
+        or (not current_phase_mode and any(flag not in allowed_flags for flag in sys.argv[4:]))
+    ):
         print(
-            "Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> "
-            "[--validate-only] [--legacy-cursor]",
+            "Usage: query_runner.py [--current-phase SCRIPT_DIR | "
+            "PHASE_LOCAL TTL_DIR SCRIPT_DIR] [--validate-only] [--legacy-cursor]",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    phase_local = sys.argv[1]
-    ttl_dir = sys.argv[2]
-    script_dir = Path(sys.argv[3])
-    validate_only = "--validate-only" in sys.argv[4:]
-    legacy_cursor = "--legacy-cursor" in sys.argv[4:]
-
-    phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
+    phase_context = None
+    if current_phase_mode:
+        script_dir = Path(sys.argv[2])
+        try:
+            phase_context = _load_current_phase(script_dir)
+        except Exception as exc:  # noqa: BLE001 - CLI configuration boundary
+            print(f"ERROR: current phase resolution failed: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+        phase_local = phase_context["phase_local"]
+        ttl_dir = phase_context["ttl_dir"]
+        phase_iri = phase_context["phase_iri"]
+        flags = sys.argv[3:]
+    else:
+        phase_local = sys.argv[1]
+        ttl_dir = sys.argv[2]
+        script_dir = Path(sys.argv[3])
+        phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
+        flags = sys.argv[4:]
+    validate_only = "--validate-only" in flags
+    legacy_cursor = "--legacy-cursor" in flags
     # This is deliberately before structure loading and before --validate-only:
     # every entry point must prove that raw findings are valid.
     try:
@@ -748,7 +1006,9 @@ def main():
         except Exception as exc:  # noqa: BLE001 - CLI validation boundary
             print(f"ERROR: lifecycle validation failed: {exc}", file=sys.stderr)
             raise SystemExit(1) from exc
-        print(json.dumps({"schema": "next-dispatch/v1", "dispatch": "validate_only", "vars": {}}, indent=2))
+        print(json.dumps(_attach_phase_context({
+            "schema": "next-dispatch/v1", "dispatch": "validate_only", "vars": {}
+        }, phase_context), indent=2))
         return
 
     try:
@@ -756,10 +1016,19 @@ def main():
     except PermissionError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from exc
+    except DispatchDataError as exc:
+        print(json.dumps(_attach_phase_context({
+            "schema": "next-dispatch/v1",
+            "dispatch": "error",
+            "error": {"code": exc.code, "message": exc.message},
+            "findings": [_finding_output(item) for item in exc.findings],
+            "target": None,
+        }, phase_context), indent=2))
+        raise SystemExit(1) from exc
     except ValueError as exc:
         print(f"ERROR: dispatch validation failed: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_attach_phase_context(result, phase_context), indent=2))
 
 
 if __name__ == "__main__":

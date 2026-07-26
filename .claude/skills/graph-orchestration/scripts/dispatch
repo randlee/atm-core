@@ -15,10 +15,16 @@ for arg in "$@"; do
   esac
 done
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo >&2 "Usage: dispatch <PHASE_LOCAL> <TTL_DIR> [--validate-only]"
+if [[ $# -eq 1 && "$1" != "--validate-only" || $# -gt 3 ]]; then
+  echo >&2 "Usage: dispatch [<PHASE_LOCAL> <TTL_DIR> [--validate-only]]"
   exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ $# -eq 0 ]]; then
+  exec "$SCRIPT_DIR/next-dispatch"
+fi
+if [[ $# -eq 1 ]]; then
+  exec "$SCRIPT_DIR/next-dispatch" --validate-only
+fi
 exec "$SCRIPT_DIR/next-dispatch" "$@"

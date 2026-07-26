@@ -1,0 +1,13 @@
+@prefix sprint: <urn:atm:sprint:> .
+@prefix triage: <urn:atm:triage:> .
+
+# Portable phase source of truth. Host-specific absolute paths belong in the
+# gitignored current-phase.local.ttl overlay, never in this committed file.
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:contextVersion "1" ;
+    sprint:phaseLocal "AICH" ;
+    sprint:phaseIri triage:PhaseAICH ;
+    sprint:structureDir ".sprints/AICH" ;
+    sprint:planDir "docs/plans/phase-ai" ;
+    sprint:integrationBranch "integrate/phase-AI" ;
+    sprint:sprintPrefix "AICH-S" .

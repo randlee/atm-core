@@ -41,6 +41,10 @@ tmp/
 .claude/projects/
 .DS_Store
 
+# Host-specific phase integration worktree overlay; the portable phase
+# contract is committed in .sprints/current-phase.ttl.
+.sprints/current-phase.local.ttl
+
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

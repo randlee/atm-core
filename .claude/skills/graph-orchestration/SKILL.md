@@ -68,12 +68,30 @@ small (progressive disclosure).
 |---|---|
 | RDF runner | Python 3 + rdflib |
 | Phase TTL location | `.sprints/<PHASE>/structure.ttl` + `.sprints/<PHASE>/events.ttl` (relative to repo root) |
+| Current phase source | `.sprints/current-phase.ttl`; optional host-local overlay `.sprints/current-phase.local.ttl` |
 | Findings storage | `.triage/*/findings/*.ttl` — managed by triaging-findings skill |
 | Test command | `just test` |
 | Dev assignee | Set per-sprint at dispatch time (j2 variable) |
 | QA reviewer set | `req-qa`, `arch-qa`, `rust-qa-agent` every pass; RBP/service-hardening/ruthless on QA-1 or finding recheck |
 
 ## Phase Setup
+
+Before dispatching, commit `.sprints/current-phase.ttl` with the phase-local
+identifier, phase IRI, relative structure directory, plan directory, and
+integration branch. The no-argument `next-dispatch` command reads this file;
+the optional ignored `current-phase.local.ttl` maps hostnames to absolute
+integration worktree paths. This keeps machine paths out of the shared graph.
+
+```turtle
+@prefix sprint: <urn:atm:sprint:> .
+@prefix triage: <urn:atm:triage:> .
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:phaseLocal "AICH" ;
+    sprint:phaseIri triage:PhaseAICH ;
+    sprint:structureDir ".sprints/AICH" ;
+    sprint:planDir "docs/plans/phase-ai" ;
+    sprint:integrationBranch "integrate/phase-AI" .
+```
 
 Before starting a phase, create two TTL files:
 
@@ -136,7 +154,7 @@ with exit 1, and a validator execution `error` blocks with exit 2.
 ## Next-dispatch loop
 
 ```bash
-RESULT=$(next-dispatch F .sprints/F)
+RESULT=$(next-dispatch)
 ACTION=$(echo "$RESULT" | jq -r .dispatch)
 ```
 
@@ -155,6 +173,11 @@ The wrapper refuses manual sprint, branch, target, or finding overrides. A
 `dispatch_fix` is valid only for the exact target and exact IDs returned by the
 same invocation. Team-lead appends the Assignment only after the required ATM
 acknowledgement, then re-runs `next-dispatch` after every event.
+
+Severity is case-normalized; reviewer-native `critical` maps to `blocking`.
+Any other severity is an `error` result with code
+`INVALID_FINDING_SEVERITY` and a nonzero exit. Finding status is metadata only;
+it cannot hide an unresolved finding without a Resolution event.
 
 QA closure is terminal for assignment. An assignment at or after
 `triage:closedAt` fails with:
@@ -303,7 +326,9 @@ before closure remain evidence and are not rewritten.
 
 ## sc-compose Integration
 
-`next-dispatch` returns JSON shaped for direct sc-compose consumption:
+`next-dispatch` returns JSON shaped for direct sc-compose consumption. With no
+arguments it resolves `.sprints/current-phase.ttl`; explicit phase/TTL
+arguments remain a compatibility mode for diagnostics:
 
 ```json
 {
@@ -316,6 +341,7 @@ before closure remain evidence and are not rewritten.
     "criteria_doc": "ac/S7.md"
   },
   "outstanding_finding_ids": ["F-123"],
+  "outstanding_findings": [],
   "promotions": []
 }
 ```
@@ -325,7 +351,7 @@ Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) follows the
 discriminant; agents must not recompute it from a second graph scan:
 
 ```bash
-RESULT=$(next-dispatch F .sprints/F)
+RESULT=$(next-dispatch)
 ACTION=$(echo "$RESULT" | jq -r .dispatch)
 
 if [ "$ACTION" = "done" ]; then
@@ -348,7 +374,10 @@ sc-compose render \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
-  --var assignee="arch-ctm"
+  --var assignee="arch-ctm" \
+  --var phase_local="$(echo "$RESULT" | jq -r .context.phase_local)" \
+  --var ttl_dir="$(echo "$RESULT" | jq -r .context.ttl_dir)" \
+  --var finding_ids="$(echo "$RESULT" | jq -r '.outstanding_finding_ids | join(" ")')"
 ```
 
 ## Completion and closure
@@ -405,6 +434,13 @@ in place.
 The `triage:` prefix maps to `urn:atm:triage:`. Classes used by
 graph-orchestration:
 
+The portable phase context uses the repository-neutral `sprint:` prefix
+(`urn:atm:sprint:`), deliberately separate from triage finding/event data:
+
+| Class | Properties | Notes |
+|---|---|---|
+| `sprint:PhaseContext` | `phaseLocal`, `phaseIri`, `structureDir`, `planDir`, `integrationBranch` | Exactly one committed context in `current-phase.ttl`; host paths live in the ignored overlay |
+
 | Class | Properties | Notes |
 |---|---|---|
 | `triage:Phase` | — | Phase identity node |
@@ -424,7 +460,7 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 
 | Script | Purpose |
 |---|---|
-| `next-dispatch` | Canonical entry point: deterministic tagged dispatch result |
+| `next-dispatch` | Canonical entry point: deterministic tagged dispatch result; reads current-phase.ttl by default |
 | `dispatch` | Guarded wrapper; refuses manual sprint/branch/finding overrides |
 | `next-dev-task` | Deprecated cursor-shaped compatibility projection |
 | `preflight` | First-step dependency gate; requires CLI + Python binding `sc-compose >= 1.2.0`, `jq`, and `python3` + `rdflib` |
@@ -433,6 +469,7 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 | `next-dispatch.sparql` | Selects earliest open, non-in-flight, non-blocked sprint; parameter: `$PHASE` |
 | `closed-sprint-targets.sparql` | Finds assignments at/after QAClosed; non-zero rows refuse dispatch; parameter: `$PHASE` |
 | `post-closure-remediation.sparql` | Promotes late findings to later eligible descendants without changing `foundIn`; parameter: `$PHASE` |
+| `current-phase.ttl` | Portable phase/plan/integration-branch source of truth; no command parameters required |
 | `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |
 | `open-findings-sprint.sparql` | Legacy report of open non-blocking findings; not a dispatch authority; parameter: `$PHASE` |
 | `all-complete.sparql` | Legacy completion report; not a dispatch authority; parameter: `$PHASE` |
@@ -443,7 +480,7 @@ Usage:
 ```bash
 # From repo root — dependency gate must pass before dispatch is queried
 .claude/skills/graph-orchestration/scripts/preflight
-.claude/skills/graph-orchestration/scripts/next-dispatch F .sprints/F
+.claude/skills/graph-orchestration/scripts/next-dispatch
 ```
 
 Output JSON (`dispatch_task`):
@@ -485,6 +522,10 @@ Output JSON (`awaiting_qa`, `blocked`, or `done`):
   "in_flight_sprints": ["PhaseF-S1"]
 }
 ```
+
+Data-integrity failures use the same union with `dispatch: "error"`, an
+`error.code`, and JSON-safe finding details; they exit nonzero and are never
+treated as an expected `blocked` or `done` result.
 
 ## Assignment Templates
 

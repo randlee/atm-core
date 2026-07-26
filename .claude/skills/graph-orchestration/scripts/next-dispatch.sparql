@@ -38,7 +38,9 @@ SELECT ?sprint ?order ?criteria WHERE {
   FILTER NOT EXISTS {
     ?finding a triage:Finding ;
              triage:foundIn ?sprint ;
-             triage:severity "blocking" .
+             triage:severity ?rawSeverity .
+    BIND(LCASE(STR(?rawSeverity)) AS ?severity)
+    FILTER (?severity IN ("blocking", "critical"))
     FILTER NOT EXISTS {
       ?resolution a triage:Resolution ;
                   triage:resolves ?finding .
@@ -50,9 +52,7 @@ SELECT ?sprint ?order ?criteria WHERE {
     NOT EXISTS { ?completion a triage:Completion ; triage:ofSprint ?sprint . }
     || EXISTS {
       ?finding a triage:Finding ;
-               triage:foundIn ?sprint ;
-               triage:severity ?severity .
-      FILTER (?severity != "blocking")
+               triage:foundIn ?sprint .
       FILTER NOT EXISTS {
         ?resolution a triage:Resolution ; triage:resolves ?finding .
       }

@@ -8,6 +8,7 @@ Requires: rdflib, pytest
 import importlib.util
 import json
 import os
+import platform
 import subprocess
 import sys
 
@@ -837,6 +838,107 @@ triage:f1 a triage:Finding ; triage:findingId "F-1" ;
         payload = json.loads(result.stdout)
         assert payload["dispatch"] == "blocked"
         assert "no eligible open descendant" in payload["reason"]
+
+    def test_invalid_severity_returns_error_union(self, tmp_path):
+        finding = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ;
+    triage:severity "medium" ; triage:description "unknown severity" .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]), findings={"F-1.ttl": finding})
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+        assert result.returncode == 1
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "error"
+        assert payload["error"]["code"] == "INVALID_FINDING_SEVERITY"
+        assert payload["findings"][0]["raw_severity"] == "medium"
+
+    def test_critical_severity_is_a_blocking_dispatch_gate(self, tmp_path):
+        finding = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ;
+    triage:severity "CRITICAL" ; triage:description "reviewer critical" .
+"""
+        repo = self._make_repo(
+            tmp_path,
+            structure([(1, "S1"), (2, "S2")]),
+            findings={"F-1.ttl": finding},
+        )
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "dispatch_task"
+        assert payload["target"]["sprint"] == "S2"
+        assert payload["blocked_sprints"][0]["finding_ids"] == ["F-1"]
+
+    def test_closed_sprint_with_unresolved_preclosure_finding_fails(self, tmp_path):
+        events = PREFIX + """
+triage:q1 a triage:QAClosed ; triage:ofSprint triage:S1 ;
+    triage:closedAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        finding = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ;
+    triage:severity "minor" ; triage:status "fixed" ;
+    triage:description "missing Resolution" .
+"""
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]), events, {"F-1.ttl": finding})
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+        assert result.returncode == 1
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "error"
+        assert payload["error"]["code"] == "CLOSED_SPRINT_HAS_UNRESOLVED_FINDINGS"
+
+    def test_no_argument_api_resolves_current_phase_context(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        config = repo / ".sprints" / "current-phase.ttl"
+        config.write_text(
+            """@prefix sprint: <urn:atm:sprint:> .
+@prefix triage: <urn:atm:triage:> .
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:phaseLocal "F" ; sprint:phaseIri triage:PhaseF ;
+    sprint:structureDir ".sprints/F" ;
+    sprint:planDir "docs/plans/phase-f" ;
+    sprint:integrationBranch "integrate/phase-F" .
+"""
+        )
+        result = self._run(repo, wrapper="next-dispatch")
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["dispatch"] == "dispatch_task"
+        assert payload["target"]["sprint"] == "S1"
+        assert payload["context"]["integration_branch"] == "integrate/phase-F"
+        assert payload["vars"]["ttl_dir"] == ".sprints/F"
+
+    def test_current_phase_local_overlay_selects_host_integration_worktree(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        (repo / ".sprints" / "current-phase.ttl").write_text(
+            """@prefix sprint: <urn:atm:sprint:> .
+@prefix triage: <urn:atm:triage:> .
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:phaseLocal "F" ; sprint:phaseIri triage:PhaseF ;
+    sprint:structureDir ".sprints/F" ;
+    sprint:planDir "docs/plans/phase-f" ;
+    sprint:integrationBranch "integrate/phase-F" .
+"""
+        )
+        (repo / ".sprints" / "current-phase.local.ttl").write_text(
+            f"""@prefix sprint: <urn:atm:sprint:> .
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:phaseLocal "F" ;
+    sprint:hostConfig [
+        sprint:hostname "{platform.node()}" ;
+        sprint:integrationWorktree "{repo}"
+    ] .
+"""
+        )
+        result = self._run(repo, wrapper="next-dispatch")
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["context"]["integration_worktree"] == str(repo)
 
 
 # ── assignee-busy CLI tests ───────────────────────────────────────────────────

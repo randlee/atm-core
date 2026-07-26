@@ -1,0 +1,12 @@
+@prefix sprint: <urn:atm:sprint:> .
+
+# Copy this file to current-phase.local.ttl and replace the hostname/path.
+# The copied file is gitignored because integration worktree paths are host
+# specific. Multiple sprint:hostConfig entries may be declared for a shared
+# repository used by several machines.
+sprint:CurrentPhase a sprint:PhaseContext ;
+    sprint:phaseLocal "AICH" ;
+    sprint:hostConfig [
+        sprint:hostname "HOSTNAME" ;
+        sprint:integrationWorktree "/absolute/path/to/integrate-phase-AI"
+    ] .

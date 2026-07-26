@@ -37,7 +37,9 @@ SELECT ?finding ?findingId ?severity ?foundAt ?origin ?originOrder ?closedAt
   FILTER NOT EXISTS {
     ?candidateFinding a triage:Finding ;
                       triage:foundIn ?candidate ;
-                      triage:severity "blocking" .
+                      triage:severity ?candidateRawSeverity .
+    BIND(LCASE(STR(?candidateRawSeverity)) AS ?candidateSeverity)
+    FILTER (?candidateSeverity IN ("blocking", "critical"))
     FILTER NOT EXISTS {
       ?candidateResolution a triage:Resolution ;
                            triage:resolves ?candidateFinding .
