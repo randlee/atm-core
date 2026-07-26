@@ -1,0 +1,189 @@
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+
+SCRIPT = Path(__file__).parents[1] / "scripts" / "triage_report.py"
+spec = importlib.util.spec_from_file_location("triage_report", SCRIPT)
+triage_report = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(triage_report)
+
+PREFIX = "@prefix triage: <urn:atm:triage:> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+
+
+@pytest.fixture(autouse=True)
+def _validator_passes(monkeypatch):
+    """Keep report unit tests hermetic; validator invocation has a dedicated test."""
+    monkeypatch.setattr(
+        triage_report,
+        "_run_findings_validator",
+        lambda *args: {
+            "kind": "validation:pass",
+            "diagnostics": [],
+            "summary": {"files": 1, "findings": 1, "errors": 0, "warnings": 0},
+        },
+    )
+
+
+def _inputs(tmp_path: Path):
+    root = tmp_path / "repo"
+    structure_dir = root / ".sprints" / "AICH"
+    structure_dir.mkdir(parents=True)
+    (structure_dir / "structure.ttl").write_text(
+        PREFIX
+        + "triage:PhaseAICH a triage:Phase .\n"
+        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-21-pre.md\" .\n"
+        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-22.md\" .\n"
+    )
+    (structure_dir / "events.ttl").write_text(
+        PREFIX
+        + "triage:a1 a triage:Assignment ; triage:ofSprint triage:AICH-S1 ; triage:assignedAt \"2026-07-25T01:00:00Z\"^^xsd:dateTime .\n"
+        + "triage:c1 a triage:Completion ; triage:ofSprint triage:AICH-S1 ; triage:at \"2026-07-25T02:00:00Z\"^^xsd:dateTime .\n"
+        + "triage:a2 a triage:Assignment ; triage:ofSprint triage:AICH-S2 ; triage:assignedAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime .\n"
+    )
+    findings_dir = root / ".triage" / "phase-AI" / "findings"
+    findings_dir.mkdir(parents=True)
+    (findings_dir / "S1.ttl").write_text(
+        PREFIX
+        + "triage:F1 a triage:Finding ; triage:findingId \"F1\" ; "
+        + "triage:foundIn triage:AICH-S1 ; "
+        + "triage:foundAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime .\n"
+    )
+    qa_path = root / "qa.json"
+    qa_path.write_text(json.dumps({"runs": [
+        {"run_id": "S1-QA1", "aich_sprint": "AICH-S1", "run_type": "qa", "result_time_utc": "2026-07-25T03:00:00Z", "verdict": "FAIL", "blockers": 1, "important": 2, "minor": 0, "count_basis": "headline"},
+        {"run_id": "S1-review", "aich_sprint": "AICH-S1", "run_type": "reviewer-only", "result_time_utc": "2026-07-25T04:00:00Z", "verdict": "PASS", "blockers": 0, "important": 0, "minor": 0},
+        {"run_id": "S2-QA1", "aich_sprint": "AICH-S2", "run_type": "qa", "result_time_utc": "2026-07-25T05:00:00Z", "verdict": "PASS", "blockers": 0, "important": 0, "minor": 0},
+    ]}))
+    metadata = root / "metadata.json"
+    metadata.write_text(json.dumps({"sprints": [
+        {"id": "AICH-S1", "branch": "feature/s1", "head_sha": "abc", "pr_number": 1, "ci_status": "pass", "merged": True},
+        {"id": "AICH-S2", "branch": "feature/s2", "head_sha": "def", "pr_number": 2, "ci_status": "pending", "merged": False},
+    ]}))
+    return root, qa_path, metadata
+
+
+def test_latest_authoritative_qa_and_gates(tmp_path):
+    root, qa, metadata = _inputs(tmp_path)
+    report = triage_report.build_report(root, "AICH", qa, metadata)
+    first, second = report["rows"]
+    assert first["qa"]["run_id"] == "S1-QA1"  # reviewer-only is excluded
+    assert first["qa"]["blockers"] == 1
+    assert first["ready_to_merge"] is False
+    assert first["ok_to_merge"] is False
+    assert second["ready_to_merge"] is True
+    assert second["previous_sprints_merged"] is True
+    assert second["ok_to_merge"] is True
+    assert "| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |" in report["table"]
+    assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
+
+
+def test_unknown_merge_is_fail_closed(tmp_path):
+    root, qa, _ = _inputs(tmp_path)
+    report = triage_report.build_report(root, "AICH", qa)
+    first, second = report["rows"]
+    assert first["merged"] is None
+    assert first["ok_to_merge"] is False  # blockers are known and nonzero
+    assert second["previous_sprints_merged"] is None
+    assert second["ok_to_merge"] is None
+    assert report["data_gaps"]
+
+
+def test_missing_integration_worktree_is_structured_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(triage_report, "_git", lambda *args: "develop")
+    result = triage_report.main([])
+    assert result == 2
+
+
+def test_malformed_structure_is_report_error(tmp_path):
+    root = tmp_path / "repo"
+    phase = root / ".sprints" / "AICH"
+    phase.mkdir(parents=True)
+    (phase / "structure.ttl").write_text("not turtle [")
+    try:
+        triage_report.build_report(root, "AICH")
+    except triage_report.ReportError as exc:
+        assert "malformed Turtle" in str(exc)
+    else:
+        raise AssertionError("malformed structure must fail")
+
+
+def test_malformed_metadata_is_report_error(tmp_path):
+    root, qa, _ = _inputs(tmp_path)
+    metadata = root / "bad-metadata.json"
+    metadata.write_text(json.dumps({"sprints": [{"id": "AICH-S1", "ci_status": True}]}))
+    try:
+        triage_report.build_report(root, "AICH", qa, metadata)
+    except triage_report.ReportError as exc:
+        assert "ci_status" in str(exc)
+    else:
+        raise AssertionError("malformed metadata must fail")
+
+
+def test_duplicate_structure_orders_are_report_error(tmp_path):
+    root, _, _ = _inputs(tmp_path)
+    structure = root / ".sprints" / "AICH" / "structure.ttl"
+    structure.write_text(
+        PREFIX
+        + "triage:PhaseAICH a triage:Phase .\n"
+        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/s1.md\" .\n"
+        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/s2.md\" .\n"
+    )
+    try:
+        triage_report.build_report(root, "AICH")
+    except triage_report.ReportError as exc:
+        assert "orders must be unique" in str(exc)
+    else:
+        raise AssertionError("duplicate sprint orders must fail")
+
+
+def test_findings_validator_is_called_before_rows(tmp_path, monkeypatch):
+    root, qa, metadata = _inputs(tmp_path)
+    calls = []
+
+    def validator(*args):
+        calls.append(args)
+        return {"kind": "validation:pass", "diagnostics": []}
+
+    monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
+    report = triage_report.build_report(root, "AICH", qa, metadata)
+    assert len(calls) == 1
+    assert calls[0][1].name == "findings"
+    assert calls[0][2].name == "structure.ttl"
+    assert calls[0][3].name == "events.ttl"
+    assert report["validation"]["kind"] == "validation:pass"
+
+
+def test_findings_validator_subprocess_passes_for_valid_schema(tmp_path):
+    root, _, _ = _inputs(tmp_path)
+    findings_dir = root / ".triage" / "phase-AI" / "findings"
+    result = triage_report._run_findings_validator(
+        root,
+        findings_dir,
+        root / ".sprints" / "AICH" / "structure.ttl",
+        root / ".sprints" / "AICH" / "events.ttl",
+    )
+    assert result["kind"] == "validation:pass"
+
+
+def test_validator_failure_blocks_report(tmp_path, monkeypatch):
+    root, qa, metadata = _inputs(tmp_path)
+
+    def validator(*args):
+        raise triage_report.ReportError(
+            "findings validation blocked report: validation:fail"
+        )
+
+    monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
+    with pytest.raises(triage_report.ReportError, match="validation blocked"):
+        triage_report.build_report(root, "AICH", qa, metadata)
+
+
+def test_phase_sprint_accepts_non_ai_prefix_and_rejects_bad_convention():
+    assert triage_report._phase_sprint("docs/sprint-ak-7.md") == "AK.7"
+    assert triage_report._phase_sprint("docs/sprint-ak-7-pre-notes.md") == "AK.7-pre"
+    with pytest.raises(triage_report.ReportError, match="unsupported sprint criteria"):
+        triage_report._phase_sprint("docs/sprint-ak-not-number.md")

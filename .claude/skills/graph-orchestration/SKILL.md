@@ -1,8 +1,22 @@
 ---
 name: graph-orchestration
-version: 0.4.0
-description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic query loop — cursor → triage-findings check → dispatch → await Completion → re-query. No agent ever decides phase, cursor position, or done-ness; queries answer all of it. Derived from codex-orchestration; replaces static sprint-doc assignments with a live RDF event log. Adds Assignment events (collision prevention), Completion invalidation (blocking post-Completion finding snaps cursor back), and CLEANUP phase (non-blocking findings after all sprints complete).
+version: 0.5.0
+description: TTL/SPARQL-driven phase orchestration. The orchestrator runs a deterministic query loop — cursor → triaging-findings check → dispatch → await Completion → re-query. No agent ever decides phase, cursor position, or done-ness; queries answer all of it. Derived from codex-orchestration; replaces static sprint-doc assignments with a live RDF event log. Adds Assignment events (collision prevention), Completion invalidation (blocking post-Completion finding snaps cursor back), and CLEANUP phase (non-blocking findings after all sprints complete).
 repo: atm-core
+requires:
+  cli:
+    - name: sc-compose
+      minimum_version: 1.2.0
+    - name: jq
+  python:
+    - package: rdflib
+      purpose: RDF/Turtle parsing and SPARQL queries
+    - package: sc-compose
+      import_name: sc_compose
+      minimum_version: 1.2.0
+      purpose: Python/maturin rendering integrations
+  test:
+    - package: pytest
 depends_on:
   quality-management-gh: 1.x
   quality-mgr: 0.x
@@ -13,7 +27,7 @@ depends_on:
   rust-qa-agent: 0.x
   rust-best-practices-agent: 0.x
   rust-service-hardening-agent: 0.x
-  triage-findings: 1.x
+  triaging-findings: 1.x
 ---
 
 # Graph Orchestration
@@ -22,13 +36,38 @@ Mechanical phase orchestration backed by an append-only RDF event log.
 Every orchestration decision is a SPARQL query result. Agents never decide
 phase, cursor position, or whether a sprint is done.
 
+## Step 1 — Verify dependencies
+
+Run the dependency preflight as the first executable step, before discovering
+the phase, invoking an agent, reading the cursor, or appending a TTL event:
+
+```bash
+.claude/skills/graph-orchestration/scripts/preflight
+```
+
+It checks the `sc-compose >= 1.2.0` CLI, the matching `sc_compose >= 1.2.0`
+Python/maturin binding, `jq`, and a `python3` interpreter that can import
+`rdflib`. The command always emits a structured JSON result and exits `0`
+only when all runtime checks pass; exit `2` is an operational dependency error
+and must stop the workflow. For test work, include pytest:
+
+```bash
+.claude/skills/graph-orchestration/scripts/preflight --for-tests
+```
+
+If the check fails, read
+`references/installation-and-troubleshooting.md`, correct the environment,
+and rerun preflight. Do not proceed with a degraded or guessed dependency.
+The reference is intentionally separate so the normal skill entry point stays
+small (progressive disclosure).
+
 ## Defaults
 
 | Setting | Default |
 |---|---|
 | RDF runner | Python 3 + rdflib |
 | Phase TTL location | `.sprints/<PHASE>/structure.ttl` + `.sprints/<PHASE>/events.ttl` (relative to repo root) |
-| Findings storage | `.triage/*/findings/*.ttl` — managed by triage-findings skill |
+| Findings storage | `.triage/*/findings/*.ttl` — managed by triaging-findings skill |
 | Test command | `just test` |
 | Dev assignee | Set per-sprint at dispatch time (j2 variable) |
 | QA reviewer set | `req-qa`, `arch-qa`, `rust-qa-agent` every pass; RBP/service-hardening/ruthless on QA-1 or finding recheck |
@@ -59,6 +98,39 @@ the phase starts.
 
 Run `validate-structure.sparql` at creation. It must return zero rows.
 
+Before relying on cursor output, validate the raw findings directory as well:
+
+```bash
+python3 .claude/skills/graph-orchestration/scripts/validate-findings.py \
+  --findings-dir .triage/phase-AI/findings \
+  --structure .sprints/AICH/structure.ttl \
+  --events .sprints/AICH/events.ttl
+```
+
+This check runs before `query_runner.py`'s sprint-membership filter, so a
+finding cannot disappear merely because `triage:foundIn` is absent. Missing
+`triage:foundIn` or `triage:foundAt` is reported as `#error` and fails the
+command; missing `triage:findingId`, `triage:severity`, or
+`triage:description` is reported as `#warning`. Use `--finding-id-regex` to
+restrict an audit to a known sprint range and `--max-results N` to truncate
+repetitive output while preserving the failure status.
+
+The validator API and JSON CLI use a discriminated result contract:
+`validation:pass` means execution completed with no `#error` diagnostics,
+`validation:fail` means execution completed and the data failed its gate, and
+`error` means the validator itself could not run (for example malformed Turtle,
+missing input, invalid regex, or a broken query). The CLI exits 0, 1, and 2 for
+those outcomes respectively; `--json` emits the tagged result for callers.
+
+`query_runner.py` invokes this validator before loading the graph, including
+for `--validate-only`; `next-dev-task` therefore cannot resolve a cursor while
+any `.triage/*/findings` directory contains an error-level diagnostic. It
+validates every findings directory (not only the directory name that appears
+to match the current phase), then scopes findings by the phase's declared
+`triage:foundIn` sprint IRIs. This ordering prevents malformed or incomplete
+records from disappearing in the membership filter. A `validation:fail` blocks
+with exit 1, and a validator execution `error` blocks with exit 2.
+
 ## Orchestrator Loop
 
 ```bash
@@ -70,14 +142,14 @@ Four outcomes from the cursor query:
 
 | `phase` | Meaning |
 |---|---|
-| `TRAVERSAL` | A sprint is ready (no in-flight Assignment, no valid Completion) — check triage-findings to pick template |
+| `TRAVERSAL` | A sprint is ready (no in-flight Assignment, no valid Completion) — check triaging-findings to pick template |
 | `AWAITING` | Cursor is empty but some sprints lack valid Completions — in-flight assignments are being worked |
 | `CLEANUP` | All sprints have valid Completions but open non-blocking findings remain |
 | `DONE` | All sprints have valid Completions and no open non-blocking findings — phase complete |
 
 After getting a `TRAVERSAL` result, the orchestrator:
 1. Appends an Assignment event to events.ttl for this sprint
-2. Checks `.triage/` for blocking/important/minor findings (via triage-findings skill)
+2. Checks `.triage/` for blocking/important/minor findings (via triaging-findings skill)
 3. Picks the template: no findings → dev-task.xml.j2; blocking findings present → dev-fix.xml.j2
 
 ```
@@ -94,7 +166,7 @@ if cursor_result.phase == "CLEANUP":
 
 # TRAVERSAL path
 append Assignment event to events.ttl for cursor sprint
-findings = run triage-findings skill for cursor sprint
+findings = run triaging-findings skill for cursor sprint
 
 if findings has blocking:
     → dispatch dev-fix.xml.j2
@@ -105,7 +177,7 @@ else:
 **Hard rules:**
 - Never cache phase or cursor across events. Re-run `next-dev-task` after every
   Completion or Assignment.
-- Never interpret findings in this skill — that is triage-findings' job. If
+- Never interpret findings in this skill — that is triaging-findings' job. If
   the orchestrator is tempted to reason about the graph, the model is broken —
   file a design issue, do not improvise.
 - QA runs after every dev Completion. Trigger immediately on Completion receipt.
@@ -128,11 +200,14 @@ Populate and send `dev-task.xml.j2`:
 | `sprint` | `result.vars.sprint` |
 | `sprint_order` | `result.vars.sprint_order` |
 | `criteria_doc` | `result.vars.criteria_doc` |
+| `phase_local` | Graph phase argument passed to `next-dev-task` |
+| `ttl_dir` | Phase TTL directory passed to `next-dev-task` |
+| `finding_ids` | Space-separated assigned Blocking finding ids; empty only for greenfield |
 
 ## Fix Dispatch (blocking findings present)
 
-Same cursor sprint, but triage-findings reports blocking findings on it.
-Use `dev-fix.xml.j2` instead. The findings payload comes from triage-findings,
+Same cursor sprint, but triaging-findings reports blocking findings on it.
+Use `dev-fix.xml.j2` instead. The findings payload comes from triaging-findings,
 not from events.ttl.
 
 ## QA Gate
@@ -160,12 +235,12 @@ Do not re-run them if they filed nothing or all their findings are resolved.
 QA rules:
 - QA never edits existing findings. Re-assessments file a **new** finding at
   the new severity.
-- QA appends findings to `.triage/` via the triage-findings skill — not to
+- QA appends findings to `.triage/` via the triaging-findings skill — not to
   events.ttl.
 - Merge gate: 0 Blocking + 0 Important + 0 Minor, no exceptions.
 
 After QA completes, re-run `next-dev-task` to get the new cursor, then run
-triage-findings to determine template selection.
+triaging-findings to determine template selection.
 
 ## Appending Events
 
@@ -220,7 +295,7 @@ Invalidation below).
 **Non-blocking findings**: Closed by an explicit Resolution in events.ttl.
 
 Findings live exclusively in `.triage/*/findings/*.ttl` and are managed by the
-triage-findings skill. Do not append raw finding data to events.ttl.
+triaging-findings skill. Do not append raw finding data to events.ttl.
 
 ## sc-compose Integration
 
@@ -234,13 +309,32 @@ triage-findings skill. Do not append raw finding data to events.ttl.
     "sprint_iri": "urn:atm:triage:S7",
     "sprint_order": 1,
     "criteria_doc": "ac/S7.md"
-  }
+  },
+  "findings": [
+    {
+      "finding_iri": "urn:atm:triage:f-123",
+      "finding_id": "AI22-BLOCK-001",
+      "severity": "blocking",
+      "found_at": "2026-07-26T00:00:00Z",
+      "description": "..."
+    }
+  ]
 }
 ```
 
+For `TRAVERSAL`, `findings` contains every dispatch-open finding on the
+returned sprint, ordered invalid severity, Blocking, Important, Minor.
+Severity is case-normalized; reviewer-native `critical` maps to `blocking`.
+An unknown value returns `phase: "INVALID_FINDING_SEVERITY"` with
+`raw_severity` preserved and exits nonzero. `status` is output as metadata but
+does not hide a finding: event-log Completion/Resolution remains the cursor's
+lifecycle source. An empty array is the only greenfield result. The developer
+must use this JSON to verify the rendered node and any assigned Blocking
+finding ids before editing.
+
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
-consulting triage-findings:
+consulting triaging-findings:
 
 ```bash
 RESULT=$(next-dev-task F .sprints/F)
@@ -255,9 +349,9 @@ fi
 echo "$RESULT" | jq .vars > /tmp/graph-vars.json
 SPRINT=$(echo "$RESULT" | jq -r .vars.sprint)
 
-# Check findings via triage-findings skill (orchestrator step)
+# Check findings via triaging-findings skill (orchestrator step)
 # If blocking findings exist, use dev-fix.xml.j2; otherwise dev-task.xml.j2
-TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triage-findings check
+TEMPLATE="dev-task.xml.j2"   # set by orchestrator after triaging-findings check
 
 # Render via sc-compose (orchestrator supplies remaining vars)
 sc-compose render \
@@ -267,7 +361,10 @@ sc-compose render \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
-  --var assignee="arch-ctm"
+  --var assignee="arch-ctm" \
+  --var phase_local="F" \
+  --var ttl_dir=".sprints/F" \
+  --var finding_ids="$FINDING_IDS"
 ```
 
 ## Completion Invalidation
@@ -337,7 +434,7 @@ graph-orchestration:
 | `triage:Completion` | `ofSprint`, `at` | Appended by team-lead on receipt of dev's ATM completion message; may be invalidated by a later blocking finding |
 | `triage:Resolution` | `resolves`, `resolvedAt` | Appended by team-lead when a non-blocking finding is confirmed fixed; blocking findings need no Resolution |
 
-Findings are defined by the triage-findings skill and live in
+Findings are defined by the triaging-findings skill and live in
 `.triage/*/findings/*.ttl`. Resolution events referencing those findings are
 appended to events.ttl by team-lead.
 
@@ -348,6 +445,8 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 | Script | Purpose |
 |---|---|
 | `next-dev-task` | Entry point: cursor resolution, returns JSON |
+| `preflight` | First-step dependency gate; requires CLI + Python binding `sc-compose >= 1.2.0`, `jq`, and `python3` + `rdflib` |
+| `validate-findings.py` | Mandatory raw findings/provenance gate invoked before query resolution |
 | `query_runner.py` | Python SPARQL runner (rdflib) |
 | `cursor.sparql` | Returns cursor sprint (lowest-ordered sprint without a truly in-flight Assignment or valid Completion); parameter: `$PHASE` |
 | `open-findings-sprint.sparql` | Returns open non-blocking findings across the phase (used for CLEANUP detection); parameter: `$PHASE` |
@@ -357,7 +456,8 @@ All scripts live in `.claude/skills/graph-orchestration/scripts/`:
 
 Usage:
 ```bash
-# From repo root — make executable first: chmod +x .claude/skills/graph-orchestration/scripts/next-dev-task
+# From repo root — dependency gate must pass before the cursor is queried
+.claude/skills/graph-orchestration/scripts/preflight
 .claude/skills/graph-orchestration/scripts/next-dev-task F .sprints/F
 ```
 
@@ -370,7 +470,8 @@ Output JSON (TRAVERSAL):
     "sprint_iri": "urn:atm:triage:PhaseF-S1",
     "sprint_order": 1,
     "criteria_doc": "ac/FS1.md"
-  }
+  },
+  "findings": []
 }
 ```
 
@@ -404,7 +505,7 @@ Output JSON (DONE):
 ## Assignment Templates
 
 - `dev-task.xml.j2` — initial dev pass (no blocking findings)
-- `dev-fix.xml.j2` — fix pass (blocking findings identified by triage-findings)
+- `dev-fix.xml.j2` — fix pass (blocking findings identified by triaging-findings)
 
 QA assignment uses the existing `quality-mgr` prompt directly — no new template.
 
