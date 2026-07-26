@@ -58,6 +58,7 @@ tracked requests within the daemon shutdown deadline.
 | `/v1/atm/messages/read` | `POST` | Owner-only read-state mutation | read mutation |
 | `/v1/atm/message/{message-id}/ack` | `POST` | Acknowledge via canonical write | canonical write |
 | `/v1/atm/doctor` | `GET` | Return safe daemon/transport health | doctor |
+| `/v1/atm/peers/{peer}/sync` | `POST` | Run one explicit bounded reconciliation for a registered peer | peer sync |
 | `/v1/atm/compatibility` | `POST` | Verify client/daemon release compatibility | compatibility |
 | `/v1/atm/heartbeat` | `POST` | Publish team-member runtime heartbeat | runtime health |
 
@@ -79,7 +80,7 @@ destination without a separate acknowledgement route.
 - Successful reads return the canonical domain projection; collection results
   carry an opaque cursor and a server-selected bounded page size.
 - Successful creation returns `201 Created`, the immutable message identity,
-  and a `Location` pointing to `/message/{message-id}`.
+  and a `Location` identifier. v1 does not register a message-by-id route.
 - Idempotent creation of an existing message ULID returns the existing resource
   projection without a second persistence or nudge event. Reusing a ULID with
   different immutable content returns the typed conflict error; it preserves

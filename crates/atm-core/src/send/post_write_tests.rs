@@ -1,15 +1,19 @@
 use tempfile::tempdir;
 
 use super::tests::{
-    RecordingObservability, RecordingPostSendEmitter, TestRuntime, message, send_request,
+    RecordingObservability, RecordingPostSendEmitter, TestRuntime, delivery_snapshot, message,
+    outbound_message, send_request,
 };
-use super::{SendMessageSource, WriteOutcome, write_mail_with_runtime_impl};
+use super::{
+    DuplicateWriteDisposition, SendMessageSource, WriteOutcome, persist_message,
+    write_mail_with_runtime_impl,
+};
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
 use crate::error_codes::AtmErrorCode;
 use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_outbound_write};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 #[test]
 fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid() {
@@ -38,6 +42,51 @@ fn host_qualified_origin_write_persists_without_remote_roster_and_preserves_orig
         .expect("persisted records lock");
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].message_key, MessageKey::from(origin_id));
+}
+
+#[test]
+fn same_store_peer_receipt_skips_the_duplicate_row_but_continues_post_write() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let destination_host: HostName = "192.168.128.82".parse().expect("destination host");
+    let source_host: HostName = "peer.example.test".parse().expect("source host");
+    let mut origin = outbound_message();
+    set_peer_outbound_write(&mut origin, &destination_host, "{}".to_string());
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &origin,
+        false,
+        None,
+    )
+    .expect("origin write");
+
+    let mut receipt = origin.clone();
+    receipt.extra.remove("peerOutbound");
+    set_authenticated_source_host(&mut receipt, Some(source_host.clone()));
+    let result = persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &receipt,
+        false,
+        Some((&source_host, &destination_host)),
+    )
+    .expect("same-store peer receipt");
+
+    assert_eq!(
+        result.duplicate_disposition,
+        DuplicateWriteDisposition::SameStorePeerReceipt
+    );
+    assert!(result.requires_post_write());
+    let records = runtime.persisted_records.lock().expect("persisted records");
+    assert_eq!(records.len(), 1);
+    assert!(records[0].envelope.extra.contains_key("peerOutbound"));
 }
 
 #[test]

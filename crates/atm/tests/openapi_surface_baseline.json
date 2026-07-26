@@ -48,22 +48,6 @@
         }
       }
     },
-    "/message/{messageId}/ack": {
-      "post": {
-        "operation_id": "acknowledgeMessage",
-        "request_required": false,
-        "responses": {
-          "201": {
-            "error": false,
-            "schema": "#/components/schemas/Message"
-          },
-          "default": {
-            "error": true,
-            "schema": "#/components/responses/AtmError"
-          }
-        }
-      }
-    },
     "/messages": {
       "delete": {
         "operation_id": "clearMessages",
@@ -142,12 +126,12 @@
     },
     "/peers/{peer}/sync": {
       "post": {
-        "operation_id": "synchronizePeer",
+        "operation_id": "syncPeer",
         "request_required": true,
         "responses": {
           "200": {
             "error": false,
-            "schema": "#/components/schemas/PeerSyncResponse"
+            "schema": "#/components/schemas/PeerSyncOutcome"
           },
           "default": {
             "error": true,
@@ -249,6 +233,17 @@
       "properties": [],
       "required": []
     },
+    "PeerSyncOutcome": {
+      "properties": [
+        "delivered",
+        "disposition",
+        "peer"
+      ],
+      "required": [
+        "delivered",
+        "peer"
+      ]
+    },
     "PeerSyncRequest": {
       "properties": [
         "peer"
@@ -256,10 +251,6 @@
       "required": [
         "peer"
       ]
-    },
-    "PeerSyncResponse": {
-      "properties": [],
-      "required": []
     },
     "ReadQuery": {
       "properties": [],

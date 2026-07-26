@@ -1,10 +1,11 @@
 {
-  "review": "AI-FIXROUND-5 retired Teams-route removal, quality-mgr verified.",
+  "review": "Reviewed retired OpenAPI endpoints; each removal is absent from the live typed codec.",
   "removals": [
     "openapi/paths//team/{teamName}",
     "openapi/paths//teams",
     "openapi/paths//message/{messageId}",
     "openapi/paths//message/{messageId}/read",
+    "openapi/paths//message/{messageId}/ack",
     "openapi/schemas/AckRequest",
     "openapi/schemas/Team"
   ]

@@ -75,6 +75,18 @@ pub struct PeerSyncRequest {
 pub struct PeerSyncOutcome {
     pub peer: HostName,
     pub delivered: u16,
+    /// Distinguishes a completed zero-message pass from an intentionally
+    /// disabled or rate-limited reconciliation request.
+    pub disposition: PeerSyncDisposition,
+}
+
+/// Disposition of one explicit peer synchronization request.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerSyncDisposition {
+    Completed,
+    Disabled,
+    RateLimited,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -365,10 +377,10 @@ mod tests {
     #[test]
     fn release_version_accepts_semver_prereleases_and_rejects_non_semver() {
         assert_eq!(
-            ReleaseVersion::parse("v1.3.2-beta-23")
+            ReleaseVersion::parse("v1.3.2-beta-24")
                 .expect("prerelease version")
                 .to_string(),
-            "1.3.2-beta-23"
+            "1.3.2-beta-24"
         );
         assert!(ReleaseVersion::parse("1.3").is_err());
     }
@@ -494,7 +506,11 @@ mod tests {
     #[test]
     #[serial(env)]
     fn daemon_socket_path_rejects_override() {
-        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
+        let alternate_socket = std::env::temp_dir().join("alternate.sock");
+        let _env = EnvGuard::set_many([(
+            "ATM_DAEMON_SOCKET",
+            Some(alternate_socket.to_str().expect("temporary path is UTF-8")),
+        )]);
         assert!(daemon_socket_path().is_err());
     }
 

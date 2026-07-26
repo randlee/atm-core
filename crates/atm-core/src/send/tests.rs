@@ -342,7 +342,7 @@ impl RetainedMailboxRuntime for TestRuntime {
     }
 }
 
-fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
+pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
     DeliveryRecipientSnapshot {
         agent: AgentName::from_validated("recipient"),
         team: TeamName::from_validated(TEST_TEAM),
@@ -354,7 +354,7 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
     }
 }
 
-fn outbound_message() -> InboxMessage {
+pub(super) fn outbound_message() -> InboxMessage {
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
@@ -463,6 +463,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
         &inbox_path,
         &outbound,
         false,
+        None,
     )
     .expect("sqlite fallback recovery");
 
@@ -493,6 +494,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         &inbox_path,
         &outbound,
         false,
+        None,
     )
     .expect("sqlite fallback recovery");
 
@@ -522,6 +524,7 @@ fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite
         &inbox_path,
         &original,
         false,
+        None,
     )
     .expect("original write");
 
@@ -534,6 +537,7 @@ fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite
         &inbox_path,
         &conflicting,
         false,
+        None,
     )
     .expect_err("mismatched duplicate ULID must fail");
 
@@ -561,6 +565,7 @@ fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
         &inbox_path,
         &original,
         false,
+        None,
     )
     .expect("original write");
     persist_message(
@@ -570,6 +575,7 @@ fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
         &inbox_path,
         &original,
         false,
+        None,
     )
     .expect("same immutable replay");
 

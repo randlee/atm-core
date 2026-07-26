@@ -41,7 +41,9 @@ pub(crate) mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
-pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+pub(crate) use delivery_persistence::{
+    DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
+};
 #[doc(hidden)]
 pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
@@ -200,6 +202,7 @@ pub struct PreparedWrite {
     outbound_request: WriteRequest,
     persisted_timestamp: IsoTimestamp,
     post_write_needed: bool,
+    same_store_peer_receipt: bool,
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
@@ -300,6 +303,15 @@ impl PreparedWrite {
     #[must_use]
     pub fn requires_post_write_route(&self) -> bool {
         !self.outcome.dry_run && self.post_write_needed
+    }
+
+    /// Whether this write reused an existing immutable record after an
+    /// authenticated receipt returned to the same store. The daemon still
+    /// performs the ordinary local post-write action exactly once for that
+    /// receipt and records the explicit duplicate disposition.
+    #[must_use]
+    pub fn is_same_store_peer_receipt(&self) -> bool {
+        self.same_store_peer_receipt
     }
 
     /// Whether this canonical write arrived from a peer transport.
@@ -488,6 +500,19 @@ fn write_mail_with_runtime_impl<
         }
         return prepare_persisted_write(request, observability, runtime, None);
     }
+    if request.to.is_some()
+        && request.authenticated_source_host.is_some()
+        && request.origin_message_id.is_some()
+        && request.origin_timestamp.is_some()
+    {
+        let acknowledgement = crate::ack::resolve_received_acknowledgement_write(request, runtime)?;
+        return prepare_persisted_write(
+            acknowledgement.request(),
+            observability,
+            runtime,
+            Some(acknowledgement),
+        );
+    }
     if request.to.is_some() {
         return Err(AtmError::validation(
             "acknowledgement write must not include a client-supplied destination",
@@ -533,13 +558,14 @@ fn prepare_persisted_write<
         requires_ack,
         task_id.clone(),
     )?;
-    // A peer receipt deliberately reuses its origin ULID. Storage skips a
-    // duplicate row, but the ordinary post-write route still handles the
-    // received event. This makes localhost, advertised-IP, and remote peer
-    // ingress use one route without relying on certificate-to-host aliases.
-    let post_write_needed =
-        persistence.newly_persisted || has_authenticated_peer_provenance(&request);
-    let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+    // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
+    // skips its duplicate row, but the ordinary post-write route still emits
+    // the visible local nudge once the peer receipt has completed.
+    let post_write_needed = persistence.requires_post_write();
+    let same_store_peer_receipt =
+        persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
+    let messages =
+        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -557,6 +583,7 @@ fn prepare_persisted_write<
         outbound_request: request,
         persisted_timestamp: timestamp,
         post_write_needed,
+        same_store_peer_receipt,
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
             recipient: context.recipient,
@@ -717,11 +744,12 @@ fn build_send_delivery_plan(
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
+    is_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
     crate::delivery_plan::LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
-        false,
+        is_ack,
     )
     .map(|message| vec![message])
     .map_err(|error| AtmError::mailbox_write(error.to_string()))
@@ -770,13 +798,7 @@ fn prepare_send_context<
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
     let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(
-        &canonical_sender,
-        &request.caller_team,
-        &recipient,
-        target,
-        has_authenticated_peer_provenance(request),
-    )?;
+    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient, target)?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot = delivery_policy.resolve_write_recipient_snapshot(
@@ -835,10 +857,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     // host-qualified address for the shared writer and a later ACK.
     if request.authenticated_source_host.is_none()
         && request.origin_message_id.is_none()
-        && let Some(host) = request
-            .to
-            .as_ref()
-            .and_then(|address| address.host.as_ref())
+        && let Some(host) = request.to.as_ref().and_then(|address| address.host())
     {
         let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
         let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
@@ -853,6 +872,16 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &context.inbox_path,
         &envelope,
         false,
+        request
+            .authenticated_source_host
+            .as_ref()
+            .and_then(|source_host| {
+                request
+                    .to
+                    .as_ref()
+                    .and_then(|destination| destination.host())
+                    .map(|destination_host| (source_host, destination_host))
+            }),
     )
 }
 
@@ -881,7 +910,7 @@ fn build_send_envelope(
         destination_chat_id: request
             .to
             .as_ref()
-            .and_then(|address| address.chat_id.clone()),
+            .and_then(|address| address.chat_id().cloned()),
         summary: Some(summary.to_string()),
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -934,7 +963,6 @@ pub(crate) fn validate_non_self_recipient(
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
     target: &AgentAddress,
-    authenticated_peer_ingress: bool,
 ) -> Result<(), AtmError> {
     let same_identity = sender
         .as_str()
@@ -942,10 +970,7 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str());
-    // Authenticated HTTPS ingress is an ordinary remote-host route. Its
-    // verified marker keeps a compatibility-normalized target from being
-    // mistaken for an unqualified local self-send.
-    if same_identity && target.host.is_none() && !authenticated_peer_ingress {
+    if same_identity && target.host().is_none() {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -972,7 +997,6 @@ mod self_address_tests {
             &"sender-a@test-team"
                 .parse::<AgentAddress>()
                 .expect("target"),
-            false,
         )
         .expect_err("case-variant self target must be rejected");
 
@@ -991,26 +1015,8 @@ mod self_address_tests {
             &"sender-a@test-team.127.0.0.1"
                 .parse::<AgentAddress>()
                 .expect("host-qualified target"),
-            false,
         )
         .expect("host-qualified self target must use the ordinary peer route");
-    }
-
-    #[test]
-    fn validate_non_self_recipient_allows_authenticated_peer_receipt_after_host_normalization() {
-        validate_non_self_recipient(
-            &AgentName::from_validated("sender-a"),
-            &TeamName::from_validated("test-team"),
-            &ResolvedRecipient {
-                agent: AgentName::from_validated("sender-a"),
-                team: TeamName::from_validated("test-team"),
-            },
-            &"sender-a@test-team"
-                .parse::<AgentAddress>()
-                .expect("normalized target"),
-            true,
-        )
-        .expect("authenticated peer receipt must not become a local self-send");
     }
 }
 
@@ -1022,12 +1028,12 @@ fn resolve_recipient(
     // `AgentAddress` has already validated the explicit team segment. Never
     // parse it again and silently substitute the caller team on failure.
     let team = target_address
-        .team
-        .clone()
+        .team()
+        .cloned()
         .unwrap_or_else(|| caller_team.clone());
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
+        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
         team,
     })
 }
