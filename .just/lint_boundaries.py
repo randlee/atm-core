@@ -32,6 +32,8 @@ REQUIRED_BOUNDARY_FIELDS = (
     ("dependencies", "allowed_dependents"),
     ("dependencies", "allowed_dependencies"),
     ("dependencies", "forbidden_edges"),
+    ("ownership", "io_owns"),
+    ("ownership", "io_forbidden"),
     ("references", "scope"),
     ("references", "forbidden"),
     ("testing", "allowed_test_double_paths"),
@@ -1035,6 +1037,16 @@ def build_boundary_record(
         ("composition", "roots"),
         field_name="composition.roots",
     )
+    io_owns, io_owns_errors = validate_list_field(
+        data,
+        ("ownership", "io_owns"),
+        field_name="ownership.io_owns",
+    )
+    io_forbidden, io_forbidden_errors = validate_list_field(
+        data,
+        ("ownership", "io_forbidden"),
+        field_name="ownership.io_forbidden",
+    )
     allowed_dependents, allowed_dependent_errors = validate_list_field(
         data,
         ("dependencies", "allowed_dependents"),
@@ -1080,6 +1092,8 @@ def build_boundary_record(
 
     errors.extend(
         composition_errors
+        + io_owns_errors
+        + io_forbidden_errors
         + allowed_dependent_errors
         + allowed_dependency_errors
         + forbidden_edge_errors

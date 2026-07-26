@@ -753,6 +753,42 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 rendered,
             )
 
+    def test_parse_boundary_records_requires_declared_io_forbidden_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            broken_doc = BASE_BOUNDARY_DOC.replace(
+                "ownership:\n  io_owns:\n    - sqlite\n  io_forbidden:\n    - socket_io\n",
+                "ownership:\n  io_owns:\n    - sqlite\n",
+            )
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
+
+            _records, violations = parse_boundary_records(repo_root)
+            rendered = [violation.render() for violation in violations]
+            self.assertTrue(
+                any("missing required field: ownership.io_forbidden" in item for item in rendered),
+                rendered,
+            )
+
+    def test_parse_boundary_records_rejects_non_list_io_forbidden_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            broken_doc = BASE_BOUNDARY_DOC.replace(
+                "  io_forbidden:\n    - socket_io\n",
+                "  io_forbidden: socket_io\n",
+            )
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
+
+            _records, violations = parse_boundary_records(repo_root)
+            rendered = [violation.render() for violation in violations]
+            self.assertTrue(
+                any("ownership.io_forbidden must be a list of strings" in item for item in rendered),
+                rendered,
+            )
+
     def test_parse_boundary_records_flags_invalid_edge_syntax(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)

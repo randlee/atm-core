@@ -34,6 +34,7 @@ use crate::daemon_runtime_observability::{
 };
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
+mod peer_authority;
 mod peer_sync;
 mod post_write_router;
 #[cfg(test)]
