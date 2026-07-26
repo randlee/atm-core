@@ -222,6 +222,13 @@ def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
     return filtered or lines
 
 
+def failure_preview(task_name: str, lines: list[str]) -> list[str]:
+    """Return actionable CI output without hiding a Python test traceback."""
+    if task_name == "pytests":
+        return lines[-40:]
+    return prioritize_error_lines(lines)[:4]
+
+
 def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> list[str]:
     transcript = [
         f"lint: {task.name}",
@@ -296,8 +303,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
             print(f"  full log: {log_display}")
         return
 
-    preview = lines[:4]
-    preview = prioritize_error_lines(lines)[:4]
+    preview = failure_preview(result.task.name, lines)
     for line in preview:
         print(f"  {line}")
     print(f"  full log: {log_display}")
@@ -307,6 +313,14 @@ def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
         futures = [executor.submit(run_task, task, repo_root) for task in tasks]
         return [future.result() for future in futures]
+
+
+def partition_python_tasks(tasks: list[LintTask]) -> tuple[list[LintTask], list[LintTask]]:
+    """Keep repository-tool tests out of the concurrent lint batch."""
+    return (
+        [task for task in tasks if task.name != "pytests"],
+        [task for task in tasks if task.name == "pytests"],
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -335,7 +349,16 @@ def main(argv: list[str]) -> int:
         results.append(result)
 
     if python_tasks:
-        for result in run_parallel(python_tasks, repo_root):
+        # The Python suite invokes repository tools and may create their normal
+        # output paths.  Running it beside the lint tasks that inspect those
+        # paths makes the overall lint gate race-dependent on CI.
+        parallel_python_tasks, serial_python_tasks = partition_python_tasks(python_tasks)
+        if parallel_python_tasks:
+            for result in run_parallel(parallel_python_tasks, repo_root):
+                print_result(result, repo_root)
+                results.append(result)
+        for task in serial_python_tasks:
+            result = run_task(task, repo_root)
             print_result(result, repo_root)
             results.append(result)
 
