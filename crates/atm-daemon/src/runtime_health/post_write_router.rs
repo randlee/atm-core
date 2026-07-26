@@ -4,6 +4,7 @@ use atm_core::api::RequestDeadline;
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, next_request_id};
+use atm_core::types::HostName;
 
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
@@ -11,17 +12,8 @@ use crate::post_send_emitter::DaemonPostSendHookEmitter;
 use super::peer_authority::resolve_peer_authority;
 use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
 
-impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(
-        &self,
-        message: &mut MessageRecord,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let host = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host());
+impl DaemonRequestDispatcher {
+    fn emit_local_post_write(&self, message: &mut MessageRecord) {
         if message.prepared.is_peer_receipt() && message.prepared.is_same_store_peer_receipt() {
             let mut event = self.runtime_health_observability.event(
                 "peer_duplicate_write_skipped",
@@ -31,26 +23,47 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             event.message_id = Some(message.prepared.persisted_message_id());
             self.runtime_health_observability.emit_event_or_warn(event);
         }
-        if message.prepared.is_peer_receipt() || host.is_none() {
-            let post_send_emitter = self.local_post_write_emitter();
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        }
-        let host = host.expect("host-qualified writes are routed above");
+        let port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+        let emitter = DaemonPostSendHookEmitter::new(Arc::clone(&port));
+        message
+            .prepared
+            .emit_local_post_write(&self.service_runtime, &emitter);
+    }
+
+    fn record_peer_outcome(
+        &self,
+        kind: PeerDeliveryEventKind,
+        request_id: atm_core::protocol::RequestId,
+        message_id: Option<atm_core::schema::AtmMessageId>,
+        peer: HostName,
+        error_code: Option<atm_core::error_codes::AtmErrorCode>,
+    ) {
+        self.record_peer_delivery_event(PeerDeliveryEvent {
+            kind,
+            request_id,
+            message_id,
+            peer,
+            error_code,
+        });
+    }
+
+    fn deliver_to_peer(
+        &self,
+        message: &MessageRecord,
+        host: &HostName,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
         let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
         let request_id = next_request_id();
         let message_id = message.outbound_request.origin_message_id;
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: PeerDeliveryEventKind::WritePersisted,
+        self.record_peer_outcome(
+            PeerDeliveryEventKind::WritePersisted,
             request_id,
             message_id,
-            peer: peer.host.clone(),
-            error_code: None,
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
+            peer.host.clone(),
+            None,
+        );
         let transport = self
             .https_transport
             .lock()
@@ -61,60 +74,58 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             })?;
         match transport.deliver(message.outbound_request.clone(), &peer, deadline) {
             Ok(ResponseEnvelope::Error(error)) => {
-                self.record_unconfirmed_delivery(peer.host, request_id, message_id, error)
-            }
-            // Reconciliation is explicit: this just-delivered immutable write
-            // must not be replayed by the ordinary post-write route.
-            Ok(_) => {
-                self.record_peer_delivery_event(PeerDeliveryEvent {
-                    kind: PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                self.record_peer_outcome(
+                    PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
                     request_id,
                     message_id,
-                    peer: peer.host,
-                    error_code: None,
-                    candidate_count: Some(1),
-                    next_attempt_at: None,
-                });
+                    peer.host,
+                    Some(error.code()),
+                );
+                Err(error)
+            }
+            Ok(_) => {
+                self.record_peer_outcome(
+                    PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                    request_id,
+                    message_id,
+                    peer.host,
+                    None,
+                );
                 Ok(())
             }
             Err(error) => {
-                let error = if error.is_daemon_unavailable() {
-                    AtmError::remote_delivery_unconfirmed(format!(
-                        "local persistence completed but peer delivery was not confirmed: {}",
-                        error.message()
-                    ))
-                } else {
-                    error
-                };
-                self.record_unconfirmed_delivery(peer.host, request_id, message_id, error)
+                self.record_peer_outcome(
+                    PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
+                    request_id,
+                    message_id,
+                    peer.host,
+                    Some(error.code()),
+                );
+                Err(error)
             }
         }
     }
 }
 
-impl DaemonRequestDispatcher {
-    fn local_post_write_emitter(&self) -> DaemonPostSendHookEmitter {
-        let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-        DaemonPostSendHookEmitter::new(graft_port)
-    }
-
-    fn record_unconfirmed_delivery(
+impl PostWriteRouter for DaemonRequestDispatcher {
+    fn dispatch(
         &self,
-        peer: atm_core::types::HostName,
-        request_id: atm_core::protocol::RequestId,
-        message_id: Option<atm_core::schema::AtmMessageId>,
-        error: AtmError,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
-        self.record_peer_delivery_event(PeerDeliveryEvent {
-            kind: PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
-            request_id,
-            message_id,
-            peer,
-            error_code: Some(error.code()),
-            candidate_count: Some(1),
-            next_attempt_at: None,
-        });
-        Err(error)
+        if message.prepared.is_peer_receipt() {
+            self.emit_local_post_write(message);
+            return Ok(());
+        }
+        let Some(host) = message
+            .outbound_request
+            .to
+            .as_ref()
+            .and_then(|address| address.host())
+        else {
+            self.emit_local_post_write(message);
+            return Ok(());
+        };
+        self.deliver_to_peer(message, host, deadline)
     }
 }

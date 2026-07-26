@@ -108,6 +108,15 @@ pub struct DaemonRuntimeDoctorReport {
     /// cursors, resolved addresses, or TLS material.
     #[serde(default)]
     pub peer_links: Vec<PeerLinkStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_wire_security: Option<PeerWireSecurityStatus>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PeerWireSecurityStatus {
+    MutualTls,
+    PlaintextTest,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

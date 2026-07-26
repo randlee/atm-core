@@ -510,6 +510,7 @@ struct HostRoutingVisitor {
 struct HostRoutingFunction {
     name: String,
     is_post_write_dispatch: bool,
+    is_post_write_router_helper: bool,
     is_test: bool,
     accesses_host: bool,
     calls_delivery: bool,
@@ -650,6 +651,11 @@ impl HostRoutingVisitor {
         let index = self.functions.len();
         self.functions.push(HostRoutingFunction {
             is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
+            // AI.27 extracts the router's two cohesive actions to keep the
+            // dispatcher below the production file/function limits. These
+            // helpers remain private methods in the router-only module; no
+            // other module may gain this authority.
+            is_post_write_router_helper: self.is_post_write_router_helper(&name),
             is_test: self.in_test_module
                 || attrs
                     .iter()
@@ -853,6 +859,7 @@ impl HostRoutingVisitor {
             .filter(|function| {
                 function.calls_delivery
                     && !function.is_post_write_dispatch
+                    && !function.is_post_write_router_helper
                     && function.reconciliation_delivery_calls == 0
             })
             .map(|function| {
@@ -883,6 +890,14 @@ impl HostRoutingVisitor {
                 || path.ends_with(Path::new(
                     "crates/atm-daemon/src/runtime_health/peer_sync.rs",
                 ))
+        })
+    }
+
+    fn is_post_write_router_helper(&self, name: &str) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new(
+                "crates/atm-daemon/src/runtime_health/post_write_router.rs",
+            )) && matches!(name, "emit_local_post_write" | "deliver_to_peer")
         })
     }
 }

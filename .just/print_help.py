@@ -71,6 +71,17 @@ SECTIONS = (
         ),
     ),
     (
+        "Smoke",
+        (
+            ("smoke", "Run the normal fixture smoke harness."),
+            ("smoke fast", "Run the fast fixture smoke harness."),
+            ("smoke thorough", "Run the thorough fixture smoke harness."),
+            ("smoke localhost", "Prove branch-daemon localhost send/read/ack."),
+            ("smoke local-ip", "Add advertised-IP branch-daemon send/read/ack."),
+            ("smoke crosshost <host...>", "Add inbound peer sends from SSH hostnames."),
+        ),
+    ),
+    (
         "View",
         (
             ("view", "Generate all implemented architecture-view artifacts."),

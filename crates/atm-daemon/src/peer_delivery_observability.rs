@@ -12,18 +12,13 @@ use crate::SubsystemObservability;
 
 /// Retained, safe-to-log facts about a foreground peer-delivery attempt.
 /// This deliberately carries no payload, resolved IP address, credential, or
-/// receipt state. AI.28 consumes the recovery variants without adding a
-/// second projection writer.
+/// receipt state. Recovery scheduling belongs to AI.28 and is intentionally
+/// absent until that sprint owns real scheduler facts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // AI.28 emits the retained recovery variants.
 pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,
     PeerDeliveryUnconfirmed,
-    PeerRecoveryScheduled,
-    PeerRecoveryAttempt,
-    PeerRecoveryConfirmed,
-    PeerRecoveryUnconfirmed,
 }
 
 impl PeerDeliveryEventKind {
@@ -32,10 +27,6 @@ impl PeerDeliveryEventKind {
             Self::WritePersisted => "write_persisted",
             Self::PeerDeliveryConfirmed => "peer_delivery_confirmed",
             Self::PeerDeliveryUnconfirmed => "peer_delivery_unconfirmed",
-            Self::PeerRecoveryScheduled => "peer_recovery_scheduled",
-            Self::PeerRecoveryAttempt => "peer_recovery_attempt",
-            Self::PeerRecoveryConfirmed => "peer_recovery_confirmed",
-            Self::PeerRecoveryUnconfirmed => "peer_recovery_unconfirmed",
         }
     }
 }
@@ -47,13 +38,23 @@ pub(crate) struct PeerDeliveryEvent {
     pub(crate) message_id: Option<AtmMessageId>,
     pub(crate) peer: HostName,
     pub(crate) error_code: Option<AtmErrorCode>,
-    pub(crate) candidate_count: Option<u32>,
-    pub(crate) next_attempt_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct PeerDeliveryProjection {
-    statuses: Mutex<BTreeMap<HostName, PeerLinkStatus>>,
+    statuses: Mutex<PeerDeliveryProjectionState>,
+}
+
+#[derive(Debug, Default)]
+struct PeerDeliveryProjectionState {
+    statuses: BTreeMap<HostName, ProjectedPeerLinkStatus>,
+    next_sequence: u64,
+}
+
+#[derive(Debug)]
+struct ProjectedPeerLinkStatus {
+    status: PeerLinkStatus,
+    sequence: u64,
 }
 
 impl PeerDeliveryProjection {
@@ -86,8 +87,9 @@ impl PeerDeliveryProjection {
             .into_iter()
             .map(|peer| {
                 statuses
+                    .statuses
                     .get(&peer.host)
-                    .cloned()
+                    .map(|tracked| tracked.status.clone())
                     .unwrap_or_else(|| PeerLinkStatus::misconfigured(peer.host))
             })
             .collect()
@@ -104,15 +106,30 @@ impl PeerDeliveryProjection {
             );
             return;
         };
-        if statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES && !statuses.contains_key(&event.peer) {
-            tracing::warn!(subsystem = "runtime_health", action = "peer_delivery_projection", outcome = "capacity_exceeded", peer = %event.peer, cap = MAX_PEER_LINK_STATUS_ENTRIES, "peer delivery health projection is bounded; retaining event without a new status row");
-            return;
+        statuses.next_sequence = statuses.next_sequence.wrapping_add(1);
+        let sequence = statuses.next_sequence;
+        if statuses.statuses.len() >= MAX_PEER_LINK_STATUS_ENTRIES
+            && !statuses.statuses.contains_key(&event.peer)
+        {
+            let oldest_peer = statuses
+                .statuses
+                .iter()
+                .min_by_key(|(_, tracked)| tracked.sequence)
+                .map(|(peer, _)| peer.clone());
+            if let Some(oldest_peer) = oldest_peer {
+                statuses.statuses.remove(&oldest_peer);
+                tracing::warn!(subsystem = "runtime_health", action = "peer_delivery_projection", outcome = "capacity_evicted_oldest", evicted_peer = %oldest_peer, peer = %event.peer, cap = MAX_PEER_LINK_STATUS_ENTRIES, "peer delivery health projection evicted its oldest status row");
+            }
         }
-        let status = statuses
+        let tracked = statuses
+            .statuses
             .entry(event.peer.clone())
-            .or_insert_with(|| PeerLinkStatus::misconfigured(event.peer.clone()));
-        status.candidate_count = event.candidate_count;
-        apply_event_to_status(status, event);
+            .or_insert_with(|| ProjectedPeerLinkStatus {
+                status: PeerLinkStatus::misconfigured(event.peer.clone()),
+                sequence,
+            });
+        tracked.sequence = sequence;
+        apply_event_to_status(&mut tracked.status, event);
     }
 }
 
@@ -124,13 +141,7 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
             "peer delivery outcome recorded",
         )
         .with_extra_string_field("request_id", event.request_id.to_string())
-        .with_extra_string_field("peer", event.peer.to_string())
-        .with_extra_string_field(
-            "candidate_count",
-            event
-                .candidate_count
-                .map_or_else(|| "unknown".to_string(), |count| count.to_string()),
-        );
+        .with_extra_string_field("peer", event.peer.to_string());
     if let Some(message_id) = event.message_id {
         retained_event = retained_event.with_message_id(message_id);
     }
@@ -138,38 +149,26 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
         retained_event =
             retained_event.with_extra_string_field("error_code", error_code.to_string());
     }
-    if let Some(next_attempt_at) = event.next_attempt_at {
-        retained_event =
-            retained_event.with_extra_string_field("next_attempt_at", next_attempt_at.to_string());
-    }
     observability.emit_event_or_warn(retained_event);
 }
 
 fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) {
     match event.kind {
         PeerDeliveryEventKind::WritePersisted => {}
-        PeerDeliveryEventKind::PeerDeliveryConfirmed
-        | PeerDeliveryEventKind::PeerRecoveryConfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryConfirmed => {
             status.quality = PeerLinkQuality::Healthy;
             status.last_success_at = Some(IsoTimestamp::now());
             status.last_error_code = None;
             status.next_attempt_at = None;
             status.drain = PeerDrainState::Idle;
         }
-        PeerDeliveryEventKind::PeerDeliveryUnconfirmed
-        | PeerDeliveryEventKind::PeerRecoveryUnconfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryUnconfirmed => {
             status.quality = peer_link_quality_for_error(event.error_code);
             status.last_failure_at = Some(IsoTimestamp::now());
             status.last_error_code = event.error_code;
-            status.next_attempt_at = event.next_attempt_at;
+            status.next_attempt_at = None;
             status.drain = PeerDrainState::Idle;
         }
-        PeerDeliveryEventKind::PeerRecoveryScheduled => {
-            status.quality = PeerLinkQuality::Degraded;
-            status.next_attempt_at = event.next_attempt_at;
-            status.drain = PeerDrainState::Connecting;
-        }
-        PeerDeliveryEventKind::PeerRecoveryAttempt => status.drain = PeerDrainState::Draining,
     }
 }
 
@@ -180,5 +179,45 @@ fn peer_link_quality_for_error(error_code: Option<AtmErrorCode>) -> PeerLinkQual
         }
         Some(AtmErrorCode::PeerConfigValidationFailed) => PeerLinkQuality::Misconfigured,
         Some(_) | None => PeerLinkQuality::Degraded,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::protocol::next_request_id;
+
+    #[test]
+    fn projection_evicts_the_oldest_status_when_at_capacity() {
+        let projection = PeerDeliveryProjection::default();
+        for index in 0..=256 {
+            projection.project(PeerDeliveryEvent {
+                kind: PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                request_id: next_request_id(),
+                message_id: None,
+                peer: format!("peer-{index}.example.test")
+                    .parse()
+                    .expect("valid peer host"),
+                error_code: None,
+            });
+        }
+
+        let statuses = projection.statuses.lock().expect("projection lock");
+        assert_eq!(statuses.statuses.len(), 256);
+        assert!(
+            !statuses.statuses.contains_key(
+                &"peer-0.example.test"
+                    .parse::<HostName>()
+                    .expect("valid peer host")
+            ),
+            "the oldest status must be evicted rather than silently dropping the new peer"
+        );
+        assert!(
+            statuses.statuses.contains_key(
+                &"peer-256.example.test"
+                    .parse::<HostName>()
+                    .expect("valid peer host")
+            )
+        );
     }
 }
