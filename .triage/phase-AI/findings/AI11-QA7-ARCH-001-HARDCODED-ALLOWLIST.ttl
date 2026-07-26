@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST>
   a triage:Finding ;
   triage:findingId "AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "Deletion gate AST scan uses a hardcoded 5-file allowlist instead of a full workspace sweep" ;
   triage:description "In fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies() (crates/atm-architecture/tests/boundary_enforcement.rs, commit bb20fd9a on feature/pAI-s11-post-merge-remediation, PR #607), the `guarded_sources` array hardcodes exactly 5 files (protocol.rs, atm-daemon/src/lib.rs, local_tcp_transport.rs, atm-daemon-client/src/lib.rs, atm/src/composition.rs) and only scans those via retired_windows_transport_ast_findings(). Two sibling guards in the SAME file already do a full workspace-wide sweep instead of a fixed allowlist: fn production_code_cannot_restore_retired_error_contract_symbols() and fn workspace_source_must_not_reintroduce_retired_peer_delivery_constructs() (also fn only_the_error_contract_module_may_define_an_atm_error_literal()), all of which call collect_rust_files(&workspace_root().join(\"crates\"), &mut files) and scan every workspace Rust file. The narrower 5-file allowlist means any new file added anywhere else in the workspace that reintroduces retired Windows pipe/AF_UNIX/frame-codec constructs would NOT be caught by this gate. No active production violation exists today -- the risk is purely the gate's ability to catch a FUTURE regression. arch-qa (ARCH-001) and ruthless-boundary-qa (RBQA-F001) both independently found this same root cause during QA-7. Fix: widen `guarded_sources` to a full collect_rust_files workspace sweep, following the exact pattern already used by the two sibling guards in this file." ;
   triage:phaseId "phase-AI" ;
@@ -44,7 +46,7 @@
 <urn:atm:triage:worktree/pAI-s11/bb20fd9a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "bb20fd9a" ;
   triage:orderIndex 11 ;
   triage:status "open" .
@@ -52,7 +54,7 @@
 <urn:atm:triage:worktree/pAI-s12/b6466aa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa1" ;
   triage:orderIndex 12 ;
   triage:status "fixed" .
@@ -60,7 +62,7 @@
 <urn:atm:triage:worktree/pAI-s13/aecade2a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "aecade2a" ;
   triage:orderIndex 13 ;
   triage:status "fixed" .
@@ -68,7 +70,7 @@
 <urn:atm:triage:worktree/pAI-s14/672ffc34>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "672ffc34" ;
   triage:orderIndex 14 ;
   triage:status "fixed" .
@@ -76,7 +78,7 @@
 <urn:atm:triage:worktree/pAI-s15/b7d2f1c7>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "b7d2f1c7" ;
   triage:orderIndex 15 ;
   triage:status "fixed" .
@@ -84,7 +86,7 @@
 <urn:atm:triage:worktree/pAI-s16/853abcfc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "853abcfc" ;
   triage:orderIndex 16 ;
   triage:status "fixed" .
@@ -92,7 +94,7 @@
 <urn:atm:triage:worktree/pAI-s17/2a5a57c8>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "2a5a57c8" ;
   triage:orderIndex 17 ;
   triage:status "fixed" .

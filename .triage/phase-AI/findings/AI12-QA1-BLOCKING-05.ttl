@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI12-QA1-BLOCKING-05>
   a triage:Finding ;
   triage:findingId "AI12-QA1-BLOCKING-05" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T08:45:00Z"^^xsd:dateTime ;
   triage:title "Acknowledgement state mutated before peer delivery is attempted; failed peer delivery does not roll back local ack mutation" ;
   triage:description "write_mail_with_runtime calls acknowledgement.finish(...) -> mark_source_acknowledged as soon as the reply is durably persisted locally, inside MessageWriter::write -- which completes and returns before route_write invokes PostWriteRouter::dispatch to attempt HTTPS delivery to the remote peer. If delivery subsequently fails, mark_source_acknowledged has already committed and is never rolled back. The legacy ack_mail path lacks any router/rollback mechanism and calls write_mail_with_runtime directly without peer delivery gating." ;
   triage:phaseId "phase-AI" ;
@@ -94,41 +96,41 @@
 <urn:atm:triage:worktree/s11/3642430d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "3642430d" ;
   triage:orderIndex 11 .
 
 <urn:atm:triage:worktree/s12/a8ea0017>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
   triage:orderIndex 12 .
 
 <urn:atm:triage:worktree/s13/2adc5fa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 13 .
 
 <urn:atm:triage:worktree/s14/ef0e5e2b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "ef0e5e2b" ;
   triage:orderIndex 14 .
 
 <urn:atm:triage:worktree/s15/5a7a762f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a7a762f" ;
   triage:orderIndex 15 .
 
 <urn:atm:triage:worktree/s16/1c23ac04>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 16 .

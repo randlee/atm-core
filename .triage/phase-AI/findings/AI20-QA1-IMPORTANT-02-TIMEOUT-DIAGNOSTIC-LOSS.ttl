@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS>
   a triage:Finding ;
   triage:findingId "AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T16:45:00Z"^^xsd:dateTime ;
   triage:title "wait_for_published_daemon's terminal timeout error discards the underlying connection-failure cause" ;
   triage:description "The daemon-client's wait_for_published_daemon function extends the auto-start readiness polling timeout to 30s (via commit 34392e5c), but its timeout error path creates a generic error that discards underlying connection-failure diagnostic information. A caller now waits up to 30s with zero diagnostic info on why each connection attempt failed." ;
   triage:phaseId "phase-AI" ;
@@ -101,27 +103,27 @@
 <urn:atm:triage:worktree/s17/324077541b47567f6ffe2f7521ebcab75890b7db>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "324077541b47567f6ffe2f7521ebcab75890b7db" ;
   triage:orderIndex 17 .
 
 <urn:atm:triage:worktree/s18/02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd" ;
   triage:orderIndex 18 .
 
 <urn:atm:triage:worktree/s19/1bd8e54d3d78c51a89914127b402a94e2106e444>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "1bd8e54d3d78c51a89914127b402a94e2106e444" ;
   triage:orderIndex 19 .
 
 <urn:atm:triage:worktree/s20/a1d186a60f615336f2ddb82d468d74042e008ca4>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "a1d186a60f615336f2ddb82d468d74042e008ca4" ;
   triage:orderIndex 20 .

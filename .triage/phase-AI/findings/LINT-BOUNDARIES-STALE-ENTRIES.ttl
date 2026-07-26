@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/LINT-BOUNDARIES-STALE-ENTRIES>
   a triage:Finding ;
   triage:findingId "LINT-BOUNDARIES-STALE-ENTRIES" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T18:40:00Z"^^xsd:dateTime ;
   triage:title ".just/lint_boundaries.py still lists 2 deleted atm-daemon files in SCB_CONFIG_BOUNDARY_FILES" ;
   triage:description "AI1-QA-1 (2026-07-20) on PR #592 found .just/lint_boundaries.py:87-92's SCB_CONFIG_BOUNDARY_FILES tuple still lists crates/atm-daemon/src/boundary_adapters.rs and crates/atm-daemon/src/direct_boundaries.rs, both confirmed deleted by the AI.1 cross-host/peer-transport reset (neither file exists in the worktree). Inert — the lint does not fail since the files are simply absent — but stale and should be removed to avoid confusion." ;
   triage:phaseId "phase-AI" ;
@@ -34,13 +36,13 @@
 <urn:atm:triage:worktree/pAI-1/da3f978e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "da3f978e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/bcfe0788>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "bcfe0788" ;
   triage:orderIndex 0 .

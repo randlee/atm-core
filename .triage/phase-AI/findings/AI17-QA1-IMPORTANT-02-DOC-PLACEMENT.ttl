@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI17-QA1-IMPORTANT-02-DOC-PLACEMENT>
   a triage:Finding ;
   triage:findingId "AI17-QA1-IMPORTANT-02-DOC-PLACEMENT" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "ATM_CHAT_ID doc sentence misplaced in nav-footer paragraph" ;
   triage:description "The new ATM_CHAT_ID doc sentence in identity-and-team.md is misplaced in the nav-footer paragraph rather than the guidance section." ;
   triage:phaseId "phase-AI" ;
@@ -33,6 +35,6 @@
 <urn:atm:triage:worktree/pAI-s17/5560bf8d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:orderIndex 17 .

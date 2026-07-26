@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-BLOCKING-01-WINDOWS-NAMED-PIPE>
   a triage:Finding ;
   triage:findingId "AI11-BLOCKING-01-WINDOWS-NAMED-PIPE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:title "Windows named-pipe IPC endpoint mapping contradicts AI phase mandate (delete, not retain)" ;
   triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Sprint-ai-6.md Deliverable 4 explicitly required 'Delete Windows named-pipe mapping/fallback... retain none'. Phase-AI plan mandates 'no named pipes, AF_UNIX only'. Live production code at crates/atm-core/src/protocol.rs:185-222 contains platform_local_ipc_endpoint_path (cfg(windows) block at 197-222) which builds named pipe paths (\\\\\\\\.\\\\pipe\\\\atm-{leaf}-{hash} pattern). This is called from daemon_local_ipc_name_from_path (line 186) with 13+ call sites across atm-daemon, atm-daemon-client, atm-graft, and atm CLI. Docs/atm-daemon/architecture.md:200-205 has a stale self-contradictory passage permitting it, 3 lines below its own 'Phase AI supersession notice.' The deliverable was not met." ;
   triage:phaseId "phase-AI" ;
@@ -37,13 +39,13 @@
 <urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:orderIndex 999 .
 
 <urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:orderIndex 20 .

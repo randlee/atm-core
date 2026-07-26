@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI10-DELIVERABLE-4-DOC-RECONCILIATION>
   a triage:Finding ;
   triage:findingId "AI10-DELIVERABLE-4-DOC-RECONCILIATION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
   triage:title "Phase-AI deliverable 4: cross-host documentation reconciliation (runbooks, checklists, findings ledger) and ADR status flips" ;
   triage:description "Deliverable 4 required retiring cross-host-setup-runbook.md, cross-host-smoke-checklist.md, and cross-host-findings-ledger.md to stub pointers (forwarding users to phase-AG equivalents), and flipping ADR-033 (HTTP Endpoint Contract), ADR-034 (Minimal Cross-Host HTTPS Transport), ADR-036 (Storage Boundary and Composition Topology), and ADR-037 (Chat Address Identity) status from Proposed to Accepted. All ADRs reflect the finalized phase-AI cross-host architecture decisions." ;
   triage:phaseId "phase-AI" ;
@@ -26,6 +28,6 @@
 <urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "b2a76894" ;
   triage:orderIndex 0 .

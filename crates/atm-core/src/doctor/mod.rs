@@ -25,9 +25,8 @@ pub use report::{
     BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility,
     DoctorExecutionContext, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
     DoctorSummary, PeerAuthorityDoctorReport, PeerConfigDoctorReport, PeerDrainState,
-    PeerLinkQuality, PeerLinkStatus, PeerWireSecurityStatus, PostSendDoctorReport,
-    PostSendHookRuleIndex, PostSendHookRuleReport, RecipientDeliveryPath,
-    RecipientDeliveryPathReport,
+    PeerLinkQuality, PeerLinkStatus, PostSendDoctorReport, PostSendHookRuleIndex,
+    PostSendHookRuleReport, RecipientDeliveryPath, RecipientDeliveryPathReport,
 };
 
 /// Inputs for a doctor run, including the caller's resolved identity.
@@ -751,7 +750,7 @@ mod tests {
                     .parse::<CertificateFingerprint>()
                     .expect("fingerprint"),
                 enabled: true,
-                https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
+                https_port: std::num::NonZeroU16::new(43101).expect("non-zero port"),
             }])
         }
 

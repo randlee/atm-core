@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-I2-AI3>
   a triage:Finding ;
   triage:findingId "ATM-QA-I2-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:25:00Z"^^xsd:dateTime ;
   triage:title "docs/atm-error-codes.md and docs/atm-core/architecture.md still cite crates/atm-core/src/error_codes.rs as the canonical registry after AI.3 split error_codes.rs into two files" ;
   triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38. Error classification respected across storage boundaries: AtmErrorCode properly propagated, error text localized to contract layer only." ;
   triage:description "AI3-QA-1 (req-qa, important). AI.3 deliverable #3 moved canonical code/template construction into one dependency-safe module; the repo now has both crates/atm-core/src/error_codes.rs and crates/atm-storage/src/error_codes.rs, but docs/atm-error-codes.md:28 and docs/atm-core/architecture.md:307,676 still describe crates/atm-core/src/error_codes.rs as the single source registry, without acknowledging or pointing at the atm-storage counterpart. Confirmed both files exist on feature/pAI-s3-error-contract-foundation." ;
@@ -35,34 +37,34 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/0d448efe>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "0d448efe" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-4/3679a9b3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s4-error-consumer-migration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
   triage:headSha "3679a9b3" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/52252a32>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "52252a32" ;
   triage:orderIndex 0 .

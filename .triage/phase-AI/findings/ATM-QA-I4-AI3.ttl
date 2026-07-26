@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-I4-AI3>
   a triage:Finding ;
   triage:findingId "ATM-QA-I4-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T23:10:00Z"^^xsd:dateTime ;
   triage:title "Doubled 'Recovery:' line in composed AtmError messages -- 4 call sites re-embed an already-rendered error.message() (which already contains a 'Recovery:' line) into a new AtmError constructor, which appends its own second 'Recovery:' line" ;
   triage:description "FOLLOWUP CORRECTION (supersedes initial_pass root-cause analysis). The originally recorded mechanism (error_catalog.rs:10 render() vs send/mod.rs:184 caller-supplied-hint path) was INCORRECT and c553b822 ('fix(send): avoid duplicate catalog recovery guidance', guarding send/mod.rs:184 with `if !message.contains(\"Recovery:\")`) does NOT fix this finding -- that commit's only new test covers an unrelated path (WarningEntry::render in send/mod.rs), not any of the 4 real buggy sites below. AI4-QA-1 verdict (quality-mgr, corroborated by req-qa + ruthless-boundary-qa + rust-best-practices-agent + arch-qa's own re-check) re-verified the real mechanism directly: each site takes a lower-level error whose `.message()` already contains a composed 'Recovery: ...' line (rendered by error_catalog::render()) and passes that whole message string into a NEW `AtmError::new(...)` / `AtmError::caller_context_request_invalid(...)` / helper constructor call, which independently appends its own guidance-derived 'Recovery: ...' line on top -- producing 'Recovery: ... Recovery: ...' in the final composed message. This is a distinct bug from send/mod.rs:184's caller-supplied-hint path and is NOT touched by c553b822. Directly re-verified all 4 sites on feature/pAI-s4-error-consumer-migration @ baf86e22 (team-lead direct grep, 2026-07-20) and confirmed the same unfixed code is present on feature/pAI-s5-chat-address-identity @ 17bfb4c0 (AI.5 branched from AI.4 and inherits it unchanged)." ;
   triage:phaseId "phase-AI" ;
@@ -91,41 +93,41 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/0d448efe>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "0d448efe" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-4/baf86e22>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s4-error-consumer-migration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
   triage:headSha "baf86e22" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pAI-5/17bfb4c0>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s5-chat-address-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s5-chat-address-identity" ;
+  triage:path "feature/pAI-s5-chat-address-identity" ;
   triage:headSha "17bfb4c0" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/cbb74cf3>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "cbb74cf3" ;
   triage:orderIndex 0 .
