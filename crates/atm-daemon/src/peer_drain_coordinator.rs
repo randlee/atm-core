@@ -19,8 +19,9 @@ use atm_core::send::WriteRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 use atm_storage::{OutboundMessageQuery, PeerConfigStore, TrustedPeer};
 
-use crate::https_transport::{HttpsMessageTransport, resolve_peer_authority};
+use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
+use crate::runtime_health::peer_authority::resolve_peer_authority;
 
 const INITIAL_BACKOFF: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(15 * 60);
