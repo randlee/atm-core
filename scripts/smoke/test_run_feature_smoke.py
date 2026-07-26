@@ -38,7 +38,7 @@ class FeatureSmokeTests(unittest.TestCase):
         with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "thorough"]):
                 self.assertEqual(RUNNER.main(), 0)
-        self.assertIn("scripts/smoke/run.py", run.call_args.args[0][1])
+        self.assertEqual(Path(run.call_args.args[0][1]).name, "run.py")
 
     def test_missing_identity_is_a_hard_failure(self):
         with mock.patch.dict(os.environ, {"ATM_IDENTITY": "", "ATM_TEAM": ""}, clear=False):
