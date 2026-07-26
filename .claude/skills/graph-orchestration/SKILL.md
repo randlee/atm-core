@@ -124,12 +124,12 @@ those outcomes respectively; `--json` emits the tagged result for callers.
 
 `query_runner.py` invokes this validator before loading the graph, including
 for `--validate-only`; `next-dev-task` therefore cannot resolve a cursor while
-any `.triage/*/findings` directory contains an error-level diagnostic. It
-validates every findings directory (not only the directory name that appears
-to match the current phase), then scopes findings by the phase's declared
-`triage:foundIn` sprint IRIs. This ordering prevents malformed or incomplete
-records from disappearing in the membership filter. A `validation:fail` blocks
-with exit 1, and a validator execution `error` blocks with exit 2.
+the current integration branch's project findings directory contains an
+error-level diagnostic. The caller's sprint worktree is never a data source:
+the resolver selects the unique `integrate/phase-*` worktree that owns the
+requested `.sprints/<phase>` directory, then validates only that integration
+branch's `.triage/<project-phase>/findings` directory. A `validation:fail`
+blocks with exit 1, and a validator execution `error` blocks with exit 2.
 
 ## Orchestrator Loop
 

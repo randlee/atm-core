@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-MINOR-104>
+  a triage:Finding ;
+  triage:findingId "AI24-MINOR-104" ;
+  triage:title "No Phase AI smoke matrix document exists to carry the same-host ACK proof row" ;
+  triage:description "Sub-task 2's required doc update -- documenting the same-host ACK proof row in the Phase AI smoke matrix as a same-host prerequisite -- has no corresponding document anywhere in the worktree. Sprint doc ref: docs/plans/phase-ai/sprint-ai-24-host-qualified-ack-receipt.md." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "req-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T09:23:40Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T14:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-104/AI24-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI24-MINOR-104/AI24-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/plan-phase-ai-smoke-matrix.md" ;
+  triage:line 1 ;
+  triage:snippet "| same-host" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:occursIn <urn:atm:triage:worktree/S24/ac465283> .
+
+<urn:atm:triage:worktree/S24/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S24" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:orderIndex 24 .

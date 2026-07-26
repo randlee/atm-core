@@ -20,8 +20,8 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
-        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
+        ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
@@ -538,7 +538,7 @@ impl DaemonRequestDispatcher {
     ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Write(request) => self.route_write(*request, deadline),
-            request => self.dispatch_non_write(request),
+            request => self.dispatch_non_write(request, deadline),
         }
     }
 
@@ -568,7 +568,11 @@ impl DaemonRequestDispatcher {
         prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
     }
 
-    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch_non_write(
+        &self,
+        request: RequestEnvelope,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
@@ -594,9 +598,9 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
-            RequestEnvelope::PeerSync(request) => {
-                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
-            }
+            RequestEnvelope::PeerSync(request) => Ok(ResponseEnvelope::PeerSync(
+                self.sync_peer(request, deadline)?,
+            )),
             RequestEnvelope::ReloadRuntimeView => {
                 self.reload_runtime_view()?;
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
@@ -748,6 +752,7 @@ impl DaemonRequestDispatcher {
         peer: &atm_storage::TrustedPeer,
         transport: &dyn HttpsMessageTransport,
         policy: atm_storage::PeerSyncPolicy,
+        deadline: RequestDeadline,
         delivered_request_json: &mut BTreeSet<String>,
     ) -> Result<u16, AtmError> {
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
@@ -761,10 +766,6 @@ impl DaemonRequestDispatcher {
             not_before,
             policy.max_batch_messages,
         )?;
-        // The peer transport contract honors this deadline. Keeping the whole
-        // pass bounded means shutdown never waits on an unbounded reconciliation
-        // loop or creates an independent worker/state machine.
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
         let mut delivered = 0_u16;
         for stored in writes {
             if delivered_request_json.contains(&stored.request_json) {
@@ -788,7 +789,11 @@ impl DaemonRequestDispatcher {
         Ok(delivered)
     }
 
-    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+    fn sync_peer(
+        &self,
+        request: PeerSyncRequest,
+        deadline: RequestDeadline,
+    ) -> Result<PeerSyncOutcome, AtmError> {
         let peer = self
             .peer_config_store
             .trusted_peer(&request.peer)?
@@ -799,6 +804,7 @@ impl DaemonRequestDispatcher {
             return Ok(PeerSyncOutcome {
                 peer: request.peer,
                 delivered: 0,
+                disposition: PeerSyncDisposition::Disabled,
             });
         }
         let transport = self
@@ -819,6 +825,7 @@ impl DaemonRequestDispatcher {
             return Ok(PeerSyncOutcome {
                 peer: request.peer,
                 delivered: 0,
+                disposition: PeerSyncDisposition::RateLimited,
             });
         }
         // Explicit sync is operator-controlled, but a tight local retry loop
@@ -830,12 +837,14 @@ impl DaemonRequestDispatcher {
             &peer,
             transport.as_ref(),
             policy,
+            deadline,
             &mut state.delivered_request_json,
         )?;
         state.delivered_request_json.clear();
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
+            disposition: PeerSyncDisposition::Completed,
         })
     }
 }

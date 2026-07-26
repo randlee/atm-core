@@ -130,7 +130,6 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             "AI.23 {adapter} adapter must enter the shared ApiRouter"
         );
         for forbidden in [
-            ".dispatch(",
             "PostWriteRouter",
             "MessageWriter",
             "persist_",
@@ -144,6 +143,44 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             );
         }
     }
+
+    let peer_https =
+        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
+    assert!(
+        !peer_https.contains("AckRequest")
+            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
+        "AI.24 forbids an ACK-specific peer transport request branch"
+    );
+    assert!(
+        peer_https.contains("fn route_peer_http_request")
+            && peer_https.contains("router\n        .route(request, ingress"),
+        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
+    );
+}
+
+#[test]
+fn ai25_trust_reload_validates_before_installing_live_trust() {
+    let root = workspace_root();
+    let composition = syn::parse_file(&read_source(
+        &root.join("crates/atm-daemon/src/composition.rs"),
+    ))
+    .expect("daemon composition must parse");
+    let mut visitor = TrustReloadValidationVisitor::default();
+    visitor.visit_file(&composition);
+    assert!(
+        visitor.is_valid(),
+        "AI.25 requires exactly one reload validator and one live trust install in daemon composition"
+    );
+
+    let missing_validation =
+        syn::parse_file("fn reload() { listeners.refresh_trusted_peers(peers).unwrap(); }")
+            .expect("negative fixture must parse");
+    let mut negative = TrustReloadValidationVisitor::default();
+    negative.visit_file(&missing_validation);
+    assert!(
+        !negative.is_valid(),
+        "AST guard must reject a live trust install without reload validation"
+    );
 }
 
 #[test]
@@ -294,6 +331,87 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
         permitted_admission_check.is_empty(),
         "AI.12 permits a host-only persistence admission check: {permitted_admission_check:?}"
     );
+}
+
+#[test]
+fn ai23_ingress_adapters_cannot_own_write_side_effects() {
+    let root = workspace_root();
+    for relative in [
+        "crates/atm-daemon/src/https_transport.rs",
+        "crates/atm-daemon/src/local_tcp_transport.rs",
+        "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+    ] {
+        let path = root.join(relative);
+        let source = read_source(&path);
+        let file = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
+        let mut visitor = IngressWriteSideEffectVisitor::default();
+        visitor.visit_file(&file);
+        assert!(
+            visitor.findings.is_empty(),
+            "AI.23 ingress adapter {relative} may authenticate/decode then call ApiRouter only; it must not own write side effects: {:?}",
+            visitor.findings
+        );
+    }
+
+    let fixture = syn::parse_file(
+        "impl MessageWriter for Bad { fn write(&self) {} } fn ingress() { persist_message(); emit_local_post_write(); route_write(); }",
+    )
+    .expect("negative fixture must parse");
+    let mut visitor = IngressWriteSideEffectVisitor::default();
+    visitor.visit_file(&fixture);
+    assert_eq!(
+        visitor.findings,
+        BTreeSet::from([
+            "MessageWriter implementation".to_string(),
+            "direct `emit_local_post_write` call".to_string(),
+            "direct `persist_message` call".to_string(),
+            "direct `route_write` call".to_string(),
+        ]),
+        "negative fixture proves the gate is AST-based and fails closed"
+    );
+}
+
+#[derive(Default)]
+struct IngressWriteSideEffectVisitor {
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for IngressWriteSideEffectVisitor {
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments.last().is_some_and(|segment| {
+                matches!(
+                    segment.ident.to_string().as_str(),
+                    "MessageWriter" | "PostWriteRouter"
+                )
+            })
+        }) {
+            let trait_name = node
+                .trait_
+                .as_ref()
+                .and_then(|(_, path, _)| path.segments.last())
+                .expect("trait segment checked above")
+                .ident
+                .to_string();
+            self.findings.insert(format!("{trait_name} implementation"));
+        }
+        syn::visit::visit_item_impl(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = node.func.as_ref()
+            && let Some(segment) = path.path.segments.last()
+        {
+            let name = segment.ident.to_string();
+            if matches!(name.as_str(), "persist_message" | "route_write")
+                || name.starts_with("emit_local_post_write")
+            {
+                self.findings.insert(format!("direct `{name}` call"));
+            }
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
 }
 
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
@@ -696,6 +814,9 @@ impl HostRoutingVisitor {
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+                || path.ends_with(Path::new(
+                    "crates/atm-daemon/src/runtime_health/peer_sync.rs",
+                ))
         })
     }
 }
@@ -1331,6 +1452,38 @@ fn production_api_router_implementation_count(path: &Path) -> usize {
 #[derive(Default)]
 struct ProductionApiRouterImplementationDetector {
     count: usize,
+}
+
+#[derive(Default)]
+struct TrustReloadValidationVisitor {
+    reload_validation_calls: usize,
+    live_trust_install_calls: usize,
+}
+
+impl TrustReloadValidationVisitor {
+    fn is_valid(&self) -> bool {
+        self.reload_validation_calls == 1 && self.live_trust_install_calls == 1
+    }
+}
+
+impl<'ast> Visit<'ast> for TrustReloadValidationVisitor {
+    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = expression.func.as_ref()
+            && path.path.segments.last().is_some_and(|segment| {
+                segment.ident == "validate_enabled_peer_configuration_for_reload"
+            })
+        {
+            self.reload_validation_calls += 1;
+        }
+        syn::visit::visit_expr_call(self, expression);
+    }
+
+    fn visit_expr_method_call(&mut self, expression: &'ast syn::ExprMethodCall) {
+        if expression.method == "refresh_trusted_peers" {
+            self.live_trust_install_calls += 1;
+        }
+        syn::visit::visit_expr_method_call(self, expression);
+    }
 }
 
 impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {

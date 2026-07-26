@@ -14,9 +14,12 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy triage:quality-mgr ;
+  triage:triageRecordVersion 2 ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-003/s21/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-003/s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-003/s23/1> ;
@@ -31,12 +34,12 @@
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
   triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
-  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
   triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
   triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
 
 <urn:atm:triage:occurrence/AI25-ATMQA-003/s21/1>
@@ -82,12 +85,14 @@
 <urn:atm:triage:occurrence/AI25-ATMQA-003/s25/1>
   a triage:Occurrence ;
   triage:file "docs/atm-daemon/http-api.md" ;
-  triage:snippet "Missing documentation for https_port/configured-port surface" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "Peer-authority doctor projection (host/https_port/enabled only)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
-  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:closedAt "2026-07-26T02:30:00Z"^^xsd:dateTime ;
+  triage:closedBy triage:quality-mgr .
 
 <urn:atm:triage:occurrence/AI25-ATMQA-003/s26/1>
   a triage:Occurrence ;

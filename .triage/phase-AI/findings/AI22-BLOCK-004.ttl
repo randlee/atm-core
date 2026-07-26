@@ -38,10 +38,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 617 ;
   triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "87ca7889" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
   triage:occursIn <urn:atm:triage:worktree/pAI/87ca7889> .
 
 <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s21/1>
@@ -49,10 +50,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 620 ;
   triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s21/42fbd9fa> .
 
 <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/1>
@@ -60,10 +62,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 630 ;
   triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
 
 <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s22/2>
@@ -81,10 +84,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 630 ;
   triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
 
 <urn:atm:triage:occurrence/AI22-BLOCK-004/pAI-s24/1>
@@ -92,10 +96,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 639 ;
   triage:snippet "fn reconcile_after_success(...) redelivers recent outbound writes" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "af2fbb83" ;
+  triage:reason "Superseded by later fix under merge-forward-collapse; not independently re-fixed on this branch." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
 
 <urn:atm:triage:worktree/pAI/87ca7889>
