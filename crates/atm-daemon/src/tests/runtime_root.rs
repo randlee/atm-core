@@ -30,6 +30,7 @@ use crate::test_support::{
 #[derive(Default)]
 struct RecordingHttpsDelivery {
     delivered: std::sync::Mutex<Vec<WriteRequest>>,
+    remaining_budgets: std::sync::Mutex<Vec<Duration>>,
 }
 
 #[test]
@@ -101,12 +102,16 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
-        _deadline: RequestDeadline,
+        deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         self.delivered
             .lock()
             .expect("peer transport recording lock")
             .push(request);
+        self.remaining_budgets
+            .lock()
+            .expect("peer transport deadline recording lock")
+            .push(deadline.remaining().unwrap_or(Duration::ZERO));
         Ok(ResponseEnvelope::CompatibilityVerdict(
             atm_core::protocol::CompatibilityVerdict::Compatible {
                 daemon_release: atm_core::protocol::ReleaseVersion::current(),

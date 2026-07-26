@@ -531,7 +531,7 @@ impl DaemonRequestDispatcher {
     ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Write(request) => self.route_write(*request, deadline),
-            request => self.dispatch_non_write(request),
+            request => self.dispatch_non_write(request, deadline),
         }
     }
 
@@ -561,7 +561,11 @@ impl DaemonRequestDispatcher {
         prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
     }
 
-    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch_non_write(
+        &self,
+        request: RequestEnvelope,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
@@ -587,9 +591,9 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
-            RequestEnvelope::PeerSync(request) => {
-                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
-            }
+            RequestEnvelope::PeerSync(request) => Ok(ResponseEnvelope::PeerSync(
+                self.sync_peer(request, deadline)?,
+            )),
             RequestEnvelope::ReloadRuntimeView => {
                 self.reload_runtime_view()?;
                 Ok(ResponseEnvelope::RuntimeViewReloaded)

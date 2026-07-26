@@ -25,6 +25,7 @@ impl DaemonRequestDispatcher {
         peer: &TrustedPeer,
         transport: &dyn HttpsMessageTransport,
         policy: PeerSyncPolicy,
+        deadline: RequestDeadline,
         delivered_request_json: &mut BTreeSet<String>,
     ) -> Result<u16, AtmError> {
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
@@ -38,7 +39,6 @@ impl DaemonRequestDispatcher {
             not_before,
             policy.max_batch_messages,
         )?;
-        let deadline = RequestDeadline::after(Duration::from_secs(5));
         let mut delivered = 0_u16;
         for stored in writes {
             if delivered_request_json.contains(&stored.request_json) {
@@ -61,7 +61,11 @@ impl DaemonRequestDispatcher {
         Ok(delivered)
     }
 
-    pub(super) fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+    pub(super) fn sync_peer(
+        &self,
+        request: PeerSyncRequest,
+        deadline: RequestDeadline,
+    ) -> Result<PeerSyncOutcome, AtmError> {
         let peer = self
             .peer_config_store
             .trusted_peer(&request.peer)?
@@ -113,6 +117,7 @@ impl DaemonRequestDispatcher {
             &peer,
             transport.as_ref(),
             policy,
+            deadline,
             &mut delivered_request_json,
         );
         progress
