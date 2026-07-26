@@ -382,8 +382,9 @@ def main():
                 "finding_iri": str(row[0]),
                 "finding_id": str(row[1]) if row[1] is not None else None,
                 "severity": str(row[2]),
-                "found_at": str(row[3]),
-                "description": str(row[4]),
+                "raw_severity": str(row[3]),
+                "found_at": str(row[4]),
+                "description": str(row[5]),
             }
             for row in finding_rows
         ]

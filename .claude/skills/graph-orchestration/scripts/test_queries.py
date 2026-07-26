@@ -144,24 +144,30 @@ triage:c2 a triage:Completion ; triage:ofSprint triage:S2 ;
 
 
 class TestOpenFindingsForSprint:
-    def test_orders_open_findings_blocking_then_important_then_minor(self):
+    def test_normalizes_case_orders_findings_and_hides_terminal_status(self):
         findings = PREFIX + """
 triage:minor a triage:Finding ; triage:findingId "M-1" ; triage:foundIn triage:S1 ;
-    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "minor" ; triage:description "minor" .
+    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "MINOR" ; triage:description "minor" .
 triage:important a triage:Finding ; triage:findingId "I-1" ; triage:foundIn triage:S1 ;
-    triage:foundAt "2026-07-01T10:00:00Z"^^xsd:dateTime ; triage:severity "important" ; triage:description "important" .
+    triage:foundAt "2026-07-01T10:00:00Z"^^xsd:dateTime ; triage:severity "Important" ; triage:description "important" .
 triage:blocking a triage:Finding ; triage:findingId "B-1" ; triage:foundIn triage:S1 ;
-    triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ; triage:description "blocking" .
+    triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ; triage:severity "BLOCKING" ; triage:description "blocking" .
 triage:resolved a triage:Finding ; triage:findingId "R-1" ; triage:foundIn triage:S1 ;
-    triage:foundAt "2026-07-01T08:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ; triage:description "resolved" .
-triage:r1 a triage:Resolution ; triage:resolves triage:resolved .
+    triage:foundAt "2026-07-01T08:00:00Z"^^xsd:dateTime ; triage:severity "Blocking" ; triage:status "fixed" ; triage:description "resolved" .
+triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; triage:severity "critical" ; triage:description "invalid severity" .
 """
         rows = sparql(
             "open-findings-for-sprint.sparql",
             {"SPRINT": URIRef(f"{TRIAGE}S1")},
             findings,
         )
-        assert [str(row[1]) for row in rows] == ["B-1", "I-1", "M-1"]
+        assert [(str(row[1]), str(row[2]), str(row[3])) for row in rows] == [
+            ("U-1", "invalid", "critical"),
+            ("B-1", "blocking", "BLOCKING"),
+            ("I-1", "important", "Important"),
+            ("M-1", "minor", "MINOR"),
+        ]
 
 
 # ── validate-structure tests ──────────────────────────────────────────────────
@@ -627,6 +633,7 @@ class TestNextDevTaskValidation:
                 "finding_iri": f"{TRIAGE}f1",
                 "finding_id": "F-1",
                 "severity": "important",
+                "raw_severity": "important",
                 "found_at": "2026-07-01T12:00:00+00:00",
                 "description": "clean",
             }

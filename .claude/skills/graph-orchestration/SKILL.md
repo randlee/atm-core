@@ -322,10 +322,14 @@ triaging-findings skill. Do not append raw finding data to events.ttl.
 }
 ```
 
-For `TRAVERSAL`, `findings` contains every unresolved finding on the returned
-sprint, ordered Blocking, Important, Minor. An empty array is the only
-greenfield result. The developer must use this JSON to verify the rendered
-node and any assigned Blocking finding ids before editing.
+For `TRAVERSAL`, `findings` contains every dispatch-open finding on the
+returned sprint, ordered invalid severity, Blocking, Important, Minor.
+Severity is case-normalized; an unknown value is returned as `invalid` with
+`raw_severity` preserved and must stop dispatch. Terminal `triage:status`
+values are excluded for routing only; this does not change Completion or QA
+lifecycle semantics. An empty array is the only greenfield result. The
+developer must use this JSON to verify the rendered node and any assigned
+Blocking finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
