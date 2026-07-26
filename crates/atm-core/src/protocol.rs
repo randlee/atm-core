@@ -101,10 +101,16 @@ impl ReleaseVersion {
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
         let (core, prerelease) = value.split_once('-').unwrap_or((value, ""));
+        // Cargo package metadata uses `beta.N`, while the project-facing
+        // Phase AI release labels use `beta-N`. Both name the same bounded
+        // prerelease channel and are accepted on the protocol boundary.
+        let beta_sequence = prerelease
+            .strip_prefix("beta-")
+            .or_else(|| prerelease.strip_prefix("beta."));
         if !prerelease.is_empty()
-            && (!prerelease.starts_with("beta.")
-                || prerelease[5..].is_empty()
-                || !prerelease[5..].bytes().all(|byte| byte.is_ascii_digit()))
+            && !beta_sequence.is_some_and(|sequence| {
+                !sequence.is_empty() && sequence.bytes().all(|byte| byte.is_ascii_digit())
+            })
         {
             return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
@@ -399,6 +405,12 @@ mod tests {
                 .to_string(),
             "1.3.2-beta-24"
         );
+        assert_eq!(
+            ReleaseVersion::parse("1.3.2-beta.25")
+                .expect("Cargo prerelease version")
+                .to_string(),
+            "1.3.2-beta.25"
+        );
         assert!(ReleaseVersion::parse("1.3").is_err());
     }
 
@@ -406,7 +418,7 @@ mod tests {
     fn release_version_rejects_invalid_wire_deserialization() {
         let error = serde_json::from_str::<ReleaseVersion>("\"not-semver\"")
             .expect_err("wire versions must use the same semver validation");
-        assert!(error.to_string().contains("unexpected character"));
+        assert!(error.to_string().contains("invalid ATM release version"));
     }
 
     #[test]

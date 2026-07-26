@@ -120,6 +120,11 @@ authenticated local `POST /v1/atm/runtime/reload` control operation to
 atomically install the updated trust snapshot; it does not start a second
 daemon.
 
+`atm doctor --json` projects each configured authority as
+`trusted_peers[] = { host, https_port, enabled }`. This is configuration
+visibility only: it deliberately excludes resolved IP addresses, private-key
+references, and certificate material.
+
 ## Deferred scope
 
 Browser session authentication/authorization UI, CORS policy, static assets,

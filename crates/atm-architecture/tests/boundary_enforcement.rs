@@ -159,6 +159,31 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
 }
 
 #[test]
+fn ai25_trust_reload_validates_before_installing_live_trust() {
+    let root = workspace_root();
+    let composition = syn::parse_file(&read_source(
+        &root.join("crates/atm-daemon/src/composition.rs"),
+    ))
+    .expect("daemon composition must parse");
+    let mut visitor = TrustReloadValidationVisitor::default();
+    visitor.visit_file(&composition);
+    assert!(
+        visitor.is_valid(),
+        "AI.25 requires exactly one reload validator and one live trust install in daemon composition"
+    );
+
+    let missing_validation =
+        syn::parse_file("fn reload() { listeners.refresh_trusted_peers(peers).unwrap(); }")
+            .expect("negative fixture must parse");
+    let mut negative = TrustReloadValidationVisitor::default();
+    negative.visit_file(&missing_validation);
+    assert!(
+        !negative.is_valid(),
+        "AST guard must reject a live trust install without reload validation"
+    );
+}
+
+#[test]
 fn canonical_write_router_has_one_host_routing_decision() {
     let root = workspace_root();
     let mut visitor = HostRoutingVisitor::default();
@@ -1427,6 +1452,38 @@ fn production_api_router_implementation_count(path: &Path) -> usize {
 #[derive(Default)]
 struct ProductionApiRouterImplementationDetector {
     count: usize,
+}
+
+#[derive(Default)]
+struct TrustReloadValidationVisitor {
+    reload_validation_calls: usize,
+    live_trust_install_calls: usize,
+}
+
+impl TrustReloadValidationVisitor {
+    fn is_valid(&self) -> bool {
+        self.reload_validation_calls == 1 && self.live_trust_install_calls == 1
+    }
+}
+
+impl<'ast> Visit<'ast> for TrustReloadValidationVisitor {
+    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = expression.func.as_ref()
+            && path.path.segments.last().is_some_and(|segment| {
+                segment.ident == "validate_enabled_peer_configuration_for_reload"
+            })
+        {
+            self.reload_validation_calls += 1;
+        }
+        syn::visit::visit_expr_call(self, expression);
+    }
+
+    fn visit_expr_method_call(&mut self, expression: &'ast syn::ExprMethodCall) {
+        if expression.method == "refresh_trusted_peers" {
+            self.live_trust_install_calls += 1;
+        }
+        syn::visit::visit_expr_method_call(self, expression);
+    }
 }
 
 impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {
