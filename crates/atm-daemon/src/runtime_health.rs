@@ -244,12 +244,10 @@ impl DaemonRequestDispatcher {
                     );
                 });
             })
-            .map_err(|_source| {
+            .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
-                    "failed to spawn daemon shutdown finalizer step `{label}`"
+                    "failed to spawn daemon shutdown finalizer step `{label}`: {source}"
                 ))
-
-
             })
     }
 
@@ -303,9 +301,9 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 let _ = result_tx.send(shutdown_handle.join());
             })
-            .map_err(|_source| {
+            .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
-                    "failed to spawn daemon shutdown finalizer join helper `{label}`"
+                    "failed to spawn daemon shutdown finalizer join helper `{label}`: {source}"
                 ))
             })?;
         Ok((result_rx, join_helper))

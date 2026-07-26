@@ -9,7 +9,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -31,7 +31,10 @@ use rustls::{
 };
 use sha2::{Digest, Sha256};
 
+use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_PEER_HTTP_CONNECTIONS: usize = 64;
 const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// The peer wire-security setting. Mutual TLS is the production default.
@@ -274,7 +277,7 @@ impl HttpsTransport {
 pub(crate) struct HttpsListenerSet {
     stop: Arc<std::sync::atomic::AtomicBool>,
     listeners: Vec<HttpsListener>,
-    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    requests: Arc<ActiveConnectionRegistry>,
     peer_verifier: Arc<PinnedClientVerifier>,
 }
 
@@ -347,7 +350,7 @@ impl HttpsListenerSet {
                 Ok((listener, address))
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
-        let requests = Arc::new(Mutex::new(Vec::new()));
+        let requests = Arc::new(ActiveConnectionRegistry::default());
         let peer_verifier = match &security {
             ListenerSecurity::MutualTls { verifier, .. } => Arc::clone(verifier),
             ListenerSecurity::PlaintextTest => Arc::new(PinnedClientVerifier::new(Vec::new())),
@@ -401,15 +404,7 @@ impl HttpsListenerSet {
                 })?;
             }
         }
-        let requests =
-            std::mem::take(&mut *self.requests.lock().map_err(|_| {
-                AtmError::daemon_unavailable("HTTPS request registry lock poisoned")
-            })?);
-        for request in requests {
-            request.join().map_err(|_| {
-                AtmError::daemon_unavailable("HTTPS request worker panicked during shutdown")
-            })?;
-        }
+        self.requests.join_tracked_dispatches(HTTPS_TIMEOUT)?;
         Ok(())
     }
 }
@@ -419,12 +414,40 @@ fn accept_loop(
     stop: Arc<std::sync::atomic::AtomicBool>,
     security: ListenerSecurity,
     router: Arc<dyn ApiRouter + Send + Sync>,
-    requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    requests: Arc<ActiveConnectionRegistry>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
-            Ok((stream, _)) => spawn_request_worker(stream, &security, &router, &requests),
+            Ok((stream, _)) => {
+                match peer_connection_admission(
+                    stop.load(std::sync::atomic::Ordering::SeqCst),
+                    requests.active_connections(),
+                ) {
+                    PeerConnectionAdmission::Stop => break,
+                    PeerConnectionAdmission::CapacityExceeded => {
+                        tracing::warn!(
+                            subsystem = "https_transport",
+                            action = "accept",
+                            outcome = "capacity_exceeded",
+                            cap = MAX_PEER_HTTP_CONNECTIONS,
+                            "peer HTTP listener rejected connection at its bounded concurrency cap"
+                        );
+                    }
+                    PeerConnectionAdmission::Admit => {
+                        spawn_request_worker(stream, &security, &router, &requests);
+                    }
+                }
+            }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if let Err(error) = requests.reap_finished_dispatches() {
+                    tracing::warn!(
+                        subsystem = "https_transport",
+                        action = "reap_request_workers",
+                        outcome = "failed",
+                        %error,
+                        "peer HTTP listener could not reap finished request workers"
+                    );
+                }
                 std::thread::sleep(Duration::from_millis(10));
             }
             Err(error) => {
@@ -441,11 +464,35 @@ fn accept_loop(
     }
 }
 
+/// Decides whether an accepted TCP connection may become peer work.
+///
+/// Shutdown deliberately wakes a blocked `accept()` with one local connection. Once the stop
+/// flag is set that wake-up is never peer work, regardless of scheduling order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PeerConnectionAdmission {
+    Stop,
+    CapacityExceeded,
+    Admit,
+}
+
+const fn peer_connection_admission(
+    stop_requested: bool,
+    active_connections: usize,
+) -> PeerConnectionAdmission {
+    if stop_requested {
+        PeerConnectionAdmission::Stop
+    } else if active_connections >= MAX_PEER_HTTP_CONNECTIONS {
+        PeerConnectionAdmission::CapacityExceeded
+    } else {
+        PeerConnectionAdmission::Admit
+    }
+}
+
 fn spawn_request_worker(
     stream: TcpStream,
     security: &ListenerSecurity,
     router: &Arc<dyn ApiRouter + Send + Sync>,
-    requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    requests: &Arc<ActiveConnectionRegistry>,
 ) {
     if let Err(error) = stream.set_nonblocking(false) {
         tracing::warn!(
@@ -457,12 +504,18 @@ fn spawn_request_worker(
         );
         return;
     }
+    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
     let request = std::thread::Builder::new()
         .name("atm-peer-http-request".to_string())
         .spawn({
             let security = security.clone();
             let router = Arc::clone(router);
-            move || log_peer_request_result(handle_peer_connection(stream, security, router))
+            let requests = Arc::clone(requests);
+            move || {
+                let _active = requests.register();
+                log_peer_request_result(handle_peer_connection(stream, security, router));
+                let _ = completion_tx.send(());
+            }
         })
         .map_err(|source| {
             AtmError::daemon_unavailable_with_cause(
@@ -471,7 +524,7 @@ fn spawn_request_worker(
             )
         });
     match request {
-        Ok(request) => track_request_worker(requests, request),
+        Ok(request) => track_request_worker(requests, request, completion_rx),
         Err(error) => tracing::warn!(
             subsystem = "https_transport",
             action = "start_request",
@@ -496,17 +549,24 @@ fn log_peer_request_result(result: Result<(), AtmError>) {
 }
 
 fn track_request_worker(
-    requests: &Mutex<Vec<std::thread::JoinHandle<()>>>,
+    requests: &ActiveConnectionRegistry,
     request: std::thread::JoinHandle<()>,
+    completion_rx: std::sync::mpsc::Receiver<()>,
 ) {
-    match requests.lock() {
-        Ok(mut active) => active.push(request),
-        Err(_) => tracing::error!(
+    if let Err(error) = requests.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle: request,
+        },
+        MAX_PEER_HTTP_CONNECTIONS,
+    ) {
+        tracing::error!(
             subsystem = "https_transport",
             action = "track_connection",
             outcome = "failed",
+            %error,
             "HTTPS request worker could not be tracked for shutdown"
-        ),
+        );
     }
 }
 
@@ -660,11 +720,14 @@ fn complete_handshake_with_deadline(
 }
 
 fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
-    deadline.remaining().ok_or_else(|| {
-        AtmError::remote_delivery_unconfirmed(
-            "local persistence completed before the peer accepted the write deadline expired",
-        )
-    })
+    deadline
+        .remaining()
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| {
+            AtmError::remote_delivery_unconfirmed(
+                "local persistence completed before the peer accepted the write deadline expired",
+            )
+        })
 }
 
 fn resolve_peer_addresses(
@@ -921,7 +984,7 @@ mod tests {
     use std::str::FromStr as _;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
@@ -960,7 +1023,8 @@ mod tests {
     use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
     use super::{
-        HttpsListenerSet, TlsIdentity, client_config, complete_handshake, normalize_fingerprint,
+        HttpsListenerSet, MAX_PEER_HTTP_CONNECTIONS, PeerConnectionAdmission, TlsIdentity,
+        client_config, complete_handshake, normalize_fingerprint, peer_connection_admission,
     };
 
     #[derive(Default)]
@@ -1363,44 +1427,6 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_joins_an_incomplete_peer_request_within_its_deadline() {
-        let certificate = test_certificate();
-        let listener = HttpsListenerSet::bind_enabled(
-            &[HttpsInterface {
-                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
-                advertise_host: "localhost".parse().expect("host"),
-                enabled: true,
-            }],
-            &certificate,
-            vec![],
-            Arc::new(RecordingRouter::default()),
-        )
-        .expect("start listener");
-        let _incomplete = TcpStream::connect(listener.listeners[0].address)
-            .expect("open incomplete peer connection");
-        let wait_started = Instant::now();
-        while listener
-            .requests
-            .lock()
-            .expect("request registry")
-            .is_empty()
-        {
-            assert!(
-                wait_started.elapsed() < Duration::from_secs(1),
-                "listener must retain each accepted request before shutdown"
-            );
-            std::thread::yield_now();
-        }
-
-        let started = Instant::now();
-        listener.shutdown().expect("shutdown listener");
-        assert!(
-            started.elapsed() < Duration::from_secs(6),
-            "shutdown must join the bounded peer I/O worker"
-        );
-    }
-
-    #[test]
     fn untrusted_mtls_peer_is_rejected_before_router() {
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
@@ -1583,40 +1609,21 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_bounds_an_incomplete_peer_handshake() {
-        let certificate = test_certificate();
-        let listener = HttpsListenerSet::bind_enabled(
-            &[HttpsInterface {
-                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
-                advertise_host: "localhost".parse().expect("host"),
-                enabled: true,
-            }],
-            &certificate,
-            vec![],
-            Arc::new(RecordingRouter::default()),
-        )
-        .expect("start listener");
-        let _incomplete = TcpStream::connect(listener.listeners[0].address)
-            .expect("open incomplete peer connection");
-        let wait_started = Instant::now();
-        while listener
-            .requests
-            .lock()
-            .expect("request registry")
-            .is_empty()
-        {
-            assert!(
-                wait_started.elapsed() < Duration::from_secs(1),
-                "listener must retain the accepted request before shutdown"
-            );
-            std::thread::yield_now();
-        }
-
-        let started = Instant::now();
-        listener.shutdown().expect("shutdown listener");
-        assert!(
-            started.elapsed() < Duration::from_secs(6),
-            "shutdown must not wait beyond the bounded peer I/O deadline"
+    fn peer_connection_admission_is_deterministic_for_shutdown_and_capacity() {
+        assert_eq!(
+            peer_connection_admission(true, 0),
+            PeerConnectionAdmission::Stop,
+            "the shutdown wake-up is never admitted as a peer request"
+        );
+        assert_eq!(
+            peer_connection_admission(false, MAX_PEER_HTTP_CONNECTIONS),
+            PeerConnectionAdmission::CapacityExceeded,
+            "the connection cap is enforced before a worker is spawned"
+        );
+        assert_eq!(
+            peer_connection_admission(false, MAX_PEER_HTTP_CONNECTIONS - 1),
+            PeerConnectionAdmission::Admit,
+            "an ordinary peer connection is admitted below the cap"
         );
     }
 

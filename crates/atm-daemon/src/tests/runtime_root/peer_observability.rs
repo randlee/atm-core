@@ -92,6 +92,32 @@ fn configured_peer_without_attempt_is_misconfigured_in_doctor_projection() {
 
 #[test]
 #[serial_test::serial(env)]
+fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
+    let (_tempdir, dispatcher) = configured_dispatcher();
+    let status = dispatcher
+        .peer_link_statuses()
+        .pop()
+        .expect("configured peer status");
+
+    let serialized = serde_json::to_string(&status).expect("serialize peer link status");
+    assert!(
+        !serialized.to_ascii_lowercase().contains("fingerprint"),
+        "peer-link status must not expose a TLS fingerprint"
+    );
+    assert!(
+        !serialized.to_ascii_lowercase().contains("ip_address"),
+        "peer-link status must not expose resolved peer IP addresses"
+    );
+    assert_eq!(
+        serde_json::from_str::<atm_core::doctor::PeerLinkStatus>(&serialized)
+            .expect("deserialize peer link status"),
+        status,
+        "the safe doctor projection must round trip without adding hidden fields"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn local_https_delivery_failure_preserves_daemon_unavailable() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
