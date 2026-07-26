@@ -162,8 +162,10 @@ validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
 # Run one named smoke feature. `localhost` and `local-ip` exercise the
-# currently-running branch daemon; `crosshost` adds each SSH hostname after
-# those local rows pass. Fixture levels retain their existing names.
+# currently-running branch daemon. Cross-host stages use only public ATM CLI
+# commands over SSH against already-running peer daemons: preflight, exact
+# send/read, then the acknowledgement round trip. Fixture levels retain their
+# existing names.
 smoke feature='normal' *hosts:
     {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
 

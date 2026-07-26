@@ -14,15 +14,25 @@ under `reports/smoke/<feature>/`.
 ```bash
 just smoke localhost
 just smoke local-ip
-just smoke crosshost m5 fastpc4
+just smoke peer-preflight m5 fastpc4
+just smoke crosshost-send m5 fastpc4
+just smoke crosshost-ack m5 fastpc4
 ```
 
 `localhost` proves host-qualified localhost send/read and requires-ack/ack.
-`local-ip` adds the daemon's advertised-IP route. `crosshost` runs both local
-features first, then asks each named SSH host to send into this host and proves
-the exact returned IDs are readable locally. It fails closed if the selected
-CLI or daemon version does not match the checked-out branch, a prerequisite
-row fails, or a required remote row is not receiver-visible.
+`local-ip` adds the daemon's advertised-IP route. `peer-preflight` confirms
+that each named SSH host already has a healthy, version-matched daemon and an
+enabled advertised host; it never starts, stops, or retries a remote daemon.
+`crosshost-send` then proves local public `atm send` and remote public `atm
+read` return the exact same ULID and body. `crosshost-ack` repeats that proof
+with `--requires-ack`, has the remote peer acknowledge it, and proves the
+reply reaches the local inbox with the original acknowledged-message ID.
+
+The legacy `just smoke crosshost <host...>` spelling remains an alias for
+`crosshost-send`. A cross-host recovery smoke is intentionally not claimed
+until the public unconfirmed-send contract exposes the locally persisted
+message ULID; otherwise a script could not truthfully prove that recovery
+preserved the sender's original ULID.
 
 Each participating host runs the same repository runner with its own config:
 

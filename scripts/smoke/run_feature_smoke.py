@@ -29,6 +29,9 @@ LOCALHOST = "localhost"
 LOCAL_IP = "local-ip"
 LOCAL_IP_ALIAS = "local-up"
 CROSSHOST = "crosshost"
+PEER_PREFLIGHT = "peer-preflight"
+CROSSHOST_SEND = "crosshost-send"
+CROSSHOST_ACK = "crosshost-ack"
 
 
 class SmokeError(RuntimeError):
@@ -143,6 +146,11 @@ def advertised_host(atm: str) -> str:
     if override:
         return override
     interfaces = parse_json(command([atm, "peer", "interface", "list", "--json"]), "peer interface list")
+    return advertised_host_from_json(interfaces)
+
+
+def advertised_host_from_json(interfaces: Any) -> str:
+    """Extract an enabled advertised host from the public interface response."""
     stack = [interfaces]
     while stack:
         current = stack.pop()
@@ -153,7 +161,56 @@ def advertised_host(atm: str) -> str:
             stack.extend(current.values())
         elif isinstance(current, list):
             stack.extend(current)
-    raise SmokeError("no enabled advertised host; set ATM_SMOKE_ADVERTISED_HOST")
+    raise SmokeError("peer interface list JSON has no enabled advertised host")
+
+
+def doctor_ready(report: Any, expected_version: str) -> bool:
+    """Return whether one public doctor response proves a matched ready pair."""
+    return (
+        isinstance(report, dict)
+        and report.get("summary", {}).get("status") == "healthy"
+        and report.get("runtime_status", {}).get("readiness") == "ready"
+        and report.get("client_context", {}).get("version") == expected_version
+        and report.get("daemon_context", {}).get("version") == expected_version
+    )
+
+
+def remote_command(peer: str, remote_atm: str, args: list[str], timeout: float = 20.0) -> dict[str, Any]:
+    """Invoke only the public CLI on an already-running SSH peer."""
+    return command(["ssh", peer, remote_atm, *args], timeout=timeout)
+
+
+def remote_preflight(
+    cases: list[dict[str, Any]], peer: str, remote_atm: str, expected_version: str
+) -> str | None:
+    """Fail fast when a peer is not already running and reachable.
+
+    This never starts, stops, retries, or configures a remote daemon. In
+    particular, an unseen macOS firewall dialog is reported as this bounded
+    preflight failure instead of consuming time in a retry loop.
+    """
+    try:
+        doctor = parse_json(remote_command(peer, remote_atm, ["doctor", "--json"]), f"{peer} doctor")
+        ready = doctor_ready(doctor, expected_version)
+        detail = (
+            f"client={doctor.get('client_context', {}).get('version')}, "
+            f"daemon={doctor.get('daemon_context', {}).get('version')}"
+            if isinstance(doctor, dict)
+            else "doctor response was not an object"
+        )
+        add_case(cases, f"{peer} doctor/version", ready, detail)
+        if not ready:
+            return None
+        interfaces = parse_json(
+            remote_command(peer, remote_atm, ["peer", "interface", "list", "--json"]),
+            f"{peer} peer interface list",
+        )
+        host = advertised_host_from_json(interfaces)
+        add_case(cases, f"{peer} advertised host", True, host)
+        return host
+    except SmokeError as error:
+        add_case(cases, f"{peer} preflight", False, str(error))
+        return None
 
 
 def add_case(cases: list[dict[str, Any]], name: str, passed: bool, detail: str) -> None:
@@ -242,17 +299,81 @@ def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: st
         add_case(cases, f"{host} requires-ack delivery/content", False, str(error))
 
 
-def remote_inbound(cases: list[dict[str, Any]], atm: str, identity: str, team: str, local_host: str, peers: list[str]) -> None:
-    target = f"{identity}@{team}.{local_host}"
-    for peer in peers:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        remote = command(["ssh", peer, atm, "send", target, f"smoke-from-{peer}-{stamp}", "--json"], timeout=25.0)
-        try:
-            remote_id = message_id(parse_json(remote, f"remote send from {peer}"))
-            visible = wait_for_message(atm, team, remote_id)
-            add_case(cases, f"{peer} inbound send/read", visible is not None, remote_id if visible else "message not visible")
-        except SmokeError as error:
-            add_case(cases, f"{peer} inbound send/read", False, str(error))
+def crosshost_send(
+    cases: list[dict[str, Any]], atm: str, remote_atm: str, identity: str, team: str,
+    peer: str, remote_host: str,
+) -> None:
+    """Stage one: local send followed by remote read of the exact ULID/body."""
+    target = f"{identity}@{team}.{remote_host}"
+    body = f"smoke-crosshost-send-{peer}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    try:
+        sent_id = message_id(parse_json(command([atm, "send", target, body, "--json"]), f"send to {peer}"))
+        remote = parse_json(
+            remote_command(peer, remote_atm, ["read", "--team", team, "--message-id", sent_id, "--json"]),
+            f"{peer} read {sent_id}",
+        )
+        received = selected_message(remote, sent_id)
+        passed = message_has_text(received, body)
+        add_case(
+            cases,
+            f"{peer} crosshost send/read/content",
+            passed,
+            sent_id if passed else "remote read did not return the sent ULID and exact body",
+        )
+    except SmokeError as error:
+        add_case(cases, f"{peer} crosshost send/read/content", False, str(error))
+
+
+def crosshost_ack(
+    cases: list[dict[str, Any]], atm: str, remote_atm: str, identity: str, team: str,
+    peer: str, remote_host: str,
+) -> None:
+    """Stage two: require an acknowledgement to traverse the reverse peer route."""
+    target = f"{identity}@{team}.{remote_host}"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    body = f"smoke-crosshost-ack-{peer}-{stamp}"
+    try:
+        sent_id = message_id(
+            parse_json(
+                command([atm, "send", target, body, "--requires-ack", "--json"]),
+                f"ack-required send to {peer}",
+            )
+        )
+        remote = parse_json(
+            remote_command(peer, remote_atm, ["read", "--team", team, "--message-id", sent_id, "--json"]),
+            f"{peer} read {sent_id}",
+        )
+        received = selected_message(remote, sent_id)
+        pending = bool(received and received.get("requires_ack", received.get("requiresAck")) is True)
+        received_exactly = pending and message_has_text(received, body)
+        add_case(
+            cases,
+            f"{peer} crosshost requires-ack delivery/content",
+            received_exactly,
+            sent_id if received_exactly else "remote read did not return the pending message and exact body",
+        )
+        if not received_exactly:
+            return
+        reply_body = f"smoke-crosshost-reply-{peer}-{stamp}"
+        acknowledgement = parse_json(
+            remote_command(peer, remote_atm, ["ack", "--team", team, sent_id, reply_body, "--json"]),
+            f"{peer} acknowledgement of {sent_id}",
+        )
+        reply_id = reply_message_id(acknowledgement)
+        reply = wait_for_message(atm, team, reply_id)
+        passed = (
+            message_has_text(reply, reply_body)
+            and reply is not None
+            and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == sent_id
+        )
+        add_case(
+            cases,
+            f"{peer} crosshost acknowledgement reply",
+            passed,
+            reply_id if passed else "local read did not return the exact acknowledgement reply",
+        )
+    except SmokeError as error:
+        add_case(cases, f"{peer} crosshost requires-ack", False, str(error))
 
 
 def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
@@ -345,19 +466,25 @@ def run_live(feature: str, peers: list[str]) -> int:
         print(f"FAIL evidence: {write_report(feature, cases)}")
         return 1
     send_read_ack(cases, atm, identity, team, "localhost")
-    if feature in {LOCAL_IP, CROSSHOST}:
+    if feature == LOCALHOST:
+        pass
+    elif feature == LOCAL_IP:
         try:
             send_read_ack(cases, atm, identity, team, advertised_host(atm))
         except SmokeError as error:
             add_case(cases, "advertised-IP", False, str(error))
-    if feature == CROSSHOST:
+    else:
+        remote_atm = os.environ.get("ATM_SMOKE_REMOTE_ATM", "atm")
+        expected_version = branch_version()
         if not peers:
             add_case(cases, "crosshost peers", False, "supply one or more SSH hostnames")
-        else:
-            try:
-                remote_inbound(cases, atm, identity, team, advertised_host(atm), peers)
-            except SmokeError as error:
-                add_case(cases, "crosshost peers", False, str(error))
+        for peer in peers:
+            remote_host = remote_preflight(cases, peer, remote_atm, expected_version)
+            if remote_host is None or feature == PEER_PREFLIGHT:
+                continue
+            crosshost_send(cases, atm, remote_atm, identity, team, peer, remote_host)
+            if feature == CROSSHOST_ACK:
+                crosshost_ack(cases, atm, remote_atm, identity, team, peer, remote_host)
     report = write_report(feature, cases)
     passed = all(case["status"] == "PASS" for case in cases)
     print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
@@ -374,10 +501,19 @@ def main() -> int:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
         return subprocess.run([sys.executable, str(ROOT / "scripts" / "smoke" / "run.py"), args.feature, "--write-artifacts"], check=False).returncode
     feature = LOCAL_IP if args.feature == LOCAL_IP_ALIAS else args.feature
-    if feature not in {LOCALHOST, LOCAL_IP, CROSSHOST}:
-        raise SmokeError("supported smoke features: fast, normal, thorough, localhost, local-ip, crosshost")
-    if args.peers and feature != CROSSHOST:
-        raise SmokeError("hostnames are only valid with `just smoke crosshost <host...>`")
+    # `crosshost` remains a compatibility alias for the first explicit
+    # cross-host stage; new automation should use `crosshost-send`.
+    feature = CROSSHOST_SEND if feature == CROSSHOST else feature
+    crosshost_features = {PEER_PREFLIGHT, CROSSHOST_SEND, CROSSHOST_ACK}
+    if feature not in {LOCALHOST, LOCAL_IP, *crosshost_features}:
+        raise SmokeError(
+            "supported smoke features: fast, normal, thorough, localhost, local-ip, "
+            "peer-preflight, crosshost-send, crosshost-ack"
+        )
+    if args.peers and feature not in crosshost_features:
+        raise SmokeError("hostnames are only valid with a cross-host smoke feature")
+    if feature in crosshost_features and not args.peers:
+        raise SmokeError(f"smoke `{feature}` requires one or more SSH hostnames")
     return run_live(feature, args.peers)
 
 
