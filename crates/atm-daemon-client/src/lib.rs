@@ -732,13 +732,14 @@ impl DaemonSupervisor {
         F: FnMut() -> Result<(), AtmError>,
     {
         self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
-        let mut child = match self.spawn_daemon() {
+        let child = match self.spawn_daemon() {
             Ok(child) => child,
             Err(error) => {
                 self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
                 return Err(error);
             }
         };
+        let mut cleanup = FailedAutoStartChild::new(child);
         self.emit_trace(
             traceability,
             "daemon_auto_start",
@@ -752,8 +753,8 @@ impl DaemonSupervisor {
             poll_interval,
             traceability,
         );
-        if result.is_err() {
-            reap_failed_auto_start(&mut child);
+        if result.is_ok() {
+            cleanup.disarm();
         }
         result
     }
@@ -865,6 +866,29 @@ fn reap_failed_auto_start(child: &mut Child) {
     }
 }
 
+/// Reaps only the daemon process spawned by this CLI invocation unless its
+/// publication succeeds.  Keeping this guard live across the wait also covers
+/// an unexpected unwind in tracing or connection polling.
+struct FailedAutoStartChild(Option<Child>);
+
+impl FailedAutoStartChild {
+    fn new(child: Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn disarm(&mut self) {
+        self.0.take();
+    }
+}
+
+impl Drop for FailedAutoStartChild {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.as_mut() {
+            reap_failed_auto_start(child);
+        }
+    }
+}
+
 fn next_auto_start_poll_interval(current: Duration) -> Duration {
     current.saturating_mul(2).min(AUTO_START_MAX_POLL_INTERVAL)
 }
@@ -964,8 +988,6 @@ mod tests {
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
-    #[cfg(unix)]
-    use super::reap_failed_auto_start;
     use super::{
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
@@ -974,6 +996,8 @@ mod tests {
         next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
         resolve_daemon_local_ipc_endpoint_from_home,
     };
+    #[cfg(unix)]
+    use super::{FailedAutoStartChild, reap_failed_auto_start};
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
@@ -1252,6 +1276,28 @@ mod tests {
         assert!(
             child.try_wait().expect("inspect reaped child").is_some(),
             "failed auto-start must reap its child"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn auto_start_guard_reaps_the_daemon_child_on_unwind_scope_exit() {
+        let child = super::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn daemon child fixture");
+        let pid = child.id().to_string();
+
+        drop(FailedAutoStartChild::new(child));
+
+        assert!(
+            !super::Command::new("kill")
+                .args(["-0", &pid])
+                .output()
+                .expect("check child process")
+                .status
+                .success(),
+            "dropping the failed-auto-start guard must reap its child"
         );
     }
 }

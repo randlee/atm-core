@@ -596,11 +596,14 @@ fn complete_handshake_with_deadline(
 }
 
 fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
-    deadline.remaining().ok_or_else(|| {
-        AtmError::remote_delivery_unconfirmed(
-            "local persistence completed before the peer accepted the write deadline expired",
-        )
-    })
+    deadline
+        .remaining()
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| {
+            AtmError::remote_delivery_unconfirmed(
+                "local persistence completed before the peer accepted the write deadline expired",
+            )
+        })
 }
 
 fn resolve_peer_addresses(
