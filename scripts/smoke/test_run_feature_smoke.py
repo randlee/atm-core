@@ -4,12 +4,15 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import sys
+import tempfile
 from unittest import mock
 import unittest
 
 
 def load_runner():
     path = Path(__file__).with_name("run_feature_smoke.py")
+    sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location("run_feature_smoke", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -60,6 +63,15 @@ class FeatureSmokeTests(unittest.TestCase):
         with mock.patch.object(RUNNER.sys, "argv", ["smoke", "localhost", "m5"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "only valid"):
                 RUNNER.main()
+
+    def test_report_writes_browser_frame_for_xhtml_pane(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.object(RUNNER, "ROOT", Path(temp)):
+                with mock.patch.object(RUNNER, "compose") as compose:
+                    report = RUNNER.write_report("localhost", [{"name": "doctor", "status": "PASS", "detail": "ready"}])
+        self.assertEqual(compose.call_count, 3)
+        self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
+        self.assertEqual(compose.call_args_list[2].args[2], report.parents[1] / "index.html")
 
 
 if __name__ == "__main__":

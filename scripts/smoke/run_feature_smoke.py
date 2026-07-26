@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from html import escape
 import json
 import os
 from pathlib import Path
@@ -17,6 +18,8 @@ import subprocess
 import sys
 import time
 from typing import Any
+
+from run_inbound_peer_smoke import PANE_TEMPLATE, compose, render_host_pane
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -185,13 +188,12 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
     # Reuse the established AI.21-pre XHTML pane template instead of creating
     # a second report format for the same live-daemon evidence.
-    from run_inbound_peer_smoke import PANE_TEMPLATE, compose, render_host_pane
-
     rows = {
         case["name"]: ("pass" if case["status"] == "PASS" else "fail", case["detail"])
         for case in cases
     }
     records = [{"phase": case["name"], "passed": case["status"] == "PASS"} for case in cases]
+    pane = report.with_suffix(".xhtml")
     compose(
         PANE_TEMPLATE,
         {
@@ -200,7 +202,34 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "host": platform.node(),
             "body_html": render_host_pane(platform.node(), None, rows, records),
         },
-        report.with_suffix(".xhtml"),
+        pane,
+    )
+    compose(
+        ROOT / "templates" / "smoke-report" / "inbound-peer-frame.html.j2",
+        {
+            "title": f"ATM smoke — {feature}",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "pane_src": pane.name,
+        },
+        report.with_suffix(".html"),
+    )
+    panes = sorted(path for path in directory.parent.rglob("*.xhtml") if path.is_file())
+    pane_html = "\n".join(
+        "<section><h2>{label}</h2><iframe title=\"{title}\" src=\"{source}\"></iframe></section>".format(
+            label=escape(str(path.relative_to(directory.parent))),
+            title=escape(path.stem, quote=True),
+            source=escape(str(path.relative_to(directory.parent)), quote=True),
+        )
+        for path in panes
+    )
+    compose(
+        ROOT / "templates" / "smoke-report" / "inbound-peer-review.html.j2",
+        {
+            "title": "ATM smoke evidence",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "pane_html": pane_html,
+        },
+        directory.parent / "index.html",
     )
     return report
 
