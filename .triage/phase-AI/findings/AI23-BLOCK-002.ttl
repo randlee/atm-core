@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-002" ;
+  triage:title "Local ingress does not validate/strip authenticated_source_host, allowing forged peer-authenticated status" ;
+  triage:description "ApiRouter::route (crates/atm-daemon/src/runtime_health.rs:919-939) only rejects AuthenticatedIngress::Local writes carrying origin_message_id/origin_timestamp; it never rejects or strips authenticated_source_host on Local ingress. WriteRequest.authenticated_source_host (crates/atm-core/src/send/mod.rs:70-74) is documented as 'not trusted from wire JSON' but commit 95dbb094 broadened its consumer from a host-equality check to a bare presence check: is_same_host_peer_receipt -> is_authenticated_peer_receipt (crates/atm-core/src/send/mod.rs:570-572) now returns true whenever authenticated_source_host.is_some(), with no host comparison. validate_non_self_recipient (crates/atm-core/src/send/mod.rs:930-952) takes an authenticated_peer_ingress bool and skips self-address rejection whenever true. PostWriteRouter::dispatch (crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:20-34) unconditionally takes the 'authenticated peer receipt' local-post-write branch whenever authenticated_source_host.is_some(), bypassing the normal host-based peer-delivery branch regardless of actual destination. Because Local ingress never validates/strips this field, any local caller (buggy client, stale/reused WriteRequest, or same-host adversary) can set authenticated_source_host on an ordinary local write to (1) bypass self-addressed-send rejection and (2) force the post-write router down the 'already a peer receipt' branch even for a legitimately host-qualified remote recipient, silently skipping actual outbound HTTPS peer delivery (message loss) while still reporting success. This is undocumented per RULE-012 (no ADR/boundary-record update accompanies this widened trust semantic)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture/security-boundary" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 919 ;
+  triage:snippet "if let RequestEnvelope::Write(write) = &request { match ingress { AuthenticatedIngress::Local if write.origin_message_id.is_some() || write.origin_timestamp.is_some() => { ... } ... } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AI/24d14beb> .
+
+<urn:atm:triage:worktree/integrate-phase-AI/24d14beb>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:orderIndex 0 .

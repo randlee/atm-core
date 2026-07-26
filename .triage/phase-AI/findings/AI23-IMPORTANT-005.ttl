@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-005>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-005" ;
+  triage:foundAt "2026-07-25T20:37:38Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Advertised-IP self-send evidence artifact omits required router/dispatcher/persistence component naming" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md requires (line 142) that evidence show \"the receiver enters the same HTTP write resource, ApiRouter::route, dispatcher, persistence method, and PostWriteRouter\" and (lines 161-162) that \"evidence names the router, dispatcher, persistence, and post-write log events observed.\" The committed artifact at artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md reports atm doctor --json output, atm send/read commands, a message ID, a live recipient nudge, and a peer-delivery log line (write_persisted -> peer_delivery_confirmed), but does not name ApiRouter::route, the DaemonRequestDispatcher, or the specific persistence method by name anywhere in the document -- only the post-write log events are actually named, not the router/dispatcher/persistence components the sprint doc explicitly requires. Confirmed by an independent req-qa review pass reading the artifact directly against the sprint doc's exact required language." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "EVIDENCE-GAP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T20:37:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/AICH/1> ;
+  triage:openOn <urn:atm:triage:worktree/AICH/24d14beb> ;
+  triage:promoteTo <urn:atm:triage:worktree/AICH/24d14beb> .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/AICH/1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "Missing ApiRouter::route, DaemonRequestDispatcher, and persistence method names (lines 1-19)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:occursIn <urn:atm:triage:worktree/AICH/24d14beb> .
+
+<urn:atm:triage:worktree/AICH/24d14beb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:orderIndex 999 .

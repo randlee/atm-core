@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-003>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-003" ;
+  triage:title "AI22-BLOCK-005 closure did not satisfy the sprint doc's 'independent quality review' acceptance gate" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md lines 160-163 require 'An independent quality review runs the release-built branch daemon through the real CLI and advertised-IP TCP listener... a mock router or direct-dispatch test cannot close this sprint.' AI22-BLOCK-005 was closed (see .triage/phase-AI/findings/AI22-BLOCK-005.ttl, triage:closureNote) on the basis of: (a) a same-commit, same-author (arch-ctm) evidence artifact at artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md, and (b) quality-mgr (the same party performing the closure) reading that artifact and independently re-running cargo fmt/test/clippy -- which is not equivalent to a second, independent party actually executing the release-built daemon through the real CLI/advertised-IP TCP listener themselves. This is a compliance gap by construction: the acceptance criterion requires an independent execution of the live proof, not a same-party review of someone else's self-reported log plus a unit-test rerun. Confirmed by an independent req-qa review pass (2026-07-26) reading the actual artifact and sprint doc side by side." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-003/01> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-003/01>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 16 ;
+  triage:snippet "This is an ordinary host-qualified peer send: no mock transport, direct dispatcher call, or loopback-only route was used." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AI/24d14beb> .
+
+<urn:atm:triage:worktree/integrate-phase-AI/24d14beb>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:orderIndex 0 .
