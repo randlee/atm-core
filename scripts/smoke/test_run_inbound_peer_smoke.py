@@ -19,6 +19,7 @@ def load_runner():
 
 
 RUNNER = load_runner()
+TEST_VERSION = "1.3.2-beta.27"
 
 
 class InboundPeerSmokeTests(unittest.TestCase):
@@ -72,7 +73,7 @@ class InboundPeerSmokeTests(unittest.TestCase):
         self.assertIn("Investigation required: local-doctor", pane)
 
     def test_doctor_version_or_api_mismatch_is_a_hard_failure(self):
-        local = {"expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1}
+        local = {"expected_daemon_version": TEST_VERSION, "expected_http_api_version": 1}
         result = {"exit_code": 0, "stderr": "", "stdout": json.dumps({
             "daemon_context": {"version": "1.3.1"},
             "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
@@ -81,16 +82,33 @@ class InboundPeerSmokeTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("daemon version", detail)
 
-    def test_host_mode_accepts_no_ssh_peers(self):
+    def test_host_mode_accepts_no_ssh_peers_with_required_local_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "host.json"
             path.write_text(json.dumps({
                 "schema_version": 1,
-                "local": {"atm_command": ["atm"], "identity": "a", "team": "t", "expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1},
-                "host": {"name": "m5", "local_checks": {}},
+                "local": {"atm_command": ["atm"], "identity": "a", "team": "t", "expected_daemon_version": TEST_VERSION, "expected_http_api_version": 1},
+                "host": {"name": "m5", "local_checks": {
+                    "localhost/local loopback": ["loopback"],
+                    "own-IP": ["own-ip"],
+                    "nudge": ["nudge"],
+                }},
             }), encoding="utf-8")
             config = RUNNER.load_config(path)
         self.assertEqual(RUNNER.validate_host_config(config)["name"], "m5")
+
+    def test_host_mode_rejects_missing_required_local_check(self):
+        config = {
+            "host": {
+                "name": "m5",
+                "local_checks": {
+                    "localhost/local loopback": ["loopback"],
+                    "own-IP": ["own-ip"],
+                },
+            },
+        }
+        with self.assertRaisesRegex(RUNNER.SmokeError, "nudge"):
+            RUNNER.validate_host_config(config)
 
     def test_handoff_requires_exact_ids_and_known_kinds(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -109,7 +127,7 @@ class InboundPeerSmokeTests(unittest.TestCase):
             "schema_version": 1,
             "local": {
                 "atm_command": ["atm"], "identity": "a", "team": "t",
-                "expected_daemon_version": "1.3.2-beta-21-pre", "expected_http_api_version": 1,
+                "expected_daemon_version": TEST_VERSION, "expected_http_api_version": 1,
                 "advertised_host": "127.0.0.1",
             },
             "host": {
@@ -123,7 +141,7 @@ class InboundPeerSmokeTests(unittest.TestCase):
             "peers": [],
         }
         doctor = json.dumps({
-            "daemon_context": {"version": "1.3.2-beta-21-pre"},
+            "daemon_context": {"version": TEST_VERSION},
             "daemon_runtime": {"http_api_version": 1, "peer_wire_security": "mutual_tls"},
         })
 

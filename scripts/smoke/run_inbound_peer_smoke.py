@@ -25,6 +25,7 @@ from typing import Any
 
 MAX_CAPTURE = 8192
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability|private[_-]?key)\s*[=:]\s*[^\s,]+)")
+REQUIRED_LOCAL_CHECKS = frozenset({"localhost/local loopback", "own-IP", "nudge"})
 
 
 class SmokeError(RuntimeError):
@@ -96,8 +97,14 @@ def validate_host_config(config: dict[str, Any]) -> dict[str, Any]:
     checks = host.get("local_checks", {})
     if not isinstance(checks, dict):
         raise SmokeError("host.local_checks must be an object")
+    missing_checks = REQUIRED_LOCAL_CHECKS - checks.keys()
+    if missing_checks:
+        raise SmokeError(
+            "host.local_checks is missing required check(s): "
+            + ", ".join(sorted(missing_checks))
+        )
     for name, command in checks.items():
-        if name not in {"localhost/local loopback", "own-IP", "nudge"}:
+        if name not in REQUIRED_LOCAL_CHECKS:
             raise SmokeError(f"unsupported host.local_checks key `{name}`")
         require_argv(command, f"host.local_checks.{name}")
     outbound = host.get("outbound_target")
