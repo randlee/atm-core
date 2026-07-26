@@ -19,6 +19,7 @@
   triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-arch> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-reqs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/integrate-8750587b> ;
   triage:triageRecordVersion "1" .
 
 # Missing AI.23 content in docs/atm-core/architecture.md
@@ -53,3 +54,23 @@
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "985a6d46" ;
   triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/ATM-QA-006/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/architecture.md and docs/atm-core/requirements.md still missing AI.23-specific convergence-point and shared-write-resource language" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: grepped both docs for 'AI.23', 'convergence point', and 'shared-write-resource' -- no matches. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

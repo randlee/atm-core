@@ -21,6 +21,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s24/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/pAI-s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F004/integrate-8750587b> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s23/985a6d46> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s24/ac465283> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s25/a489691b> ;
@@ -99,3 +100,23 @@
   triage:path "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "bc1346e4" ;
   triage:orderIndex 6 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI25-RBQA-F004/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub(crate) fn resolve_peer_authority(target: &atm_core::types::HostName, peers: &[TrustedPeer]) -> Result<TrustedPeer, AtmError> { ... } // routing decision still lives in https_transport.rs, forbidden by peer-http-adapter.toml for recipient_routing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: resolve_peer_authority still lives in https_transport.rs at line 51; the boundary-policy violation this finding describes is unchanged." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

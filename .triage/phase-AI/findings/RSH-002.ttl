@@ -21,6 +21,7 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/integrate-8750587b> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
@@ -102,3 +103,23 @@
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "6d8ee8c3" ;
   triage:orderIndex 4 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/RSH-002/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 658 ;
+  triage:snippet "transport.deliver(request, peer, HttpsRequestDeadline::default())?; // still fails fast, no partial-success tracking on multi-message reconcile loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: reconcile_peer's delivery loop is unchanged by the AI.23 provenance fix; the fail-fast/no-partial-success-tracking behavior this finding describes still reproduces at runtime_health.rs:658 (line drifted from the stale s23 snapshot's line 686/572)." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

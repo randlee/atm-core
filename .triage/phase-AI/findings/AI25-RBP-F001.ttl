@@ -29,6 +29,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s28/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s29/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/integrate-8750587b> ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
@@ -39,6 +41,22 @@
   triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
   triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
+
+# Fixed occurrence on integrate/phase-AI: both resolve_peer_addresses (plural) and
+# resolve_peer_address (singular) now use daemon_unavailable_with_cause. s26-s30 remain
+# open on their own branches (forked from a pre-fix commit) and still require
+# merge-forward; those branches have not yet merged.
+<urn:atm:triage:occurrence/AI25-RBP-F001/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 582 ;
+  triage:snippet "fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<SocketAddr, AtmError> { ... .map_err(|source| { AtmError::daemon_unavailable_with_cause(...) }) } // FIXED: cause preserved" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. Independently re-verified: resolve_peer_addresses (https_transport.rs:548-577, plural) and resolve_peer_address (https_transport.rs:582-596, singular) both now use AtmError::daemon_unavailable_with_cause with the source preserved -- the singular hot-path function this finding's followup pass flagged as still-unfixed (a9e61fb0) is fixed on the current integration branch. s26-s30 occurrences remain open on their own not-yet-merged branches." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
 
 <urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1>
   a triage:Occurrence ;
@@ -173,6 +191,13 @@
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "77252eca" ;
   triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
 
 <urn:atm:triage:worktree/s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;

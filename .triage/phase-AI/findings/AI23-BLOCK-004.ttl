@@ -44,12 +44,12 @@
 <urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 1259 ;
-  triage:snippet "non-test code: 1259 lines (file 1471 total)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 857 ;
+  triage:snippet "AICH-S7-QA-1 recheck (2026-07-26, commit 282fad38): non-test code now 857 lines, under the 1000-line RULE-003 limit -- dispatch logic split into runtime_health/post_write_router.rs (134) and runtime_health/peer_sync.rs (120), same fix that closed AI27-BLOCK-005." ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "ce0a8a40" ;
+  triage:headSha "282fad38" ;
   triage:occursIn <urn:atm:triage:worktree/1_s27_peer_delivery> .
 
 <urn:atm:triage:occurrence/AI23-BLOCK-004/2_s28_bounded_peer>
@@ -131,7 +131,7 @@
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature/pAI-s27-peer-delivery-observability" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "ce0a8a40" ;
+  triage:headSha "282fad38" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/2_s28_bounded_peer>

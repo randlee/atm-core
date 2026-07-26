@@ -22,21 +22,37 @@
   triage:foundAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pAI-s30-semver-http-compatibility" ;
   triage:promoteToBranch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:highestFixedBranch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   # Occurrences on s22 (where vulnerability was introduced)
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/integrate-8750587b> ;
   # Representative occurrences on open branches
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s25-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 # Closure note: s22-primary and s23 occurrences confirmed fixed at root/introduction site.
 # Round-2 fix verified on feature/pAI-s23-crosshost-shared-write-path @ b0781316.
 # Validated by 3 independent reviewers (quality-mgr, rust-qa-agent, team-lead).
 # Root cause (authenticated_source_host bare is_some() check) now replaced with ALL THREE field AND logic.
-# s25/s30 branches not yet re-verified post-merge-forward; status remains open until cascade verified.
+#
+# 2026-07-26 (quality-mgr): AI.23 merged into integrate/phase-AI via PR #629
+# (merge commit 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0). Independently
+# re-verified against integrate/phase-AI HEAD: ApiRouter::route
+# (runtime_health.rs:919-931) now rejects Local writes carrying
+# authenticated_source_host (not just origin_message_id/origin_timestamp) and
+# requires all 3 provenance fields on Peer ingress; is_peer_receipt()
+# (send/mod.rs:311-313) delegates to has_authenticated_peer_provenance()
+# (send/mod.rs:570-574), which ANDs all 3 fields, replacing the vulnerable
+# bare is_some() check entirely. Regression test
+# local_write_rejects_forged_peer_provenance present (runtime_health.rs:1137).
+# This is NOT an unresolved AI.23 blocker on the current integration branch --
+# the s25/s30 occurrences below are stale pre-merge-forward snapshots on
+# branches that have not yet merged this fix forward themselves; status
+# remains "open" at the top level only to track that cascade, not because the
+# fix is missing on integrate/phase-AI.
 
 # Primary occurrence: Local ingress validation gap in ApiRouter::route
 <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary>
@@ -87,6 +103,20 @@
   triage:note "Round-2 fix confirmed: combined validation at runtime_health.rs:919-940 (Peer ingress requires all 3 fields) and send/mod.rs:570-572 (is_authenticated_peer_receipt now properly validates). Regression test: runtime_health.rs:1136-1168 (local_write_rejects_forged_peer_provenance)." ;
   triage:occursIn <urn:atm:triage:worktree/s23/b0781316> .
 
+# Fixed occurrence on integrate/phase-AI: AI.23 (PR #629) merged forward, carrying
+# the s23 fix onto the integration branch itself.
+<urn:atm:triage:occurrence/AI23-BLOCK-002/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 919 ;
+  triage:snippet "AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() || write.origin_message_id.is_none() || write.origin_timestamp.is_none() => ... // FIXED: requires ALL THREE fields via AND (merged forward from s23)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. Independently re-verified: Local ingress now rejects authenticated_source_host too (runtime_health.rs:919-926), Peer ingress requires all 3 fields (runtime_health.rs:927-931), is_peer_receipt() delegates to has_authenticated_peer_provenance() (send/mod.rs:311-313, 570-574) which ANDs all 3 fields. Regression test local_write_rejects_forged_peer_provenance present." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
 # Secondary occurrence: is_peer_receipt() vulnerability in send/mod.rs (repeatable sweep finding)
 <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt>
   a triage:Occurrence ;
@@ -127,3 +157,10 @@
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "9fd44444" ;
   triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
