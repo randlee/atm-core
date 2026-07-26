@@ -35,22 +35,24 @@ Output shape (DONE):
   }
 
 Findings are NOT resolved here. The orchestrator checks .triage/ via
-triage-findings skill to decide between dev-task.xml.j2 and dev-fix.xml.j2.
+triaging-findings skill to decide between dev-task.xml.j2 and dev-fix.xml.j2.
 Assignments are appended to events.ttl by the orchestrator after dispatch.
 
-Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR>
+Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> [--validate-only]
   PHASE_LOCAL  e.g. "F"
   TTL_DIR      path to .sprints/<PHASE>/ directory on integrate/phase-N branch
   SCRIPT_DIR   path to this script's directory (for .sparql files)
+  --validate-only  validate structure.ttl/events.ttl and stop before cursor resolution
 """
 
+import importlib.util
 import sys
 import json
 from pathlib import Path
 
 try:
     from rdflib import Graph, URIRef, Namespace
-    from rdflib.namespace import RDF, XSD
+    from rdflib.namespace import RDF
 except ImportError:
     print("ERROR: rdflib not installed. Run: pip3 install rdflib", file=sys.stderr)
     sys.exit(1)
@@ -107,7 +109,7 @@ def _load_ignored_phase_dirs(repo_root: Path) -> set:
     return names
 
 
-def load_graph(ttl_dir: str) -> Graph:
+def load_graph(ttl_dir: str, *, include_findings: bool = True) -> Graph:
     g = Graph()
     base = Path(ttl_dir)
     structure = base / "structure.ttl"
@@ -127,6 +129,9 @@ def load_graph(ttl_dir: str) -> Graph:
     # defeated by a future phase reusing an unprefixed or colliding local
     # sprint label.
     known_sprints = set(g.subjects(RDF.type, TRIAGE.Sprint))
+
+    if not include_findings:
+        return g
 
     # Load triage findings from repo root .triage/ (relative to TTL dir's parent)
     # Walk up from ttl_dir to find repo root (contains .triage/)
@@ -215,33 +220,195 @@ def run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
     return list(results)
 
 
+def _cli_load_graph(ttl_dir: str, *, include_findings: bool) -> Graph:
+    """Load a graph while keeping malformed input errors CLI-friendly."""
+    try:
+        return load_graph(ttl_dir, include_findings=include_findings)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: query runner failed to load graph: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def _cli_run_sparql(g: Graph, sparql_file: Path, bindings: dict) -> list:
+    """Run one bundled query while keeping query errors one-line."""
+    try:
+        return run_sparql(g, sparql_file, bindings)
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: query runner failed to run {sparql_file}: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+
+def _load_validator(script_dir: Path):
+    """Load the canonical findings validator without duplicating its rules."""
+
+    validator_path = script_dir / "validate-findings.py"
+    if not validator_path.exists():
+        raise RuntimeError(f"validate-findings.py not found at {validator_path}")
+    spec = importlib.util.spec_from_file_location("graph_orchestration_validator", validator_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load validator at {validator_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
+    """Run raw findings validation before *any* graph query.
+
+    ``load_graph`` intentionally scopes findings by ``foundIn``.  Running this
+    gate first prevents malformed or incomplete records from disappearing in
+    that scope filter.  A normal validation failure (exit-1 equivalent) and a
+    validator execution error both stop cursor resolution; warnings alone are
+    allowed by the validator's discriminated result contract.
+    """
+
+    repo_root = _find_repo_root(Path(ttl_dir))
+    if repo_root is None:
+        raise RuntimeError(
+            "cannot locate repository root containing .triage; findings validation cannot run"
+        )
+    triage_root = repo_root / ".triage"
+    ignored_phase_dirs = _load_ignored_phase_dirs(repo_root)
+    findings_dirs = sorted(
+        path
+        for path in triage_root.glob("*/findings")
+        if path.is_dir() and path.parent.name not in ignored_phase_dirs
+    ) if triage_root.exists() else []
+    # An existing but empty .triage tree is a valid no-findings input.  Passing
+    # the root directory still exercises the validator and gives a structured
+    # error if the directory itself is missing or unreadable.
+    if not findings_dirs:
+        findings_dirs = [triage_root]
+
+    validator = _load_validator(script_dir)
+    structure = Path(ttl_dir) / "structure.ttl"
+    events_path = Path(ttl_dir) / "events.ttl"
+    events = events_path if events_path.exists() else None
+
+    for findings_dir in findings_dirs:
+        result = validator.run_validation(
+            findings_dir=findings_dir,
+            structure=structure,
+            events=events,
+            script_dir=script_dir,
+        )
+        if result.kind == "validation:pass":
+            continue
+        summary = getattr(result, "summary", None)
+        counts = (
+            f" ({summary.errors} error(s), {summary.warnings} warning(s))"
+            if summary is not None
+            else ""
+        )
+        print(
+            f"ERROR: findings validation blocked query resolution for {findings_dir}"
+            f"{counts}",
+            file=sys.stderr,
+        )
+        for diagnostic in result.diagnostics[:20]:
+            print(diagnostic, file=sys.stderr)
+        if len(result.diagnostics) > 20:
+            print(
+                f"… {len(result.diagnostics) - 20} diagnostic line(s) truncated; "
+                "run validate-findings.py directly for the full report",
+                file=sys.stderr,
+            )
+        if result.kind == "error":
+            raise SystemExit(2)
+        raise SystemExit(1)
+
+
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR>", file=sys.stderr)
+    if len(sys.argv) not in (4, 5) or (
+        len(sys.argv) == 5 and sys.argv[4] != "--validate-only"
+    ):
+        print(
+            "Usage: query_runner.py <PHASE_LOCAL> <TTL_DIR> <SCRIPT_DIR> "
+            "[--validate-only]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     phase_local = sys.argv[1]
     ttl_dir = sys.argv[2]
     script_dir = Path(sys.argv[3])
+    validate_only = len(sys.argv) == 5
 
     phase_iri = URIRef(f"{TRIAGE_BASE}Phase{phase_local}")
-    g = load_graph(ttl_dir)
+    # This is deliberately before structure loading and before --validate-only:
+    # every query_runner entry point must prove that raw findings are valid.
+    try:
+        _validate_findings_before_query(ttl_dir, script_dir)
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - CLI boundary
+        print(f"ERROR: findings validation could not run: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+    # The raw findings gate above runs before structure validation so malformed
+    # or incomplete records cannot disappear during phase membership filtering.
+    # Once that gate passes, structure validation can report graph-shape errors
+    # without being conflated with finding-schema diagnostics.
+    g = _cli_load_graph(ttl_dir, include_findings=not validate_only)
 
     # ── Validate structure before cursor ─────────────────────────────────────
-    validate_rows = run_sparql(g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri})
+    validate_rows = _cli_run_sparql(
+        g, script_dir / "validate-structure.sparql", {"PHASE": phase_iri}
+    )
     if validate_rows:
         for row in validate_rows:
             print(f"ERROR: structure violation: {row[0]} — {row[1]}", file=sys.stderr)
         sys.exit(1)
 
+    if validate_only:
+        print(json.dumps({"phase": "VALIDATE_ONLY", "vars": {}}, indent=2))
+        return
+
     # ── Cursor ───────────────────────────────────────────────────────────────
-    cursor_rows = run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})
+    cursor_rows = _cli_run_sparql(g, script_dir / "cursor.sparql", {"PHASE": phase_iri})
 
     if cursor_rows:
         sprint_iri = str(cursor_rows[0][0])
         order = int(cursor_rows[0][1])
         criteria = str(cursor_rows[0][2])
         sprint_local = sprint_iri.split(":")[-1] if ":" in sprint_iri else sprint_iri
+        finding_rows = _cli_run_sparql(
+            g,
+            script_dir / "open-findings-for-sprint.sparql",
+            {"SPRINT": URIRef(sprint_iri)},
+        )
+        findings = [
+            {
+                "finding_iri": str(row[0]),
+                "finding_id": str(row[1]) if row[1] is not None else None,
+                "severity": str(row[2]),
+                "raw_severity": str(row[3]),
+                "status": str(row[4]) if row[4] is not None else None,
+                "found_at": str(row[5]),
+                "description": str(row[6]),
+            }
+            for row in finding_rows
+        ]
+
+        invalid_findings = [
+            finding for finding in findings if finding["severity"] == "invalid"
+        ]
+        if invalid_findings:
+            print(json.dumps({
+                "phase": "INVALID_FINDING_SEVERITY",
+                "vars": {
+                    "sprint": sprint_local,
+                    "sprint_iri": sprint_iri,
+                    "sprint_order": order,
+                    "criteria_doc": criteria,
+                },
+                "findings": findings,
+                "error": "unknown finding severity blocks dispatch",
+            }, indent=2))
+            raise SystemExit(1)
 
         print(json.dumps({
             "phase": "TRAVERSAL",
@@ -251,11 +418,14 @@ def main():
                 "sprint_order": order,
                 "criteria_doc": criteria,
             },
+            "findings": findings,
         }, indent=2))
         return
 
     # ── Cursor empty — verify all sprints have valid Completions ─────────────
-    incomplete_rows = run_sparql(g, script_dir / "all-complete.sparql", {"PHASE": phase_iri})
+    incomplete_rows = _cli_run_sparql(
+        g, script_dir / "all-complete.sparql", {"PHASE": phase_iri}
+    )
     if incomplete_rows:
         # Some sprints are in-flight or have invalid Completions
         print(json.dumps({
@@ -266,7 +436,7 @@ def main():
         return
 
     # ── Check for open non-blocking findings (CLEANUP) ───────────────────────
-    cleanup_rows = run_sparql(
+    cleanup_rows = _cli_run_sparql(
         g, script_dir / "open-findings-sprint.sparql", {"PHASE": phase_iri}
     )
 

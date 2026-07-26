@@ -1,0 +1,91 @@
+# validate-findings.sparql — Finding metadata integrity check.
+#
+# Run against the phase structure/events graph plus the raw findings files.
+# The query deliberately runs before membership filtering so a finding with no
+# triage:foundIn cannot disappear silently.
+#
+# Levels:
+#   #error   fields required for cursor invalidation and phase scoping
+#   #warning descriptive/routing fields needed by cleanup and dispatch output
+#   #error   persisted file paths must not escape the repository
+#
+# Parameter: none
+
+PREFIX triage: <urn:atm:triage:>
+PREFIX xsd:    <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?level ?finding ?field ?detail WHERE {
+  ?finding a triage:Finding .
+
+  {
+    FILTER NOT EXISTS { ?finding triage:findingId ?id . }
+    BIND("#warning" AS ?level)
+    BIND("triage:findingId" AS ?field)
+    BIND("stable finding identity is missing" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:foundIn ?sprint . }
+    BIND("#error" AS ?level)
+    BIND("triage:foundIn" AS ?field)
+    BIND("finding cannot be assigned to a sprint" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:foundAt ?found_at . }
+    BIND("#error" AS ?level)
+    BIND("triage:foundAt" AS ?field)
+    BIND("completion invalidation cannot be time-ordered" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:severity ?severity . }
+    BIND("#warning" AS ?level)
+    BIND("triage:severity" AS ?field)
+    BIND("blocking/important/minor routing cannot be determined" AS ?detail)
+  }
+  UNION
+  {
+    FILTER NOT EXISTS { ?finding triage:description ?description . }
+    BIND("#warning" AS ?level)
+    BIND("triage:description" AS ?field)
+    BIND("dispatch and cleanup output lack a description" AS ?detail)
+  }
+  UNION
+  {
+    ?finding triage:hasOccurrence ?occurrence .
+    ?occurrence triage:file ?file .
+    FILTER (
+      STRSTARTS(STR(?file), "/")
+      || REGEX(STR(?file), "(^|[/\\\\])\\.\\.(?:[/\\\\]|$)")
+      || REGEX(STR(?file), "^[A-Za-z]:[/\\\\]")
+    )
+    BIND("#error" AS ?level)
+    BIND("triage:file" AS ?field)
+    BIND(
+      CONCAT("occurrence path must be repository-relative: ", STR(?file))
+      AS ?detail
+    )
+  }
+  UNION
+  {
+    ?finding triage:hasOccurrence ?occurrence .
+    ?occurrence triage:occursIn ?worktree .
+    ?worktree triage:path ?path .
+    FILTER (
+      STRSTARTS(STR(?path), "/")
+      || REGEX(STR(?path), "(^|[/\\\\])\\.\\.(?:[/\\\\]|$)")
+      || REGEX(STR(?path), "^[A-Za-z]:[/\\\\]")
+    )
+    BIND("#error" AS ?level)
+    BIND("triage:path" AS ?field)
+    BIND(
+      CONCAT(
+        "legacy worktree path must not be absolute or escape repository: ",
+        STR(?path)
+      )
+      AS ?detail
+    )
+  }
+}
+ORDER BY ?level ?finding ?field

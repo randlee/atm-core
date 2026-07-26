@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI17-QA1-BLOCKING-01-DOC-STATUS>
   a triage:Finding ;
   triage:findingId "AI17-QA1-BLOCKING-01-DOC-STATUS" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T13:45:00Z"^^xsd:dateTime ;
   triage:title "Sprint AI.17 doc frontmatter status not updated to complete" ;
   triage:description "Sprint doc frontmatter 'status' field remains 'planned' instead of 'complete', violating the standing closure-criteria gate independent of code state." ;
   triage:triageMode "initial_pass" ;
@@ -32,6 +34,6 @@
 <urn:atm:triage:worktree/pAI-s17/5560bf8d20c48cffb234d3ee5cd4e010b55f51fe>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d20c48cffb234d3ee5cd4e010b55f51fe" ;
   triage:orderIndex 17 .

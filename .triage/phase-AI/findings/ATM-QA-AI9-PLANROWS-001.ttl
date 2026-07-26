@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-AI9-PLANROWS-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-AI9-PLANROWS-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T13:45:00Z"^^xsd:dateTime ;
   triage:title "docs/project-plan.md has no completed row for AI.9" ;
   triage:description "AI9-QA-1 (quality-mgr, blocking). docs/project-plan.md's sprint registry has no per-sprint status table row for AI.9, confirming a recurring gap across all Phase AI sprints (AI.4-AI.10 have zero rows). This is the same pattern already identified for AI.6, AI.7, AI.8 and affects the entire phase. Confirmed present unchanged on feature/pAI-s9-https-peer-transport and feature/pAI-s10-crosshost-proof-closeout." ;
   triage:phaseId "phase-AI" ;
@@ -48,20 +50,20 @@
 <urn:atm:triage:worktree/pAI-9/7cf40edd>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s9-https-peer-transport" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
   triage:headSha "7cf40edd" ;
   triage:orderIndex 9 .
 
 <urn:atm:triage:worktree/pAI-10/d461c936>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
   triage:headSha "d461c936" ;
   triage:orderIndex 10 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/3687ce58>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "3687ce58" ;
   triage:orderIndex 0 .

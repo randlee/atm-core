@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-QA1-BLOCKING-03>
   a triage:Finding ;
   triage:findingId "AI11-QA1-BLOCKING-03" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T05:39:02Z"^^xsd:dateTime ;
   triage:title "AuthenticatedIngress/HttpResponse boundary-contract types don't match sprint doc's documented signatures" ;
   triage:description "Sprint doc (docs/plans/phase-ai/sprint-ai-11-windows-transport.md, section: Boundary contract, lines 55-81) specifies AuthenticatedIngress::Local(LocalCapability) and AuthenticatedIngress::Peer(AuthenticatedPeer) as payload-carrying variants, plus standalone HttpResponse{status,headers,body} struct with HttpStatus and HttpHeaders types. Actual implementation in all worktrees (crates/atm-core/src/api.rs:331-336) defines AuthenticatedIngress with unit variants Local and Peer only — no payload carrying. LocalCapability, AuthenticatedPeer, LocalHttpEndpointRecord, HttpResponse, HttpStatus, and HttpHeaders types do not exist anywhere in any crate (verified grep zero hits across all worktrees). Boundary contract is incompletely or incorrectly realized relative to sprint doc specification." ;
   triage:phaseId "phase-AI" ;
@@ -71,48 +73,48 @@
 <urn:atm:triage:worktree/pAI-s11/568723c5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "568723c5" ;
   triage:orderIndex 0 .
 
 <urn:atm:triage:worktree/pAI-s12/b64e8358>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-s13/b64e8358>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-s14/b64e8358>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s15/b64e8358>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pAI-s16/b64e8358>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "b64e8358" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:orderIndex 20 .

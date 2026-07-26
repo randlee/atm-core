@@ -116,20 +116,37 @@ def query_records(store_dir: Path, branch: str) -> list[dict[str, object]]:
     if result.returncode != 0:
         raise SystemExit(result.stderr.strip() or "oxigraph query failed")
 
-    data = json.loads(result.stdout)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"oxigraph query returned invalid JSON: {exc}") from exc
+
+    if not isinstance(data, dict) or not isinstance(data.get("results"), dict):
+        raise SystemExit("oxigraph query returned an invalid results object")
+    bindings = data["results"].get("bindings", [])
+    if not isinstance(bindings, list):
+        raise SystemExit("oxigraph query returned an invalid bindings array")
+
     rows: list[dict[str, object]] = []
-    for binding in data.get("results", {}).get("bindings", []):
-        line_term = binding.get("line")
-        rows.append(
-            {
-                "id": binding["finding_id"]["value"],
-                "category": binding.get("category", {}).get("value"),
-                "severity": binding.get("severity", {}).get("value"),
-                "file": binding["file"]["value"],
-                "line": int(line_term["value"]) if line_term else None,
-                "summary": binding["summary"]["value"],
-            }
-        )
+    for index, binding in enumerate(bindings):
+        try:
+            if not isinstance(binding, dict):
+                raise TypeError("binding is not an object")
+            line_term = binding.get("line")
+            rows.append(
+                {
+                    "id": binding["finding_id"]["value"],
+                    "category": binding.get("category", {}).get("value"),
+                    "severity": binding.get("severity", {}).get("value"),
+                    "file": binding["file"]["value"],
+                    "line": int(line_term["value"]) if line_term else None,
+                    "summary": binding["summary"]["value"],
+                }
+            )
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise SystemExit(
+                f"oxigraph query returned invalid binding at row {index}: {exc}"
+            ) from exc
     return rows
 
 

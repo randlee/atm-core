@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM>
   a triage:Finding ;
   triage:findingId "AI20-QA1-IMPORTANT-01-FRONTMATTER-OVERCLAIM" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T16:15:00Z"^^xsd:dateTime ;
   triage:title "AI.20 sprint-doc frontmatter claims status: complete while contradicted by its own Draft Validation Limit section and the readiness record's PENDING state" ;
   triage:description "docs/plans/phase-ai/sprint-ai-20-hermes-bridge-deployment.md frontmatter says status: complete, but the same document's Draft Validation Limit section and docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md both record AI.20 as PENDING (not yet closed). This is a doc-consistency defect, same category as the AI.17/AI.19 frontmatter issue fixed earlier this phase." ;
   triage:phaseId "phase-AI" ;
@@ -33,6 +35,6 @@
 <urn:atm:triage:worktree/pAI-s20/a1d186a6>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "a1d186a6" ;
   triage:orderIndex 4 .

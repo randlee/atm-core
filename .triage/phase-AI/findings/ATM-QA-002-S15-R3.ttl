@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-002-S15-R3>
   a triage:Finding ;
   triage:findingId "ATM-QA-002-S15-R3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "forbidden_daemon_log_entries strings never match real daemon log output" ;
   triage:description "In scripts/smoke/run_peer_pair.py's new semantic-verification mechanism (added on feature/pAI-s15-windows-peer-smoke, commit 12f4b96e), untrusted_or_allowlist_rejection's shipped forbidden_daemon_log_entries strings (\"peer delivery\"/\"duplicate nudge\") match no real daemon log output, so the check can never fail regardless of a real violation -- an always-passing check. Found by req-qa during QA-2 verification of the BLOCKING-02/04 fix on PR #611." ;
   triage:phaseId "phase-AI" ;
@@ -170,41 +172,41 @@
 <urn:atm:triage:worktree/pAI-s15/12f4b96e>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "12f4b96e" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s16/34e055b9>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "34e055b9" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pAI-s17/2825b1c0>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "2825b1c0" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/pAI-s18/a3cfdaa6>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s18-graft-python-bindings" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "a3cfdaa6" ;
   triage:orderIndex 6 .
 
 <urn:atm:triage:worktree/pAI-s19/e88825a7>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s19-hermes-graft-integration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "e88825a7" ;
   triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
   triage:branch "pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:orderIndex 8 .

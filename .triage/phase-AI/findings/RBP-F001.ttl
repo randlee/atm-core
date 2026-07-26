@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RBP-F001>
   a triage:Finding ;
   triage:findingId "RBP-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:title "HttpRouteKind to HTTP_ROUTE_SPECS lookup is runtime .expect(), not compile/test-time exhaustiveness-checked" ;
   triage:description "crates/atm-core/src/api.rs: as part of the AI24-IMPORTANT-001 fix, a single HTTP_ROUTE_SPECS const table (lines 63-127) now backs endpoint_for, decode_route_request/route_kind_for_http, and http_route_surface(). However the link from HttpRouteKind to its HTTP_ROUTE_SPECS entry is only a runtime .expect() lookup in route_spec(), not compile-time or test-time exhaustiveness-checked -- a new HttpRouteKind variant added without a corresponding HTTP_ROUTE_SPECS entry would panic at runtime rather than fail to compile or fail a test." ;
   triage:phaseId "phase-AI" ;
@@ -33,27 +35,27 @@
 <urn:atm:triage:worktree/s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s22/a5aa6813>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s23/c528137c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s24/c326cbe7>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7" ;
   triage:orderIndex 4 .
