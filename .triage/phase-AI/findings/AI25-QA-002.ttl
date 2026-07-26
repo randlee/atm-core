@@ -14,9 +14,13 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified on fix/close-out-round2-easy (673a6fff, PR #652). .winget/randlee.agent-team-mail.yaml PackageVersion now reads 1.3.2-beta.25, matching the workspace Cargo.toml version exactly. Commit 673a6fff does not itself touch this file -- confirmed via git log --follow that the version bump was already applied by an earlier commit (95dbb094) on this branch's history, predating this batch. No scope mismatch; the version-consistency check now genuinely passes." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/fix-close-out-round2-easy/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s27/1> ;
@@ -29,6 +33,18 @@
   triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
   triage:fixedOn <urn:atm:triage:worktree/s30/77252eca> ;
   triage:promoteTo <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.2-beta.25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: version now matches workspace Cargo.toml (1.3.2-beta.25); just lint version-consistency check passes." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
 
 <urn:atm:triage:occurrence/AI25-QA-002/s25/1>
   a triage:Occurrence ;

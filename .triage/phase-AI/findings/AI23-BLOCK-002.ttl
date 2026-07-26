@@ -39,6 +39,19 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s29-regressed-ab442ac3> ;
   triage:triageRecordVersion "6" .
 
+# 2026-07-26 (quality-mgr, AICH-S7-QA-FIX-2): arch-ctm's self-reported forward-merge
+# fix e1b754b5 on feature/pAI-s28-bounded-peer-recovery does NOT touch runtime_health.rs
+# at all (git show --stat e1b754b5: peer_delivery_observability.rs, peer_drain_coordinator.rs,
+# runtime_health/peer_delivery_router.rs, tests/runtime_root/peer_observability.rs only).
+# Independently re-confirmed via git show origin/feature/pAI-s28-bounded-peer-recovery
+# (and identically on s29, inherited via 7e73866a): the Local ingress arm at
+# runtime_health.rs:899-902 only rejects on origin_message_id/origin_timestamp presence;
+# authenticated_source_host is neither checked nor stripped on Local ingress. The
+# s28-regressed-2d7ca600/s29-regressed-ab442ac3 occurrences below remain live and
+# UNFIXED by this commit chain. Task #1145 (fix AI23-BLOCK-002 regression on s28) is
+# still open; arch-ctm's "just test PASS" self-report did not address this finding.
+# s30 (b4b304d0, current head unchanged from prior b7ad9f6c verification) remains fixed.
+
 # 2026-07-26 (quality-mgr, AICH-S10-QA-FWDMERGE-2, PR #623 fwd-merge sweep):
 # REGRESSION FOUND. Merge 2d7ca600 (feature/pAI-s27-peer-delivery-observability
 # -> feature/pAI-s28-bounded-peer-recovery) resolved runtime_health.rs entirely

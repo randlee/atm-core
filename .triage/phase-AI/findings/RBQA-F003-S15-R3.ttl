@@ -17,6 +17,10 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S7-QA-FIX-2: verified fixed on commit bb34e71a (PR #642, feature/pAI-s27-peer-delivery-observability) -- scripts/smoke/run_peer_pair.py:295 now has 'if not after.startswith(daemon_log_before)' guard, refusing an unverified delta and surfacing daemon_log_delta in the outcome instead of silently passing on rotation/truncation. Confirmed via direct git show of current branch head, not self-report." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s15/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F003-S15-R3/s17/1> ;
@@ -87,12 +91,12 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 271 ;
   triage:snippet "delta = after[len(daemon_log_before):]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "35cb19f8" ;
+  triage:headSha "bb34e71a" ;
   triage:occursIn <urn:atm:triage:worktree/s27> ;
-  triage:notes "Consolidated/migrated occurrence: daemon-log delta slice still lacks startswith check on current branch, allowing log rotation/truncation to silently produce empty delta with trivial verification pass." .
+  triage:notes "AICH-S7-QA-FIX-2: fixed on bb34e71a -- startswith(daemon_log_before) guard added at line 295, refusing an unverified delta on rotation/truncation instead of silently passing. Occurrence headSha 35cb19f8 was pre-fix." .
 
 <urn:atm:triage:worktree/s15>
   a triage:WorktreeSnapshot ;
