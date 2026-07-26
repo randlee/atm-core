@@ -5,10 +5,10 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::next_request_id;
 
-use crate::https_transport::resolve_peer_authority;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 
+use super::peer_authority::resolve_peer_authority;
 use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
