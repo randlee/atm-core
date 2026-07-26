@@ -144,7 +144,7 @@ triage:c2 a triage:Completion ; triage:ofSprint triage:S2 ;
 
 
 class TestOpenFindingsForSprint:
-    def test_normalizes_case_orders_findings_and_hides_terminal_status(self):
+    def test_normalizes_case_orders_findings_and_retains_status_metadata(self):
         findings = PREFIX + """
 triage:minor a triage:Finding ; triage:findingId "M-1" ; triage:foundIn triage:S1 ;
     triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "MINOR" ; triage:description "minor" .
@@ -166,6 +166,7 @@ triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage
         )
         assert [(str(row[1]), str(row[2]), str(row[3])) for row in rows] == [
             ("U-1", "invalid", "medium"),
+            ("R-1", "blocking", "Blocking"),
             ("B-1", "blocking", "BLOCKING"),
             ("C-1", "blocking", "critical"),
             ("I-1", "important", "Important"),
@@ -637,10 +638,30 @@ class TestNextDevTaskValidation:
                 "finding_id": "F-1",
                 "severity": "important",
                 "raw_severity": "important",
+                "status": None,
                 "found_at": "2026-07-01T12:00:00+00:00",
                 "description": "clean",
             }
         ]
+
+    def test_invalid_severity_returns_json_and_fails_closed(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:foundIn triage:S1 ; '
+            'triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; '
+            'triage:severity "medium" ; triage:description "unknown" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["phase"] == "INVALID_FINDING_SEVERITY"
+        assert payload["findings"][0]["raw_severity"] == "medium"
 
     def test_validate_only_reports_structure_errors(self, tmp_path):
         invalid = PREFIX + """

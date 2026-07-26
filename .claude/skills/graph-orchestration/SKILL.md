@@ -325,11 +325,12 @@ triaging-findings skill. Do not append raw finding data to events.ttl.
 For `TRAVERSAL`, `findings` contains every dispatch-open finding on the
 returned sprint, ordered invalid severity, Blocking, Important, Minor.
 Severity is case-normalized; reviewer-native `critical` maps to `blocking`.
-An unknown value is returned as `invalid` with `raw_severity` preserved and
-must stop dispatch. Terminal `triage:status` values are excluded for routing
-only; this does not change Completion or QA lifecycle semantics. An empty
-array is the only greenfield result. The developer must use this JSON to
-verify the rendered node and any assigned Blocking finding ids before editing.
+An unknown value returns `phase: "INVALID_FINDING_SEVERITY"` with
+`raw_severity` preserved and exits nonzero. `status` is output as metadata but
+does not hide a finding: event-log Completion/Resolution remains the cursor's
+lifecycle source. An empty array is the only greenfield result. The developer
+must use this JSON to verify the rendered node and any assigned Blocking
+finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
@@ -360,7 +361,10 @@ sc-compose render \
   --var worktree_path="$WORKTREE_PATH" \
   --var branch="$BRANCH" \
   --var pr_target="$PR_TARGET" \
-  --var assignee="arch-ctm"
+  --var assignee="arch-ctm" \
+  --var phase_local="F" \
+  --var ttl_dir=".sprints/F" \
+  --var finding_ids="$FINDING_IDS"
 ```
 
 ## Completion Invalidation

@@ -383,11 +383,29 @@ def main():
                 "finding_id": str(row[1]) if row[1] is not None else None,
                 "severity": str(row[2]),
                 "raw_severity": str(row[3]),
-                "found_at": str(row[4]),
-                "description": str(row[5]),
+                "status": str(row[4]) if row[4] is not None else None,
+                "found_at": str(row[5]),
+                "description": str(row[6]),
             }
             for row in finding_rows
         ]
+
+        invalid_findings = [
+            finding for finding in findings if finding["severity"] == "invalid"
+        ]
+        if invalid_findings:
+            print(json.dumps({
+                "phase": "INVALID_FINDING_SEVERITY",
+                "vars": {
+                    "sprint": sprint_local,
+                    "sprint_iri": sprint_iri,
+                    "sprint_order": order,
+                    "criteria_doc": criteria,
+                },
+                "findings": findings,
+                "error": "unknown finding severity blocks dispatch",
+            }, indent=2))
+            raise SystemExit(1)
 
         print(json.dumps({
             "phase": "TRAVERSAL",
