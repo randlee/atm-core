@@ -914,7 +914,14 @@ mod tests {
 
     #[test]
     fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
-        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
+        // `Instant::now() + Duration::ZERO` is not observably elapsed on all
+        // platforms (notably Windows' coarser clock). Wait for a real,
+        // absolute deadline instead of relying on zero-duration arithmetic.
+        let deadline = RequestDeadline::after(Duration::from_millis(1));
+        while !deadline.expired() {
+            std::thread::yield_now();
+        }
+        let error = super::remaining_budget(deadline)
             .expect_err("an expired shared request budget must fail before peer delivery");
         assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
     }
