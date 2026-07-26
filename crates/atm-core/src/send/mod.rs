@@ -309,8 +309,7 @@ impl PreparedWrite {
     /// address—to choose the one local-vs-peer action.
     #[must_use]
     pub fn is_peer_receipt(&self) -> bool {
-        self.outbound_request.authenticated_source_host.is_some()
-            || self.outbound_request.origin_message_id.is_some()
+        has_authenticated_peer_provenance(&self.outbound_request)
     }
 }
 
@@ -538,7 +537,8 @@ fn prepare_persisted_write<
     // duplicate row, but the ordinary post-write route still handles the
     // received event. This makes localhost, advertised-IP, and remote peer
     // ingress use one route without relying on certificate-to-host aliases.
-    let post_write_needed = persistence.newly_persisted || is_authenticated_peer_receipt(&request);
+    let post_write_needed =
+        persistence.newly_persisted || has_authenticated_peer_provenance(&request);
     let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
     let outcome = finalize_send_outcome(
         runtime,
@@ -567,8 +567,10 @@ fn prepare_persisted_write<
     })
 }
 
-fn is_authenticated_peer_receipt(request: &WriteRequest) -> bool {
+fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
     request.authenticated_source_host.is_some()
+        && request.origin_message_id.is_some()
+        && request.origin_timestamp.is_some()
 }
 
 #[cfg(test)]
@@ -773,7 +775,7 @@ fn prepare_send_context<
         &request.caller_team,
         &recipient,
         target,
-        request.authenticated_source_host.is_some(),
+        has_authenticated_peer_provenance(request),
     )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
@@ -781,7 +783,7 @@ fn prepare_send_context<
         runtime,
         target,
         &recipient,
-        request.authenticated_source_host.is_some(),
+        has_authenticated_peer_provenance(request),
     )?;
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,

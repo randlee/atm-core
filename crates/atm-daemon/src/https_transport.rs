@@ -8,6 +8,7 @@
 use std::fmt;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -31,6 +32,7 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_CONCURRENT_PEER_REQUESTS: usize = 64;
 
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
@@ -234,12 +236,14 @@ impl HttpsListenerSet {
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let active_requests = Arc::new(AtomicUsize::new(0));
         let mut listeners = Vec::new();
         for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
             let thread_config = Arc::clone(&server_config);
             let thread_requests = Arc::clone(&requests);
+            let thread_active_requests = Arc::clone(&active_requests);
             let thread_peer_verifier = Arc::clone(&peer_verifier);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
@@ -250,6 +254,7 @@ impl HttpsListenerSet {
                         thread_config,
                         thread_router,
                         thread_requests,
+                        thread_active_requests,
                         thread_peer_verifier,
                     )
                 })
@@ -304,12 +309,20 @@ fn accept_loop(
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    active_requests: Arc<AtomicUsize>,
     peer_verifier: Arc<PinnedClientVerifier>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                spawn_request_worker(stream, &config, &router, &requests, &peer_verifier);
+                spawn_request_worker(
+                    stream,
+                    &config,
+                    &router,
+                    &requests,
+                    &active_requests,
+                    &peer_verifier,
+                );
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -333,9 +346,21 @@ fn spawn_request_worker(
     config: &Arc<ServerConfig>,
     router: &Arc<dyn ApiRouter + Send + Sync>,
     requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    active_requests: &Arc<AtomicUsize>,
     peer_verifier: &Arc<PinnedClientVerifier>,
 ) {
+    if !try_admit_peer_request(active_requests) {
+        tracing::warn!(
+            subsystem = "https_transport",
+            action = "connection_admission",
+            outcome = "saturated",
+            connection_cap = MAX_CONCURRENT_PEER_REQUESTS,
+            "HTTPS peer listener rejected connection because its bounded request capacity is exhausted"
+        );
+        return;
+    }
     if let Err(error) = stream.set_nonblocking(false) {
+        active_requests.fetch_sub(1, Ordering::SeqCst);
         tracing::warn!(
             subsystem = "https_transport",
             action = "configure_connection",
@@ -351,7 +376,17 @@ fn spawn_request_worker(
             let config = Arc::clone(config);
             let router = Arc::clone(router);
             let peer_verifier = Arc::clone(peer_verifier);
+            let active_requests = Arc::clone(active_requests);
             move || {
+                struct RequestPermit(Arc<AtomicUsize>);
+
+                impl Drop for RequestPermit {
+                    fn drop(&mut self) {
+                        self.0.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+
+                let _permit = RequestPermit(active_requests);
                 log_peer_request_result(handle_peer_connection(
                     stream,
                     config,
@@ -363,14 +398,25 @@ fn spawn_request_worker(
         .map_err(|_source| AtmError::daemon_unavailable("failed to start HTTPS request worker"));
     match request {
         Ok(request) => track_request_worker(requests, request),
-        Err(error) => tracing::warn!(
-            subsystem = "https_transport",
-            action = "start_request",
-            outcome = "failed",
-            error_code = %error.code(),
-            "HTTPS listener rejected connection because request worker startup failed"
-        ),
+        Err(error) => {
+            active_requests.fetch_sub(1, Ordering::SeqCst);
+            tracing::warn!(
+                subsystem = "https_transport",
+                action = "start_request",
+                outcome = "failed",
+                error_code = %error.code(),
+                "HTTPS listener rejected connection because request worker startup failed"
+            );
+        }
     }
+}
+
+fn try_admit_peer_request(active_requests: &AtomicUsize) -> bool {
+    active_requests
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |active| {
+            (active < MAX_CONCURRENT_PEER_REQUESTS).then_some(active + 1)
+        })
+        .is_ok()
 }
 
 fn log_peer_request_result(result: Result<(), AtmError>) {
@@ -743,7 +789,7 @@ fn normalize_fingerprint(value: &str) -> String {
 mod tests {
     use std::net::{TcpListener, TcpStream};
     use std::str::FromStr as _;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
@@ -751,11 +797,19 @@ mod tests {
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
         read_http_response, write_http_request,
     };
+    use atm_core::boundary::RosterHarness;
     use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmError;
+    use atm_core::graft::{
+        GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
+    };
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-    use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::HostName;
+    use atm_core::read::ReadQuery;
+    use atm_core::schema::AgentMember;
+    use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
+    use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD};
+    use atm_core::types::{AgentName, HostName, IsoTimestamp, ReadSelection, TeamName};
+    use atm_runtime_test_support::{SQLITE_RUNTIME_PATH_ENV, open_sqlite_boundary};
     use atm_storage::{
         CertificateFingerprint, HttpsInterface, LocalCertificate, PrivateKeyRef, TrustedPeer,
     };
@@ -799,6 +853,8 @@ mod tests {
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
 
+    use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
+
     use super::{
         HttpsListenerSet, TlsIdentity, client_config, complete_handshake, normalize_fingerprint,
     };
@@ -840,8 +896,32 @@ mod tests {
     }
 
     #[test]
+    fn peer_listener_admission_is_bounded_and_recovers_after_a_request_finishes() {
+        let active = AtomicUsize::new(super::MAX_CONCURRENT_PEER_REQUESTS - 1);
+
+        assert!(super::try_admit_peer_request(&active));
+        assert!(
+            !super::try_admit_peer_request(&active),
+            "a saturated listener must reject rather than create an unbounded thread"
+        );
+
+        active.fetch_sub(1, Ordering::SeqCst);
+        assert!(
+            super::try_admit_peer_request(&active),
+            "a finished request must release its admission permit"
+        );
+    }
+
+    #[test]
     fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
-        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
+        // `Instant::now() + Duration::ZERO` is not observably elapsed on all
+        // platforms (notably Windows' coarser clock). Wait for a real,
+        // absolute deadline instead of relying on zero-duration arithmetic.
+        let deadline = RequestDeadline::after(Duration::from_millis(1));
+        while !deadline.expired() {
+            std::thread::yield_now();
+        }
+        let error = super::remaining_budget(deadline)
             .expect_err("an expired shared request budget must fail before peer delivery");
         assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
     }
@@ -926,6 +1006,170 @@ mod tests {
         write_http_request(&mut tls, &request).expect("write shared request");
         let _ = read_http_response(&mut tls, &request).expect("shared router response");
         assert!(router.routed.load(Ordering::SeqCst));
+        listener.shutdown().expect("shutdown listener");
+    }
+
+    #[test]
+    #[serial_test::serial(env)]
+    fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() {
+        crate::tests::install_retained_runtime_factory();
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        let workspace_dir = tempdir.path().join("workspace");
+        let db_path = tempdir.path().join("mail.db");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        crate::tests::write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[atm.graft]\nenabled = true\n",
+        )
+        .expect("write graft configuration");
+
+        let team: TeamName = crate::tests::TEST_TEAM.parse().expect("team");
+        let roster = [ROLE_TEAM_LEAD, "qa-a"]
+            .iter()
+            .map(|name| {
+                let mut member = AgentMember::with_name((*name).parse().expect("member"));
+                member.home_dir = workspace_dir.clone().into();
+                let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
+                    team.clone(),
+                    member,
+                );
+                record.harness = RosterHarness::CodexCli;
+                record
+            })
+            .collect::<Vec<_>>();
+        open_sqlite_boundary(&db_path)
+            .expect("sqlite boundary")
+            .roster_store_arc()
+            .replace_roster(&team, &roster)
+            .expect("install roster");
+
+        let recipient: AgentName = "qa-a".parse().expect("recipient");
+        let receiver_path = graft_receiver_record_path_from_home(&workspace_dir, &team, &recipient);
+        let graft_listener =
+            GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
+        let (nudge_tx, nudge_rx) = std::sync::mpsc::sync_channel(1);
+        let graft_thread = std::thread::spawn(move || {
+            let mut stream = loop {
+                if let Some(stream) = graft_listener.poll_accept().expect("poll graft receiver") {
+                    break stream;
+                }
+                std::thread::yield_now();
+            };
+            let request = graft_listener
+                .read_request(&mut stream, Duration::from_secs(5))
+                .expect("read graft nudge");
+            nudge_tx.send(request.event).expect("capture graft nudge");
+            graft_listener
+                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                .expect("ack graft nudge");
+        });
+
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            (
+                "ATM_CONFIG_HOME",
+                Some(tempdir.path().to_str().expect("utf8 config home")),
+            ),
+            (
+                SQLITE_RUNTIME_PATH_ENV,
+                Some(db_path.to_str().expect("utf8 db path")),
+            ),
+            ("HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("USERPROFILE", None),
+        ]);
+        let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
+            atm_home.clone(),
+            RuntimeStatusCache::new(),
+            db_path,
+        ));
+        let certificate = test_certificate();
+        let peer = TrustedPeer {
+            host: "localhost".parse().expect("peer host"),
+            fingerprint: certificate.fingerprint.clone(),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("peer port"),
+        };
+        let listener = HttpsListenerSet::bind_enabled(
+            &[HttpsInterface {
+                bind_addr: "127.0.0.1:0".parse().expect("advertised-IP bind"),
+                advertise_host: peer.host.clone(),
+                enabled: true,
+            }],
+            &certificate,
+            vec![peer.clone()],
+            dispatcher.clone(),
+        )
+        .expect("start real HTTPS peer listener");
+        let address = listener.listeners[0].address;
+        let identity = TlsIdentity::load(&certificate).expect("load client identity");
+        let config = client_config(&identity, &peer).expect("client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("server name"),
+        )
+        .expect("client connection");
+        let stream = TcpStream::connect(address).expect("connect advertised IP listener");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("mutual TLS handshake");
+        let origin_id = atm_core::schema::AtmMessageId::new();
+        let request = RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home.clone(),
+                workspace_dir.clone(),
+                ROLE_TEAM_LEAD.parse().expect("sender"),
+                "qa-a@test-team.127.0.0.1",
+                team.clone(),
+                SendMessageSource::Inline("advertised-IP real peer write".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("peer write")
+            .with_origin_metadata(origin_id, IsoTimestamp::now()),
+        ));
+        write_http_request(&mut tls, &request).expect("write peer request");
+        let response = read_http_response(&mut tls, &request).expect("read peer response");
+        assert!(matches!(response, ResponseEnvelope::Send(_)));
+
+        let nudge = nudge_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("peer receipt must nudge after persistence");
+        assert_eq!(nudge.recipient, recipient);
+        assert_eq!(nudge.description, "advertised-IP real peer write");
+        let origin_id_filter = origin_id.to_string();
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Receive(
+                ReadQuery::new(
+                    atm_home,
+                    workspace_dir,
+                    recipient,
+                    None,
+                    team,
+                    ReadSelection::All,
+                    false,
+                    false,
+                    Some(&origin_id_filter),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+                .expect("recipient read query"),
+            ))
+            .expect("read persisted recipient record");
+        let ResponseEnvelope::Receive(outcome) = response else {
+            panic!("expected recipient inbox read response");
+        };
+        assert_eq!(
+            outcome.count, 1,
+            "recipient can read the persisted peer write"
+        );
+        graft_thread.join().expect("join graft receiver");
         listener.shutdown().expect("shutdown listener");
     }
 

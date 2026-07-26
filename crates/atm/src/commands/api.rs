@@ -41,7 +41,7 @@ enum ApiSubcommand {
 #[cfg(test)]
 mod tests {
     use super::OPENAPI_YAML;
-    use atm_core::api::endpoint_for;
+    use atm_core::api::{HTTP_ROUTE_INVENTORY, endpoint_for};
     use atm_core::doctor::DoctorQuery;
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 
@@ -70,5 +70,18 @@ mod tests {
             .expect("error response JSON")
             .is_object()
         );
+    }
+
+    #[test]
+    fn openapi_declares_every_typed_http_codec_route() {
+        let document: serde_json::Value = serde_yaml::from_str(OPENAPI_YAML).expect("OpenAPI YAML");
+
+        for (method, path) in HTTP_ROUTE_INVENTORY {
+            let openapi_path = path.strip_prefix("/v1/atm").expect("API base path");
+            assert!(
+                document["paths"][openapi_path][method.to_ascii_lowercase()].is_object(),
+                "OpenAPI must declare implemented {method} {path}"
+            );
+        }
     }
 }

@@ -13,6 +13,18 @@ configured HTTPS interface and a pinned trusted-peer entry for that address.
 | `atm read --message-id` | returned the same ULID and payload |
 | Peer delivery log | `write_persisted` followed by `peer_delivery_confirmed` for the same ULID |
 
+## Canonical-path component evidence
+
+The proof exercised the peer TCP listener in
+`https_transport::handle_peer_connection`, which decoded the shared HTTP write
+resource and invoked `ApiRouter::route(..., AuthenticatedIngress::Peer, ...)`.
+The only production router implementation is `DaemonRequestDispatcher`; its
+`route_write` method invoked the one `MessageWriter::write` implementation and
+then `PostWriteRouter::dispatch`. The persisted row was readable before the
+recipient's nudge for the ULID above. The architecture gate
+`ai23_ingress_adapters_cannot_own_write_side_effects` prevents either HTTP
+adapter from adding a separate persistence, ACK, or nudge implementation.
+
 This is an ordinary host-qualified peer send: no mock transport, direct
 dispatcher call, or loopback-only route was used. The release test suite also
 exercises the pinned mutual-TLS ingress route in

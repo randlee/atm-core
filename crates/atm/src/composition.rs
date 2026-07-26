@@ -261,22 +261,6 @@ impl<'a> CliComposition<'a> {
         self.observability_port
     }
 
-    #[expect(
-        dead_code,
-        reason = "reserved for future command-routing phase — exposes send entry-point to callers"
-    )]
-    pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
-        &self.send_command
-    }
-
-    #[expect(
-        dead_code,
-        reason = "reserved for future command-routing phase — exposes receive entry-point to callers"
-    )]
-    pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
-        &self.receive_command
-    }
-
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Write(Box::new(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {

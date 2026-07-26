@@ -17,7 +17,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         message: &mut MessageRecord,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
-        if message.outbound_request.authenticated_source_host.is_some() {
+        if message.prepared.is_peer_receipt() {
             tracing::info!(
                 subsystem = "runtime_health",
                 action = "post_write",

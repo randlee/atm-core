@@ -314,6 +314,87 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     );
 }
 
+#[test]
+fn ai23_ingress_adapters_cannot_own_write_side_effects() {
+    let root = workspace_root();
+    for relative in [
+        "crates/atm-daemon/src/https_transport.rs",
+        "crates/atm-daemon/src/local_tcp_transport.rs",
+        "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+    ] {
+        let path = root.join(relative);
+        let source = read_source(&path);
+        let file = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
+        let mut visitor = IngressWriteSideEffectVisitor::default();
+        visitor.visit_file(&file);
+        assert!(
+            visitor.findings.is_empty(),
+            "AI.23 ingress adapter {relative} may authenticate/decode then call ApiRouter only; it must not own write side effects: {:?}",
+            visitor.findings
+        );
+    }
+
+    let fixture = syn::parse_file(
+        "impl MessageWriter for Bad { fn write(&self) {} } fn ingress() { persist_message(); emit_local_post_write(); route_write(); }",
+    )
+    .expect("negative fixture must parse");
+    let mut visitor = IngressWriteSideEffectVisitor::default();
+    visitor.visit_file(&fixture);
+    assert_eq!(
+        visitor.findings,
+        BTreeSet::from([
+            "MessageWriter implementation".to_string(),
+            "direct `emit_local_post_write` call".to_string(),
+            "direct `persist_message` call".to_string(),
+            "direct `route_write` call".to_string(),
+        ]),
+        "negative fixture proves the gate is AST-based and fails closed"
+    );
+}
+
+#[derive(Default)]
+struct IngressWriteSideEffectVisitor {
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for IngressWriteSideEffectVisitor {
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments.last().is_some_and(|segment| {
+                matches!(
+                    segment.ident.to_string().as_str(),
+                    "MessageWriter" | "PostWriteRouter"
+                )
+            })
+        }) {
+            let trait_name = node
+                .trait_
+                .as_ref()
+                .and_then(|(_, path, _)| path.segments.last())
+                .expect("trait segment checked above")
+                .ident
+                .to_string();
+            self.findings.insert(format!("{trait_name} implementation"));
+        }
+        syn::visit::visit_item_impl(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = node.func.as_ref()
+            && let Some(segment) = path.path.segments.last()
+        {
+            let name = segment.ident.to_string();
+            if matches!(name.as_str(), "persist_message" | "route_write")
+                || name.starts_with("emit_local_post_write")
+            {
+                self.findings.insert(format!("direct `{name}` call"));
+            }
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
+}
+
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates"), &mut files);

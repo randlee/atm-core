@@ -75,11 +75,26 @@ paths:
       responses:
         '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
         default: { $ref: '#/components/responses/AtmError' }
+  /peers/{peer}/sync:
+    parameters: [ { $ref: '#/components/parameters/Peer' } ]
+    post:
+      operationId: synchronizePeer
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncRequest' } } } }
+      responses:
+        '200': { description: Peer synchronization result, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /runtime/reload:
+    post:
+      operationId: reloadRuntimeView
+      responses:
+        '200': { description: Runtime view reloaded }
+        default: { $ref: '#/components/responses/AtmError' }
 components:
   parameters:
     MessageId: { name: messageId, in: path, required: true, schema: { type: string } }
     Agent: { name: agent, in: query, schema: { type: string } }
     ChatId: { name: chat_id, in: query, schema: { type: string } }
+    Peer: { name: peer, in: path, required: true, schema: { type: string } }
   responses:
     AtmError:
       description: ATM error
@@ -127,6 +142,14 @@ components:
     HeartbeatResponse:
       type: object
       description: Team-member heartbeat result.
+    PeerSyncRequest:
+      type: object
+      required: [peer]
+      properties:
+        peer: { type: string }
+    PeerSyncResponse:
+      type: object
+      description: Bounded peer synchronization result.
     Message:
       type: object
       required: [message_id, from, to, body]

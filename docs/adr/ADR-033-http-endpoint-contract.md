@@ -22,20 +22,25 @@ The initial stable application surface is resource-oriented REST under
 
 | Resource | Initial operations |
 | --- | --- |
-| `/messages` | `GET` list/query, `POST` create/send |
+| `/messages` | `GET` list/query, `POST` canonical send/ack write |
 | `/messages/inspect` | `POST` non-mutating inspection/query |
 | `/messages` | `DELETE` clear selected messages where authorized |
 | `/messages/read` | `POST` owner-only read-state mutation |
 | `/message/{message-id}/ack` | `POST` acknowledgement |
 | `/doctor` | `GET` doctor report |
+| `/compatibility` | `POST` compatibility preflight |
+| `/heartbeat` | `POST` team-member heartbeat |
+| `/peers/{peer}/sync` | `POST` bounded peer reconciliation |
+| `/runtime/reload` | `POST` authenticated runtime-view reload |
 
 The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,
 status codes, pagination, and conditional mutation semantics before
 implementation. The HTTP wire body is never a generic
 `RequestEnvelope`/`ResponseEnvelope`; failures use ADR-032's `{code,message}`
-body with the route's HTTP status. An acknowledgement endpoint builds the same
-internal canonical write whose `acknowledges_message_id: Option<MessageId>` is
-populated. It is not a separate envelope, transport, or persistence path.
+body with the route's HTTP status. `POST /messages` builds the same internal
+canonical write for send and acknowledgement; an acknowledgement only has
+`acknowledges_message_id: Option<MessageId>` populated. It is not a separate
+resource, envelope, transport, or persistence path.
 
 The HTTP API has an independent strict SemVer identity. Its major equals the
 `/v{major}` path segment. Same-major minor additions are compatible and patch

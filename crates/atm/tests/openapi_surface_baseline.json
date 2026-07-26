@@ -139,6 +139,38 @@
           }
         }
       }
+    },
+    "/peers/{peer}/sync": {
+      "post": {
+        "operation_id": "synchronizePeer",
+        "request_required": true,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": "#/components/schemas/PeerSyncResponse"
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
+    },
+    "/runtime/reload": {
+      "post": {
+        "operation_id": "reloadRuntimeView",
+        "request_required": false,
+        "responses": {
+          "200": {
+            "error": false,
+            "schema": null
+          },
+          "default": {
+            "error": true,
+            "schema": "#/components/responses/AtmError"
+          }
+        }
+      }
     }
   },
   "schemas": {
@@ -214,6 +246,18 @@
       ]
     },
     "PeekQuery": {
+      "properties": [],
+      "required": []
+    },
+    "PeerSyncRequest": {
+      "properties": [
+        "peer"
+      ],
+      "required": [
+        "peer"
+      ]
+    },
+    "PeerSyncResponse": {
       "properties": [],
       "required": []
     },
