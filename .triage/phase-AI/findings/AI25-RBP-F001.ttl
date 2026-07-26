@@ -16,13 +16,14 @@
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-25T10:54:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-26T00:15:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s24/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s26/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s27/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s28/1> ;
@@ -32,7 +33,6 @@
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
   triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
-  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
   triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
   triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
@@ -89,8 +89,8 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 489 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {}\", peer.host)) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
   triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
@@ -100,11 +100,24 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 498 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
   triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F001/s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 471 ;
+  triage:snippet ".spawn(...).map_err(|source| { AtmError::daemon_unavailable_with_cause(\"failed to start peer HTTP request worker\", source) })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "d7fdc8f409e8d95bd9f2f6d02ae2fffa40098100" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/d7fdc8f409e8d95bd9f2f6d02ae2fffa40098100> .
 
 <urn:atm:triage:occurrence/AI25-RBP-F001/s26/1>
   a triage:Occurrence ;
@@ -194,6 +207,20 @@
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:path "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s25/33544351068a4253625d4fb504d31e7b686f9d9f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "33544351068a4253625d4fb504d31e7b686f9d9f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s25/d7fdc8f409e8d95bd9f2f6d02ae2fffa40098100>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "d7fdc8f409e8d95bd9f2f6d02ae2fffa40098100" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s26/b5eec1bf>

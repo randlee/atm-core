@@ -15,11 +15,13 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T10:11:34Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-107/AI24-1> ;
   triage:triageRecordVersion "1" .
 
@@ -27,16 +29,16 @@
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 509 ;
-  triage:snippet "EnvGuard::set_many([(\"ATM_DAEMON_SOCKET\", Some(\"/tmp/alternate.sock\"))])" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "std::env::temp_dir().join(\"alternate.sock\")" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
-  triage:occursIn <urn:atm:triage:worktree/AI24/1daef214> .
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/ac465283> .
 
-<urn:atm:triage:worktree/AI24/1daef214>
+<urn:atm:triage:worktree/AI24/ac465283>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
+  triage:headSha "ac465283" ;
   triage:orderIndex 4 .

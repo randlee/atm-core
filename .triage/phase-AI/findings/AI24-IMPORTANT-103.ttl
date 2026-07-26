@@ -15,11 +15,13 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T10:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T18:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triageRecordVersion "1" .
 
 <urn:atm:triage:worktree/S24-1daef214>

@@ -8,35 +8,37 @@
   a triage:Finding ;
   triage:findingId "RBP-F001" ;
   triage:title "HttpRouteKind to HTTP_ROUTE_SPECS lookup is runtime .expect(), not compile/test-time exhaustiveness-checked" ;
-  triage:description "crates/atm-core/src/api.rs:143-148 route_spec(kind) resolves via linear .find().expect() scan of HTTP_ROUTE_SPECS instead of an exhaustive match; a new HttpRouteKind variant wired into route_kind_for_request but missing an HTTP_ROUTE_SPECS entry compiles cleanly and only panics at runtime. Re-confirmed present unchanged by ruthless-boundary-qa at the current worktree HEAD 1daef214 (existing record was last triaged at c326cbe7)." ;
+  triage:description "crates/atm-core/src/api.rs:143-148 route_spec(kind) resolved via linear .find().expect() scan of HTTP_ROUTE_SPECS instead of an exhaustive match; a new HttpRouteKind variant wired into route_kind_for_request but missing an HTTP_ROUTE_SPECS entry compiles cleanly and only panics at runtime. Fixed: converted to exhaustive match over HttpRouteKind with no wildcard arm, returning &'static HttpRouteSpec. rust-best-practices-agent independently cross-checked all 10 index/kind pairs against HTTP_ROUTE_SPECS array declaration order; no mismatch found." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "followup_pass" ;
   triage:category "best-practices" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T15:45:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/AI24-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/RBP-F001/AI24-1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 143 ;
-  triage:snippet "fn route_spec(kind: HttpRouteKind) -> HttpRouteSpec { *HTTP_ROUTE_SPECS.iter().find(|spec| spec.kind == kind).expect(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "fn route_spec(kind: HttpRouteKind) -> &'static HttpRouteSpec { match kind { HttpRouteKind::Login => &HTTP_ROUTE_SPECS[0], ... } }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
-  triage:occursIn <urn:atm:triage:worktree/AI24/1daef214> .
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/ac465283> .
 
-<urn:atm:triage:worktree/AI24/1daef214>
+<urn:atm:triage:worktree/AI24/ac465283>
   a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
+  triage:headSha "ac465283" ;
   triage:orderIndex 4 .

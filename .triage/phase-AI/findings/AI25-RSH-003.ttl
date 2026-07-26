@@ -14,11 +14,13 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T14:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-003/s25/1> ;
-  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
   triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
 
 <urn:atm:triage:occurrence/AI25-RSH-003/s25/1>
@@ -26,10 +28,13 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 167 ;
   triage:snippet "let address = resolve_peer_address(&host, peer.https_port.get())?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T14:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:headShaFixed "33544351068a4253625d4fb504d31e7b686f9d9f" ;
   triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
 
 <urn:atm:triage:worktree/s21/42fbd9fa>
