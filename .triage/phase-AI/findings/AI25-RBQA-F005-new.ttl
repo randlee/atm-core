@@ -15,11 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T17:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). New crates/atm-daemon/src/peer_resolution.rs::resolve_peer_socket_addresses is the single shared helper, pub(crate) (no new pub cross-crate surface), consumed by both https_transport.rs:619 and runtime_health/peer_authority.rs. Independently grepped both former call sites for the old thread::Builder+mpsc::sync_channel DNS block -- zero occurrences remain in peer_authority.rs; the remaining thread::Builder sites in https_transport.rs are the unrelated HTTP accept-loop/connection workers. ruthless-boundary-qa independently confirmed no new cross-crate dependency edges and correct crate-private placement. CI green (8/8)." ;
   triage:foundIn triage:AICH-S5 ;
   triage:foundAt "2026-07-26T17:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F005-new/preai27-a5659742> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F005-new/pAI-s25/96377687> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s25/96377687-f005> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s25/96377687-f005> ;
@@ -44,3 +48,22 @@
   triage:path "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "96377687" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F005-new/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_resolution.rs" ;
+  triage:line 12 ;
+  triage:snippet "pub(crate) fn resolve_peer_socket_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<SocketAddr>, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656; single shared helper now used by both former duplicate sites. ruthless-boundary-qa PASS." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .

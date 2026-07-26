@@ -12,11 +12,15 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:category "structure" ;
   triage:severity "important" ;
   triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). New crates/atm-core/src/provenance.rs::validate_write_provenance is the single shared validator, independently confirmed as consumed at all 4 originally-cited sites: send/mod.rs (validate_non_self_recipient), ack/mod.rs (resolve_acknowledgement_write), delivery_policy.rs (consumes the validated ValidatedWriteProvenance result), runtime_health.rs (AuthenticatedIngress arms, ApiRouter::route). Grepped all 4 files for the old ad hoc inline checks (authenticated_source_host.is_some(), origin_message_id/origin_timestamp pairing) -- none remain. ruthless-boundary-qa independently confirmed this is a correct single-owner consolidation with no new cross-crate coupling. CI green (8/8)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/preai27-a5659742> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/send-mod-759> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/ack-mod-422> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/runtime-health-957> ;
@@ -71,6 +75,25 @@
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "fc9832b3" ;
   triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/provenance.rs" ;
+  triage:line 64 ;
+  triage:snippet "pub fn validate_write_provenance(ingress: WriteIngress, provenance: WriteProvenance<'_>) -> Result<ValidatedWriteProvenance, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656: single shared validator now consumed at all 4 originally-cited sites; ruthless-boundary-qa PASS 0 findings." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .
 
 <urn:atm:triage:worktree/integrate-AI/e52fffb6>
   a triage:WorktreeSnapshot ;

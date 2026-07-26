@@ -12,13 +12,17 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). ai23_peer_adapter_never_matches_localhost_or_own_ip (boundary_enforcement.rs:271-312) is an explicit named AST-based structural test matching the sprint-doc's actual ask (AST assertions, same pattern as the existing AI.12 invariant test) -- not a runtime-behavioral test, which the sprint doc did not require. Confirmed structurally distinct from ai23_ingress_adapters_cannot_own_write_side_effects (:318), which asserts a different invariant (write side-effect ownership, not host-routing precedence). cargo test -p atm-architecture --test boundary_enforcement ai23_peer_adapter_never_matches_localhost_or_own_ip: 1/1 pass. ruthless-boundary-qa independently confirmed the test follows the same AST-visitor conventions as its neighbors, not a new/inconsistent approach. CI green (8/8)." ;
   triage:foundIn triage:AICH-S3 ;
   triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s23-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/preai27-a5659742> ;
   triage:triageRecordVersion "1" .
 
 # Deliverable-missing occurrence on s23: no explicit named test for host-routing precedence
@@ -60,3 +64,22 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8750587b" ;
   triage:orderIndex 100 .
+
+<urn:atm:triage:occurrence/ATM-QA-003/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 271 ;
+  triage:snippet "fn ai23_peer_adapter_never_matches_localhost_or_own_ip() { ... syn AST assertions on post_write_router.rs precedence and forbidden loopback fragments ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656; cargo test 1/1 pass; ruthless-boundary-qa PASS." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .
