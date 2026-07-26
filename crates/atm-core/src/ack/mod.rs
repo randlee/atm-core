@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
 use crate::schema::{AtmMessageId, InboxMessage, authenticated_source_host, peer_outbound_host};
 use crate::send::{SendMessageSource, SendOutcome, SendRequest, WriteOutcome};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -207,6 +208,15 @@ pub(crate) fn resolve_acknowledgement_write<
     request: SendRequest,
     runtime: &R,
 ) -> Result<ResolvedAcknowledgement, AtmError> {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
     let request = AckRequest::from_unresolved_write(request)?;
     let actor = request.caller_identity.clone();
     let team = request.caller_team.clone();
@@ -251,6 +261,15 @@ pub(crate) fn resolve_received_acknowledgement_write<
     request: SendRequest,
     runtime: &R,
 ) -> Result<ResolvedAcknowledgement, AtmError> {
+    validate_write_provenance(
+        WriteIngress::Peer,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
     let message_id = request.acknowledges_message_id.ok_or_else(|| {
         AtmError::validation("acknowledgement write is missing acknowledges_message_id")
     })?;
@@ -480,11 +499,21 @@ fn validate_reply_target<R: RetainedServiceRuntime>(
 
 fn reply_target_host(source: &InboxMessage) -> Result<Option<crate::types::HostName>, AtmError> {
     let authenticated = authenticated_source_host(source)?;
-    if authenticated.is_some() {
-        Ok(authenticated)
-    } else {
-        peer_outbound_host(source)
-    }
+    let outbound = peer_outbound_host(source)?;
+    let validated = validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: outbound.as_ref(),
+            authenticated_source_host: authenticated.as_ref(),
+            origin_message_id: authenticated.is_some(),
+            origin_timestamp: authenticated.is_some(),
+        },
+    )?;
+    Ok(validated
+        .is_authenticated_peer()
+        .then_some(authenticated)
+        .flatten()
+        .or(outbound))
 }
 
 fn record_ack_telemetry(

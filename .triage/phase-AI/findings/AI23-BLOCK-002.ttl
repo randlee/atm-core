@@ -15,14 +15,17 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T21:15:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T22:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real current branch heads (not accepted from arch-ctm's fb1994b9/s27 claim, which does not address the live s28/s29 regression). s28 current head aee3433a6b (PR #634, fetched directly from origin/feature/pAI-s28-bounded-peer-recovery): runtime_health.rs Local-ingress arm rejects authenticated_source_host.is_some() (matches s27's fix, no longer dropped). s29 current head 5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74 (PR #638): identical fix present. Both branches' send/mod.rs::is_peer_receipt delegates to has_authenticated_peer_provenance (3-field AND), not a bare is_some(). Task #1145 can be closed; the regression this finding tracked is fixed on both previously-regressed branches at their real current heads." ;
   triage:foundIn triage:AICH-S3 ;
   triage:foundAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
-  triage:highestOpenBranch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:promoteToBranch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:highestOpenBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:promoteToBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:highestFixedBranch "feature/pAI-s29-crosshost-smoke-rerun" ;
   # Occurrences on s22 (where vulnerability was introduced)
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed> ;
@@ -35,9 +38,12 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/pAI-s30/b7ad9f6c-secondary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-f378a830> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-fb1994b9> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s28-regressed-2d7ca600> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s29-regressed-ab442ac3> ;
-  triage:triageRecordVersion "6" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s28-fixed-aee3433a> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s29-fixed-5590302146> ;
+  triage:triageRecordVersion "8" .
 
 # 2026-07-26 (quality-mgr, AICH-S7-QA-FIX-2): arch-ctm's self-reported forward-merge
 # fix e1b754b5 on feature/pAI-s28-bounded-peer-recovery does NOT touch runtime_health.rs
@@ -51,6 +57,18 @@
 # UNFIXED by this commit chain. Task #1145 (fix AI23-BLOCK-002 regression on s28) is
 # still open; arch-ctm's "just test PASS" self-report did not address this finding.
 # s30 (b4b304d0, current head unchanged from prior b7ad9f6c verification) remains fixed.
+
+# 2026-07-26 (quality-mgr, arch-ctm audit evidence re-verification): arch-ctm reported
+# (message 01KYG2HZWP9YXBXEJDR06M6RAF) that AI23-BLOCK-002 is not an open occurrence
+# on feature/pAI-s27-peer-delivery-observability current HEAD fb1994b9. Independently
+# confirmed by direct git show: runtime_health.rs:876-892 rejects Local writes carrying
+# authenticated_source_host/origin_message_id/origin_timestamp and requires all 3 fields
+# for Peer ingress; send/mod.rs:323-325 is_peer_receipt() delegates to
+# has_authenticated_peer_provenance() (send/mod.rs:597-601), a 3-field AND. Matches
+# arch-ctm's claim exactly. New s27-fixed-fb1994b9 occurrence added below superseding
+# the stale f378a830 snapshot. This does NOT close the top-level finding -- s28/s29
+# regressed occurrences above remain open and are the actual live blockers; arch-ctm's
+# message states he is addressing those plus a separate Windows regression.
 
 # 2026-07-26 (quality-mgr, AICH-S10-QA-FWDMERGE-2, PR #623 fwd-merge sweep):
 # REGRESSION FOUND. Merge 2d7ca600 (feature/pAI-s27-peer-delivery-observability
@@ -271,6 +289,18 @@
   triage:note "Confirmed by quality-mgr (AICH-S10-QA-FWDMERGE-2): runtime_health.rs:863-866, reject-style fix, correct." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/f378a830> .
 
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s27-fixed-fb1994b9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 876 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: reject-style, still correct on current s27 HEAD" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "fb1994b9" ;
+  triage:note "Independently re-verified by quality-mgr against arch-ctm's audit claim (message 01KYG2HZWP9YXBXEJDR06M6RAF): runtime_health.rs:876-892 and send/mod.rs:323-325/597-601 confirmed matching exactly. Supersedes the stale f378a830 snapshot." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/fb1994b9> .
+
 # REGRESSED occurrence on s28: the s27 fix was silently dropped during the
 # s27->s28 forward merge (2d7ca600 resolved runtime_health.rs entirely in
 # favor of s28's own pre-fix content).
@@ -319,6 +349,44 @@
   triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:headSha "ab442ac3" ;
   triage:orderIndex 14 .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s28-fixed-aee3433a>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: regression resolved on current head" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "aee3433a" ;
+  triage:note "Independently re-verified by quality-mgr against real current PR #634 head (fetched directly from origin), not accepted from arch-ctm's fb1994b9/s27 claim which does not cover this branch. Regression from 2d7ca600 is resolved." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/aee3433a> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s29-fixed-5590302146>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 899 ;
+  triage:snippet "AuthenticatedIngress::Local if write.authenticated_source_host.is_some() || write.origin_message_id.is_some() || write.origin_timestamp.is_some() => Err(...) // FIXED: regression resolved on current head" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74" ;
+  triage:note "Independently re-verified by quality-mgr against real current PR #638 head (fetched directly from origin). Regression inherited from s28/ab442ac3 is resolved." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s29/5590302146> .
+
+<urn:atm:triage:worktree/pAI-s28/aee3433a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "aee3433a" ;
+  triage:orderIndex 100 .
+
+<urn:atm:triage:worktree/pAI-s29/5590302146>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5590302146c6c6c85d7f7e6f9ed9f9a7134e6f74" ;
+  triage:orderIndex 101 .
 
 # Worktree snapshots
 <urn:atm:triage:worktree/s22/95dbb094>

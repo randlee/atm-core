@@ -63,7 +63,7 @@ fn retry_timestamp(delay: Duration) -> IsoTimestamp {
     )
 }
 
-fn is_retryable_peer_error(error: &AtmError) -> bool {
+pub(crate) fn is_retryable_peer_error(error: &AtmError) -> bool {
     matches!(
         error.code(),
         AtmErrorCode::DaemonUnavailable | AtmErrorCode::RemoteDeliveryUnconfirmed
