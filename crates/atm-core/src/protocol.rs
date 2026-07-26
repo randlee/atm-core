@@ -44,6 +44,8 @@ pub enum RequestEnvelope {
     Clear(ClearQuery),
     Doctor(DoctorQuery),
     PeerSync(PeerSyncRequest),
+    /// Authenticated local control request that reloads the daemon's durable runtime view.
+    ReloadRuntimeView,
 }
 
 /// Shared protocol response envelope.
@@ -58,6 +60,7 @@ pub enum ResponseEnvelope {
     Clear(ClearOutcome),
     Doctor(Box<DoctorReport>),
     PeerSync(PeerSyncOutcome),
+    RuntimeViewReloaded,
     Error(AtmError),
 }
 
@@ -85,12 +88,29 @@ impl ReleaseVersion {
             .trim()
             .strip_prefix('v')
             .unwrap_or(value.as_ref().trim());
-        semver::Version::parse(value).map_err(|_source| {
-            AtmError::new(
+        let (core, prerelease) = value.split_once('-').unwrap_or((value, ""));
+        if !prerelease.is_empty()
+            && (!prerelease.starts_with("beta.")
+                || prerelease[5..].is_empty()
+                || !prerelease[5..].bytes().all(|byte| byte.is_ascii_digit()))
+        {
+            return Err(AtmError::new(
                 AtmErrorCode::ClientDaemonVersionIncompatible,
                 format!("invalid ATM release version `{value}`"),
-            )
-        })?;
+            ));
+        }
+        let mut parts = core.split('.');
+        let valid = (0..3).all(|_| {
+            parts.next().is_some_and(|part| {
+                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        }) && parts.next().is_none();
+        if !valid {
+            return Err(AtmError::new(
+                AtmErrorCode::ClientDaemonVersionIncompatible,
+                format!("invalid ATM release version `{value}`"),
+            ));
+        }
         Ok(Self(value.to_string()))
     }
 
@@ -335,10 +355,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ReleaseVersion, RequestEnvelope,
-        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
+        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
+        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -348,16 +368,6 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
     use serial_test::serial;
     use tempfile::TempDir;
-
-    #[test]
-    fn release_version_accepts_semver_prerelease() {
-        assert_eq!(
-            ReleaseVersion::parse("1.3.2-beta-21-pre")
-                .expect("semver prerelease")
-                .to_string(),
-            "1.3.2-beta-21-pre"
-        );
-    }
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {

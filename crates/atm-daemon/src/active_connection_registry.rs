@@ -344,4 +344,47 @@ mod tests {
             "unexpected error: {error:?}"
         );
     }
+
+    #[test]
+    fn shutdown_joins_completed_dispatch_without_detaching_tracked_work() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let worker_registry = Arc::clone(&registry);
+        let (started_tx, started_rx) = std::sync::mpsc::sync_channel(1);
+        let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+        let join_handle = std::thread::spawn(move || {
+            let _work = worker_registry.register_dispatch_work();
+            started_tx.send(()).expect("report tracked worker start");
+            release_rx.recv().expect("release tracked worker");
+            completion_tx
+                .send(())
+                .expect("report tracked worker completion");
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                1,
+            )
+            .expect("track dispatch worker");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker entered tracked runtime work");
+        assert_eq!(registry.active_work_items(), 1);
+        release_tx.send(()).expect("release worker");
+
+        registry
+            .join_tracked_dispatches(Duration::from_secs(1))
+            .expect("shutdown joins completed tracked work");
+        assert_eq!(registry.active_work_items(), 0);
+        assert!(
+            registry
+                .lock_dispatch_handles()
+                .expect("lock dispatch handles")
+                .is_empty(),
+            "shutdown leaves no detached tracked dispatch"
+        );
+    }
 }

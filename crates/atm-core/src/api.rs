@@ -55,6 +55,7 @@ pub fn endpoint_for(request: &RequestEnvelope) -> (&'static str, String) {
         RequestEnvelope::PeerSync(request) => {
             ("POST", format!("/v1/atm/peers/{}/sync", request.peer))
         }
+        RequestEnvelope::ReloadRuntimeView => ("POST", "/v1/atm/runtime/reload".to_string()),
         RequestEnvelope::CompatibilityPreflight(_) => ("POST", "/v1/atm/compatibility".to_string()),
         RequestEnvelope::Heartbeat(_) => ("POST", "/v1/atm/heartbeat".to_string()),
     }
@@ -260,6 +261,7 @@ fn encode_request_body(request: &RequestEnvelope) -> Result<Vec<u8>, AtmError> {
         RequestEnvelope::Clear(value) => serde_json::to_vec(value),
         RequestEnvelope::Doctor(value) => serde_json::to_vec(value),
         RequestEnvelope::PeerSync(value) => serde_json::to_vec(value),
+        RequestEnvelope::ReloadRuntimeView => serde_json::to_vec(&()),
     }
     .map_err(AtmError::from)
 }
@@ -303,6 +305,9 @@ fn decode_route_request(method: &str, path: &str, body: &[u8]) -> Result<ApiRequ
             }
             Ok(ApiRequest::PeerSync(request))
         }
+        ("POST", "/v1/atm/runtime/reload") => serde_json::from_slice::<()>(body)
+            .map(|()| ApiRequest::ReloadRuntimeView)
+            .map_err(|source| invalid_route_body("runtime reload", source)),
         _ => Err(AtmError::validation(format!(
             "unsupported daemon HTTP route {method} {path}"
         ))),
@@ -354,6 +359,9 @@ fn decode_success_response(
         RequestEnvelope::PeerSync(_) => serde_json::from_slice(body)
             .map(ResponseEnvelope::PeerSync)
             .map_err(AtmError::from),
+        RequestEnvelope::ReloadRuntimeView => serde_json::from_slice::<()>(body)
+            .map(|()| ResponseEnvelope::RuntimeViewReloaded)
+            .map_err(AtmError::from),
     }
 }
 
@@ -381,6 +389,7 @@ fn encode_response(response: &ResponseEnvelope) -> Result<EncodedHttpResponse, A
         ResponseEnvelope::Clear(_) => unreachable!("clear responses use HTTP 204 metadata"),
         ResponseEnvelope::Doctor(value) => (200, "OK", None, serde_json::to_vec(value)),
         ResponseEnvelope::PeerSync(value) => (200, "OK", None, serde_json::to_vec(value)),
+        ResponseEnvelope::RuntimeViewReloaded => (200, "OK", None, serde_json::to_vec(&())),
         ResponseEnvelope::Error(value) => {
             let status = if value.is_validation() { 400 } else { 503 };
             (
@@ -499,6 +508,7 @@ pub enum ApiRequest {
     CompatibilityPreflight(CompatibilityPreflight),
     Heartbeat(TeamMemberHeartbeatRequest),
     PeerSync(PeerSyncRequest),
+    ReloadRuntimeView,
 }
 
 #[derive(Debug, Clone)]
@@ -528,6 +538,7 @@ impl ApiRequest {
             }
             Self::Heartbeat(request) => RequestEnvelope::Heartbeat(request),
             Self::PeerSync(request) => RequestEnvelope::PeerSync(request),
+            Self::ReloadRuntimeView => RequestEnvelope::ReloadRuntimeView,
         }
     }
 }
@@ -552,6 +563,7 @@ impl From<RequestEnvelope> for ApiRequest {
             }
             RequestEnvelope::Heartbeat(request) => Self::Heartbeat(request),
             RequestEnvelope::PeerSync(request) => Self::PeerSync(request),
+            RequestEnvelope::ReloadRuntimeView => Self::ReloadRuntimeView,
         }
     }
 }
@@ -612,6 +624,14 @@ impl RequestDeadline {
     pub fn expired(self) -> bool {
         Instant::now() >= self.0
     }
+
+    /// Returns the budget left for the next operation in this request.
+    ///
+    /// Adapters must consume this value rather than minting a fresh timeout:
+    /// one ingress request has one absolute completion deadline.
+    pub fn remaining(self) -> Option<Duration> {
+        self.0.checked_duration_since(Instant::now())
+    }
 }
 
 /// The one application routing boundary for every daemon ingress.
@@ -659,6 +679,22 @@ mod tests {
         .expect("decode HTTP request");
 
         assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn authenticated_runtime_reload_uses_the_shared_http_contract() {
+        let request = RequestEnvelope::ReloadRuntimeView;
+        let mut bytes = Vec::new();
+
+        write_http_request(&mut bytes, &request).expect("write runtime reload request");
+        let decoded = decode_request(
+            read_http_request(&mut bytes.as_slice())
+                .expect("read HTTP request")
+                .expect("request"),
+        )
+        .expect("decode runtime reload request");
+
+        assert!(matches!(decoded, ApiRequest::ReloadRuntimeView));
     }
 
     #[test]

@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI28-3>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI28-3" ;
+  triage:title "Background retry scheduling doesn't compose cleanly with router terminal/unconfirmed classification" ;
+  triage:description "The bounded peer recovery coordinator schedules backoff-based retries independently, but the router's terminal (permanent failure) vs. unconfirmed (transient, recoverable) classification is not always synchronized with the coordinator's retry schedule. In edge cases, the coordinator might schedule a retry for a peer whose delivery status has been classified as terminal by the router, or vice versa. This is a composition gap between two independent systems that should be coordinated: if a delivery is truly terminal (e.g., peer address resolution failed), the coordinator should not retry indefinitely; conversely, if the coordinator decides a peer is worth retrying, that decision should influence the router's classification to prevent marking deliveries as permanent failures prematurely. This is not an immediate functional bug but a design coherence issue that should be resolved to prevent future divergence. Fix recommended: clarify and document the ownership boundary between the router's classification and the coordinator's retry logic; ensure that terminal deliveries bypass coordinator retry scheduling, and that the coordinator's retry decisions are visible to routing decisions." ;
+  triage:category "Architecture" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "Retry scheduling logic does not check router's terminal classification before retrying" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

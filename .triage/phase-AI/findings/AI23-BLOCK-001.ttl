@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-001" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Round-2 fix does not satisfy sprint's runtime-evidence acceptance bar for advertised-IP peer-TCP write proof" ;
+  triage:description "arch-ctm's round-2 fix commit c528137cd07c8c329572cdb8e852faffb3fc9c94 on feature/pAI-s23-crosshost-shared-write-path added test advertised_ip_peer_send_and_ack_reach_the_shared_router (lines 1035-1132 in crates/atm-daemon/src/https_transport.rs) to close this finding. The test correctly proves a narrower claim: TLS-verified peer identity overwrites/never-trusts a spoofed source host (authenticated_source_host == Some(peer.host), ingress == AuthenticatedIngress::Peer). This narrower claim was independently validated and closed prior findings RBQA-F001 and RSH-002. However, the test uses RecordingRouter (a unit-only test double that records requests and returns hardcoded AtmError::validation response, never invoking the real DaemonRequestDispatcher, never persisting, providing no ULID readback, no nudge proof). The sprint doc acceptance criteria explicitly state: 'not satisfied by localhost, raw TCP connect, sender-side persistence, or a fake transport' and 'Unit-only router spies cannot close the runtime-evidence acceptance item'. Sub-task 4 requires a daemon-pair helper against the real advertised/bound virtual-Ethernet IP with receiver-side ULID readback and post-persistence nudge proof, which this test does not provide." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94/1> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1036 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94> ;
+  triage:notes "Test proves narrower claim (TLS identity verification) but not broader acceptance bar (runtime integration with real advertised IP, persistence, ULID readback, nudge proof). Acceptance criteria require daemon-pair helper with receiver-side readback." .
+
+<urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:orderIndex 0 ;
+  triage:patternMatches 1 ;
+  triage:status "open" .

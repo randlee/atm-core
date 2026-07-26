@@ -4,35 +4,44 @@
 <urn:atm:triage:finding/AI30-MINOR-001>
   a triage:Finding ;
   triage:findingId "AI30-MINOR-001" ;
-  triage:title "compile_fail doctest has stray trailing comma masking intended lesson" ;
-  triage:description "crates/atm-daemon-client/src/compatibility.rs:19-34 -- a compile_fail doctest has a stray trailing comma, an unrelated syntax error masking the intended typestate-violation lesson. Reported by rust-best-practices-agent (RBP-F006)." ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
+  triage:title "compile_fail doctest trailing comma masking typestate lesson — CLOSED" ;
+  triage:description "crates/atm-daemon-client/src/compatibility.rs:22-39 -- compile_fail doctest had a stray trailing comma masking the intended typestate-violation lesson. Fixed by commit 77252eca: trailing comma removed, doctest now correctly fails when attempting dispatch_write on unverified Connection. Independently verified by req-qa (direct read, no trailing comma remains) and rust-qa-agent (cargo test --workspace, compile_fail doctest passed)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "doctest-defect" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "testing" ;
   triage:severity "Minor" ;
   triage:repeatable false ;
-  triage:sweepScope "this-branch-only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI30-MINOR-001/pAI-s30-1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/7ad54d25> ;
-  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime .
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s30/77252eca> ;
+  triage:triagedAt "2026-07-25T07:03:40Z"^^xsd:dateTime .
 
 <urn:atm:triage:occurrence/AI30-MINOR-001/pAI-s30-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon-client/src/compatibility.rs" ;
   triage:line 37 ;
   triage:snippet "///     }),  # stray trailing comma on line 37 after closing brace" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:headSha "7ad54d25" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s30/7ad54d25> .
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/77252eca> .
 
 <urn:atm:triage:worktree/pAI-s30/7ad54d25>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "7ad54d25" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
   triage:orderIndex 9 .
