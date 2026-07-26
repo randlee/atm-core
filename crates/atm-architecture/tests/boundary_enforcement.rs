@@ -286,14 +286,24 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         "AI.23 requires the production PostWriteRouter::dispatch function"
     );
 
-    let local_guard = source
-        .find("if message.prepared.is_peer_receipt() || host.is_none()")
-        .expect("the generic local/peer routing guard must remain explicit");
-    let peer_adapter = source
+    let dispatch_start = source
+        .find("fn dispatch(")
+        .expect("the production PostWriteRouter::dispatch function must remain explicit");
+    let dispatch = &source[dispatch_start..];
+    let peer_receipt_guard = dispatch
+        .find("message.prepared.is_peer_receipt()")
+        .expect("the generic local/peer routing guard must handle peer receipts");
+    let host_guard = dispatch
+        .find("let Some(host) = message")
+        .expect("the generic local/peer routing guard must handle optional hosts");
+    let peer_branch = dispatch
+        .find("self.deliver_to_peer")
+        .expect("generic peer routing must remain behind the local/peer guard");
+    let _peer_adapter = source
         .find("resolve_peer_authority(host")
         .expect("peer authority selection must remain in the generic peer branch");
     assert!(
-        local_guard < peer_adapter,
+        peer_receipt_guard < peer_branch && host_guard < peer_branch,
         "localhost and own-IP must be considered by the generic host guard before peer authority selection"
     );
     for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
