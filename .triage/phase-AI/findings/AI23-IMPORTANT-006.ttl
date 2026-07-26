@@ -1,0 +1,189 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-IMPORTANT-006>
+  a triage:Finding ;
+  triage:findingId "AI23-IMPORTANT-006" ;
+  triage:foundAt "2026-07-25T18:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S30 ;
+  triage:title "PostWriteRouter::dispatch re-derives peer-receipt status via ad-hoc inline check instead of calling canonical is_peer_receipt() accessor" ;
+  triage:description "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:20 implements an ad-hoc inline check (if message.outbound_request.authenticated_source_host.is_some() { ... }) to determine whether a message is a peer receipt, instead of calling the canonical PreparedWrite::is_peer_receipt() accessor defined at crates/atm-core/src/send/mod.rs:323-326. This pattern mirrors the root cause of AI23-BLOCK-002 (two modules independently answering the same architectural question), with is_peer_receipt() effectively dead code (zero callers workspace-wide). The architectural risk is future drift between the inline check and the canonical definition when either is modified. Cross-reference: related to AI22-IMPORTANT-003 (broader overlapping-predicate pattern in send/mod.rs)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "structure" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T18:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-006/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/s23/acaa2a43> ;
+  triage:openOn <urn:atm:triage:worktree/s24/7f85b1e6> ;
+  triage:openOn <urn:atm:triage:worktree/s25/66775a09> ;
+  triage:openOn <urn:atm:triage:worktree/s26/2dc8d98b> ;
+  triage:openOn <urn:atm:triage:worktree/s27/ce0a8a40> ;
+  triage:openOn <urn:atm:triage:worktree/s28/657d56db> ;
+  triage:openOn <urn:atm:triage:worktree/s29/7dcf6953> ;
+  triage:openOn <urn:atm:triage:worktree/s30/008e58e2> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/008e58e2> .
+
+# Occurrence on s23
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "acaa2a43" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/acaa2a43> .
+
+# Occurrence on s24
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7f85b1e6> .
+
+# Occurrence on s25
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "66775a09" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/66775a09> .
+
+# Occurrence on s26
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/2dc8d98b> .
+
+# Occurrence on s27
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/ce0a8a40> .
+
+# Occurrence on s28
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/657d56db> .
+
+# Occurrence on s29
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/7dcf6953> .
+
+# Occurrence on s30
+<urn:atm:triage:occurrence/AI23-IMPORTANT-006/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 20 ;
+  triage:snippet "if message.outbound_request.authenticated_source_host.is_some() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/s23/acaa2a43>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "acaa2a43" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/7f85b1e6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/s25/66775a09>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "66775a09" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/s26/2dc8d98b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:orderIndex 26 .
+
+<urn:atm:triage:worktree/s27/ce0a8a40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/657d56db>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/7dcf6953>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/008e58e2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:orderIndex 30 .
