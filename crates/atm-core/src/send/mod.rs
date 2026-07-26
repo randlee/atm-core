@@ -23,6 +23,9 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
+use crate::provenance::{
+    ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
+};
 use crate::schema::{
     AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
     set_peer_outbound_write,
@@ -492,6 +495,15 @@ fn write_mail_with_runtime_impl<
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<PreparedWrite, AtmError> {
+    let provenance = validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
     if request.acknowledges_message_id.is_none() {
         if request.to.is_none() {
             return Err(AtmError::validation(
@@ -500,11 +512,7 @@ fn write_mail_with_runtime_impl<
         }
         return prepare_persisted_write(request, observability, runtime, None);
     }
-    if request.to.is_some()
-        && request.authenticated_source_host.is_some()
-        && request.origin_message_id.is_some()
-        && request.origin_timestamp.is_some()
-    {
+    if request.to.is_some() && provenance.is_authenticated_peer() {
         let acknowledgement = crate::ack::resolve_received_acknowledgement_write(request, runtime)?;
         return prepare_persisted_write(
             acknowledgement.request(),
@@ -595,9 +603,16 @@ fn prepare_persisted_write<
 }
 
 fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
-    request.authenticated_source_host.is_some()
-        && request.origin_message_id.is_some()
-        && request.origin_timestamp.is_some()
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )
+    .is_ok_and(ValidatedWriteProvenance::is_authenticated_peer)
 }
 
 #[cfg(test)]
@@ -797,16 +812,27 @@ fn prepare_send_context<
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
+    let provenance = validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: target.host(),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
     let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient, target)?;
+    validate_non_self_recipient(
+        &canonical_sender,
+        &request.caller_team,
+        &recipient,
+        target,
+        provenance,
+    )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
-    let delivery_snapshot = delivery_policy.resolve_write_recipient_snapshot(
-        runtime,
-        target,
-        &recipient,
-        has_authenticated_peer_provenance(request),
-    )?;
+    let delivery_snapshot =
+        delivery_policy.resolve_write_recipient_snapshot(runtime, &recipient, provenance)?;
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,
         request.thread_mode,
@@ -963,6 +989,7 @@ pub(crate) fn validate_non_self_recipient(
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
     target: &AgentAddress,
+    provenance: ValidatedWriteProvenance,
 ) -> Result<(), AtmError> {
     let same_identity = sender
         .as_str()
@@ -970,7 +997,7 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host().is_none() {
+    if same_identity && target.host().is_none() && !provenance.is_authenticated_peer() {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -983,10 +1010,21 @@ mod self_address_tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};
     use crate::address::AgentAddress;
     use crate::error_codes::AtmErrorCode;
+    use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
     use crate::types::{AgentName, TeamName};
 
     #[test]
     fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: None,
+                authenticated_source_host: None,
+                origin_message_id: false,
+                origin_timestamp: false,
+            },
+        )
+        .expect("local provenance");
         let error = validate_non_self_recipient(
             &AgentName::from_validated("Sender-A"),
             &TeamName::from_validated("Test-Team"),
@@ -997,6 +1035,7 @@ mod self_address_tests {
             &"sender-a@test-team"
                 .parse::<AgentAddress>()
                 .expect("target"),
+            provenance,
         )
         .expect_err("case-variant self target must be rejected");
 
@@ -1005,6 +1044,19 @@ mod self_address_tests {
 
     #[test]
     fn validate_non_self_recipient_allows_host_qualified_self_target() {
+        let target = "sender-a@test-team.127.0.0.1"
+            .parse::<AgentAddress>()
+            .expect("host-qualified target");
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: target.host(),
+                authenticated_source_host: None,
+                origin_message_id: false,
+                origin_timestamp: false,
+            },
+        )
+        .expect("host-qualified origin provenance");
         validate_non_self_recipient(
             &AgentName::from_validated("sender-a"),
             &TeamName::from_validated("test-team"),
@@ -1012,11 +1064,39 @@ mod self_address_tests {
                 agent: AgentName::from_validated("sender-a"),
                 team: TeamName::from_validated("test-team"),
             },
-            &"sender-a@test-team.127.0.0.1"
-                .parse::<AgentAddress>()
-                .expect("host-qualified target"),
+            &target,
+            provenance,
         )
         .expect("host-qualified self target must use the ordinary peer route");
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_authenticated_peer_after_target_normalization() {
+        let target = "sender-a@test-team"
+            .parse::<AgentAddress>()
+            .expect("normalized target");
+        let peer_host = "peer.example.test".parse().expect("peer host");
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: target.host(),
+                authenticated_source_host: Some(&peer_host),
+                origin_message_id: true,
+                origin_timestamp: true,
+            },
+        )
+        .expect("authenticated peer provenance");
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            &target,
+            provenance,
+        )
+        .expect("authenticated peer receipt must not become a local self-send");
     }
 }
 
