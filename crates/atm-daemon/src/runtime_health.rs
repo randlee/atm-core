@@ -919,10 +919,12 @@ impl ApiRouter for DaemonRequestDispatcher {
         if let RequestEnvelope::Write(write) = &request {
             match ingress {
                 AuthenticatedIngress::Local
-                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_some()
+                        || write.origin_timestamp.is_some() =>
                 {
                     return Err(AtmError::validation(
-                        "local write requests must not supply origin message metadata",
+                        "local write requests must not supply peer provenance or origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Peer
@@ -1088,6 +1090,8 @@ mod tests {
     };
     use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::send::{SendMessageSource, WriteRequest};
+    use atm_core::types::{AgentName, TeamName};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
@@ -1127,6 +1131,40 @@ mod tests {
             )
             .expect_err("peer ingress must not control daemon reload");
         assert!(error.is_validation());
+    }
+
+    #[test]
+    fn local_write_rejects_forged_peer_provenance() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+        let mut write = WriteRequest::new(
+            tempdir.path().join("home"),
+            tempdir.path().join("current"),
+            AgentName::from_validated("sender"),
+            "recipient@test-team",
+            TeamName::from_validated("test-team"),
+            SendMessageSource::Inline("forged provenance".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("write request");
+        write.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
+
+        let error = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect_err("local ingress must reject peer provenance from wire data");
+        assert!(error.is_validation());
+        assert!(error.message().contains("peer provenance"));
     }
 
     struct ShutdownFinalizerDrainGuard;

@@ -8,6 +8,7 @@
 use std::fmt;
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -31,6 +32,7 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_CONCURRENT_PEER_REQUESTS: usize = 64;
 
 /// The only outbound cross-host capability. It serializes the canonical
 /// request envelope; it never receives a storage or post-write capability.
@@ -234,12 +236,14 @@ impl HttpsListenerSet {
             })
             .collect::<Result<Vec<_>, AtmError>>()?;
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let active_requests = Arc::new(AtomicUsize::new(0));
         let mut listeners = Vec::new();
         for (listener, address) in bound {
             let thread_stop = Arc::clone(&stop);
             let thread_router = Arc::clone(&router);
             let thread_config = Arc::clone(&server_config);
             let thread_requests = Arc::clone(&requests);
+            let thread_active_requests = Arc::clone(&active_requests);
             let thread_peer_verifier = Arc::clone(&peer_verifier);
             let thread = std::thread::Builder::new()
                 .name("atm-https-peer-listener".to_string())
@@ -250,6 +254,7 @@ impl HttpsListenerSet {
                         thread_config,
                         thread_router,
                         thread_requests,
+                        thread_active_requests,
                         thread_peer_verifier,
                     )
                 })
@@ -304,12 +309,20 @@ fn accept_loop(
     config: Arc<ServerConfig>,
     router: Arc<dyn ApiRouter + Send + Sync>,
     requests: Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    active_requests: Arc<AtomicUsize>,
     peer_verifier: Arc<PinnedClientVerifier>,
 ) {
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                spawn_request_worker(stream, &config, &router, &requests, &peer_verifier);
+                spawn_request_worker(
+                    stream,
+                    &config,
+                    &router,
+                    &requests,
+                    &active_requests,
+                    &peer_verifier,
+                );
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -333,9 +346,21 @@ fn spawn_request_worker(
     config: &Arc<ServerConfig>,
     router: &Arc<dyn ApiRouter + Send + Sync>,
     requests: &Arc<Mutex<Vec<std::thread::JoinHandle<()>>>>,
+    active_requests: &Arc<AtomicUsize>,
     peer_verifier: &Arc<PinnedClientVerifier>,
 ) {
+    if !try_admit_peer_request(active_requests) {
+        tracing::warn!(
+            subsystem = "https_transport",
+            action = "connection_admission",
+            outcome = "saturated",
+            connection_cap = MAX_CONCURRENT_PEER_REQUESTS,
+            "HTTPS peer listener rejected connection because its bounded request capacity is exhausted"
+        );
+        return;
+    }
     if let Err(error) = stream.set_nonblocking(false) {
+        active_requests.fetch_sub(1, Ordering::SeqCst);
         tracing::warn!(
             subsystem = "https_transport",
             action = "configure_connection",
@@ -351,7 +376,17 @@ fn spawn_request_worker(
             let config = Arc::clone(config);
             let router = Arc::clone(router);
             let peer_verifier = Arc::clone(peer_verifier);
+            let active_requests = Arc::clone(active_requests);
             move || {
+                struct RequestPermit(Arc<AtomicUsize>);
+
+                impl Drop for RequestPermit {
+                    fn drop(&mut self) {
+                        self.0.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+
+                let _permit = RequestPermit(active_requests);
                 log_peer_request_result(handle_peer_connection(
                     stream,
                     config,
@@ -363,14 +398,25 @@ fn spawn_request_worker(
         .map_err(|_source| AtmError::daemon_unavailable("failed to start HTTPS request worker"));
     match request {
         Ok(request) => track_request_worker(requests, request),
-        Err(error) => tracing::warn!(
-            subsystem = "https_transport",
-            action = "start_request",
-            outcome = "failed",
-            error_code = %error.code(),
-            "HTTPS listener rejected connection because request worker startup failed"
-        ),
+        Err(error) => {
+            active_requests.fetch_sub(1, Ordering::SeqCst);
+            tracing::warn!(
+                subsystem = "https_transport",
+                action = "start_request",
+                outcome = "failed",
+                error_code = %error.code(),
+                "HTTPS listener rejected connection because request worker startup failed"
+            );
+        }
     }
+}
+
+fn try_admit_peer_request(active_requests: &AtomicUsize) -> bool {
+    active_requests
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |active| {
+            (active < MAX_CONCURRENT_PEER_REQUESTS).then_some(active + 1)
+        })
+        .is_ok()
 }
 
 fn log_peer_request_result(result: Result<(), AtmError>) {
@@ -743,7 +789,7 @@ fn normalize_fingerprint(value: &str) -> String {
 mod tests {
     use std::net::{TcpListener, TcpStream};
     use std::str::FromStr as _;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
@@ -837,6 +883,23 @@ mod tests {
     fn request_deadline_is_one_absolute_budget() {
         let deadline = RequestDeadline::after(Duration::from_secs(5));
         assert!(deadline.remaining().is_some());
+    }
+
+    #[test]
+    fn peer_listener_admission_is_bounded_and_recovers_after_a_request_finishes() {
+        let active = AtomicUsize::new(super::MAX_CONCURRENT_PEER_REQUESTS - 1);
+
+        assert!(super::try_admit_peer_request(&active));
+        assert!(
+            !super::try_admit_peer_request(&active),
+            "a saturated listener must reject rather than create an unbounded thread"
+        );
+
+        active.fetch_sub(1, Ordering::SeqCst);
+        assert!(
+            super::try_admit_peer_request(&active),
+            "a finished request must release its admission permit"
+        );
     }
 
     #[test]

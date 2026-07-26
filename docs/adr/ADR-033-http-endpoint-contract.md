@@ -27,8 +27,11 @@ The initial stable application surface is resource-oriented REST under
 | `/messages` | `DELETE` clear selected messages where authorized |
 | `/messages/read` | `POST` owner-only read-state mutation |
 | `/message/{message-id}/ack` | `POST` acknowledgement |
-| `/message/{message-id}` | `GET` canonical message resource returned by `Location` after a write |
 | `/doctor` | `GET` doctor report |
+| `/compatibility` | `POST` compatibility preflight |
+| `/heartbeat` | `POST` team-member heartbeat |
+| `/peers/{peer}/sync` | `POST` bounded peer reconciliation |
+| `/runtime/reload` | `POST` authenticated runtime-view reload |
 
 The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,
 status codes, pagination, and conditional mutation semantics before
