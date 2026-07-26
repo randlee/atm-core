@@ -522,6 +522,56 @@ def _qa_counts(run: dict[str, Any] | None) -> dict[str, int | None]:
     return counts
 
 
+def _live_counts(
+    phase_path: Path,
+    findings_dir: Path,
+    sprints: list[dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Return unresolved B/I/M counts through the shared graph query.
+
+    These are the merge and dispatch gates.  QA evidence describes the review
+    that happened at a particular commit; it must not replace current TTL
+    state when a real unresolved occurrence remains on a sprint branch.
+    """
+    runner = _graph_runner()
+    query = (
+        Path(__file__).resolve().parents[2]
+        / "graph-orchestration"
+        / "scripts"
+        / "open-findings-for-sprint.sparql"
+    )
+    try:
+        graph = runner.load_graph(str(phase_path), findings_dir=findings_dir)
+    except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
+        raise ReportError(f"could not load live finding graph: {exc}") from exc
+
+    results: dict[str, dict[str, int]] = {}
+    for sprint in sprints:
+        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
+        if branch:
+            bindings["BRANCH"] = Literal(branch)
+        try:
+            rows = runner.run_sparql(graph, query, bindings)
+        except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
+            raise ReportError(f"could not query live findings for {sprint['id']}: {exc}") from exc
+        counts = {"blockers": 0, "important": 0, "minor": 0}
+        for row in rows:
+            severity = str(row[2]).lower()
+            if severity in {"blocking", "critical"}:
+                counts["blockers"] += 1
+            elif severity == "important":
+                counts["important"] += 1
+            elif severity == "minor":
+                counts["minor"] += 1
+            else:
+                raise ReportError(
+                    f"{sprint['id']}: live findings query returned invalid severity {severity!r}"
+                )
+        results[sprint["id"]] = counts
+    return results
+
+
 def _current_integration_findings(
     findings_dir: Path,
 ) -> tuple[dict[str, int], dict[str, int], list[dict[str, str]]]:
@@ -744,9 +794,8 @@ def build_report(
     )
     diagnostics = _validation_diagnostics(validation, malformed_diagnostics)
     qa = _qa_runs(qa_data)
-    current_counts, legacy_counts, stale_occurrences = _current_integration_findings(
-        findings_dir
-    )
+    live_counts = _live_counts(phase_path, findings_dir, sprints)
+    current_counts, legacy_counts, stale_occurrences = _current_integration_findings(findings_dir)
     github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
@@ -767,7 +816,8 @@ def build_report(
         row_errors = [item for item in row_diagnostics if item.get("level") == "error"]
         run = qa.get(sid)
         item = github.get(sid, {})
-        counts = _qa_counts(run)
+        counts = live_counts[sid]
+        qa_snapshot = _qa_counts(run)
         verdict = str(run.get("verdict", "")) if run else None
         if not verdict and run and isinstance(run.get("pass"), bool):
             verdict = "PASS" if run["pass"] else "FAIL"
@@ -813,11 +863,8 @@ def build_report(
                     "blockers": counts["blockers"],
                     "important": counts["important"],
                     "minor": counts["minor"],
-                    "count_basis": "latest authoritative QA run",
-                    "reported_counts": {
-                        name: run.get(name) if run else None
-                        for name in ("blockers", "important", "minor")
-                    },
+                    "count_basis": "live unresolved TTL findings",
+                    "reported_counts": qa_snapshot,
                 },
                 "branch": item.get("branch"),
                 "head_sha": item.get("head_sha"),
@@ -885,9 +932,12 @@ def build_report(
             f"Sprint: {row['id']} ({phase_sprint})\n"
             f"DEV: {row['dev_icon']}  QA: {row['qa_icon']} {q['verdict'] or 'UNKNOWN'}  "
             f"CI: {row['ci_icon']}  PR: {_pr_cell(row)}\n"
-            f"QA B/I/M: {q['blockers'] if q['blockers'] is not None else '?'} / "
+            f"Live B/I/M: {q['blockers'] if q['blockers'] is not None else '?'} / "
             f"{q['important'] if q['important'] is not None else '?'} / "
             f"{q['minor'] if q['minor'] is not None else '?'}  "
+            f"QA snapshot B/I/M: {q['reported_counts']['blockers'] if q['reported_counts']['blockers'] is not None else '?'} / "
+            f"{q['reported_counts']['important'] if q['reported_counts']['important'] is not None else '?'} / "
+            f"{q['reported_counts']['minor'] if q['reported_counts']['minor'] is not None else '?'}  "
             f"Ready: {row['ready_icon']}  OK: {row['ok_icon']}\n"
             f"QA assignment PST: {q['assignment_time_pst'] or 'unknown'}  result PST: {q['result_time_pst'] or 'unknown'}\n"
             f"Branch: {row['branch'] or 'unknown'}  Commit: {row['head_sha'] or 'unknown'}\n"
@@ -900,8 +950,8 @@ def build_report(
         detailed.append(detail)
     integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
     table = (
-        "| Sprint | DEV | QA | CI | PR | QA B | QA I | QA M | Ready | OK |\n"
-        "|--------|-----|----|----|----|------|------|------|-------|----|\n"
+        "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |\n"
+        "|--------|-----|----|----|----|--------|--------|--------|-------|----|\n"
         + "\n".join(lines) + "\n" + integration_row
     )
     if diagnostics:

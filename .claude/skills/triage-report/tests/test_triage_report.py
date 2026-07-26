@@ -101,14 +101,14 @@ def _inputs(tmp_path: Path):
     return root, qa_path
 
 
-def test_historical_qa_counts_drive_sprint_rows(tmp_path):
+def test_live_ttl_counts_drive_sprint_gates(tmp_path):
     root, qa = _inputs(tmp_path)
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
     assert first["qa"]["run_id"] == "S1-QA1"  # reviewer-only is excluded
     assert first["qa"]["blockers"] == 1
-    assert first["qa"]["important"] == 2
-    assert first["qa"]["minor"] == 0
+    assert first["qa"]["important"] == 0
+    assert first["qa"]["minor"] == 1
     assert first["qa"]["reported_counts"] == {"blockers": 1, "important": 2, "minor": 0}
     assert first["ready_to_merge"] is None  # already merged is history, not ready-to-merge
     assert first["ok_to_merge"] is None
@@ -116,7 +116,7 @@ def test_historical_qa_counts_drive_sprint_rows(tmp_path):
     assert second["ready_to_merge"] is True
     assert second["previous_sprints_merged"] is True
     assert second["ok_to_merge"] is True
-    assert "| Sprint | DEV | QA | CI | PR | QA B | QA I | QA M | Ready | OK |" in report["table"]
+    assert "| Sprint | DEV | QA | CI | PR | Live B | Live I | Live M | Ready | OK |" in report["table"]
     assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
 
 
@@ -130,12 +130,12 @@ def test_github_state_replaces_manual_metadata(tmp_path):
     assert not any("metadata" in gap for gap in report["data_gaps"])
 
 
-def test_missing_qa_snapshot_keeps_sprint_counts_unknown(tmp_path):
+def test_missing_qa_snapshot_does_not_hide_live_sprint_counts(tmp_path):
     root, _ = _inputs(tmp_path)
     report = triage_report.build_report(root, "AICH", root / "missing-qa.json")
     first = report["rows"][0]
-    assert first["qa"]["blockers"] is None
-    assert first["qa"]["important"] is None
+    assert first["qa"]["blockers"] == 1
+    assert first["qa"]["important"] == 0
     assert "QA evidence master not found" in report["data_gaps"][0]
 
 
@@ -174,7 +174,7 @@ def test_malformed_selected_finding_only_marks_attributed_row(tmp_path):
     first, second = report["rows"]
     assert first["data_status"] == "error"
     assert first["ready_to_merge"] is False
-    assert first["ok_to_merge"] is None
+    assert first["ok_to_merge"] is None  # merged rows are not merge candidates
     assert first["diagnostics"][0]["sprint"] == "AICH-S1"
     assert first["diagnostics"][0]["path"].endswith("BROKEN-S1.ttl")
     assert "repair Turtle syntax" in first["diagnostics"][0]["action"]
@@ -204,7 +204,7 @@ def test_malformed_selected_finding_without_found_in_is_unattributed(tmp_path):
     assert report["merge_blocked"] is True
 
 
-def test_promoted_finding_is_not_replayed_into_historical_qa_row(tmp_path):
+def test_promoted_finding_gates_its_open_branch_only(tmp_path):
     root, qa = _inputs(tmp_path)
     findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
     with findings.open("a") as stream:
@@ -223,7 +223,7 @@ def test_promoted_finding_is_not_replayed_into_historical_qa_row(tmp_path):
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
     assert first["qa"]["blockers"] == 1
-    assert second["qa"]["blockers"] == 0
+    assert second["qa"]["blockers"] == 1
     assert report["current_integration_counts"]["blockers"] == 2  # F1 + F4, once each
 
 
