@@ -55,6 +55,8 @@ pub(crate) mod persistence;
 pub mod process;
 /// Shared protocol DTOs used by boundary transport and adapter contracts.
 pub mod protocol;
+/// Shared authenticated/immutable write provenance validation.
+pub mod provenance;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.

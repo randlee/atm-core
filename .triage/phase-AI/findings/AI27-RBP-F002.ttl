@@ -12,10 +12,12 @@
   triage:severity "Important" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:relatedFinding <urn:atm:triage:finding/AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING> ;
-  triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP. Repeatable-pattern sweep found the AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING precedent (atm-graft-python FFI boundary) as thematically related but not the same finding (different crate/file/root site); left as separate record. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP. Repeatable-pattern sweep found the AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING precedent (atm-graft-python FFI boundary) as thematically related but not the same finding (different crate/file/root site); left as separate record. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. AICH-S7-QA-FIX-2: independently re-verified arch-ctm's e80564bf self-report against the real diff (not accepted at face value) -- all three cited map_err(|_source| ...) sites (spawn_shutdown_step ~231, spawn_shutdown_join_helper ~290, chrono::Duration::from_std/serde_json::from_str in reconcile_after_success ~658-682) now bind |source| and interpolate {source} into the AtmError message, genuinely preserving the underlying io::Error/serde_json::Error/chrono error detail rather than just renaming the closure parameter. Confirmed on feature/pAI-s27-peer-delivery-observability current head 4315ad0a." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
@@ -31,10 +33,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 231 ;
   triage:snippet ".map_err(|_source| { ... }) in spawn_shutdown_step, thread-spawn failure detail discarded" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at e80564bf: now .map_err(|source| ... {source} ...), preserving io::Error detail. Verified on current head 4315ad0a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:occurrence/AI27-RBP-F002/pAI-s27/2>
@@ -42,10 +45,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 290 ;
   triage:snippet ".map_err(|_source| { ... }) in spawn_shutdown_join_helper, thread-spawn failure detail discarded" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at e80564bf: now .map_err(|source| ... {source} ...), preserving io::Error detail. Verified on current head 4315ad0a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:occurrence/AI27-RBP-F002/pAI-s27/3>
@@ -53,10 +57,11 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 658 ;
   triage:snippet "chrono::Duration::from_std(policy.max_message_age).map_err(|_source| { ... }) / serde_json::from_str(&stored.request_json).map_err(|_source| { ... }) in reconcile_after_success, JSON/duration-parse failure detail discarded" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at e80564bf: both sites now bind |source| and interpolate {source}, preserving chrono::OutOfRangeError/serde_json::Error detail. Verified on current head 4315ad0a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>

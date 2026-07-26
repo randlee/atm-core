@@ -12,9 +12,11 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
-  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. AICH-S7-QA-FIX-2: independently re-verified arch-ctm's ad441f16 self-report against the real diff -- new test peer_link_status_json_round_trip_exposes_no_authority_secrets (crates/atm-daemon/src/tests/runtime_root/peer_observability.rs, +26 lines) asserts no 'fingerprint'/'ip_address' substrings appear in the serialized PeerLinkStatus JSON and confirms a correct round-trip, matching this finding's actual ask (not the mismatched 'doctor --json runtime evidence' framing in the AICH-S7-QA-FIX-2 task text, which does not apply to this finding). Confirmed present on feature/pAI-s27-peer-delivery-observability current head 4315ad0a." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
@@ -28,10 +30,11 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root/peer_observability.rs" ;
   triage:line 0 ;
   triage:snippet "Missing test: PeerLinkStatus serde round-trip proving absence of fingerprint/IP fields (cf. sibling PeerConfigDoctorReport secret-exclusion test)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at ad441f16: new peer_link_status_json_round_trip_exposes_no_authority_secrets test added. Verified on current head 4315ad0a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>

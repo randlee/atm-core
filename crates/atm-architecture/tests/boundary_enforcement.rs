@@ -269,6 +269,59 @@ fn canonical_write_router_has_one_host_routing_decision() {
 }
 
 #[test]
+fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
+    let root = workspace_root();
+    let router_path = root.join("crates/atm-daemon/src/runtime_health/post_write_router.rs");
+    let source = read_source(&router_path);
+    let file = syn::parse_file(&source).unwrap_or_else(|error| {
+        panic!("{} must remain valid Rust: {error}", router_path.display())
+    });
+    let mut visitor = HostRoutingVisitor::default();
+    visitor.visit_file(&file);
+    assert!(
+        visitor
+            .functions
+            .iter()
+            .any(|function| function.is_post_write_dispatch),
+        "AI.23 requires the production PostWriteRouter::dispatch function"
+    );
+
+    let dispatch_start = source
+        .find("fn dispatch(")
+        .expect("the production PostWriteRouter::dispatch function must remain explicit");
+    let dispatch = &source[dispatch_start..];
+    let peer_receipt_guard = dispatch
+        .find("message.prepared.is_peer_receipt()")
+        .expect("the generic local/peer routing guard must handle peer receipts");
+    let host_guard = dispatch
+        .find("let Some(host) = message")
+        .expect("the generic local/peer routing guard must handle optional hosts");
+    let peer_branch = dispatch
+        .find("self.deliver_to_peer")
+        .expect("generic peer routing must remain behind the local/peer guard");
+    let _peer_adapter = source
+        .find("resolve_peer_authority(host")
+        .expect("peer authority selection must remain in the generic peer branch");
+    assert!(
+        peer_receipt_guard < peer_branch && host_guard < peer_branch,
+        "localhost and own-IP must be considered by the generic host guard before peer authority selection"
+    );
+    for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
+        assert!(
+            !source.contains(forbidden),
+            "AI.23 forbids a dedicated loopback/own-IP production branch: `{forbidden}`"
+        );
+    }
+
+    let negative_source = "fn dispatch() { if host.is_loopback() { local(); } else { resolve_peer_authority(host); } }";
+    syn::parse_file(negative_source).expect("negative loopback fixture must parse");
+    assert!(
+        negative_source.contains("is_loopback"),
+        "the structural test must be able to identify a forbidden loopback branch"
+    );
+}
+
+#[test]
 fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     for (name, source) in [
         (

@@ -12,8 +12,11 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a (not accepted from arch-ctm's b7d84882 self-report). drain() now spans lines 250-321 (72 lines), below the 80-line RULE-002 threshold, verified by brace-depth counting. gh pr checks 634: 8/8 green including Just-lint on all three OS legs at c0445b1a." ;
   triage:foundIn triage:AICH-S8 ;
   triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
   triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
@@ -26,10 +29,11 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 190 ;
   triage:snippet "fn drain(...) { ... } // 92 lines total" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "7163648b" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at b7d84882: drain() now lines 250-321 (72 lines). Verified on current head c0445b1a." ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
 
 <urn:atm:triage:worktree/pAI-s28/7163648b>

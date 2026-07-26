@@ -4,13 +4,14 @@
 //! peer receives a host-qualified message is routing policy, while the adapter
 //! only connects to the already-selected authority.
 
-use std::net::{IpAddr, ToSocketAddrs};
-use std::sync::mpsc;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_core::types::HostName;
 use atm_storage::TrustedPeer;
+
+use crate::peer_resolution::resolve_peer_socket_addresses;
 
 const DNS_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(5);
 /// Literal-IP authority resolution is deliberately bounded. Operators should
@@ -49,7 +50,7 @@ pub(crate) fn resolve_peer_authority(
     let matches = enabled_peers
         .into_iter()
         .filter(|peer| {
-            resolve_peer_addresses(peer, DNS_RESOLUTION_TIMEOUT)
+            resolve_peer_socket_addresses(peer, DNS_RESOLUTION_TIMEOUT)
                 .is_ok_and(|addresses| addresses.contains(&ip))
         })
         .cloned()
@@ -65,40 +66,6 @@ pub(crate) fn resolve_peer_authority(
             "send to the intended registered hostname or correct the overlapping forward DNS records",
         )),
     }
-}
-
-fn resolve_peer_addresses(peer: &TrustedPeer, timeout: Duration) -> Result<Vec<IpAddr>, AtmError> {
-    let authority = format!("{}:{}", peer.host, peer.https_port);
-    let (sender, receiver) = mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("atm-peer-dns".to_string())
-        .spawn(move || {
-            let _ = sender.send(
-                authority
-                    .to_socket_addrs()
-                    .map(|addresses| addresses.map(|address| address.ip()).collect::<Vec<_>>()),
-            );
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to start bounded HTTPS DNS resolution",
-                source,
-            )
-        })?;
-    receiver
-        .recv_timeout(timeout)
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "HTTPS DNS resolution timed out; verify peer forward DNS or retry",
-                source,
-            )
-        })?
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to resolve configured HTTPS peer; verify forward DNS",
-                source,
-            )
-        })
 }
 
 #[cfg(test)]
