@@ -25,6 +25,8 @@ impl HttpsMessageTransport for BlockingPeerDelivery {
         Ok(ResponseEnvelope::CompatibilityVerdict(
             atm_core::protocol::CompatibilityVerdict::Compatible {
                 daemon_release: atm_core::protocol::ReleaseVersion::current(),
+                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
             },
         ))
     }
