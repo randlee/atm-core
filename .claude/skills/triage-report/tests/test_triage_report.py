@@ -72,15 +72,24 @@ def _inputs(tmp_path: Path):
         + "triage:F1 a triage:Finding ; triage:findingId \"F1\" ; "
         + "triage:foundIn triage:AICH-S1 ; "
         + "triage:foundAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime ; "
-        + "triage:severity \"blocking\" ; triage:description \"live blocker\" .\n"
+        + "triage:severity \"blocking\" ; triage:description \"live blocker\" ; "
+        + "triage:hasOccurrence triage:O1 .\n"
         + "triage:F2 a triage:Finding ; triage:findingId \"F2\" ; "
         + "triage:foundIn triage:AICH-S1 ; "
         + "triage:foundAt \"2026-07-25T04:00:00Z\"^^xsd:dateTime ; "
-        + "triage:severity \"minor\" ; triage:description \"live minor\" .\n"
+        + "triage:severity \"minor\" ; triage:description \"live minor\" ; "
+        + "triage:hasOccurrence triage:O2 .\n"
         + "triage:F3 a triage:Finding ; triage:findingId \"F3\" ; "
         + "triage:foundIn triage:AICH-S2 ; "
         + "triage:foundAt \"2026-07-25T05:00:00Z\"^^xsd:dateTime ; "
-        + "triage:severity \"blocking\" ; triage:description \"closed\" ; triage:status \"fixed\" .\n"
+        + "triage:severity \"blocking\" ; triage:description \"closed\" ; "
+        + "triage:status \"fixed\" ; triage:hasOccurrence triage:O3 .\n"
+        + "triage:O1 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+        + "triage:status \"open\" ; triage:closed false .\n"
+        + "triage:O2 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+        + "triage:status \"open\" ; triage:closed false .\n"
+        + "triage:O3 a triage:Occurrence ; triage:branch \"feature/s2\" ; "
+        + "triage:status \"fixed\" ; triage:closed true .\n"
     )
     qa_path = root / "qa.json"
     qa_path.write_text(json.dumps({"runs": [
@@ -127,6 +136,28 @@ def test_live_ttl_counts_do_not_require_qa_snapshot(tmp_path):
     assert first["qa"]["blockers"] == 1
     assert first["qa"]["important"] == 0
     assert "QA evidence master not found" in report["data_gaps"][0]
+
+
+def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
+    root, qa = _inputs(tmp_path)
+    findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
+    with findings.open("a") as stream:
+        stream.write(
+            "triage:F4 a triage:Finding ; triage:findingId \"F4\" ; "
+            "triage:foundIn triage:AICH-S1 ; "
+            "triage:foundAt \"2026-07-25T06:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"blocking\" ; triage:description \"promoted\" ; "
+            "triage:hasOccurrence triage:O4S1, triage:O4S2 .\n"
+            "triage:O4S1 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+            "triage:status \"closed\" ; triage:closed true .\n"
+            "triage:O4S2 a triage:Occurrence ; triage:branch \"feature/s2\" ; "
+            "triage:status \"open\" ; triage:closed false .\n"
+        )
+
+    report = triage_report.build_report(root, "AICH", qa)
+    first, second = report["rows"]
+    assert first["qa"]["blockers"] == 1  # F1; closed S1 occurrence of F4 is ignored
+    assert second["qa"]["blockers"] == 1  # F4 is open on S2's own branch
 
 
 def test_missing_integration_worktree_is_structured_error(tmp_path, monkeypatch):

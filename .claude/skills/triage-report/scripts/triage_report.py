@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from rdflib import Graph, Namespace, RDF
+    from rdflib import Graph, Literal, Namespace, RDF
     _RDFLIB_ERROR = None
 except ImportError as exc:  # pragma: no cover - environment error
-    Graph = Namespace = RDF = None  # type: ignore[assignment]
+    Graph = Literal = Namespace = RDF = None  # type: ignore[assignment]
     _RDFLIB_ERROR = str(exc)
 
 
@@ -434,11 +434,18 @@ def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, d
 
     results: dict[str, dict[str, int]] = {}
     for sprint in sprints:
+        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
+        if branch:
+            bindings["BRANCH"] = Literal(branch)
+        # Legacy structure rows may intentionally have no branch convention.
+        # Keep those rows on the query's origin-sprint compatibility path; all
+        # mapped delivery sprints use occurrence-level branch scoping.
         try:
             rows = runner.run_sparql(
                 graph,
                 query,
-                {"SPRINT": runner.URIRef(sprint["iri"])},
+                bindings,
             )
         except Exception as exc:  # noqa: BLE001 - normalize SPARQL failures
             raise ReportError(f"could not query live findings for {sprint['id']}: {exc}") from exc
