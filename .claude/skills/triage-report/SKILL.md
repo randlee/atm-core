@@ -10,6 +10,12 @@ description: Produce an auditable phase triage report from the integration workt
 the machine-readable source of truth and its precomputed row strings are the
 inputs displayed by `sc-compose`; Jinja performs no gate arithmetic.
 
+Current B/I/M counts and merge readiness come from unresolved Turtle findings
+through graph-orchestration's existing `open-findings-for-sprint.sparql`
+query. QA evidence is review provenance only. PR, CI, and merge state are read
+from GitHub for the branch declared in Turtle (or derived from the documented
+criteria filename convention); no hand-maintained metadata file is used.
+
 ## Usage
 
 Run from the current `integrate/phase-*` worktree, or pass the worktree
@@ -26,14 +32,14 @@ python3 .claude/skills/triage-report/scripts/triage_report.py \
 When the command is not run from an integration worktree it searches Git
 worktrees. It fails with a structured JSON error (exit 2) when there is not
 exactly one `integrate/phase-*` candidate. Use `--integration-root` to remove
-that ambiguity. `--qa-master` and `--metadata` may be supplied when those
-artifacts are stored at non-default paths.
+that ambiguity. `--qa-master` may be supplied when QA evidence is stored at a
+non-default path.
 
 The default QA evidence path is
 `docs/plans/phase-<phase>/.audit/qa-evidence-master.json`. Only the latest
-`run_type: "qa"` run per sprint is authoritative; reviewer-only runs do not
-replace QA. Missing QA, PR, CI, branch, acknowledgement, or merge inputs stay
-`null` and are listed in `data_gaps`.
+`run_type: "qa"` run per sprint is displayed as QA provenance; reviewer-only
+runs do not replace QA. Missing QA or GitHub inputs stay `null` and are listed
+in `data_gaps`.
 
 The QA message/shared/temp path fields in machine rows are retained as
 host-local evidence pointers from the audit master for drill-down. They are
@@ -41,13 +47,11 @@ not canonical Turtle paths; triage record paths remain repository-relative.
 
 ## Calculated gates
 
-- `ready_to_merge` is true only when the authoritative blocker count is known
-  and zero; unknown counts produce `null`.
-- `ok_to_merge` is true only when `ready_to_merge` is true and every earlier
-  sprint has explicit `merged: true` metadata. No branch name, PR number, or
-  ancestry is treated as proof of merge.
-- `quality_gate` separately requires all known B/I/M counts to be zero and is
-  never used to silently convert missing counts to zero.
+- `ready_to_merge` is true only when the live unresolved Turtle blocker count
+  is zero.
+- `ok_to_merge` is true only when `ready_to_merge` is true and GitHub reports
+  every earlier sprint's current delivery attempt as merged.
+- `quality_gate` requires live unresolved Turtle B/I/M counts to be zero.
 
 The table uses the same DEV/QA/CI/PR icons as `/sprint-report`: `📥`, `🌀`,
 `✅`, `🚩`, `🔨`, `🚧`, `❌`, `🏁`, and `🚀`. Unknown values are shown as `?` or

@@ -47,14 +47,6 @@ paths:
       responses:
         '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
         default: { $ref: '#/components/responses/AtmError' }
-  /message/{messageId}/ack:
-    parameters: [ { $ref: '#/components/parameters/MessageId' } ]
-    post:
-      operationId: acknowledgeMessage
-      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
-      responses:
-        '201': { description: Ack message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
-        default: { $ref: '#/components/responses/AtmError' }
   /doctor:
     get:
       operationId: doctor
@@ -99,6 +91,7 @@ components:
     MessageId: { name: messageId, in: path, required: true, schema: { type: string } }
     Agent: { name: agent, in: query, schema: { type: string } }
     ChatId: { name: chat_id, in: query, schema: { type: string } }
+    Peer: { name: peer, in: path, required: true, schema: { type: string } }
   responses:
     AtmError:
       description: ATM error
@@ -157,6 +150,7 @@ components:
       properties:
         peer: { type: string }
         delivered: { type: integer, minimum: 0 }
+        disposition: { type: string, enum: [completed, disabled, rate_limited] }
     Message:
       type: object
       required: [message_id, from, to, body]

@@ -285,8 +285,7 @@ triage:r1 a triage:Resolution ; triage:resolves triage:f1 ;
 # ── load_graph filesystem tests ────────────────────────────────────────────────
 #
 # These need real files on disk (not the in-memory `sparql()` helper above),
-# since load_graph()'s repo-root discovery + glob + per-file parse is what's
-# under test.
+# since graph loading and phase-local finding selection are under test.
 
 class TestLoadGraphFindingsIsolation:
     def _make_repo(self, tmp_path: Path, phase_local: str, sprints: list) -> Path:
@@ -320,6 +319,27 @@ class TestLoadGraphFindingsIsolation:
         )
         assert len(rows) == 1
         assert str(rows[0][1]) == "1"
+
+    def test_resolver_uses_current_integration_worktree_and_namespace(self, tmp_path, monkeypatch):
+        """A sprint branch must never supply copied TTL or another phase's findings."""
+        query_runner = _load_query_runner()
+        branch_root = self._make_repo(tmp_path / "branch", "AICH", [(1, "S1")])
+        integration_root = self._make_repo(tmp_path / "integration", "AICH", [(1, "S1")])
+
+        monkeypatch.setattr(
+            query_runner,
+            "_integration_worktrees",
+            lambda _root, _phase: [(integration_root, "integrate/phase-AI")],
+        )
+
+        source = query_runner.resolve_phase_source(
+            "AICH", str(branch_root / ".sprints" / "AICH")
+        )
+
+        assert source.root == integration_root.resolve()
+        assert source.ttl_dir == integration_root / ".sprints" / "AICH"
+        assert source.findings_dir == integration_root / ".triage" / "phase-AI" / "findings"
+        assert source.branch == "integrate/phase-AI"
 
 
     def test_wellformed_findings_in_queried_phase_still_loaded(self, tmp_path):
@@ -483,11 +503,8 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
         assert not list(g.triples((URIRef(f"{TRIAGE}fcross"), None, None)))
         assert len(rows) == 0  # PhaseX fully complete; no re-dispatch triggered
 
-    def test_no_ignore_file_warns_on_all_malformed_dirs(self, tmp_path, capsys):
-        """Backward compatibility: with no ignore file present, every
-        malformed findings file (regardless of directory) still produces a
-        stderr warning and is otherwise skipped, exactly as before this
-        feature was added."""
+    def test_unrelated_malformed_findings_are_never_opened(self, tmp_path, capsys):
+        """Historical phases cannot affect a current phase query at all."""
         query_runner = _load_query_runner()
         repo = self._make_repo(tmp_path, "F", [(1, "S1")])
 
@@ -499,8 +516,7 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
 
         g = query_runner.load_graph(str(repo / ".sprints" / "F"))
         captured = capsys.readouterr()
-        assert "WARNING: skipping malformed findings file" in captured.err
-        assert "LEGACY-001.ttl" in captured.err
+        assert captured.err == ""
 
         rows = list(
             g.query(
@@ -511,38 +527,20 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
         assert len(rows) == 1
         assert str(rows[0][1]) == "1"
 
-    def test_ignore_file_skips_listed_dir_without_warning(self, tmp_path, capsys):
-        """A directory listed in `.triage/.graph-orchestration-ignore` must be
-        skipped entirely (no `.parse()` call, no warning), while a
-        DIFFERENT, unignored directory with its own malformed file still
-        produces the usual warning."""
+    def test_selected_phase_malformed_findings_still_warn(self, tmp_path, capsys):
+        """The chosen project phase remains visible to the loader and validator."""
         query_runner = _load_query_runner()
         repo = self._make_repo(tmp_path, "F", [(1, "S1")])
-
-        (repo / ".triage" / query_runner.IGNORE_FILE_NAME).write_text(
-            "# closed/dead legacy phases, pre-Turtle findings format\n"
-            "phase-U\n"
-            "\n"
-            "phase-V\n"
-        )
-
-        ignored = repo / ".triage" / "phase-U" / "findings"
-        ignored.mkdir(parents=True)
-        (ignored / "LEGACY-001.ttl").write_text(
-            "finding_id: LEGACY-001\ntitle: pre-Turtle legacy finding\n"
-        )
-
-        unignored = repo / ".triage" / "phase-W" / "findings"
-        unignored.mkdir(parents=True)
-        (unignored / "LEGACY-002.ttl").write_text(
+        selected = repo / ".triage" / "phase-F" / "findings"
+        selected.mkdir(parents=True)
+        (selected / "BROKEN.ttl").write_text(
             "finding_id: LEGACY-002\ntitle: unexpected malformed finding\n"
         )
 
         g = query_runner.load_graph(str(repo / ".sprints" / "F"))
         captured = capsys.readouterr()
 
-        assert "LEGACY-001.ttl" not in captured.err
-        assert "LEGACY-002.ttl" in captured.err
+        assert "BROKEN.ttl" in captured.err
         assert "WARNING: skipping malformed findings file" in captured.err
 
         rows = list(
@@ -581,7 +579,7 @@ class TestNextDevTaskValidation:
             check=False,
         )
 
-    def test_validate_only_blocks_malformed_findings_before_structure_query(self, tmp_path):
+    def test_validate_only_ignores_unrelated_malformed_findings(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
         malformed = repo / ".triage" / "phase-U" / "findings"
         malformed.mkdir(parents=True)
@@ -589,11 +587,28 @@ class TestNextDevTaskValidation:
 
         result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
 
-        assert result.returncode == 2, result.stderr
-        assert result.stdout == ""
-        assert "findings validation could not run" not in result.stderr
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["phase"] == "VALIDATE_ONLY"
+
+    def test_selected_malformed_findings_return_json_error_union(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1"), (2, "S2")]))
+        malformed = repo / ".triage" / "phase-F" / "findings"
+        malformed.mkdir(parents=True)
+        broken = malformed / "BROKEN-S1.ttl"
+        broken.write_text(
+            PREFIX
+            + "triage:broken a triage:Finding ; triage:foundIn triage:S1 ;\n"
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 2
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "findings_validation"
+        assert payload["dispatch_blocked"] is True
+        assert any("BROKEN-S1.ttl" in item for item in payload["diagnostics"])
         assert "findings validation blocked query resolution" in result.stderr
-        assert "malformed Turtle" in result.stderr
 
     def test_cursor_resolution_is_blocked_by_missing_provenance(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -608,7 +623,10 @@ class TestNextDevTaskValidation:
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
         assert result.returncode == 1, result.stderr
-        assert result.stdout == ""
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "validation:fail"
+        assert payload["error_code"] == "findings_validation"
+        assert payload["dispatch_blocked"] is True
         assert "findings validation blocked query resolution" in result.stderr
         assert "triage:foundIn" in result.stderr
         assert "triage:foundAt" in result.stderr
@@ -676,19 +694,21 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
 
         assert result.returncode == 1
         assert "ERROR: structure violation" in result.stderr
-        assert result.stdout == ""
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "validation:fail"
+        assert payload["error_code"] == "structure_validation"
 
     def test_malformed_structure_is_reported_without_traceback(self, tmp_path):
         repo = self._make_repo(tmp_path, "not valid Turtle [")
 
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
-        # Findings validation is intentionally the first gate, so malformed
-        # structure is reported by the validator before the RDF loader runs.
-        assert result.returncode == 2
-        assert result.stdout == ""
+        assert result.returncode == 1
         assert "Traceback" not in result.stderr
-        assert "findings validation blocked query resolution" in result.stderr
+        assert "ERROR: query runner failed to load graph" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "graph_load"
 
     def test_broken_sparql_is_reported_without_traceback(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -719,9 +739,11 @@ triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
         )
 
         assert result.returncode == 1
-        assert result.stdout == ""
         assert "Traceback" not in result.stderr
         assert "ERROR: query runner failed to run" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "sparql_query"
 
     def test_unknown_optional_argument_is_rejected(self, tmp_path):
         repo = self._make_repo(tmp_path, structure([(1, "S1")]))
@@ -797,9 +819,12 @@ triage:c1 a triage:Completion ; triage:ofSprint triage:S1 ;
         result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
 
         assert result.returncode == 1
-        assert result.stdout == ""
         assert "Traceback" not in result.stderr
         assert "ERROR:" in result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["kind"] == "error"
+        assert payload["error_code"] == "assignee_check"
+        assert payload["dispatch_blocked"] is True
 
 
 if __name__ == "__main__":

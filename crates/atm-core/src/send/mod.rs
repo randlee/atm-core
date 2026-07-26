@@ -321,8 +321,7 @@ impl PreparedWrite {
     /// address—to choose the one local-vs-peer action.
     #[must_use]
     pub fn is_peer_receipt(&self) -> bool {
-        self.outbound_request.authenticated_source_host.is_some()
-            || self.outbound_request.origin_message_id.is_some()
+        has_authenticated_peer_provenance(&self.outbound_request)
     }
 }
 
@@ -565,7 +564,8 @@ fn prepare_persisted_write<
     let post_write_needed = persistence.requires_post_write();
     let same_store_peer_receipt =
         persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
-    let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+    let messages =
+        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -592,6 +592,12 @@ fn prepare_persisted_write<
         },
         acknowledgement,
     })
+}
+
+fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+    request.authenticated_source_host.is_some()
+        && request.origin_message_id.is_some()
+        && request.origin_timestamp.is_some()
 }
 
 #[cfg(test)]
@@ -738,11 +744,12 @@ fn build_send_delivery_plan(
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
+    is_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
     crate::delivery_plan::LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
-        false,
+        is_ack,
     )
     .map(|message| vec![message])
     .map_err(|error| AtmError::mailbox_write(error.to_string()))
@@ -798,7 +805,7 @@ fn prepare_send_context<
         runtime,
         target,
         &recipient,
-        request.authenticated_source_host.is_some(),
+        has_authenticated_peer_provenance(request),
     )?;
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,

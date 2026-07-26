@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI26-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AI26-RBQA-F001" ;
+  triage:title "reconcile_peer constructs an independent RequestDeadline instead of consuming caller-admitted deadline" ;
+  triage:description "ruthless-boundary-qa found during AICH-S6-QA-INTEGRITY-2 (PR #641 @ 584c4c176b7dab82945fb2463f59d06857e58ba2) that crates/atm-daemon/src/runtime_health/peer_sync.rs:41, function reconcile_peer, constructs its own independent RequestDeadline::after(Duration::from_secs(5)) rather than consuming/propagating the caller-admitted deadline passed through the request path. Additionally, dispatch_non_write discards the inbound deadline entirely for PeerSync requests. This is pre-existing on this branch (the file was not touched by AI.26's own diff) -- not new drift introduced by the ancestry replay -- but it is a real, currently-unfixed defect on the branch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-RBQA-F001/S26-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI26-RBQA-F001/S26-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_sync.rs" ;
+  triage:line 41 ;
+  triage:snippet "let deadline = RequestDeadline::after(Duration::from_secs(5));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "584c4c1" ;
+  triage:occursIn <urn:atm:triage:worktree/S26/584c4c1> .
+
+<urn:atm:triage:worktree/S26/584c4c1>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S26" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "584c4c1" ;
+  triage:orderIndex 26 .

@@ -33,6 +33,10 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
+/// Literal-IP authority resolution is deliberately bounded. Operators should
+/// address a registered hostname directly when their authority set exceeds
+/// this control-plane safety cap.
+const MAX_LITERAL_IP_AUTHORITY_CANDIDATES: usize = 32;
 const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 
 /// The peer wire-security setting. Mutual TLS is the production default.
@@ -96,11 +100,22 @@ pub(crate) fn resolve_peer_authority(
         return Ok(peer.clone());
     }
     let ip: IpAddr = target.as_str().parse().map_err(|_| {
-        AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {target}"))
+        AtmError::validation_with_recovery(
+            format!("no trusted HTTPS peer is configured for {target}"),
+            "register the peer hostname first, then send to that hostname or one of its current forward-DNS addresses",
+        )
     })?;
-    let matches = peers
-        .iter()
-        .filter(|peer| peer.enabled)
+    let enabled_peers = peers.iter().filter(|peer| peer.enabled).collect::<Vec<_>>();
+    if enabled_peers.len() > MAX_LITERAL_IP_AUTHORITY_CANDIDATES {
+        return Err(AtmError::validation_with_recovery(
+            format!(
+                "literal peer IP {target} cannot be resolved across more than {MAX_LITERAL_IP_AUTHORITY_CANDIDATES} enabled trusted peers"
+            ),
+            "send to the registered hostname directly or reduce the enabled trusted-peer set",
+        ));
+    }
+    let matches = enabled_peers
+        .into_iter()
         .filter(|peer| {
             resolve_peer_addresses(peer, HTTPS_TIMEOUT)
                 .is_ok_and(|addresses| addresses.contains(&ip))
@@ -109,12 +124,14 @@ pub(crate) fn resolve_peer_authority(
         .collect::<Vec<_>>();
     match matches.as_slice() {
         [peer] => Ok(peer.clone()),
-        [] => Err(AtmError::daemon_unavailable(format!(
-            "literal peer IP {target} matches no trusted hostname"
-        ))),
-        _ => Err(AtmError::validation(format!(
-            "literal peer IP {target} matches multiple trusted hostnames"
-        ))),
+        [] => Err(AtmError::validation_with_recovery(
+            format!("literal peer IP {target} matches no trusted hostname"),
+            "register the peer hostname, verify its forward DNS includes this IP, or send to the registered hostname",
+        )),
+        _ => Err(AtmError::validation_with_recovery(
+            format!("literal peer IP {target} matches multiple trusted hostnames"),
+            "send to the intended registered hostname or correct the overlapping forward DNS records",
+        )),
     }
 }
 
@@ -144,9 +161,18 @@ impl TlsIdentity {
         })?;
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|_source| AtmError::validation("configured TLS certificate PEM is invalid"))?;
-        let private_key = PrivateKeyDer::from_pem_slice(&pem)
-            .map_err(|_source| AtmError::validation("configured TLS private key PEM is invalid"))?;
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    "configured TLS certificate PEM is invalid",
+                    source,
+                )
+            })?;
+        let private_key = PrivateKeyDer::from_pem_slice(&pem).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "configured TLS private key PEM is invalid",
+                source,
+            )
+        })?;
         let first = certificates
             .first()
             .ok_or_else(|| AtmError::validation("configured TLS PEM bundle has no certificate"))?;
@@ -263,22 +289,27 @@ impl HttpsTransport {
         let stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?).map_err(
             |source| {
                 AtmError::remote_delivery_unconfirmed(format!(
-                    "failed to connect to HTTPS peer {host}: {source}"
+                    "failed to connect to HTTPS peer {host}"
                 ))
+                .with_cause(source)
             },
         )?;
         match &self.mode {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
                 let config = client_config(identity, peer)?;
-                let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
-                    AtmError::validation(
+                let server_name = ServerName::try_from(host.clone()).map_err(|source| {
+                    AtmError::daemon_unavailable_with_cause(
                         "configured HTTPS peer host is not a valid TLS server name",
+                        source,
                     )
                 })?;
                 let connection =
-                    ClientConnection::new(Arc::new(config), server_name).map_err(|_source| {
-                        AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS client")
+                    ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
+                        AtmError::daemon_unavailable_with_cause(
+                            "failed to initialize HTTPS peer TLS client",
+                            source,
+                        )
                     })?;
                 let mut tls = StreamOwned::new(connection, stream);
                 complete_handshake_with_deadline(&mut tls, deadline)?;
@@ -487,8 +518,11 @@ fn spawn_request_worker(
             let router = Arc::clone(router);
             move || log_peer_request_result(handle_peer_connection(stream, security, router))
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to start peer HTTP request worker")
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to start peer HTTP request worker",
+                source,
+            )
         });
     match request {
         Ok(request) => track_request_worker(requests, request),
@@ -736,7 +770,12 @@ fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<Sock
         .into_iter()
         .next()
         .map(|ip| SocketAddr::new(ip, port))
-        .ok_or_else(|| AtmError::daemon_unavailable("HTTPS peer resolved to no addresses"))
+        .ok_or_else(|| {
+            AtmError::validation_with_recovery(
+                "HTTPS peer resolved to no addresses",
+                "verify the registered hostname has a current A or AAAA record, then retry",
+            )
+        })
 }
 
 fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientConfig, AtmError> {
@@ -983,6 +1022,16 @@ mod tests {
                 .is_err()
         );
     }
+
+    #[test]
+    fn literal_ip_authority_resolution_has_a_bounded_candidate_set() {
+        let target = "127.0.0.1".parse().expect("target");
+        let peers = (0..=super::MAX_LITERAL_IP_AUTHORITY_CANDIDATES)
+            .map(|_| trusted("localhost"))
+            .collect::<Vec<_>>();
+
+        assert!(super::resolve_peer_authority(&target, &peers).is_err());
+    }
     use rustls::pki_types::ServerName;
     use rustls::pki_types::{CertificateDer, pem::PemObject};
     use rustls::{ClientConnection, StreamOwned};
@@ -1031,6 +1080,16 @@ mod tests {
         let remaining = super::remaining_budget(deadline).expect("fresh deadline has budget");
         assert!(remaining <= Duration::from_secs(5));
         assert!(remaining > Duration::ZERO);
+    }
+
+    #[test]
+    fn expired_peer_budget_reports_remote_delivery_unconfirmed() {
+        let error = super::remaining_budget(RequestDeadline::after(Duration::ZERO))
+            .expect_err("an expired shared request budget must fail before peer delivery");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
+        );
     }
 
     #[test]
