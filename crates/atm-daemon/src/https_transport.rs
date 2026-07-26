@@ -468,8 +468,11 @@ fn spawn_request_worker(
             let router = Arc::clone(router);
             move || log_peer_request_result(handle_peer_connection(stream, security, router))
         })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to start peer HTTP request worker")
+        .map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "failed to start peer HTTP request worker",
+                source,
+            )
         });
     match request {
         Ok(request) => track_request_worker(requests, request),
