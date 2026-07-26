@@ -222,6 +222,13 @@ def preview_lines_for_task(task_name: str, lines: list[str]) -> list[str]:
     return filtered or lines
 
 
+def failure_preview(task_name: str, lines: list[str]) -> list[str]:
+    """Return actionable CI output without hiding a Python test traceback."""
+    if task_name == "pytests":
+        return lines[-40:]
+    return prioritize_error_lines(lines)[:4]
+
+
 def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> list[str]:
     transcript = [
         f"lint: {task.name}",
@@ -296,8 +303,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
             print(f"  full log: {log_display}")
         return
 
-    preview = lines[:4]
-    preview = prioritize_error_lines(lines)[:4]
+    preview = failure_preview(result.task.name, lines)
     for line in preview:
         print(f"  {line}")
     print(f"  full log: {log_display}")

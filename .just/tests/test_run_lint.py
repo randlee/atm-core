@@ -13,6 +13,7 @@ if str(JUST_DIR) not in sys.path:
 from run_lint import build_tasks
 from run_lint import build_transcript
 from run_lint import extract_count
+from run_lint import failure_preview
 from run_lint import LintResult
 from run_lint import LintTask
 from run_lint import partition_python_tasks
@@ -76,6 +77,30 @@ resolver = "2"
                 "error[E0432]: unresolved import `uuid`",
                 "could not compile `agent-team-mail`",
             ],
+        )
+
+    def test_failure_preview_keeps_python_test_traceback_context(self) -> None:
+        lines = [f"setup {index}" for index in range(45)]
+        lines.extend(
+            [
+                "FAIL: test_expected_behavior",
+                "Traceback (most recent call last):",
+                "AssertionError: expected value",
+                "FAILED (failures=1)",
+            ]
+        )
+
+        preview = failure_preview("pytests", lines)
+
+        self.assertEqual(preview, lines[-40:])
+        self.assertIn("FAIL: test_expected_behavior", preview)
+
+    def test_failure_preview_keeps_other_lints_concise(self) -> None:
+        lines = ["progress", "error: one", "error: two", "error: three", "error: four", "error: five"]
+
+        self.assertEqual(
+            failure_preview("boundaries", lines),
+            ["error: one", "error: two", "error: three", "error: four"],
         )
 
     def test_strip_ansi_and_prioritize_error_lines_handles_colored_cargo_output(self) -> None:
