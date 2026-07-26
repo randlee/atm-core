@@ -1,0 +1,27 @@
+# open-findings-for-sprint.sparql — All unresolved findings for one sprint.
+#
+# Parameters: $SPRINT. Results are ordered for dispatch review: Blocking,
+# Important, Minor, then unknown severity; ties use foundAt.
+
+PREFIX triage: <urn:atm:triage:>
+
+SELECT ?finding ?findingId ?severity ?foundAt ?description WHERE {
+  ?finding a triage:Finding ;
+           triage:foundIn $SPRINT ;
+           triage:severity ?severity ;
+           triage:foundAt ?foundAt ;
+           triage:description ?description .
+  OPTIONAL { ?finding triage:findingId ?findingId . }
+  FILTER NOT EXISTS {
+    ?resolution a triage:Resolution ;
+                triage:resolves ?finding .
+  }
+  BIND(
+    IF(?severity = "blocking", 0,
+      IF(?severity = "important", 1,
+        IF(?severity = "minor", 2, 3)
+      )
+    ) AS ?severityOrder
+  )
+}
+ORDER BY ?severityOrder ?foundAt ?finding

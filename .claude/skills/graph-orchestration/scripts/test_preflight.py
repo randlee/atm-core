@@ -151,6 +151,9 @@ def test_cli_renders_graph_dev_template(tmp_path):
         "branch": "feature/test",
         "pr_target": "integrate/phase-AI",
         "assignee": "arch-ctm",
+        "phase_local": "AICH",
+        "ttl_dir": ".sprints/AICH",
+        "finding_ids": "",
     }
     vars_path = tmp_path / "vars.json"
     output_path = tmp_path / "task.xml"

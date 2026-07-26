@@ -143,6 +143,27 @@ triage:c2 a triage:Completion ; triage:ofSprint triage:S2 ;
         assert len(rows) == 0
 
 
+class TestOpenFindingsForSprint:
+    def test_orders_open_findings_blocking_then_important_then_minor(self):
+        findings = PREFIX + """
+triage:minor a triage:Finding ; triage:findingId "M-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "minor" ; triage:description "minor" .
+triage:important a triage:Finding ; triage:findingId "I-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T10:00:00Z"^^xsd:dateTime ; triage:severity "important" ; triage:description "important" .
+triage:blocking a triage:Finding ; triage:findingId "B-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ; triage:description "blocking" .
+triage:resolved a triage:Finding ; triage:findingId "R-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T08:00:00Z"^^xsd:dateTime ; triage:severity "blocking" ; triage:description "resolved" .
+triage:r1 a triage:Resolution ; triage:resolves triage:resolved .
+"""
+        rows = sparql(
+            "open-findings-for-sprint.sparql",
+            {"SPRINT": URIRef(f"{TRIAGE}S1")},
+            findings,
+        )
+        assert [str(row[1]) for row in rows] == ["B-1", "I-1", "M-1"]
+
+
 # ── validate-structure tests ──────────────────────────────────────────────────
 
 class TestValidateStructure:
@@ -598,7 +619,18 @@ class TestNextDevTaskValidation:
         result = self._run(repo, "F", str(repo / ".sprints" / "F"))
 
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["phase"] == "TRAVERSAL"
+        payload = json.loads(result.stdout)
+        assert payload["phase"] == "TRAVERSAL"
+        assert payload["vars"]["sprint"] == "S1"
+        assert payload["findings"] == [
+            {
+                "finding_iri": f"{TRIAGE}f1",
+                "finding_id": "F-1",
+                "severity": "important",
+                "found_at": "2026-07-01T12:00:00+00:00",
+                "description": "clean",
+            }
+        ]
 
     def test_validate_only_reports_structure_errors(self, tmp_path):
         invalid = PREFIX + """

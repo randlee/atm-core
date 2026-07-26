@@ -372,6 +372,21 @@ def main():
         order = int(cursor_rows[0][1])
         criteria = str(cursor_rows[0][2])
         sprint_local = sprint_iri.split(":")[-1] if ":" in sprint_iri else sprint_iri
+        finding_rows = _cli_run_sparql(
+            g,
+            script_dir / "open-findings-for-sprint.sparql",
+            {"SPRINT": URIRef(sprint_iri)},
+        )
+        findings = [
+            {
+                "finding_iri": str(row[0]),
+                "finding_id": str(row[1]) if row[1] is not None else None,
+                "severity": str(row[2]),
+                "found_at": str(row[3]),
+                "description": str(row[4]),
+            }
+            for row in finding_rows
+        ]
 
         print(json.dumps({
             "phase": "TRAVERSAL",
@@ -381,6 +396,7 @@ def main():
                 "sprint_order": order,
                 "criteria_doc": criteria,
             },
+            "findings": findings,
         }, indent=2))
         return
 

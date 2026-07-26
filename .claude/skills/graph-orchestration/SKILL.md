@@ -200,6 +200,9 @@ Populate and send `dev-task.xml.j2`:
 | `sprint` | `result.vars.sprint` |
 | `sprint_order` | `result.vars.sprint_order` |
 | `criteria_doc` | `result.vars.criteria_doc` |
+| `phase_local` | Graph phase argument passed to `next-dev-task` |
+| `ttl_dir` | Phase TTL directory passed to `next-dev-task` |
+| `finding_ids` | Space-separated assigned Blocking finding ids; empty only for greenfield |
 
 ## Fix Dispatch (blocking findings present)
 
@@ -306,9 +309,23 @@ triaging-findings skill. Do not append raw finding data to events.ttl.
     "sprint_iri": "urn:atm:triage:S7",
     "sprint_order": 1,
     "criteria_doc": "ac/S7.md"
-  }
+  },
+  "findings": [
+    {
+      "finding_iri": "urn:atm:triage:f-123",
+      "finding_id": "AI22-BLOCK-001",
+      "severity": "blocking",
+      "found_at": "2026-07-26T00:00:00Z",
+      "description": "..."
+    }
+  ]
 }
 ```
+
+For `TRAVERSAL`, `findings` contains every unresolved finding on the returned
+sprint, ordered Blocking, Important, Minor. An empty array is the only
+greenfield result. The developer must use this JSON to verify the rendered
+node and any assigned Blocking finding ids before editing.
 
 The orchestrator saves `vars` to a temp file and adds non-graph variables.
 Template selection (`dev-task.xml.j2` vs `dev-fix.xml.j2`) is made after
@@ -445,7 +462,8 @@ Output JSON (TRAVERSAL):
     "sprint_iri": "urn:atm:triage:PhaseF-S1",
     "sprint_order": 1,
     "criteria_doc": "ac/FS1.md"
-  }
+  },
+  "findings": []
 }
 ```
 
