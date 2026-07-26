@@ -157,3 +157,7 @@ triage:a24 a triage:Assignment ;
     triage:ofSprint triage:AICH-S4 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-07-26T09:29:00Z"^^xsd:dateTime .
+triage:a25 a triage:Assignment ;
+    triage:ofSprint triage:AICH-S5 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-26T11:26:00Z"^^xsd:dateTime .
