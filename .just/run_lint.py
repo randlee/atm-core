@@ -309,6 +309,14 @@ def run_parallel(tasks: list[LintTask], repo_root: Path) -> list[LintResult]:
         return [future.result() for future in futures]
 
 
+def partition_python_tasks(tasks: list[LintTask]) -> tuple[list[LintTask], list[LintTask]]:
+    """Keep repository-tool tests out of the concurrent lint batch."""
+    return (
+        [task for task in tasks if task.name != "pytests"],
+        [task for task in tasks if task.name == "pytests"],
+    )
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run repo lint targets.")
     parser.add_argument("target", nargs="?", default="all")
@@ -335,7 +343,16 @@ def main(argv: list[str]) -> int:
         results.append(result)
 
     if python_tasks:
-        for result in run_parallel(python_tasks, repo_root):
+        # The Python suite invokes repository tools and may create their normal
+        # output paths.  Running it beside the lint tasks that inspect those
+        # paths makes the overall lint gate race-dependent on CI.
+        parallel_python_tasks, serial_python_tasks = partition_python_tasks(python_tasks)
+        if parallel_python_tasks:
+            for result in run_parallel(parallel_python_tasks, repo_root):
+                print_result(result, repo_root)
+                results.append(result)
+        for task in serial_python_tasks:
+            result = run_task(task, repo_root)
             print_result(result, repo_root)
             results.append(result)
 

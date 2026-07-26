@@ -15,6 +15,7 @@ from run_lint import build_transcript
 from run_lint import extract_count
 from run_lint import LintResult
 from run_lint import LintTask
+from run_lint import partition_python_tasks
 from run_lint import preview_lines_for_task
 from run_lint import prioritize_error_lines
 from run_lint import resolve_task_names
@@ -153,6 +154,16 @@ resolver = "2"
                 "pytests",
             ],
         )
+
+    def test_partition_python_tasks_runs_pytests_after_independent_lints(self) -> None:
+        version = LintTask("version", ["python3", "version.py"])
+        pytests = LintTask("pytests", ["python3", "run_pytests.py"])
+        boundaries = LintTask("boundaries", ["python3", "boundaries.py"])
+
+        parallel, serial = partition_python_tasks([version, pytests, boundaries])
+
+        self.assertEqual(parallel, [version, boundaries])
+        self.assertEqual(serial, [pytests])
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
