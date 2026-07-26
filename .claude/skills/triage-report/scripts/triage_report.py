@@ -40,6 +40,18 @@ ICONS = {
     "ready": "🚀",
 }
 
+# ``validate-findings.py`` deliberately treats malformed Turtle as an
+# operational error.  Reports are read-only, however, and must still render
+# the valid sprint rows so an operator can see what is affected.  Keep this
+# small recovery parser deliberately conservative: it only attributes a
+# malformed file when exactly one declared sprint can be recovered from an
+# explicit ``triage:foundIn`` token.  Anything else is unattributed and blocks
+# dispatch/merge globally.
+_FOUND_IN_TOKEN = re.compile(
+    r"(?:triage:foundIn|<urn:atm:triage:foundIn>)\s+"
+    r"(?:triage:([A-Za-z0-9_.-]+)|<([^>]+)>)"
+)
+
 
 class ReportError(RuntimeError):
     """An operational error which prevents a trustworthy report."""
@@ -295,39 +307,6 @@ def _source_path(path: Path | None, root: Path) -> str | None:
         return f"<external>/{path.name}"
 
 
-def _findings_dir(root: Path, plan_phase: str | None) -> Path:
-    """Resolve the phase findings directory without guessing across phases."""
-    if not plan_phase:
-        raise ReportError(
-            "cannot locate findings: sprint criteria do not declare a plan phase"
-        )
-    suffix = plan_phase.removeprefix("phase-")
-    candidates = [
-        root / ".triage" / plan_phase,
-        root / ".triage" / f"phase-{suffix.upper()}",
-        root / ".triage" / f"phase-{suffix}",
-    ]
-    existing: list[Path] = []
-    # macOS's default filesystem is case-insensitive even though Path keeps
-    # the spelling supplied by the caller; compare case-folded real paths.
-    existing_real: set[str] = set()
-    for candidate in candidates:
-        findings = candidate / "findings"
-        if findings.is_dir():
-            resolved = findings.resolve()
-            identity = str(resolved).casefold()
-            if identity not in existing_real:
-                existing_real.add(identity)
-                existing.append(resolved)
-    if len(existing) != 1:
-        listed = ", ".join(str(item) for item in existing) or "none"
-        raise ReportError(
-            f"cannot determine unique findings directory for {plan_phase}: "
-            f"found {len(existing)} ({listed})"
-        )
-    return existing[0]
-
-
 def _run_findings_validator(
     root: Path,
     findings_dir: Path,
@@ -383,22 +362,123 @@ def _run_findings_validator(
         "error",
     }:
         raise ReportError("findings validator returned an invalid result object")
-    if payload.get("kind") != "validation:pass" or result.returncode != 0:
-        diagnostics = payload.get("diagnostics") or []
-        detail = "; ".join(str(item) for item in diagnostics[:8])
-        message = payload.get("message") or payload.get("kind") or "unknown result"
-        if detail:
-            message = f"{message}: {detail}"
-        raise ReportError(f"findings validation blocked report: {message}")
-    return payload
+    # A validation failure is data that the report must display, not a reason
+    # to suppress every unaffected sprint row.  Operational validator errors
+    # (notably malformed finding TTL) are retained as ``kind:error`` and are
+    # converted into structured report diagnostics below.  The report remains
+    # merge/dispatch-blocked until those diagnostics are repaired.
+    if payload.get("kind") == "validation:pass" and result.returncode == 0:
+        return payload
+    if payload.get("kind") in {"validation:fail", "error"}:
+        return payload
+    diagnostics = payload.get("diagnostics") or []
+    detail = "; ".join(str(item) for item in diagnostics[:8])
+    message = payload.get("message") or payload.get("kind") or "unknown result"
+    if detail:
+        message = f"{message}: {detail}"
+    raise ReportError(f"findings validator returned inconsistent result: {message}")
+
+
+def _malformed_finding_diagnostics(
+    findings_dir: Path,
+    structure: Graph,
+    sprints: list[dict[str, Any]],
+    root: Path,
+) -> list[dict[str, Any]]:
+    """Return actionable diagnostics for malformed finding files.
+
+    ``load_graph`` skips an individual malformed file, which is exactly what
+    the read-only report needs.  We retain the parse error and recover
+    ``foundIn`` when the broken text still contains one unambiguous declared
+    sprint.  A file without a recoverable target is explicitly unattributed;
+    it still blocks dispatch/merge but cannot be blamed on a row.
+    """
+    if not findings_dir.is_dir():
+        return []
+    known = {str(item["iri"]): item["id"] for item in sprints}
+    # Prefix-local values such as ``triage:AICH-S1`` resolve against the
+    # canonical product namespace used by the graph.
+    known_local = {iri.rsplit(":", 1)[-1]: (iri, sid) for iri, sid in known.items()}
+    diagnostics: list[dict[str, Any]] = []
+    for path in sorted(findings_dir.glob("*.ttl")):
+        try:
+            parsed = Graph()
+            parsed.parse(str(path), format="turtle")
+            continue
+        except Exception as exc:  # noqa: BLE001 - report each bad file
+            text = path.read_text(encoding="utf-8", errors="replace")
+            candidates: set[str] = set()
+            for local, full in _FOUND_IN_TOKEN.findall(text):
+                iri = full or f"urn:atm:triage:{local}"
+                if iri in known:
+                    candidates.add(iri)
+                elif local in known_local:
+                    candidates.add(known_local[local][0])
+            sprint_iri = next(iter(candidates)) if len(candidates) == 1 else None
+            sprint_id = known.get(sprint_iri) if sprint_iri else None
+            try:
+                display_path = str(path.relative_to(root))
+            except ValueError:
+                display_path = str(path)
+            diagnostics.append(
+                {
+                    "code": "malformed_finding_ttl" if sprint_id else "unattributed_malformed_finding_ttl",
+                    "level": "error",
+                    "path": display_path,
+                    "absolute_path": str(path),
+                    "sprint": sprint_id,
+                    "sprint_iri": sprint_iri,
+                    "message": f"malformed Turtle: {exc}",
+                    "action": "repair Turtle syntax, then rerun validation before dispatch or merge",
+                }
+            )
+    return diagnostics
+
+
+def _validation_diagnostics(
+    validation: dict[str, Any],
+    malformed: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normalize validator output into stable report diagnostics."""
+    diagnostics = list(malformed)
+    # Malformed parser diagnostics are represented with structured paths above;
+    # avoid duplicating their raw text from the validator payload.
+    malformed_paths = {item["path"] for item in malformed}
+    for detail in validation.get("diagnostics") or []:
+        text = str(detail)
+        if "malformed Turtle" in text and any(path in text for path in malformed_paths):
+            continue
+        diagnostics.append(
+            {
+                "code": "finding_validation",
+                "level": "error" if validation.get("kind") != "validation:pass" else "warning",
+                "path": None,
+                "absolute_path": None,
+                "sprint": None,
+                "sprint_iri": None,
+                "message": text,
+                "action": "repair the finding record and rerun validation before dispatch or merge",
+            }
+        )
+    return diagnostics
+
+
+def _diagnostic_text(diagnostic: dict[str, Any]) -> str:
+    """Render one diagnostic with the exact path and repair action."""
+    target = diagnostic.get("sprint") or "unattributed"
+    path = diagnostic.get("path") or diagnostic.get("absolute_path") or "unknown path"
+    return (
+        f"[{target}] {path}: {diagnostic.get('message', 'data error')} "
+        f"Action: {diagnostic.get('action', 'repair and revalidate')}"
+    )
 
 
 def _graph_runner():
     """Load graph-orchestration's public graph/query helpers once.
 
-    The report must use the same finding membership and resolution semantics as
-    dispatch.  Loading that module is preferable to a parallel Turtle loader or
-    a report-specific copy of ``open-findings-for-sprint.sparql``.
+    The report must use the same current-integration resolver, finding scope,
+    and resolution semantics as dispatch. Loading that module is preferable to
+    a parallel Turtle loader or report-specific query logic.
     """
     runner_path = (
         Path(__file__).resolve().parents[2]
@@ -414,7 +494,11 @@ def _graph_runner():
     return module
 
 
-def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+def _live_counts(
+    phase_path: Path,
+    findings_dir: Path,
+    sprints: list[dict[str, Any]],
+) -> dict[str, dict[str, int]]:
     """Return unresolved B/I/M counts using graph-orchestration's query.
 
     This is the report's gate source.  QA evidence records review provenance;
@@ -428,7 +512,7 @@ def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, d
         / "open-findings-for-sprint.sparql"
     )
     try:
-        graph = runner.load_graph(str(phase_path))
+        graph = runner.load_graph(str(phase_path), findings_dir=findings_dir)
     except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
         raise ReportError(f"could not load live finding graph: {exc}") from exc
 
@@ -593,7 +677,14 @@ def build_report(
     if _RDFLIB_ERROR:
         raise ReportError(f"rdflib is required; install it with pip install rdflib ({_RDFLIB_ERROR})")
     root = Path(integration_root).resolve()
-    phase_name, phase_path = _phase_dir(root, phase)
+    phase_name, requested_phase_path = _phase_dir(root, phase)
+    runner = _graph_runner()
+    try:
+        source = runner.resolve_phase_source(phase_name, str(requested_phase_path))
+    except Exception as exc:  # noqa: BLE001 - normalize shared source errors
+        raise ReportError(f"could not resolve current integration phase source: {exc}") from exc
+    root = source.root
+    phase_path = source.ttl_dir
     structure_path = phase_path / "structure.ttl"
     events_path = phase_path / "events.ttl"
     structure = _parse_ttl(structure_path)
@@ -614,12 +705,18 @@ def build_report(
     if not qa_master.is_absolute():
         qa_master = root / qa_master
     qa_data = _json(qa_master)
-    # Validate raw findings before calculating a single row.  This prevents
-    # query_runner's phase scoping from hiding malformed or orphan records.
-    findings_dir = _findings_dir(root, plan_phase)
+    # Validate raw findings before calculating rows.  Unlike dispatch, the
+    # read-only report keeps going after a malformed finding file so valid
+    # sprint rows remain visible.  ``diagnostics`` still blocks readiness and
+    # merge/dispatch globally.
+    findings_dir = source.findings_dir
     validation = _run_findings_validator(root, findings_dir, structure_path, events_path)
+    malformed_diagnostics = _malformed_finding_diagnostics(
+        findings_dir, structure, sprints, root
+    )
+    diagnostics = _validation_diagnostics(validation, malformed_diagnostics)
     qa = _qa_runs(qa_data)
-    live_counts = _live_counts(phase_path, sprints)
+    live_counts = _live_counts(phase_path, findings_dir, sprints)
     github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
@@ -629,10 +726,15 @@ def build_report(
         data_gaps.append(f"QA evidence master not found: {qa_master}")
     if github_repo is None:
         data_gaps.append("GitHub origin is unavailable; PR/CI/merge cells are unknown")
+    data_gaps.extend(_diagnostic_text(item) for item in diagnostics)
 
     rows: list[dict[str, Any]] = []
     for sprint in sprints:
         sid = sprint["id"]
+        row_diagnostics = [
+            item for item in diagnostics if item.get("sprint") == sid
+        ]
+        row_errors = [item for item in row_diagnostics if item.get("level") == "error"]
         run = qa.get(sid)
         item = github.get(sid, {})
         counts = live_counts[sid]
@@ -650,6 +752,12 @@ def build_report(
         known_counts = all(value is not None for value in counts.values())
         quality_gate = (all(value == 0 for value in counts.values()) if known_counts else None)
         ready = None if counts["blockers"] is None else counts["blockers"] == 0
+        if row_errors:
+            # Affected rows are visibly blocked even when the malformed file
+            # was skipped by the graph loader and therefore did not inflate a
+            # B/I/M count.
+            quality_gate = False
+            ready = False
         rows.append(
             {
                 **sprint,
@@ -692,6 +800,8 @@ def build_report(
                 "delivery_attempts": item.get("delivery_attempts", []),
                 "quality_gate": quality_gate,
                 "ready_to_merge": ready,
+                "data_status": "error" if row_errors else ("warning" if row_diagnostics else "ok"),
+                "diagnostics": row_diagnostics,
             }
         )
         if run is None:
@@ -728,13 +838,14 @@ def build_report(
     for row in rows:
         q = row["qa"]
         phase_sprint = row["phase_sprint"] or "—"
+        marker = " ⚠️" if row.get("diagnostics") else ""
         lines.append(
-            f"| {row['id']} ({phase_sprint}) | {row['dev_icon']} | {row['qa_icon']} | "
+            f"| {row['id']} ({phase_sprint}){marker} | {row['dev_icon']} | {row['qa_icon']} | "
             f"{row['ci_icon']} | {_pr_cell(row)} | {q['blockers'] if q['blockers'] is not None else '?'} | "
             f"{q['important'] if q['important'] is not None else '?'} | {q['minor'] if q['minor'] is not None else '?'} | "
             f"{row['ready_icon']} | {row['ok_icon']} |"
         )
-        detailed.append(
+        detail = (
             f"Sprint: {row['id']} ({phase_sprint})\n"
             f"DEV: {row['dev_icon']}  QA: {row['qa_icon']} {q['verdict'] or 'UNKNOWN'}  "
             f"CI: {row['ci_icon']}  PR: {_pr_cell(row)}\n"
@@ -746,12 +857,22 @@ def build_report(
             f"Branch: {row['branch'] or 'unknown'}  Commit: {row['head_sha'] or 'unknown'}\n"
             f"PR URL: {row['pr_url'] or 'unknown'}"
         )
+        if row.get("diagnostics"):
+            detail += "\nData diagnostics:\n" + "\n".join(
+                f"- {_diagnostic_text(item)}" for item in row["diagnostics"]
+            )
+        detailed.append(detail)
     integration_row = f"| **integrate/{plan_phase or ('phase-' + phase_name)}** | | — | — | — | — | — | — | — | — |"
     table = (
         "| Sprint | DEV | QA | CI | PR | B | I | M | Ready | OK |\n"
         "|--------|-----|----|----|----|---|---|---|-------|----|\n"
         + "\n".join(lines) + "\n" + integration_row
     )
+    if diagnostics:
+        table += "\n\nDiagnostics (dispatch/merge blocked):\n" + "\n".join(
+            f"- {_diagnostic_text(item)}" for item in diagnostics
+        )
+    merge_blocked = any(item.get("level") == "error" for item in diagnostics)
     return {
         "kind": "triage-report/v1",
         "mode": "table",
@@ -766,6 +887,9 @@ def build_report(
         "table": table,
         "data_gaps": data_gaps,
         "validation": validation,
+        "diagnostics": diagnostics,
+        "dispatch_blocked": merge_blocked,
+        "merge_blocked": merge_blocked,
         "sources": {
             "integration_root": ".",
             "structure": str(structure_path.relative_to(root)),
@@ -789,7 +913,20 @@ def main(argv: list[str] | None = None) -> int:
         root = args.integration_root or discover_integration_root(Path.cwd())
         report = build_report(root, args.phase, args.qa_master)
     except ReportError as exc:
-        print(json.dumps({"kind": "error", "error": str(exc)}, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "schema": "triage-report/v1",
+                    "kind": "error",
+                    "error_code": "report",
+                    "message": str(exc),
+                    "diagnostics": [],
+                    "dispatch_blocked": True,
+                    "merge_blocked": True,
+                },
+                sort_keys=True,
+            )
+        )
         return 2
     output_format = "json" if args.json else args.format
     report["mode"] = "detailed" if args.format == "detailed" else args.mode

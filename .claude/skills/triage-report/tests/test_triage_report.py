@@ -11,6 +11,7 @@ triage_report = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(triage_report)
 GITHUB_STATE = triage_report._github_state
+REAL_RUN_FINDINGS_VALIDATOR = triage_report._run_findings_validator
 
 PREFIX = "@prefix triage: <urn:atm:triage:> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
 
@@ -138,6 +139,71 @@ def test_live_ttl_counts_do_not_require_qa_snapshot(tmp_path):
     assert "QA evidence master not found" in report["data_gaps"][0]
 
 
+def test_report_ignores_unrelated_project_phase_findings(tmp_path):
+    """A historical malformed phase cannot block the current phase report."""
+    root, qa = _inputs(tmp_path)
+    unrelated = root / ".triage" / "phase-U" / "findings"
+    unrelated.mkdir(parents=True)
+    (unrelated / "legacy.ttl").write_text("finding_id: legacy\n")
+
+    report = triage_report.build_report(root, "AICH", qa)
+
+    assert report["rows"][0]["qa"]["blockers"] == 1
+
+
+def test_malformed_selected_finding_only_marks_attributed_row(tmp_path):
+    """A broken selected TTL must not hide valid sprint rows."""
+    root, qa = _inputs(tmp_path)
+    broken = root / ".triage" / "phase-AI" / "findings" / "BROKEN-S1.ttl"
+    broken.write_text(
+        PREFIX
+        + 'triage:broken a triage:Finding ; triage:foundIn triage:AICH-S1 ;\n'
+    )
+
+    validation = REAL_RUN_FINDINGS_VALIDATOR(
+        root,
+        root / ".triage" / "phase-AI" / "findings",
+        root / ".sprints" / "AICH" / "structure.ttl",
+        root / ".sprints" / "AICH" / "events.ttl",
+    )
+    assert validation["kind"] == "error"
+
+    report = triage_report.build_report(root, "AICH", qa)
+
+    assert [row["id"] for row in report["rows"]] == ["AICH-S1", "AICH-S2"]
+    first, second = report["rows"]
+    assert first["data_status"] == "error"
+    assert first["ready_to_merge"] is False
+    assert first["ok_to_merge"] is False
+    assert first["diagnostics"][0]["sprint"] == "AICH-S1"
+    assert first["diagnostics"][0]["path"].endswith("BROKEN-S1.ttl")
+    assert "repair Turtle syntax" in first["diagnostics"][0]["action"]
+    assert second["data_status"] == "ok"
+    assert second["ready_to_merge"] is True
+    assert report["merge_blocked"] is True
+    assert report["dispatch_blocked"] is True
+    assert "BROKEN-S1.ttl" in report["table"]
+    assert "Action: repair Turtle syntax" in report["table"]
+
+
+def test_malformed_selected_finding_without_found_in_is_unattributed(tmp_path):
+    """A broken TTL without a recoverable sprint is globally visible."""
+    root, qa = _inputs(tmp_path)
+    broken = root / ".triage" / "phase-AI" / "findings" / "BROKEN-UNKNOWN.ttl"
+    broken.write_text(PREFIX + "triage:broken a triage:Finding ;\n")
+
+    report = triage_report.build_report(root, "AICH", qa)
+
+    assert any(
+        item["code"] == "unattributed_malformed_finding_ttl"
+        and item["sprint"] is None
+        for item in report["diagnostics"]
+    )
+    assert "unattributed" in report["table"]
+    assert "BROKEN-UNKNOWN.ttl" in report["table"]
+    assert report["merge_blocked"] is True
+
+
 def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
     root, qa = _inputs(tmp_path)
     findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
@@ -170,6 +236,7 @@ def test_malformed_structure_is_report_error(tmp_path):
     root = tmp_path / "repo"
     phase = root / ".sprints" / "AICH"
     phase.mkdir(parents=True)
+    (root / ".triage").mkdir()
     (phase / "structure.ttl").write_text("not turtle [")
     try:
         triage_report.build_report(root, "AICH")
