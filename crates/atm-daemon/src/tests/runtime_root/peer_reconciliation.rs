@@ -269,7 +269,9 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     );
 
     let cooldown = dispatcher
-        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer }))
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: peer.clone(),
+        }))
         .expect("immediate duplicate sync is rate limited");
     assert!(matches!(
         cooldown,
@@ -279,6 +281,24 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         transport.delivered.lock().expect("deliveries").len(),
         3,
         "the cooldown prevents another peer delivery pass"
+    );
+
+    dispatcher.expire_peer_sync_cooldown_for_test(&peer);
+    let after_cooldown = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer }))
+        .expect("expired cooldown permits the next bounded sync");
+    assert!(matches!(
+        after_cooldown,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome {
+            disposition: PeerSyncDisposition::Completed,
+            delivered: 1,
+            ..
+        })
+    ));
+    assert_eq!(
+        transport.delivered.lock().expect("deliveries").len(),
+        4,
+        "cooldown expiry permits a subsequent bounded reconciliation pass"
     );
 }
 

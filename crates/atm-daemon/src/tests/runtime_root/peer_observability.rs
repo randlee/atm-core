@@ -34,8 +34,6 @@ fn peer_delivery_events_project_only_safe_configured_peer_health() {
         message_id: Some(atm_core::schema::AtmMessageId::new()),
         peer: peer.clone(),
         error_code: Some(AtmErrorCode::RemoteDeliveryUnconfirmed),
-        candidate_count: Some(1),
-        next_attempt_at: None,
     });
     let statuses = dispatcher.peer_link_statuses();
     assert_eq!(statuses.len(), 1);
@@ -58,8 +56,6 @@ fn peer_delivery_events_project_only_safe_configured_peer_health() {
         message_id: Some(atm_core::schema::AtmMessageId::new()),
         peer,
         error_code: None,
-        candidate_count: Some(1),
-        next_attempt_at: None,
     });
     let status = dispatcher
         .peer_link_statuses()
@@ -88,4 +84,94 @@ fn configured_peer_without_attempt_is_misconfigured_in_doctor_projection() {
     assert!(status.last_failure_at.is_none());
     assert!(status.last_error_code.is_none());
     assert!(status.next_attempt_at.is_none());
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
+    let (_tempdir, dispatcher) = configured_dispatcher();
+    let status = dispatcher
+        .peer_link_statuses()
+        .pop()
+        .expect("configured peer status");
+
+    let serialized = serde_json::to_string(&status).expect("serialize peer link status");
+    assert!(
+        !serialized.to_ascii_lowercase().contains("fingerprint"),
+        "peer-link status must not expose a TLS fingerprint"
+    );
+    assert!(
+        !serialized.to_ascii_lowercase().contains("ip_address"),
+        "peer-link status must not expose resolved peer IP addresses"
+    );
+    assert_eq!(
+        serde_json::from_str::<atm_core::doctor::PeerLinkStatus>(&serialized)
+            .expect("deserialize peer link status"),
+        status,
+        "the safe doctor projection must round trip without adding hidden fields"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn local_https_delivery_failure_preserves_daemon_unavailable() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: "peer.example.test".parse().expect("peer host"),
+            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: NonZeroU16::new(43101).expect("non-zero"),
+        })
+        .expect("save trusted peer");
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    dispatcher
+        .install_https_transport(Arc::new(FailingHttpsDelivery::daemon_unavailable()))
+        .expect("install unavailable HTTPS delivery");
+
+    let error = dispatcher
+        .dispatch(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                atm_home,
+                workspace_dir,
+                ROLE_TEAM_LEAD.parse().expect("caller"),
+                "remote-agent@remote-team.peer.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("peer write".to_string()),
+                None,
+                false,
+                None,
+                false,
+            )
+            .expect("remote write request"),
+        )))
+        .expect_err("local transport failure must be returned unchanged");
+
+    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    let status = dispatcher
+        .peer_link_statuses()
+        .pop()
+        .expect("configured peer delivery status");
+    assert_eq!(
+        status.last_error_code,
+        Some(AtmErrorCode::DaemonUnavailable)
+    );
 }

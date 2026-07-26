@@ -82,6 +82,11 @@ IO_FORBIDDEN_SOURCE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"\bdispatch_(?:write|non_write)\s*\(",
         r"\broute_write\s*\(",
     ),
+    "database_io": (
+        r"\b(?:rusqlite|sqlx|diesel)::",
+        r"\b(?:Sqlite|SQLite)(?:Connection|Transaction|Store|Database|Pool|Backend)\b",
+        r"\bdatabase_io\b",
+    ),
     "compatibility_jsonl_append": (
         r"\bappend_compat_inbox_message\s*\(",
         r"\bcompatibility_jsonl_append\b",

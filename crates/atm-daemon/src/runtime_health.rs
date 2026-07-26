@@ -154,10 +154,18 @@ pub(crate) struct DaemonRequestDispatcher {
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     peer_sync_progress: std::sync::Mutex<
-        HashMap<atm_core::types::HostName, Arc<std::sync::Mutex<peer_sync::PeerSyncProgress>>>,
+        HashMap<atm_core::types::HostName, Arc<std::sync::Mutex<PeerSyncProgress>>>,
     >,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: PeerDeliveryProjection,
+}
+
+/// Transient per-daemon guard for explicit sync requests. It is intentionally
+/// not durable transport state: a completed pass clears its watermark.
+#[derive(Default)]
+pub(super) struct PeerSyncProgress {
+    next_allowed_at: Option<std::time::Instant>,
+    in_flight: bool,
 }
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
@@ -230,12 +238,10 @@ impl DaemonRequestDispatcher {
                     );
                 });
             })
-            .map_err(|_source| {
+            .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
-                    "failed to spawn daemon shutdown finalizer step `{label}`"
+                    "failed to spawn daemon shutdown finalizer step `{label}`: {source}"
                 ))
-
-
             })
     }
 
@@ -289,9 +295,9 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 let _ = result_tx.send(shutdown_handle.join());
             })
-            .map_err(|_source| {
+            .map_err(|source| {
                 AtmError::daemon_unavailable(format!(
-                    "failed to spawn daemon shutdown finalizer join helper `{label}`"
+                    "failed to spawn daemon shutdown finalizer join helper `{label}`: {source}"
                 ))
             })?;
         Ok((result_rx, join_helper))
@@ -463,10 +469,22 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
-    /// The one runtime-owned writer for retained peer delivery health.
     pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
         self.peer_delivery_projection
             .record(event, &self.runtime_health_observability);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn expire_peer_sync_cooldown_for_test(&self, peer: &atm_core::types::HostName) {
+        let progress = self
+            .peer_sync_progress
+            .lock()
+            .expect("peer sync progress map")
+            .get(peer)
+            .expect("the first sync creates peer progress")
+            .clone();
+        progress.lock().expect("peer sync progress").next_allowed_at =
+            Some(std::time::Instant::now() - Duration::from_secs(1));
     }
 
     pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
@@ -755,6 +773,7 @@ impl DaemonRequestDispatcher {
             findings: peer_findings,
             peer_config: Some(peer_config),
             peer_links: self.peer_link_statuses(),
+            peer_wire_security: None,
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -781,6 +800,7 @@ impl DaemonRequestDispatcher {
                 findings: vec![runtime_status_finding],
                 peer_config: None,
                 peer_links: Vec::new(),
+                peer_wire_security: None,
             });
         }
         report.runtime_status = Some(runtime_status);
@@ -887,6 +907,13 @@ impl ApiRouter for DaemonRequestDispatcher {
                 | AuthenticatedIngress::Peer
                 | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
+        }
+        if matches!(request, RequestEnvelope::ReloadRuntimeView)
+            && ingress != AuthenticatedIngress::Local
+        {
+            return Err(AtmError::validation(
+                "runtime reload is available only through authenticated local IPC",
+            ));
         }
         self.dispatch_with_deadline(request, deadline)
             .map(ApiResponse::new)
@@ -1031,8 +1058,48 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
+    use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let dispatcher = DaemonRequestDispatcher::new_for_test(
+            tempdir.path().join("home"),
+            super::RuntimeStatusCache::default(),
+            tempdir.path().join("runtime.db"),
+        );
+        let refreshed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let refresh_flag = Arc::clone(&refreshed);
+        dispatcher
+            .install_runtime_reload_hook(Arc::new(move || {
+                refresh_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }))
+            .expect("install reload hook");
+
+        let response = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Local,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect("authenticated local reload routes")
+            .into_inner();
+        assert!(matches!(response, ResponseEnvelope::RuntimeViewReloaded));
+        assert!(refreshed.load(std::sync::atomic::Ordering::SeqCst));
+
+        let error = dispatcher
+            .route(
+                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
+                AuthenticatedIngress::Peer,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+            .expect_err("peer ingress must not control daemon reload");
+        assert!(error.is_validation());
+    }
 
     struct ShutdownFinalizerDrainGuard;
 
