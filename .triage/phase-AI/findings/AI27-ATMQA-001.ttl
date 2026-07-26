@@ -12,9 +12,11 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
-  triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP, not dispatched now. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP, not dispatched now. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. quality-mgr AICH-S7-QA-FIX-1: verified fixed on commit 35cb19f8 (PR #642) -- original router file replaced by crates/atm-daemon/src/runtime_health/post_write_router.rs, which preserves the real error code end-to-end via record_peer_outcome(..., Some(error.code())) on both post-dispatch and transport-level failure branches; regression test local_https_delivery_failure_preserves_daemon_unavailable added. Confirmed by 3 independent reviewers (req-qa, arch-qa, ruthless-boundary-qa) and full-green CI (8/8 legs)." ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S7 ;
   triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
@@ -28,10 +30,10 @@
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 91 ;
   triage:snippet "Err(error) if error.is_daemon_unavailable() => { self.peer_delivery_unconfirmed(peer.host, request_id, message_id, error) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "5e91a889" ;
+  triage:headSha "35cb19f8" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
 
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>

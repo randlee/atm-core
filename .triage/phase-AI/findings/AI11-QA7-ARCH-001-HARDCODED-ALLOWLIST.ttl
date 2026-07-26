@@ -37,8 +37,9 @@
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:line 375 ;
   triage:snippet "let guarded_sources = [&protocol, &daemon_lib, &local_tcp, &daemon_client, &cli_transport,];" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- hardcoded guarded_sources array replaced with ai11_guarded_workspace_sources(&root) which performs full workspace sweep via collect_rust_files. Defect no longer present. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "bb20fd9a" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s11/bb20fd9a> .

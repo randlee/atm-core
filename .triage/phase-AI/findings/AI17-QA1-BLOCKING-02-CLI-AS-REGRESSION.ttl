@@ -14,20 +14,20 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+  triage:triageClosureTime "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1> .
 
 <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION/pAI-s17/1>
   a triage:Occurrence ;
   triage:file "crates/atm-core/src/caller_context.rs" ;
   triage:line 37 ;
   triage:snippet "let ambient_identity = resolve_identity_component(None)?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_cli_inspection_caller_context at line 37-38 now correctly implements '--as, else ATM_IDENTITY' by calling resolve_identity_component(overrides.identity_override.map(...)), which checks overrides first. Test inspection_as_override_does_not_require_ambient_identity at line 280-297 confirms --as works without ATM_IDENTITY. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .

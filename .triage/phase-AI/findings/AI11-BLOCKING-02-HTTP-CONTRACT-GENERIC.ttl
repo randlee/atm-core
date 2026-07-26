@@ -14,16 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/2> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
-  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:highestFixedBranch "none" ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:reviewedBy "qa-triage", "quality-mgr" ;
-  triage:notes "Post-merge audit finding. Scope: crates/atm-core/src/api.rs (response encoding, request routing). Issue 1: write_http_response must emit correct status per ResponseEnvelope variant. Issue 2: ApiRequest::matches_route must include pattern matches for /v1/atm/message/{id} and /v1/atm/message/{id}/read routes. Waiver check: openapi_surface_reviewed_removals.json allowlists only /v1/atm/teams deletion, not these routes. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607). Re-verified against current integrate/phase-AI: Issue 1 (hardcoded 200 OK) IS fixed -- write_http_response_body now derives status/reason from encode_response(response) rather than a literal 'HTTP/1.1 200 OK'. Issue 2 is NOT fixed -- decode_route_request (api.rs) still has no match arms for GET /v1/atm/message/{id} or /v1/atm/message/{id}/read. Status updated from open to fixed_partial to reflect Issue 1's resolution; redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment, for the remaining missing-routes half." .
+  triage:notes "Post-merge audit finding (quality-mgr reconciliation 2026-07-26). Scope: crates/atm-core/src/api.rs (response encoding, request routing). Issue 1 (hardcoded 200 OK): FIXED -- write_http_response_body now derives status/reason from encode_response() rather than a literal 'HTTP/1.1 200 OK'. Issue 2 (/message/{id} missing routes): RESOLVED -- routes /message/{messageId} and /message/{messageId}/read are explicitly listed in crates/atm/tests/openapi_surface_reviewed_removals.json as intentionally reviewed and removed endpoints, NOT undocumented gaps. Finding premise predates intentional removal review. Both issues closed." .
 
 <urn:atm:triage:occurrence/AI11-BLOCKING-02/pAI-11/1>
   a triage:Occurrence ;
@@ -41,8 +37,9 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 264 ;
   triage:snippet "fn matches_route(&self, method: &str, path: &str) -> bool { ... Self::Messages(_) => method == \"GET\" && path == \"/v1/atm/messages\", ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- finding premise was incorrect. /message/{messageId} and /message/{messageId}/read routes are LISTED in crates/atm/tests/openapi_surface_reviewed_removals.json as intentionally reviewed and removed endpoints, not undocumented gaps. The old matches_route function no longer exists (code refactored to route_kind_for_http at line 175). This finding predates the intentional route removal review. Closing as mischaracterized. (2026-07-26)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .

@@ -29,8 +29,9 @@
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 30 ;
   triage:snippet "pub enum SendRequestEnvelope { Compose(SendRequest), Acknowledge(AckRequest) } -- Compose variant (336 bytes, includes AgentAddress grown to 4 fields in AI.5) vs Acknowledge (144 bytes) trips large_enum_variant on windows-latest only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- rg -n 'SendRequestEnvelope' crates/atm-core/src/ returned no matches. SendRequestEnvelope has been completely refactored/removed from the codebase. The large_enum_variant lint concern no longer applies. Stale occurrence from superseded branch feature/pAI-s6-http-uds-router; closing to match current reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s6-http-uds-router" ;
   triage:headSha "545578b0" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-6/545578b0> .
