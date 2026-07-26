@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION>
   a triage:Finding ;
   triage:findingId "AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "No per-case semantic verification beyond exit-code/substring" ;
   triage:description "In scripts/smoke/run_peer_pair.py, duplicate_ulid and failed_remote_ack cases never assert the actual invariants the sprint doc claims (single-record retention, no ack mutation) — only external command exit codes/substrings are checked. Shallow verification also present in run_thorough_shared_host.py and run_graft_same_host.py" ;
   triage:triageMode "initial_pass" ;
@@ -316,62 +318,62 @@
 <urn:atm:triage:worktree/s12/2cb82716>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "2cb82716" ;
   triage:orderIndex 12 .
 
 <urn:atm:triage:worktree/s13/34ffe677>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "34ffe677" ;
   triage:orderIndex 13 .
 
 <urn:atm:triage:worktree/s14/6be71984>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "6be71984" ;
   triage:orderIndex 14 .
 
 <urn:atm:triage:worktree/s15/5a6bac5b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a6bac5b" ;
   triage:orderIndex 15 .
 
 <urn:atm:triage:worktree/s16/b3749b90>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "b3749b90" ;
   triage:orderIndex 16 .
 
 <urn:atm:triage:worktree/s17/f3af571e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "f3af571e" ;
   triage:orderIndex 17 .
 
 <urn:atm:triage:worktree/s18/1c40c3a1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "1c40c3a1" ;
   triage:orderIndex 18 .
 
 <urn:atm:triage:worktree/s19/fb781b27>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "fb781b27" ;
   triage:orderIndex 19 .
 
 <urn:atm:triage:worktree/s20/51897df0>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "51897df0" ;
   triage:orderIndex 20 .

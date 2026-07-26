@@ -36,7 +36,7 @@
 <urn:atm:triage:worktree/AI23-BLOCK-001/c528137cd07c8c329572cdb8e852faffb3fc9c94>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
   triage:orderIndex 0 ;
   triage:patternMatches 1 ;

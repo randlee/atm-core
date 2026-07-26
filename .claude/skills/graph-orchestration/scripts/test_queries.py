@@ -6,12 +6,13 @@ Run from skill root: python3 -m pytest scripts/test_queries.py -v
 Requires: rdflib, pytest
 """
 import importlib.util
+import json
+import os
+import subprocess
 import sys
 
-import pytest
 from pathlib import Path
 from rdflib import Graph, URIRef, Namespace
-from rdflib.namespace import XSD
 
 SCRIPTS = Path(__file__).parent
 TRIAGE = "urn:atm:triage:"
@@ -142,6 +143,36 @@ triage:c2 a triage:Completion ; triage:ofSprint triage:S2 ;
         assert len(rows) == 0
 
 
+class TestOpenFindingsForSprint:
+    def test_normalizes_case_orders_and_excludes_terminal_statuses(self):
+        findings = PREFIX + """
+triage:minor a triage:Finding ; triage:findingId "M-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "MINOR" ; triage:description "minor" .
+triage:important a triage:Finding ; triage:findingId "I-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T10:00:00Z"^^xsd:dateTime ; triage:severity "Important" ; triage:description "important" .
+triage:blocking a triage:Finding ; triage:findingId "B-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T11:00:00Z"^^xsd:dateTime ; triage:severity "BLOCKING" ; triage:description "blocking" .
+triage:resolved a triage:Finding ; triage:findingId "R-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T08:00:00Z"^^xsd:dateTime ; triage:severity "Blocking" ; triage:status "fixed" ; triage:description "resolved" .
+triage:critical a triage:Finding ; triage:findingId "C-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; triage:severity "critical" ; triage:description "critical" .
+triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T13:00:00Z"^^xsd:dateTime ; triage:severity "medium" ; triage:description "invalid severity" .
+"""
+        rows = sparql(
+            "open-findings-for-sprint.sparql",
+            {"SPRINT": URIRef(f"{TRIAGE}S1")},
+            findings,
+        )
+        assert [(str(row[1]), str(row[2]), str(row[3])) for row in rows] == [
+            ("U-1", "invalid", "medium"),
+            ("B-1", "blocking", "BLOCKING"),
+            ("C-1", "blocking", "critical"),
+            ("I-1", "important", "Important"),
+            ("M-1", "minor", "MINOR"),
+        ]
+
+
 # ── validate-structure tests ──────────────────────────────────────────────────
 
 class TestValidateStructure:
@@ -168,6 +199,41 @@ triage:S1 a triage:Sprint ; triage:inPhase triage:PhaseF ; triage:order 1 .
         rows = sparql("validate-structure.sparql", {"PHASE": PHASE}, ttl)
         violations = [str(r[0]) for r in rows]
         assert "missing-criteria" in violations
+
+
+# ── validate-findings tests ───────────────────────────────────────────────────
+
+class TestValidateFindings:
+    def test_complete_finding_returns_zero_rows(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:foundIn triage:S1 ; triage:foundAt
+      "2026-07-01T12:00:00Z"^^xsd:dateTime ;
+    triage:severity "important" ; triage:description "Issue" .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        assert rows == []
+
+    def test_missing_graph_critical_fields_are_errors(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:findingId "F-1" ;
+    triage:severity "important" ; triage:description "Issue" .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        levels = {(str(row[0]), str(row[2])) for row in rows}
+        assert ("#error", "triage:foundIn") in levels
+        assert ("#error", "triage:foundAt") in levels
+
+    def test_missing_descriptive_fields_are_warnings(self):
+        findings = PREFIX + """
+triage:f1 a triage:Finding ; triage:foundIn triage:S1 ;
+    triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        rows = sparql("validate-findings.sparql", {}, findings)
+        levels = {(str(row[0]), str(row[2])) for row in rows}
+        assert ("#warning", "triage:findingId") in levels
+        assert ("#warning", "triage:severity") in levels
+        assert ("#warning", "triage:description") in levels
 
 
 # ── open-findings-sprint tests ────────────────────────────────────────────────
@@ -254,6 +320,7 @@ class TestLoadGraphFindingsIsolation:
         )
         assert len(rows) == 1
         assert str(rows[0][1]) == "1"
+
 
     def test_wellformed_findings_in_queried_phase_still_loaded(self, tmp_path):
         """A well-formed, relevant findings file is still parsed and correctly
@@ -488,6 +555,252 @@ triage:fcross a triage:Finding ; triage:foundIn triage:YS1 ;
         assert str(rows[0][1]) == "1"
 
 
+# ── next-dev-task CLI tests ───────────────────────────────────────────────────
+
+class TestNextDevTaskValidation:
+    def _make_repo(self, tmp_path: Path, structure_ttl: str) -> Path:
+        repo = tmp_path / "repo"
+        ttl_dir = repo / ".sprints" / "F"
+        ttl_dir.mkdir(parents=True)
+        (ttl_dir / "structure.ttl").write_text(structure_ttl)
+        (repo / ".triage").mkdir()
+        return repo
+
+    def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        # Keep the shell wrapper and query runner on the same interpreter as
+        # pytest; this also exercises the GRAPH_ORCH_PYTHON escape hatch used
+        # by the dependency preflight.
+        env["GRAPH_ORCH_PYTHON"] = sys.executable
+        return subprocess.run(
+            [str(SCRIPTS / "next-dev-task"), *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+    def test_validate_only_blocks_malformed_findings_before_structure_query(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        malformed = repo / ".triage" / "phase-U" / "findings"
+        malformed.mkdir(parents=True)
+        (malformed / "LEGACY.ttl").write_text("finding_id: LEGACY-001\n")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
+
+        assert result.returncode == 2, result.stderr
+        assert result.stdout == ""
+        assert "findings validation could not run" not in result.stderr
+        assert "findings validation blocked query resolution" in result.stderr
+        assert "malformed Turtle" in result.stderr
+
+    def test_cursor_resolution_is_blocked_by_missing_provenance(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:severity "important" ; triage:description "missing provenance" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1, result.stderr
+        assert result.stdout == ""
+        assert "findings validation blocked query resolution" in result.stderr
+        assert "triage:foundIn" in result.stderr
+        assert "triage:foundAt" in result.stderr
+
+    def test_cursor_resolution_runs_after_clean_findings_validation(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:foundIn triage:S1 ; '
+            'triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; '
+            'triage:severity "important" ; triage:description "clean" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["phase"] == "TRAVERSAL"
+        assert payload["vars"]["sprint"] == "S1"
+        assert payload["findings"] == [
+            {
+                "finding_iri": f"{TRIAGE}f1",
+                "finding_id": "F-1",
+                "severity": "important",
+                "raw_severity": "important",
+                "status": None,
+                "found_at": "2026-07-01T12:00:00+00:00",
+                "description": "clean",
+            }
+        ]
+
+    def test_invalid_severity_returns_json_and_fails_closed(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        findings = repo / ".triage" / "phase-F" / "findings"
+        findings.mkdir(parents=True)
+        (findings / "F-1.ttl").write_text(
+            PREFIX
+            + 'triage:f1 a triage:Finding ; triage:findingId "F-1" ; '
+            'triage:foundIn triage:S1 ; '
+            'triage:foundAt "2026-07-01T12:00:00Z"^^xsd:dateTime ; '
+            'triage:severity "medium" ; triage:description "unknown" .\n'
+        )
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        assert result.returncode == 1, result.stderr
+        payload = json.loads(result.stdout)
+        assert payload["phase"] == "INVALID_FINDING_SEVERITY"
+        assert payload["findings"][0]["raw_severity"] == "medium"
+
+    def test_validate_only_reports_structure_errors(self, tmp_path):
+        invalid = PREFIX + """
+triage:PhaseF a triage:Phase .
+triage:S1 a triage:Sprint ; triage:inPhase triage:PhaseF ;
+    triage:order 1 ; triage:criteria "ac/S1.md" .
+triage:S2 a triage:Sprint ; triage:inPhase triage:PhaseF ;
+    triage:order 1 ; triage:criteria "ac/S2.md" .
+"""
+        repo = self._make_repo(tmp_path, invalid)
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--validate-only")
+
+        assert result.returncode == 1
+        assert "ERROR: structure violation" in result.stderr
+        assert result.stdout == ""
+
+    def test_malformed_structure_is_reported_without_traceback(self, tmp_path):
+        repo = self._make_repo(tmp_path, "not valid Turtle [")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"))
+
+        # Findings validation is intentionally the first gate, so malformed
+        # structure is reported by the validator before the RDF loader runs.
+        assert result.returncode == 2
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "findings validation blocked query resolution" in result.stderr
+
+    def test_broken_sparql_is_reported_without_traceback(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+        broken_scripts = tmp_path / "scripts"
+        broken_scripts.mkdir()
+        (broken_scripts / "validate-structure.sparql").write_text(
+            "SELECT definitely broken"
+        )
+        (broken_scripts / "validate-findings.py").write_text(
+            (SCRIPTS / "validate-findings.py").read_text()
+        )
+        (broken_scripts / "validate-findings.sparql").write_text(
+            (SCRIPTS / "validate-findings.sparql").read_text()
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "query_runner.py"),
+                "F",
+                str(repo / ".sprints" / "F"),
+                str(broken_scripts),
+            ],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "ERROR: query runner failed to run" in result.stderr
+
+    def test_unknown_optional_argument_is_rejected(self, tmp_path):
+        repo = self._make_repo(tmp_path, structure([(1, "S1")]))
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "--bogus")
+
+        assert result.returncode == 1
+        assert "Usage: next-dev-task" in result.stderr
+
+
+# ── assignee-busy CLI tests ───────────────────────────────────────────────────
+
+class TestAssigneeBusy:
+    def _make_repo(self, tmp_path: Path, events_ttl: str | None = None) -> Path:
+        repo = tmp_path / "repo"
+        ttl_dir = repo / ".sprints" / "F"
+        ttl_dir.mkdir(parents=True)
+        (ttl_dir / "structure.ttl").write_text(structure([(1, "S1")]))
+        if events_ttl is not None:
+            (ttl_dir / "events.ttl").write_text(events_ttl)
+        (repo / ".triage").mkdir()
+        return repo
+
+    def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
+        env = os.environ.copy()
+        env["GRAPH_ORCH_PYTHON"] = sys.executable
+        return subprocess.run(
+            [str(SCRIPTS / "assignee-busy"), *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+
+    def test_reports_only_truly_in_flight_assignments(self, tmp_path):
+        events = PREFIX + """
+triage:a1 a triage:Assignment ; triage:ofSprint triage:S1 ;
+    triage:assignedTo "arch-ctm" ;
+    triage:assignedAt "2026-07-01T10:00:00Z"^^xsd:dateTime .
+triage:c1 a triage:Completion ; triage:ofSprint triage:S1 ;
+    triage:at "2026-07-01T12:00:00Z"^^xsd:dateTime .
+"""
+        repo = self._make_repo(tmp_path, events)
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
+
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {
+            "busy": False,
+            "assignee": "arch-ctm",
+            "open_assignments": [],
+        }
+
+    def test_rejects_extra_arguments(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+
+        result = self._run(
+            repo,
+            "F",
+            str(repo / ".sprints" / "F"),
+            "arch-ctm",
+            "unexpected",
+        )
+
+        assert result.returncode == 1
+        assert "Usage: assignee-busy" in result.stderr
+
+    def test_reports_malformed_structure_as_cli_error(self, tmp_path):
+        repo = self._make_repo(tmp_path)
+        (repo / ".sprints" / "F" / "structure.ttl").write_text("not valid turtle [")
+
+        result = self._run(repo, "F", str(repo / ".sprints" / "F"), "arch-ctm")
+
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "Traceback" not in result.stderr
+        assert "ERROR:" in result.stderr
+
+
 if __name__ == "__main__":
-    import subprocess, sys
     sys.exit(subprocess.call(["python3", "-m", "pytest", __file__, "-v"]))

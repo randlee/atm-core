@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-QA5-RBQA-F001>
   a triage:Finding ;
   triage:findingId "AI11-QA5-RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T12:00:00Z"^^xsd:dateTime ;
   triage:title "Dual concurrent local-ingress listeners on Unix (UDS + TCP loopback)" ;
   triage:description "crates/atm-daemon/src/local_ipc_transport.rs: on #[cfg(not(windows))], this binds BOTH the UDS LocalSocketListener AND a #[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field (bind_after_install, ~lines 291-298; both run as live accept-loop threads ~457-496). atm-daemon-client resolves the local endpoint exclusively via HTTP record on s14+ (c5665204 onward) but UDS on s11-s13 (old code path). The UDS listener is dead infra on s14+ (never reached), never initialized listener is unused on s11-s13. Originally found by ruthless-boundary-qa on AI.11 QA-5. Same defect independently reported as AI14-QA1-RBQA-F001 during AI.14 QA-1 (s14-s16). This record documents the AI.11-originated instance (s11-s13 upstream of s14)." ;
   triage:phaseId "phase-AI" ;
@@ -100,42 +102,42 @@
 <urn:atm:triage:worktree/s11/8a7ea589>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "8a7ea589" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s12/b6466aa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa1" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s13/2adc5fa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s14/0bf86031>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "0bf86031" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s15/436493ab>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "436493ab" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s16/1c23ac04>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 6 .
 

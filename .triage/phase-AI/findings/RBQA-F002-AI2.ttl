@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RBQA-F002-AI2>
   a triage:Finding ;
   triage:findingId "RBQA-F002-AI2" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "atm-storage-rusqlite retains dead 'upcoming SQL Server backend' wrapper types/methods contradicting already-accepted readiness-proof conclusion" ;
   triage:description "AI2-QA-1 (ruthless-boundary-qa). crates/atm-storage-rusqlite/src/lib.rs retains dead 'upcoming SQL Server backend' wrapper types and 7 dead methods, all suppressed via #[allow(dead_code, reason=\"used by upcoming SQL server backend\")], directly contradicting docs/plans/phase-AC/sqlserver-readiness-proof.md:44-51's already-accepted conclusion that no such wrappers remain in atm-storage/atm-storage-claude/atm-storage-rusqlite. Confirmed present unchanged on AI.1 (crates/atm-storage-rusqlite/src/mailbox_metadata.rs + lib.rs), AI.2, and AI.3 -- origin is the AI.1 baseline, not a new AI.2 regression." ;
   triage:phaseId "phase-AI" ;
@@ -35,27 +37,27 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/c9d62ff6>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "c9d62ff6" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "00fe6608" ;
   triage:orderIndex 0 .

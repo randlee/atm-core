@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI12-QA1-BLOCKING-06>
   a triage:Finding ;
   triage:findingId "AI12-QA1-BLOCKING-06" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "7 of 8 required-tests-table rows have no corresponding test in the diff" ;
   triage:description "AI.12 sprint doc specifies 8 required tests (Ordering, Local write, Peer write, Inbound peer, Failure, Roster ownership, Idempotency, Ingress parity). Current worktrees have only 3 partial implementations. QA confirmed 7 rows fully or partially missing across all branches." ;
   triage:phaseId "phase-AI" ;
@@ -530,41 +532,41 @@
 <urn:atm:triage:worktree/s11/3642430d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "3642430d" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s12/a8ea0017>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s13/2adc5fa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s14/ef0e5e2b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "ef0e5e2b" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s15/5a7a762f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a7a762f" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s16/1c23ac04>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 6 .

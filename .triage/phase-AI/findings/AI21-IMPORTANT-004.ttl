@@ -34,13 +34,13 @@
 <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/5678337ce236a386d613790363f48a461238016c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "5678337ce236a386d613790363f48a461238016c" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9faa3c52c06b99784487e64152e6c658941>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
   triage:orderIndex 1 .
