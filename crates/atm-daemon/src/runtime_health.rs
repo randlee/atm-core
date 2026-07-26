@@ -35,6 +35,7 @@ use crate::daemon_runtime_observability::{
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
+pub(crate) mod peer_authority;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
