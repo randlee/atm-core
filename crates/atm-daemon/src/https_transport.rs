@@ -7,7 +7,7 @@
 
 use std::fmt;
 use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
@@ -176,10 +176,11 @@ impl HttpsMessageTransport for HttpsTransport {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
                 let config = client_config(identity, peer)?;
-                let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
+                let server_name = ServerName::try_from(host.clone()).map_err(|source| {
                     AtmError::validation(
                         "configured HTTPS peer host is not a valid TLS server name",
                     )
+                    .with_cause(source)
                 })?;
                 let connection =
                     ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
@@ -603,43 +604,6 @@ fn remaining_budget(deadline: RequestDeadline) -> Result<Duration, AtmError> {
     })
 }
 
-fn resolve_peer_addresses(
-    peer: &TrustedPeer,
-    timeout: Duration,
-) -> Result<Vec<std::net::IpAddr>, AtmError> {
-    let authority = format!("{}:{}", peer.host, peer.https_port);
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
-        .name("atm-peer-dns".to_string())
-        .spawn(move || {
-            let _ = sender.send(
-                authority
-                    .to_socket_addrs()
-                    .map(|a| a.map(|address| address.ip()).collect::<Vec<_>>()),
-            );
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to start bounded HTTPS DNS resolution",
-                source,
-            )
-        })?;
-    receiver
-        .recv_timeout(timeout)
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "HTTPS DNS resolution timed out; verify peer forward DNS or retry",
-                source,
-            )
-        })?
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to resolve configured HTTPS peer; verify forward DNS",
-                source,
-            )
-        })
-}
-
 fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<SocketAddr, AtmError> {
     let peer = TrustedPeer {
         host: host.parse().map_err(|source| {
@@ -652,7 +616,7 @@ fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<Sock
         https_port: std::num::NonZeroU16::new(port)
             .ok_or_else(|| AtmError::validation("configured HTTPS peer port was zero"))?,
     };
-    resolve_peer_addresses(&peer, timeout)?
+    crate::peer_resolution::resolve_peer_socket_addresses(&peer, timeout)?
         .into_iter()
         .next()
         .map(|ip| SocketAddr::new(ip, port))
@@ -940,6 +904,31 @@ mod tests {
             error.code(),
             atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
         );
+    }
+
+    #[test]
+    fn invalid_tls_server_name_preserves_the_parser_cause() {
+        let result: Result<ServerName<'static>, AtmError> =
+            ServerName::try_from("-invalid".to_string()).map_err(|source| {
+                AtmError::validation("configured HTTPS peer host is not a valid TLS server name")
+                    .with_cause(source)
+            });
+        let error = result.expect_err("invalid DNS label must fail validation");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(
+            error.cause().is_some(),
+            "TLS parser cause must be preserved"
+        );
+    }
+
+    #[test]
+    fn https_address_resolution_uses_the_shared_bounded_helper() {
+        let address = super::resolve_peer_address("localhost", 43101, Duration::from_secs(1))
+            .expect("localhost must resolve through the shared helper");
+        assert_eq!(address.port(), 43101);
     }
 
     #[test]

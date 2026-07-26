@@ -33,6 +33,7 @@ mod local_ipc_wake;
 mod local_tcp_transport;
 mod non_claude_outbound_runtime;
 mod peer_delivery_observability;
+mod peer_resolution;
 mod post_send_emitter;
 mod runtime_health;
 mod runtime_status_cache;

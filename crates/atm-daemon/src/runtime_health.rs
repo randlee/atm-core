@@ -23,6 +23,7 @@ use atm_core::{
         CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
         SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
+    provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
     send::{PreparedWrite, WriteOutcome, WriteRequest, prepare_write_with_runtime},
@@ -850,43 +851,21 @@ impl ApiRouter for DaemonRequestDispatcher {
         }
         let request = request.into_inner();
         if let RequestEnvelope::Write(write) = &request {
-            match ingress {
-                AuthenticatedIngress::Local
-                    if write.authenticated_source_host.is_some()
-                        || write.origin_message_id.is_some()
-                        || write.origin_timestamp.is_some() =>
-                {
-                    return Err(AtmError::validation(
-                        "local write requests must not supply authenticated peer provenance or origin metadata",
-                    ));
-                }
-                AuthenticatedIngress::Peer
-                    if write.authenticated_source_host.is_none()
-                        || write.origin_message_id.is_none()
-                        || write.origin_timestamp.is_none() =>
-                {
-                    return Err(AtmError::validation(
-                        "peer write requests require authenticated source provenance and immutable origin metadata",
-                    ));
-                }
-                AuthenticatedIngress::UntrustedSmoke(_)
-                    if write.authenticated_source_host.is_some()
-                        || write.origin_message_id.is_none()
-                        || write.origin_timestamp.is_none() =>
-                {
-                    return Err(AtmError::validation(
-                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
-                    ));
-                }
-                AuthenticatedIngress::AnonymousSmoke => {
-                    return Err(AtmError::validation(
-                        "anonymous plaintext diagnostics cannot submit writes; include the X-ATM-Peer-Source-Host header only for an explicit smoke write",
-                    ));
-                }
-                AuthenticatedIngress::Local
-                | AuthenticatedIngress::Peer
-                | AuthenticatedIngress::UntrustedSmoke(_) => {}
-            }
+            let write_ingress = match &ingress {
+                AuthenticatedIngress::Local => WriteIngress::Local,
+                AuthenticatedIngress::Peer => WriteIngress::Peer,
+                AuthenticatedIngress::UntrustedSmoke(_) => WriteIngress::UntrustedSmoke,
+                AuthenticatedIngress::AnonymousSmoke => WriteIngress::AnonymousSmoke,
+            };
+            validate_write_provenance(
+                write_ingress,
+                WriteProvenance {
+                    target_host: write.to.as_ref().and_then(|address| address.host()),
+                    authenticated_source_host: write.authenticated_source_host.as_ref(),
+                    origin_message_id: write.origin_message_id.is_some(),
+                    origin_timestamp: write.origin_timestamp.is_some(),
+                },
+            )?;
         }
         self.dispatch_with_deadline(request, deadline)
             .map(ApiResponse::new)
