@@ -869,7 +869,7 @@ mod tests {
     use atm_core::graft::{
         GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
     };
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
     use atm_core::read::ReadQuery;
     use atm_core::schema::{AgentMember, AtmMessageId};
     use atm_core::send::{SendMessageSource, SendRequest, WriteRequest};
@@ -1019,21 +1019,24 @@ mod tests {
         let receiver_path = graft_receiver_record_path_from_home(&workspace_dir, &team, &recipient);
         let graft_listener =
             GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
-        let (nudge_tx, nudge_rx) = std::sync::mpsc::sync_channel(1);
+        let (nudge_tx, nudge_rx) = std::sync::mpsc::sync_channel(2);
         let graft_thread = std::thread::spawn(move || {
-            let mut stream = loop {
-                if let Some(stream) = graft_listener.poll_accept().expect("poll graft receiver") {
-                    break stream;
-                }
-                std::thread::yield_now();
-            };
-            let request = graft_listener
-                .read_request(&mut stream, Duration::from_secs(5))
-                .expect("read graft nudge");
-            nudge_tx.send(request.event).expect("capture graft nudge");
-            graft_listener
-                .write_response(&mut stream, &GraftPostSendResponse::Delivered)
-                .expect("ack graft nudge");
+            for _ in 0..2 {
+                let mut stream = loop {
+                    if let Some(stream) = graft_listener.poll_accept().expect("poll graft receiver")
+                    {
+                        break stream;
+                    }
+                    std::thread::yield_now();
+                };
+                let request = graft_listener
+                    .read_request(&mut stream, Duration::from_secs(5))
+                    .expect("read graft nudge");
+                nudge_tx.send(request.event).expect("capture graft nudge");
+                graft_listener
+                    .write_response(&mut stream, &GraftPostSendResponse::Delivered)
+                    .expect("ack graft nudge");
+            }
         });
 
         let _env = EnvGuard::set_many([
@@ -1093,7 +1096,7 @@ mod tests {
                 team.clone(),
                 SendMessageSource::Inline("advertised-IP real peer write".to_string()),
                 None,
-                false,
+                true,
                 None,
                 false,
             )
@@ -1102,7 +1105,10 @@ mod tests {
         ));
         write_http_request(&mut tls, &request).expect("write peer request");
         let response = read_http_response(&mut tls, &request).expect("read peer response");
-        assert!(matches!(response, ResponseEnvelope::Send(_)));
+        let source_message_id = match response {
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome.message_id,
+            other => panic!("expected peer send response, got {other:?}"),
+        };
 
         let nudge = nudge_rx
             .recv_timeout(Duration::from_secs(5))
@@ -1113,11 +1119,11 @@ mod tests {
         let response = dispatcher
             .dispatch(RequestEnvelope::Receive(
                 ReadQuery::new(
-                    atm_home,
-                    workspace_dir,
-                    recipient,
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    recipient.clone(),
                     None,
-                    team,
+                    team.clone(),
                     ReadSelection::All,
                     false,
                     false,
@@ -1138,6 +1144,44 @@ mod tests {
             outcome.count, 1,
             "recipient can read the persisted peer write"
         );
+        let ack_origin_id = AtmMessageId::new();
+        let mut ack = WriteRequest::new(
+            atm_home.clone(),
+            workspace_dir.clone(),
+            recipient.clone(),
+            "qa-a@test-team.127.0.0.1",
+            team.clone(),
+            SendMessageSource::Inline("advertised-IP canonical acknowledgement".to_string()),
+            None,
+            false,
+            None,
+            false,
+        )
+        .expect("canonical ACK write");
+        ack.acknowledges_message_id = Some(source_message_id);
+        ack = ack.with_origin_metadata(ack_origin_id, IsoTimestamp::now());
+        let stream = TcpStream::connect(address).expect("connect advertised IP listener for ACK");
+        let config = client_config(&identity, &peer).expect("ACK client config");
+        let connection = ClientConnection::new(
+            Arc::new(config),
+            ServerName::try_from("localhost".to_string()).expect("ACK server name"),
+        )
+        .expect("ACK client connection");
+        let mut tls = StreamOwned::new(connection, stream);
+        complete_handshake(&mut tls).expect("ACK mutual TLS handshake");
+        let ack_request = RequestEnvelope::Write(Box::new(ack));
+        write_http_request(&mut tls, &ack_request).expect("write canonical ACK peer request");
+        let ack_response = read_http_response(&mut tls, &ack_request).expect("read ACK response");
+        match ack_response {
+            ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_)) => {}
+            other => panic!("expected canonical ACK response, got {other:?}"),
+        }
+        let ack_nudge = nudge_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("canonical ACK must nudge after persistence");
+        assert_eq!(ack_nudge.recipient, recipient);
+        assert!(ack_nudge.is_ack, "expected ACK nudge, got {ack_nudge:?}");
+        assert_eq!(ack_nudge.message_id, ack_origin_id);
         graft_thread.join().expect("join graft receiver");
         listener.shutdown().expect("shutdown listener");
     }

@@ -351,12 +351,29 @@ fn peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery
         }))
         .expect("install blocking delivery");
     let first_dispatcher = Arc::clone(&dispatcher);
+    let first_peer = peer_a.clone();
     let first = std::thread::spawn(move || {
-        first_dispatcher.dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer: peer_a }))
+        first_dispatcher.dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: first_peer,
+        }))
     });
     started_rx
         .recv_timeout(Duration::from_secs(1))
         .expect("peer A must enter its bounded delivery");
+
+    let same_peer = dispatcher
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: peer_a.clone(),
+        }))
+        .expect("same-peer sync must not wait for the in-flight delivery");
+    assert!(matches!(
+        same_peer,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome {
+            delivered: 0,
+            disposition: PeerSyncDisposition::RateLimited,
+            ..
+        })
+    ));
 
     let (second_tx, second_rx) = std::sync::mpsc::sync_channel(1);
     let second_dispatcher = Arc::clone(&dispatcher);

@@ -143,6 +143,18 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
             );
         }
     }
+
+    let peer_https = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
+    assert!(
+        !peer_https.contains("AckRequest")
+            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
+        "AI.24 forbids an ACK-specific peer transport request branch"
+    );
+    assert!(
+        peer_https.contains("fn route_peer_http_request")
+            && peer_https.contains("router\n        .route(request, ingress"),
+        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
+    );
 }
 
 #[test]
@@ -776,6 +788,9 @@ impl HostRoutingVisitor {
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+                || path.ends_with(Path::new(
+                    "crates/atm-daemon/src/runtime_health/peer_sync.rs",
+                ))
         })
     }
 }
