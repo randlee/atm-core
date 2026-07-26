@@ -159,6 +159,23 @@ pub(crate) struct DaemonRequestDispatcher {
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
 
+fn build_peer_delivery_coordinator(
+    peer_config_store: &Arc<dyn PeerConfigStore + Send + Sync>,
+    outbound_message_query: &Arc<dyn atm_storage::OutboundMessageQuery + Send + Sync>,
+    https_transport: &Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    projection: &Arc<PeerDeliveryProjection>,
+    observability: &SubsystemObservability,
+) -> Arc<dyn PeerDeliveryCoordinator> {
+    let coordinator_projection = Arc::clone(projection);
+    let coordinator_observability = observability.clone();
+    Arc::new(PeerDrainCoordinator::new(
+        Arc::clone(peer_config_store),
+        Arc::clone(outbound_message_query),
+        Arc::clone(https_transport),
+        Arc::new(move |event| coordinator_projection.record(event, &coordinator_observability)),
+    ))
+}
+
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonRequestDispatcher")
@@ -423,17 +440,13 @@ impl DaemonRequestDispatcher {
         }
         let https_transport = Arc::new(std::sync::Mutex::new(None));
         let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
-        let coordinator_observability = runtime_health_observability.clone();
-        let coordinator_projection = Arc::clone(&peer_delivery_projection);
-        let peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator> =
-            Arc::new(PeerDrainCoordinator::new(
-                Arc::clone(&peer_config_store),
-                Arc::clone(&outbound_message_query),
-                Arc::clone(&https_transport),
-                Arc::new(move |event| {
-                    coordinator_projection.record(event, &coordinator_observability)
-                }),
-            ));
+        let peer_delivery_coordinator = build_peer_delivery_coordinator(
+            &peer_config_store,
+            &outbound_message_query,
+            &https_transport,
+            &peer_delivery_projection,
+            &runtime_health_observability,
+        );
         Self {
             home_dir,
             observability: Arc::clone(&observability),
@@ -1048,17 +1061,13 @@ impl DaemonRequestDispatcher {
         let outbound_message_query = runtime_assembly.outbound_message_query();
         let https_transport = Arc::new(std::sync::Mutex::new(None));
         let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
-        let coordinator_observability = runtime_health_observability.clone();
-        let coordinator_projection = Arc::clone(&peer_delivery_projection);
-        let peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator> =
-            Arc::new(PeerDrainCoordinator::new(
-                Arc::clone(&peer_config_store),
-                Arc::clone(&outbound_message_query),
-                Arc::clone(&https_transport),
-                Arc::new(move |event| {
-                    coordinator_projection.record(event, &coordinator_observability)
-                }),
-            ));
+        let peer_delivery_coordinator = build_peer_delivery_coordinator(
+            &peer_config_store,
+            &outbound_message_query,
+            &https_transport,
+            &peer_delivery_projection,
+            &runtime_health_observability,
+        );
         Self {
             home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,

@@ -161,9 +161,18 @@ impl TlsIdentity {
         })?;
         let certificates = CertificateDer::pem_slice_iter(&pem)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|_source| AtmError::validation("configured TLS certificate PEM is invalid"))?;
-        let private_key = PrivateKeyDer::from_pem_slice(&pem)
-            .map_err(|_source| AtmError::validation("configured TLS private key PEM is invalid"))?;
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    "configured TLS certificate PEM is invalid",
+                    source,
+                )
+            })?;
+        let private_key = PrivateKeyDer::from_pem_slice(&pem).map_err(|source| {
+            AtmError::daemon_unavailable_with_cause(
+                "configured TLS private key PEM is invalid",
+                source,
+            )
+        })?;
         let first = certificates
             .first()
             .ok_or_else(|| AtmError::validation("configured TLS PEM bundle has no certificate"))?;
@@ -280,17 +289,19 @@ impl HttpsTransport {
         let stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?).map_err(
             |source| {
                 AtmError::remote_delivery_unconfirmed(format!(
-                    "failed to connect to HTTPS peer {host}: {source}"
+                    "failed to connect to HTTPS peer {host}"
                 ))
+                .with_cause(source)
             },
         )?;
         match &self.mode {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
                 let config = client_config(identity, peer)?;
-                let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
-                    AtmError::validation(
+                let server_name = ServerName::try_from(host.clone()).map_err(|source| {
+                    AtmError::daemon_unavailable_with_cause(
                         "configured HTTPS peer host is not a valid TLS server name",
+                        source,
                     )
                 })?;
                 let connection =

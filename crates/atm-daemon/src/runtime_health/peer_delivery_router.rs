@@ -17,7 +17,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         message: &mut MessageRecord,
         deadline: RequestDeadline,
     ) -> Result<(), AtmError> {
-        if message.outbound_request.authenticated_source_host.is_some() {
+        if message.prepared.is_peer_receipt() {
             tracing::info!(
                 subsystem = "runtime_health",
                 action = "post_write",
@@ -74,6 +74,10 @@ impl DaemonRequestDispatcher {
         request_id: atm_core::protocol::RequestId,
         message_id: Option<atm_core::schema::AtmMessageId>,
     ) -> Result<(), AtmError> {
+        // The coordinator owns retry eligibility and backoff. This router only
+        // classifies the foreground result: an unconfirmed delivery is
+        // retryable through the coordinator, while a validation/configuration
+        // error is returned without inventing a second retry policy.
         if let Err(error) = self
             .peer_delivery_coordinator
             .deliver_after_persist(&message.outbound_request, deadline)
