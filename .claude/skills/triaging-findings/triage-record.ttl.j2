@@ -32,6 +32,10 @@ required_variables:
   - worktree_branches
   - worktree_head_shas
   - worktree_order_indices
+optional_variables:
+  - triage_record_version
+  - closed_at
+  - closed_by
 ---
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
@@ -56,7 +60,9 @@ required_variables:
   triage:foundIn triage:{{ found_in }} ;
   triage:foundAt "{{ found_at }}"^^xsd:dateTime ;
 {% for occurrence_id in occurrences %}  triage:hasOccurrence <urn:atm:triage:occurrence/{{ finding_id }}/{{ occurrence_id }}> ;
-{% endfor %}  triage:triageRecordVersion "1" .
+{% endfor %}{% if closed_at %}  triage:closedAt "{{ closed_at }}"^^xsd:dateTime ;
+{% endif %}{% if closed_by %}  triage:closedBy "{{ closed_by }}" ;
+{% endif %}  triage:triageRecordVersion "{% if triage_record_version %}{{ triage_record_version }}{% else %}1{% endif %}" .
 
 {% for occurrence_id in occurrences %}<urn:atm:triage:occurrence/{{ finding_id }}/{{ occurrence_id }}>
   a triage:Occurrence ;

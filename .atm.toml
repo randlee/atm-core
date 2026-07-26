@@ -14,7 +14,7 @@ sandbox = "workspace-write"
 approval_policy = "on-failure"
 
 [startup.team-lead]
-all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md",
+all = ["Read /graph-orchestration SKILL.md and /triaging-findings SKILL.md",
        "Use native atm send or atm ack for messages to arch-ctm or quality-mgr",
        "Use native atm read to read messages from team-members" ]
 

@@ -61,5 +61,6 @@ defaults:
     <step id="j">If a PR number is present and CI is not already green, monitor it with `gh pr checks {{ pr_number }} --watch`.</step>
     <step id="k">Append the completed QA report to the PR whenever a PR exists. Use the quality-management-gh templates when available.</step>
     <step id="l">Send the final QA verdict to team-lead and include deliverable completion as `X/Y (Z%)`. PASS requires 100% deliverable completion, a PASS verdict from every required reviewer, an active PR for the branch, and no unresolved blocking findings.</step>
+    <step id="m">For every triage record in `{{ triage_records }}` (or any other `.triage/*/findings/*.ttl` record in scope for this round) that this round's reviewers confirm is fixed on the reviewed branch, update that record's `triage:status` to `"fixed"` and set `triage:closedAt`/`triage:closedBy "quality-mgr"` before sending the final verdict — per the triaging-findings skill's closure rule that quality-mgr, not team-lead, owns finding closure once follow-up QA confirms the fix. Do not close a record that is still open, regressed, or unverified this round. List every record you closed (finding id + file) in the final verdict message so team-lead can reconcile it.</step>
   </workflow>
 </repo-qa-task>
