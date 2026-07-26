@@ -168,3 +168,6 @@ triage:a26 a triage:Assignment ;
 triage:c19 a triage:Completion ;
     triage:ofSprint triage:AICH-S5 ;
     triage:at "2026-07-26T13:36:02Z"^^xsd:dateTime .
+triage:c20 a triage:Completion ;
+    triage:ofSprint triage:AICH-S4 ;
+    triage:at "2026-07-26T13:40:00Z"^^xsd:dateTime .
