@@ -397,7 +397,7 @@ impl PeerDrainCoordinator {
                 );
                 Ok(())
             }
-            Err(error) => Err(AtmError::remote_delivery_unconfirmed(error.message())),
+            Err(error) => Err(error),
         }
     }
 

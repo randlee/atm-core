@@ -34,6 +34,8 @@ fn peer_delivery_events_project_only_safe_configured_peer_health() {
         message_id: Some(atm_core::schema::AtmMessageId::new()),
         peer: peer.clone(),
         error_code: Some(AtmErrorCode::RemoteDeliveryUnconfirmed),
+        candidate_count: Some(1),
+        next_attempt_at: None,
     });
     let statuses = dispatcher.peer_link_statuses();
     assert_eq!(statuses.len(), 1);
@@ -56,6 +58,8 @@ fn peer_delivery_events_project_only_safe_configured_peer_health() {
         message_id: Some(atm_core::schema::AtmMessageId::new()),
         peer,
         error_code: None,
+        candidate_count: Some(1),
+        next_attempt_at: None,
     });
     let status = dispatcher
         .peer_link_statuses()
