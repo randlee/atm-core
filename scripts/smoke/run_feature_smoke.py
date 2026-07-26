@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Any
 
-from run_inbound_peer_smoke import PANE_TEMPLATE, compose, render_host_pane
+from run_inbound_peer_smoke import PANE_TEMPLATE, compose
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -143,6 +143,44 @@ def add_case(cases: list[dict[str, Any]], name: str, passed: bool, detail: str) 
     print(f"{'PASS' if passed else 'FAIL'} {name}: {detail}", flush=True)
 
 
+def render_feature_pane(feature: str, cases: list[dict[str, Any]]) -> str:
+    """Render exactly the progressive live checks executed by this invocation."""
+    doctor = next((case for case in cases if case["name"] == "doctor"), None)
+    executed = [case for case in cases if case["name"] != "doctor"]
+    rows = "".join(
+        "<tr class=\"{status}\"><td>{marker}</td><td>{name}</td><td>{detail}</td></tr>".format(
+            status="pass" if case["status"] == "PASS" else "fail",
+            marker="✓" if case["status"] == "PASS" else "✗",
+            name=escape(case["name"]),
+            detail=escape(case["detail"]),
+        )
+        for case in executed
+    )
+    logs = "".join(
+        f"<li><strong>{escape(case['name'])}</strong>: {escape(case['status'])}</li>" for case in executed
+    )
+    failures = [case["name"] for case in executed if case["status"] == "FAIL"]
+    preflight = (
+        f"<h2>Preflight</h2><p class=\"{'pass' if doctor['status'] == 'PASS' else 'fail'}\">"
+        f"<strong>Doctor {'passed' if doctor['status'] == 'PASS' else 'failed'}.</strong> {escape(doctor['detail'])}</p>"
+        if doctor
+        else "<h2>Preflight</h2><p class=\"fail\">Doctor was not executed.</p>"
+    )
+    assessment = (
+        "Investigation required: " + "; ".join(failures)
+        if failures
+        else "No issues found by executed checks."
+    )
+    return (
+        f"<h1>ATM smoke: {escape(feature)}</h1>"
+        f"{preflight}"
+        f"<table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr>"
+        f"</thead><tbody>{rows}</tbody></table>"
+        f"<h2>Session log</h2><ul>{logs}</ul>"
+        f"<h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p>"
+    )
+
+
 def send_read_ack(cases: list[dict[str, Any]], atm: str, identity: str, team: str, host: str) -> None:
     target = f"{identity}@{team}.{host}"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -188,11 +226,6 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
     # Reuse the established AI.21-pre XHTML pane template instead of creating
     # a second report format for the same live-daemon evidence.
-    rows = {
-        case["name"]: ("pass" if case["status"] == "PASS" else "fail", case["detail"])
-        for case in cases
-    }
-    records = [{"phase": case["name"], "passed": case["status"] == "PASS"} for case in cases]
     pane = report.with_suffix(".xhtml")
     compose(
         PANE_TEMPLATE,
@@ -200,7 +233,7 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "host": platform.node(),
-            "body_html": render_host_pane(platform.node(), None, rows, records),
+            "body_html": render_feature_pane(feature, cases),
         },
         pane,
     )
@@ -250,9 +283,17 @@ def run_live(feature: str, peers: list[str]) -> int:
             and daemon_version == expected_version
         )
         detail = (
-            f"healthy/ready; expected={expected_version}, client={client_version}, daemon={daemon_version}"
+            "status: healthy\n"
+            "readiness: ready\n"
+            f"expected version: {expected_version}\n"
+            f"CLI version: {client_version}\n"
+            f"daemon version: {daemon_version}"
             if healthy
-            else f"expected={expected_version}, client={client_version}, daemon={daemon_version}"
+            else (
+                f"expected version: {expected_version}\n"
+                f"CLI version: {client_version}\n"
+                f"daemon version: {daemon_version}"
+            )
         )
         add_case(cases, "doctor", healthy, detail)
     except SmokeError as error:

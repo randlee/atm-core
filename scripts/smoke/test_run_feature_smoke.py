@@ -73,6 +73,18 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
         self.assertEqual(compose.call_args_list[2].args[2], report.parents[1] / "index.html")
 
+    def test_feature_pane_renders_each_executed_case(self):
+        pane = RUNNER.render_feature_pane(
+            "localhost",
+            [
+                {"name": "doctor", "status": "PASS", "detail": "status: healthy\\nreadiness: ready"},
+                {"name": "localhost send/read", "status": "PASS", "detail": "01TEST"},
+            ],
+        )
+        self.assertIn("localhost send/read", pane)
+        self.assertIn("Doctor passed", pane)
+        self.assertNotIn("<td>doctor</td>", pane)
+
 
 if __name__ == "__main__":
     unittest.main()
