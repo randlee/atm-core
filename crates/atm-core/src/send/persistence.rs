@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use serde_json::Map;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
@@ -156,6 +156,12 @@ fn mirror_message_to_store(
     let message_key = boundary::MessageKey::from(message_id);
     if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
         if immutable_envelopes_match(&existing.envelope, envelope) {
+            info!(
+                message_id = %message_id,
+                team = %team,
+                agent = %agent,
+                "duplicate immutable message write retained without another database row"
+            );
             return Ok(false);
         }
         error!(
@@ -196,8 +202,12 @@ fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool 
     left.read = false;
     left.pending_ack_at = None;
     left.acknowledged_at = None;
+    left.extra.remove("sourceHost");
+    left.extra.remove("peerOutbound");
     right.read = false;
     right.pending_ack_at = None;
     right.acknowledged_at = None;
+    right.extra.remove("sourceHost");
+    right.extra.remove("peerOutbound");
     left == right
 }

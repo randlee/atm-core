@@ -436,7 +436,7 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             && self.current_function.is_some_and(|index| {
                 self.functions
                     .get(index)
-                    .is_some_and(|function| function.name == "reconcile_after_success")
+                    .is_some_and(|function| function.name == "reconcile_peer")
             });
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"

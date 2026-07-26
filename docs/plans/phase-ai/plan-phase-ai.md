@@ -196,7 +196,7 @@ Findings are fixed on their owning sprint before forward merge.
 
 For every remaining Phase AI implementation sprint, the first commit sets the
 workspace release for every releasable ATM assembly to
-`1.3.2-beta-<sprint-number>` (for example, AI.22 is `1.3.2-beta-22`). Runtime
+`1.3.2-beta-<sprint-number>` (for example, AI.22 is `1.3.2-beta.22`). Runtime
 evidence starts only after `atm doctor --json` reports matching CLI and daemon
 release values; release labels are diagnostic, not protocol admission.
 

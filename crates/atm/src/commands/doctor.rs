@@ -105,9 +105,7 @@ impl DoctorCommand {
             &runtime.doctor_ports,
             Some(DaemonRuntimeDoctorReport {
                 findings: peer_findings,
-                http_api_version: atm_core::api::HTTP_API_VERSION,
                 peer_config: Some(peer_config),
-                peer_wire_security: None,
                 peer_links: Vec::new(),
             }),
         )
