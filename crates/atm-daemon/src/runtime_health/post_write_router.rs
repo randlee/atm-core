@@ -12,7 +12,11 @@ use super::peer_authority::resolve_peer_authority;
 use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, PostWriteRouter};
 
 impl PostWriteRouter for DaemonRequestDispatcher {
-    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
+    fn dispatch(
+        &self,
+        message: &mut MessageRecord,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
         let host = message
             .outbound_request
             .to
@@ -55,11 +59,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        match transport.deliver(
-            message.outbound_request.clone(),
-            &peer,
-            RequestDeadline::after(std::time::Duration::from_secs(5)),
-        ) {
+        match transport.deliver(message.outbound_request.clone(), &peer, deadline) {
             Ok(ResponseEnvelope::Error(error)) => {
                 self.record_unconfirmed_delivery(peer.host, request_id, message_id, error)
             }

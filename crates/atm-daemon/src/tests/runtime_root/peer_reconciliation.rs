@@ -216,11 +216,22 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         )
         .expect("enable one-message sync");
 
-    let response = dispatcher
-        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+    transport
+        .remaining_budgets
+        .lock()
+        .expect("delivery deadline recording lock")
+        .clear();
+
+    let response = ApiRouter::route(
+        &dispatcher,
+        ApiRequest::new(RequestEnvelope::PeerSync(PeerSyncRequest {
             peer: peer.clone(),
-        }))
-        .expect("explicit peer sync");
+        })),
+        AuthenticatedIngress::Local,
+        RequestDeadline::after(Duration::from_secs(1)),
+    )
+    .expect("explicit peer sync")
+    .into_inner();
     match response {
         ResponseEnvelope::PeerSync(PeerSyncOutcome {
             peer: returned_peer,
@@ -247,6 +258,15 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         "reconciliation reuses the canonical immutable write and its original ULID"
     );
     drop(delivered);
+    assert!(
+        transport
+            .remaining_budgets
+            .lock()
+            .expect("delivery deadline recording lock")
+            .iter()
+            .all(|remaining| *remaining <= Duration::from_secs(1)),
+        "peer sync delivery must consume the caller-admitted deadline rather than creating a fresh budget"
+    );
 
     let cooldown = dispatcher
         .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest { peer }))
