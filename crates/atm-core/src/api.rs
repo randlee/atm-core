@@ -16,6 +16,7 @@ use crate::protocol::{
 };
 use crate::read::{PeekQuery, ReadQuery};
 use crate::send::WriteRequest;
+use crate::types::HostName;
 use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
@@ -582,12 +583,34 @@ impl ApiResponse {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthenticatedIngress {
     Local,
     /// A peer that completed the HTTPS adapter's mutual-TLS and exact-pin
     /// checks. The application router receives no socket or peer configuration.
     Peer,
+    /// Explicit plaintext-test provenance. This is not peer authentication.
+    UntrustedSmoke(UntrustedSmokeProvenance),
+    /// A plaintext diagnostic request without declared source provenance.
+    /// It is never peer authentication and cannot carry a write.
+    AnonymousSmoke,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UntrustedSmokeProvenance {
+    declared_source_host: HostName,
+}
+
+impl UntrustedSmokeProvenance {
+    pub const fn new(declared_source_host: HostName) -> Self {
+        Self {
+            declared_source_host,
+        }
+    }
+
+    pub const fn declared_source_host(&self) -> &HostName {
+        &self.declared_source_host
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
