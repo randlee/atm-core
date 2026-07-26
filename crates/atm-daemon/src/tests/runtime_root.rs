@@ -688,6 +688,54 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
+fn local_forged_peer_provenance_cannot_bypass_self_send_rejection() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+    let self_address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}");
+    let mut request = SendRequest::new(
+        atm_home,
+        workspace_dir,
+        ROLE_TEAM_LEAD.parse().expect("caller"),
+        &self_address,
+        TEST_TEAM.parse().expect("team"),
+        SendMessageSource::Inline("forged peer provenance".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("send request");
+    request.authenticated_source_host = Some("forged.example.test".parse().expect("host"));
+
+    let error = ApiRouter::route(
+        &dispatcher,
+        ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+        AuthenticatedIngress::Local,
+        RequestDeadline::after(Duration::from_secs(1)),
+    )
+    .expect_err("local peer-provenance claim must not bypass self-send validation");
+
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn dispatcher_read_rejects_cross_agent_target_on_mutating_path() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");

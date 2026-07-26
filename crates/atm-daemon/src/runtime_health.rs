@@ -889,15 +889,20 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        let request = request.into_inner();
-        if let RequestEnvelope::Write(write) = &request {
+        let mut request = request.into_inner();
+        if let RequestEnvelope::Write(write) = &mut request {
             match ingress {
-                AuthenticatedIngress::Local
-                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
-                {
-                    return Err(AtmError::validation(
-                        "local write requests must not supply origin message metadata",
-                    ));
+                AuthenticatedIngress::Local => {
+                    // The local IPC payload is caller-controlled. Peer provenance is
+                    // established only by the HTTPS adapter after authentication.
+                    // Strip a local claim so it cannot bypass ordinary self-send
+                    // validation or select the peer-receipt post-write path.
+                    write.authenticated_source_host = None;
+                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() {
+                        return Err(AtmError::validation(
+                            "local write requests must not supply origin message metadata",
+                        ));
+                    }
                 }
                 AuthenticatedIngress::Peer
                     if write.authenticated_source_host.is_none()
@@ -922,9 +927,7 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "anonymous plaintext diagnostics cannot submit writes",
                     ));
                 }
-                AuthenticatedIngress::Local
-                | AuthenticatedIngress::Peer
-                | AuthenticatedIngress::UntrustedSmoke(_) => {}
+                AuthenticatedIngress::Peer | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
         if matches!(request, RequestEnvelope::ReloadRuntimeView)
