@@ -36,7 +36,7 @@ defaults:
 
   <workflow>
     <step id="a">ACK this message immediately. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
-    <step id="b">Immediately after ACK, begin work in the same session.</step>
+    <step id="b">Before reading code or editing, verify this is either a new/greenfield sprint or a fix task with an assigned, open Blocking finding on this exact sprint. If neither condition is true, stop and report the invalid assignment. Then begin work in the same session.</step>
     <step id="c">Read `{{ criteria_doc }}` before coding. This is the authoritative acceptance criteria for this node. Satisfy every criterion completely — do not weaken or skip any.</step>
     <step id="d">Update the worktree from `{{ pr_target }}` before any edits: `git fetch origin && git merge origin/{{ pr_target }}`.</step>
     <step id="e">Implement the work. Commit incrementally on `{{ branch }}`.</step>
