@@ -36,38 +36,6 @@ pub(super) fn take_accept_error(
     }
 }
 
-pub(super) fn maybe_reload_runtime_view<ReloadRuntimeView>(
-    signals: &ServeLoopSignals,
-    reload_runtime_view: &ReloadRuntimeView,
-    observability: &SubsystemObservability,
-) -> bool
-where
-    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
-{
-    if !signals.take_reload() {
-        return false;
-    }
-    match reload_runtime_view() {
-        Ok(()) => {
-            observability.emit_or_warn(
-                "reload_runtime_view",
-                "ok",
-                "bounded lifecycle-control-triggered config or roster reload applied",
-            );
-            tracing::info!("bounded lifecycle-control-triggered config/roster reload applied");
-        }
-        Err(error) => tracing::warn!(
-            subsystem = "local_ipc_transport",
-            action = "reload_runtime_view",
-            outcome = "rejected",
-            error_code = %error.code(),
-            error_message = %error.message(),
-            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
-        ),
-    }
-    true
-}
-
 pub(super) fn handle_shutdown_probe(
     stream: &mut LocalSocketStream,
     lifecycle_control: &LifecycleControlSourceAdapter,

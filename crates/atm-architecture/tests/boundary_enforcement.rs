@@ -101,6 +101,89 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
 }
 
 #[test]
+fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
+    let root = workspace_root();
+    let api = read_source(&root.join("crates/atm-core/src/api.rs"));
+    assert!(
+        api.contains("HttpRouteKind::Write")
+            && api.contains("path_template: MESSAGES_PATH")
+            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";")
+            && api.contains("fn route_kind_for_http"),
+        "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
+    );
+    assert!(
+        !api.contains("is_ack_path") && !api.contains("/ack\""),
+        "AI.23 forbids an acknowledgement-specific HTTP resource"
+    );
+
+    for (adapter, path) in [
+        (
+            "local IPC",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(
+            source.contains(".route("),
+            "AI.23 {adapter} adapter must enter the shared ApiRouter"
+        );
+        for forbidden in [
+            "PostWriteRouter",
+            "MessageWriter",
+            "persist_",
+            "prepare_write",
+            "emit_local_post_write",
+            "DaemonPostSend",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "AI.23 {adapter} adapter must not own write persistence or post-write side effects: `{forbidden}`"
+            );
+        }
+    }
+
+    let peer_https =
+        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
+    assert!(
+        !peer_https.contains("AckRequest")
+            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
+        "AI.24 forbids an ACK-specific peer transport request branch"
+    );
+    assert!(
+        peer_https.contains("fn route_peer_http_request")
+            && peer_https.contains("router\n        .route(request, ingress"),
+        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
+    );
+}
+
+#[test]
+fn ai25_trust_reload_validates_before_installing_live_trust() {
+    let root = workspace_root();
+    let composition = syn::parse_file(&read_source(
+        &root.join("crates/atm-daemon/src/composition.rs"),
+    ))
+    .expect("daemon composition must parse");
+    let mut visitor = TrustReloadValidationVisitor::default();
+    visitor.visit_file(&composition);
+    assert!(
+        visitor.is_valid(),
+        "AI.25 requires exactly one reload validator and one live trust install in daemon composition"
+    );
+
+    let missing_validation =
+        syn::parse_file("fn reload() { listeners.refresh_trusted_peers(peers).unwrap(); }")
+            .expect("negative fixture must parse");
+    let mut negative = TrustReloadValidationVisitor::default();
+    negative.visit_file(&missing_validation);
+    assert!(
+        !negative.is_valid(),
+        "AST guard must reject a live trust install without reload validation"
+    );
+}
+
+#[test]
 fn canonical_write_router_has_one_host_routing_decision() {
     let root = workspace_root();
     let mut visitor = HostRoutingVisitor::default();
@@ -250,6 +333,87 @@ fn canonical_write_router_rejects_all_mandated_negative_fixtures() {
     );
 }
 
+#[test]
+fn ai23_ingress_adapters_cannot_own_write_side_effects() {
+    let root = workspace_root();
+    for relative in [
+        "crates/atm-daemon/src/https_transport.rs",
+        "crates/atm-daemon/src/local_tcp_transport.rs",
+        "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+    ] {
+        let path = root.join(relative);
+        let source = read_source(&path);
+        let file = syn::parse_file(&source)
+            .unwrap_or_else(|error| panic!("{} must remain valid Rust: {error}", path.display()));
+        let mut visitor = IngressWriteSideEffectVisitor::default();
+        visitor.visit_file(&file);
+        assert!(
+            visitor.findings.is_empty(),
+            "AI.23 ingress adapter {relative} may authenticate/decode then call ApiRouter only; it must not own write side effects: {:?}",
+            visitor.findings
+        );
+    }
+
+    let fixture = syn::parse_file(
+        "impl MessageWriter for Bad { fn write(&self) {} } fn ingress() { persist_message(); emit_local_post_write(); route_write(); }",
+    )
+    .expect("negative fixture must parse");
+    let mut visitor = IngressWriteSideEffectVisitor::default();
+    visitor.visit_file(&fixture);
+    assert_eq!(
+        visitor.findings,
+        BTreeSet::from([
+            "MessageWriter implementation".to_string(),
+            "direct `emit_local_post_write` call".to_string(),
+            "direct `persist_message` call".to_string(),
+            "direct `route_write` call".to_string(),
+        ]),
+        "negative fixture proves the gate is AST-based and fails closed"
+    );
+}
+
+#[derive(Default)]
+struct IngressWriteSideEffectVisitor {
+    findings: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for IngressWriteSideEffectVisitor {
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        if node.trait_.as_ref().is_some_and(|(_, path, _)| {
+            path.segments.last().is_some_and(|segment| {
+                matches!(
+                    segment.ident.to_string().as_str(),
+                    "MessageWriter" | "PostWriteRouter"
+                )
+            })
+        }) {
+            let trait_name = node
+                .trait_
+                .as_ref()
+                .and_then(|(_, path, _)| path.segments.last())
+                .expect("trait segment checked above")
+                .ident
+                .to_string();
+            self.findings.insert(format!("{trait_name} implementation"));
+        }
+        syn::visit::visit_item_impl(self, node);
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = node.func.as_ref()
+            && let Some(segment) = path.path.segments.last()
+        {
+            let name = segment.ident.to_string();
+            if matches!(name.as_str(), "persist_message" | "route_write")
+                || name.starts_with("emit_local_post_write")
+            {
+                self.findings.insert(format!("direct `{name}` call"));
+            }
+        }
+        syn::visit::visit_expr_call(self, node);
+    }
+}
+
 fn canonical_write_modules(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_rust_files(&root.join("crates"), &mut files);
@@ -280,6 +444,7 @@ struct HostRoutingVisitor {
 struct HostRoutingFunction {
     name: String,
     is_post_write_dispatch: bool,
+    is_post_write_router_helper: bool,
     is_test: bool,
     accesses_host: bool,
     calls_delivery: bool,
@@ -366,19 +531,26 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
+        if method == "host"
+            && let Some(function) = self.current_function_mut()
+        {
+            function.accesses_host = true;
+        }
         let local_nudge = method.starts_with("emit_local_post_write");
-        let reconciliation_delivery = matches!(method.as_str(), "deliver" | "deliver_page")
+        let reconciliation_delivery = (method == "deliver"
+            && self.is_runtime_dispatcher_source()
             && self.current_function.is_some_and(|index| {
-                self.functions.get(index).is_some_and(|function| {
-                    (self.is_runtime_dispatcher_source()
-                        && function.name == "reconcile_after_success")
-                        || (self.source_path.as_ref().is_some_and(|path| {
-                            path.ends_with(Path::new(
-                                "crates/atm-daemon/src/peer_drain_coordinator.rs",
-                            ))
-                        }) && function.name == "drain")
-                })
-            });
+                self.functions
+                    .get(index)
+                    .is_some_and(|function| function.name == "reconcile_peer")
+            }))
+            || (method == "deliver_page"
+                && self.is_peer_drain_coordinator_source()
+                && self.current_function.is_some_and(|index| {
+                    self.functions
+                        .get(index)
+                        .is_some_and(|function| function.name == "drain")
+                }));
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"
             || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
@@ -420,6 +592,11 @@ impl HostRoutingVisitor {
         let index = self.functions.len();
         self.functions.push(HostRoutingFunction {
             is_post_write_dispatch: self.in_post_write_router && name == "dispatch",
+            // AI.27 extracts the router's two cohesive actions to keep the
+            // dispatcher below the production file/function limits. These
+            // helpers remain private methods in the router-only module; no
+            // other module may gain this authority.
+            is_post_write_router_helper: self.is_post_write_router_helper(&name),
             is_test: self.in_test_module
                 || attrs
                     .iter()
@@ -623,6 +800,7 @@ impl HostRoutingVisitor {
             .filter(|function| {
                 function.calls_delivery
                     && !function.is_post_write_dispatch
+                    && !function.is_post_write_router_helper
                     && function.reconciliation_delivery_calls == 0
             })
             .map(|function| {
@@ -650,6 +828,23 @@ impl HostRoutingVisitor {
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+                || path.ends_with(Path::new(
+                    "crates/atm-daemon/src/runtime_health/peer_sync.rs",
+                ))
+        })
+    }
+
+    fn is_peer_drain_coordinator_source(&self) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new("crates/atm-daemon/src/peer_drain_coordinator.rs"))
+        })
+    }
+
+    fn is_post_write_router_helper(&self, name: &str) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new(
+                "crates/atm-daemon/src/runtime_health/post_write_router.rs",
+            )) && matches!(name, "emit_local_post_write" | "deliver_to_peer")
         })
     }
 }
@@ -1285,6 +1480,38 @@ fn production_api_router_implementation_count(path: &Path) -> usize {
 #[derive(Default)]
 struct ProductionApiRouterImplementationDetector {
     count: usize,
+}
+
+#[derive(Default)]
+struct TrustReloadValidationVisitor {
+    reload_validation_calls: usize,
+    live_trust_install_calls: usize,
+}
+
+impl TrustReloadValidationVisitor {
+    fn is_valid(&self) -> bool {
+        self.reload_validation_calls == 1 && self.live_trust_install_calls == 1
+    }
+}
+
+impl<'ast> Visit<'ast> for TrustReloadValidationVisitor {
+    fn visit_expr_call(&mut self, expression: &'ast syn::ExprCall) {
+        if let syn::Expr::Path(path) = expression.func.as_ref()
+            && path.path.segments.last().is_some_and(|segment| {
+                segment.ident == "validate_enabled_peer_configuration_for_reload"
+            })
+        {
+            self.reload_validation_calls += 1;
+        }
+        syn::visit::visit_expr_call(self, expression);
+    }
+
+    fn visit_expr_method_call(&mut self, expression: &'ast syn::ExprMethodCall) {
+        if expression.method == "refresh_trusted_peers" {
+            self.live_trust_install_calls += 1;
+        }
+        syn::visit::visit_expr_method_call(self, expression);
+    }
 }
 
 impl<'ast> Visit<'ast> for ProductionApiRouterImplementationDetector {

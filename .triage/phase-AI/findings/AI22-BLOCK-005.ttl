@@ -32,8 +32,8 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 272 ;
   triage:snippet "fn authenticated_host_qualified_peer_receipt_routes_local_without_redelivery() { ... dispatcher.dispatch(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:reason "Test uses direct-dispatch mock with mismatched caller/recipient identities; does not exercise TCP/TLS advertised-IP self-send; acceptance criteria explicitly disallow mock-based closure" ;
@@ -44,8 +44,8 @@
   triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
   triage:line 271 ;
   triage:snippet "fn authenticated_host_qualified_peer_receipt_routes_local_without_redelivery() { ... dispatcher.dispatch(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:reason "Test inherited from s22; same insufficiency: direct-dispatch mock, not advertised-IP TCP/TLS" ;

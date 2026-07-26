@@ -9,17 +9,18 @@
   triage:title "Reload blocks the local-IPC accept loop during trust refresh" ;
   triage:description "During refresh_https_trust, the local-IPC accept loop is blocked. EXPLICITLY FLAGGED BY THE REVIEWER AS A PRE-EXISTING PATTERN, NOT A REGRESSION -- for awareness only. Not urgent; pre-existing pattern may recur elsewhere reload-adjacent code is added. Distinct from AI25-RSH-001 (unbounded DNS resolution stall)." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RSH" ;
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/composition.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T13:12:15Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-004/s25/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/33544351068a4253625d4fb504d31e7b686f9d9f> ;
   triage:sourceOrigin "AICH-S5" ;
   triage:reviewerNote "pre-existing pattern, not a regression, awareness only" .
 
@@ -28,12 +29,12 @@
   triage:file "crates/atm-daemon/src/composition.rs" ;
   triage:line 370 ;
   triage:snippet "reload_runtime_view: || { self.request_dispatcher.reload_runtime_view()?; self.refresh_https_trust() }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:headSha "33544351068a4253625d4fb504d31e7b686f9d9f" ;
   triage:orderIndex 5 ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/33544351068a4253625d4fb504d31e7b686f9d9f> .
 
 <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9fa>
   a triage:WorktreeSnapshot ;
@@ -67,13 +68,13 @@
   triage:orderIndex 4 ;
   triage:status "absent" .
 
-<urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+<urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/33544351068a4253625d4fb504d31e7b686f9d9f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:path "feature/pAI-s25-peer-authority-resolution" ;
-  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:headSha "33544351068a4253625d4fb504d31e7b686f9d9f" ;
   triage:orderIndex 5 ;
-  triage:status "open" .
+  triage:status "fixed" .
 
 <urn:atm:triage:worktree/pAI-s26-peer-write-deadline/b5eec1bf>
   a triage:WorktreeSnapshot ;

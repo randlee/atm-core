@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI25-RBQA-F002-new>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F002-new" ;
+  triage:title "lint_boundaries.py never validates the [ownership]/io_forbidden table, so forbidden-dependency violations like AI25-RBQA-F001 are invisible to the mechanical boundary gate" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S5-QA-2 (AI.25 fix-round-2 recheck, PR #640, commit 5f794c42d449687b6badca46193592f11bc25529, branch feature/pAI-s25-peer-authority-resolution), as a companion finding to AI25-RBQA-F001 (a boundary policy leak that the mechanical gate failed to catch). The boundary-enforcement lint script (locate it -- likely lint_boundaries.py or similar under scripts/ or .claude/) does not validate declared [ownership]/io_forbidden tables in adapter boundary TOML files (e.g. peer-http-adapter.toml), meaning policy violations like resolve_peer_authority living in a forbidden file for recipient_routing are not mechanically caught. Multiple boundary TOML files declare [ownership]/io_forbidden tables (peer-http-adapter.toml and others in boundaries/ directory), but lint_boundaries.py does not check that code-level implementations respect these forbidden-dependency declarations. The lint script's REQUIRED_BOUNDARY_FIELDS tuple does not include ('ownership', 'io_forbidden'), and no validation function exists to check io_forbidden entries against actual source code patterns." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T12:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F002-new/lint-gap-1>
+  a triage:Occurrence ;
+  triage:file ".just/lint_boundaries.py" ;
+  triage:line 25 ;
+  triage:snippet "REQUIRED_BOUNDARY_FIELDS does not include ('ownership', 'io_forbidden')" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s26-peer-write-deadline/bc1346e4> .
+
+<urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/pAI-s24-host-qualified-ack-receipt/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 24 .
+
+<urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/5f794c42>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42" ;
+  triage:orderIndex 25 .
+
+<urn:atm:triage:worktree/pAI-s26-peer-write-deadline/bc1346e4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "bc1346e4" ;
+  triage:orderIndex 26 .

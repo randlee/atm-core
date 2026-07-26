@@ -19,8 +19,8 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
-        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
+        ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
@@ -642,6 +642,7 @@ impl DaemonRequestDispatcher {
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
+            disposition: PeerSyncDisposition::Completed,
         })
     }
 }

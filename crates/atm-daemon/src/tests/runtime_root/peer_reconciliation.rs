@@ -78,7 +78,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
             ack.clone().into_write_request(),
         )))
         .expect_err("failed remote acknowledgement must return the transport error");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing
             .attempted
@@ -200,8 +200,10 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
         ResponseEnvelope::PeerSync(PeerSyncOutcome {
             peer: returned_peer,
             delivered,
+            disposition,
         }) => {
             assert_eq!(returned_peer, peer);
+            assert_eq!(disposition, PeerSyncDisposition::Completed);
             assert_eq!(
                 delivered, 2,
                 "the coordinator drains all bounded pages before releasing its lease"
