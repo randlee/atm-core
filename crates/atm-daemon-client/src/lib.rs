@@ -773,9 +773,17 @@ impl DaemonSupervisor {
         let halfway_deadline = Instant::now() + (publish_timeout / 2);
         let mut halfway_reported = false;
         let mut current_poll_interval = poll_interval;
+        let mut last_connect_error = None;
         while Instant::now() < deadline {
-            if self.try_connect_with_traceability(try_connect, traceability, "pending") {
-                return Ok(());
+            match try_connect() {
+                Ok(()) => {
+                    self.emit_trace(traceability, "daemon_connect", "connected", None);
+                    return Ok(());
+                }
+                Err(error) => {
+                    self.emit_trace(traceability, "daemon_connect", "pending", Some(&error));
+                    last_connect_error = Some(error);
+                }
             }
             if !halfway_reported && Instant::now() >= halfway_deadline {
                 tracing::warn!(
@@ -798,8 +806,13 @@ impl DaemonSupervisor {
             thread::sleep(current_poll_interval.min(remaining));
             current_poll_interval = next_auto_start_poll_interval(current_poll_interval);
         }
+        let detail = last_connect_error
+            .as_ref()
+            .map_or_else(String::new, |error| {
+                format!("; last local IPC failure: {error}")
+            });
         let error = AtmError::daemon_auto_start_failed(format!(
-            "failed to connect to daemon local IPC endpoint at {} after auto-start",
+            "failed to connect to daemon local IPC endpoint at {} after auto-start{detail}",
             self.endpoint.display()
         ));
         self.emit_trace(
@@ -1261,6 +1274,26 @@ mod tests {
             .expect("daemon record becomes connectable before the bounded deadline");
 
         assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn publish_wait_retains_the_last_local_ipc_failure_in_its_timeout_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let supervisor = supervisor(&tempdir);
+        let error = supervisor
+            .wait_for_published_daemon(
+                &mut || Err(AtmError::daemon_unavailable("fixture connection refused")),
+                Instant::now() + Duration::from_millis(2),
+                Duration::from_millis(2),
+                Duration::from_millis(1),
+                None,
+            )
+            .expect_err("unreachable daemon must exhaust the publish wait");
+
+        assert!(
+            error.message().contains("fixture connection refused"),
+            "the timeout must retain the last local IPC diagnostic"
+        );
     }
 
     #[cfg(unix)]

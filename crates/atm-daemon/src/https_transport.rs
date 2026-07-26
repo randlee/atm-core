@@ -176,10 +176,10 @@ impl HttpsMessageTransport for HttpsTransport {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
                 let config = client_config(identity, peer)?;
-                let server_name = ServerName::try_from(host.clone()).map_err(|_source| {
-                    AtmError::validation(
-                        "configured HTTPS peer host is not a valid TLS server name",
-                    )
+                let server_name = ServerName::try_from(host.clone()).map_err(|source| {
+                    AtmError::validation(format!(
+                        "configured HTTPS peer host is not a valid TLS server name: {source}",
+                    ))
                 })?;
                 let connection =
                     ClientConnection::new(Arc::new(config), server_name).map_err(|source| {
