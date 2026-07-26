@@ -355,6 +355,12 @@ fn accept_loop(
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
+                // `shutdown` wakes a blocking accept with one short-lived connection.  Do not
+                // turn that wake-up into a five-second TLS/request worker: it is not a peer
+                // request and would consume the entire bounded shutdown window.
+                if stop.load(std::sync::atomic::Ordering::SeqCst) {
+                    break;
+                }
                 if requests.active_connections() >= MAX_PEER_HTTP_CONNECTIONS {
                     tracing::warn!(
                         subsystem = "https_transport",
