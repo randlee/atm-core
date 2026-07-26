@@ -10,11 +10,16 @@ description: Produce an auditable phase triage report from the integration workt
 the machine-readable source of truth and its precomputed row strings are the
 inputs displayed by `sc-compose`; Jinja performs no gate arithmetic.
 
-Current B/I/M counts and merge readiness come from unresolved Turtle findings
-through graph-orchestration's existing `open-findings-for-sprint.sparql`
-query. QA evidence is review provenance only. PR, CI, and merge state are read
-from GitHub for the branch declared in Turtle (or derived from the documented
-criteria filename convention); no hand-maintained metadata file is used.
+Each sprint row's live B/I/M counts and merge readiness come from unresolved
+Turtle findings through graph-orchestration's existing
+`open-findings-for-sprint.sparql` query. QA evidence is shown as review
+provenance only. Current phase-wide findings are deduplicated in a separate
+integration summary, so later occurrences do not distort the sprint's QA
+snapshot. Fixed findings remain fixed; an open occurrence beneath one is TTL
+reconciliation data and never becomes a development blocker. PR, CI, and merge
+state are read from GitHub for the branch declared in Turtle (or derived from
+the documented criteria filename convention); no hand-maintained metadata file
+is used.
 
 ## Usage
 
@@ -48,9 +53,10 @@ not canonical Turtle paths; triage record paths remain repository-relative.
 ## Calculated gates
 
 - `ready_to_merge` is true only when the live unresolved Turtle blocker count
-  is zero.
+  is zero; it is not applicable once GitHub reports the sprint merged.
 - `ok_to_merge` is true only when `ready_to_merge` is true and GitHub reports
-  every earlier sprint's current delivery attempt as merged.
+  every earlier sprint's current delivery attempt as merged; it is not
+  applicable once the sprint itself is merged.
 - `quality_gate` requires live unresolved Turtle B/I/M counts to be zero.
 
 The table uses the same DEV/QA/CI/PR icons as `/sprint-report`: `📥`, `🌀`,
