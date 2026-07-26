@@ -1,6 +1,6 @@
 ---
 title: AI.27 truthful peer delivery outcomes
-status: proposed
+status: complete
 branch: feature/pAI-s27-peer-delivery-observability
 target: integrate/phase-AI
 depends_on: AI.21-pre, AI.23, AI.26
