@@ -36,6 +36,6 @@
 <urn:atm:triage:worktree/s25/a9e61fb081de28d706071981e54d179c6e1f9265>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
   triage:orderIndex 5 .

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-BLOCKING-02-HTTP-CONTRACT-GENERIC>
   a triage:Finding ;
   triage:findingId "AI11-BLOCKING-02-HTTP-CONTRACT-GENERIC" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:title "HTTP response always status 200; missing detail/read routes documented in OpenAPI" ;
   triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Two defects in HTTP API contract enforcement: (1) write_http_response (crates/atm-core/src/api.rs:107-114) hardcodes literal 'HTTP/1.1 200 OK' regardless of envelope content/error state, contradicting openapi.yaml documented 200/201/204 statuses and error-response handling contract. (2) ApiRequest::matches_route (api.rs:264-284) has no matching case for GET /v1/atm/message/{id} detail route or /v1/atm/message/{id}/read route, despite both documented in openapi.yaml. Note: /v1/atm/teams route removal is already an accepted waiver (openapi_surface_reviewed_removals.json); this finding addresses only the missing detail/read routes and always-200 status bug, which are NOT in that allowlist. Sprint-ai-9.md Deliverable 2 requires HTTP API contract parity with OpenAPI spec." ;
   triage:phaseId "phase-AI" ;
@@ -48,13 +50,13 @@
 <urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:orderIndex 999 .
 
 <urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:orderIndex 20 .

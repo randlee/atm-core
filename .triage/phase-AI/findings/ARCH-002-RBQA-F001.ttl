@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ARCH-002-RBQA-F001>
   a triage:Finding ;
   triage:findingId "ARCH-002-RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "MailStore/RosterStore boundary records claim state=retired with no live callers, but live production call sites still depend on the deprecated bridge" ;
   triage:description "AI2-QA-1 (arch-qa + ruthless-boundary-qa, same defect, converged from different angles). atm_core::boundary::{MailStore, RosterStore} are #[deprecated] and their backing TOML records (boundaries/atm-core/mail-store.toml:43-45, roster-store.toml:45-47) claim state = \"retired\" with \"consumer cutover complete,\" yet live production call sites still depend on the deprecated bridge (atm/src/composition.rs:751,793,841; atm/src/commands/teams.rs:510; atm/src/commands/members.rs:152; atm-daemon/src/composition.rs:417; atm-daemon/src/runtime_health.rs:513,923,947) via crates/atm-runtime/src/legacy_storage_adapters.rs's BoundaryMailStoreView/BoundaryRosterStoreView, with the compiler warning suppressed via #[allow(deprecated, ...)] at 5 sites. 'Retired, no live callers' is factually false as currently stated. Confirmed by direct inspection: state = \"retired\" already present at AI.1 baseline; legacy_storage_adapters.rs present on AI.1, AI.2, and AI.3 unchanged -- this is not a new AI.2 regression, it originates at the AI.1 baseline and has propagated forward unfixed through AI.3." ;
   triage:phaseId "phase-AI" ;
@@ -35,27 +37,27 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/c9d62ff6>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "c9d62ff6" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "00fe6608" ;
   triage:orderIndex 0 .

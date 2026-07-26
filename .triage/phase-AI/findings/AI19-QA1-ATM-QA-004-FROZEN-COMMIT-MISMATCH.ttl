@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH>
   a triage:Finding ;
   triage:findingId "AI19-QA1-ATM-QA-004-FROZEN-COMMIT-MISMATCH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "FROZEN readiness record cites potentially incorrect commit" ;
   triage:description "docs/plans/phase-ai/readiness-ai17-21-hermes-graft.md AI.19 row records FROZEN at commit 5947858a (feature commit introducing bridge), but the actually-reviewed QA tip was bedc1bf1 (docs-only commit freezing the record). bedc1bf1 changed only documentation (readiness-ai17-21-hermes-graft.md and sprint-ai-19-hermes-graft-integration.md), not the bridge file. Determination: bridge file is frozen at 5947858a and unchanged in bedc1bf1. Citation should be verified: 5947858a is the frozen surface; bedc1bf1 is the reviewed/approved record." ;
   triage:phaseId "phase-AI" ;
@@ -46,13 +48,13 @@
 <urn:atm:triage:worktree/s19-docs/bedc1bf1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "bedc1bf1" ;
   triage:orderIndex 19 .
 
 <urn:atm:triage:worktree/s20-docs/32af5bb1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "32af5bb1" ;
   triage:orderIndex 20 .

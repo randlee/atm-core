@@ -122,3 +122,11 @@ triage:a18 a triage:Assignment ;
     triage:ofSprint triage:AICH-S10 ;
     triage:assignedTo "arch-ctm" ;
     triage:assignedAt "2026-07-25T16:48:00Z"^^xsd:dateTime .
+
+triage:a19 a triage:Assignment ;
+    triage:ofSprint triage:AICH-Legacy ;
+    triage:assignedTo "team-lead" ;
+    triage:assignedAt "2026-01-01T00:00:00Z"^^xsd:dateTime .
+triage:c16 a triage:Completion ;
+    triage:ofSprint triage:AICH-Legacy ;
+    triage:at "2026-07-26T01:31:27Z"^^xsd:dateTime .

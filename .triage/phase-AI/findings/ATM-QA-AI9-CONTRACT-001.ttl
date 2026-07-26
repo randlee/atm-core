@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-AI9-CONTRACT-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-AI9-CONTRACT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T21:00:00Z"^^xsd:dateTime ;
   triage:title "AI.9 sprint doc names PostWriteRouter type that does not exist; actual mechanism is DaemonRequestDispatcher::dispatch" ;
   triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports a contract-fidelity gap: the sprint doc (docs/plans/phase-ai/sprint-ai-9.md) names a `PostWriteRouter` type that doesn't exist in the workspace. The actual mechanism is `DaemonRequestDispatcher::dispatch` in runtime_health.rs (lines 558-568), which examines write.to.host and routes to dispatch_peer_write or dispatch_local. This echoes the same MessageWriter/PostWriteRouter naming gap already known from AI.6/AI.7 (see ATM-QA-AI6-DELIVERABLE-8 and the AI.7 FAIL 2/17 finding referencing the same missing types). Both AI.9 and AI.10 sprint docs inherit this reference from the shared AI.9 deliverable text." ;
   triage:phaseId "phase-AI" ;
@@ -49,7 +51,7 @@
 <urn:atm:triage:worktree/pAI-s9/7cf40edd>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s9-https-peer-transport" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
   triage:headSha "7cf40edd" ;
   triage:orderIndex 9 ;
   triage:prNumber 604 ;
@@ -58,7 +60,7 @@
 <urn:atm:triage:worktree/pAI-s10/d461c936>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
   triage:headSha "d461c936" ;
   triage:orderIndex 10 ;
   triage:targetBranch "integrate/phase-AI" .
