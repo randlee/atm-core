@@ -107,11 +107,7 @@ impl DaemonRequestDispatcher {
         message_id: Option<atm_core::schema::AtmMessageId>,
         error: AtmError,
     ) -> Result<(), AtmError> {
-        let unconfirmed = AtmError::remote_delivery_unconfirmed(format!(
-            "local persistence completed but peer delivery was not confirmed: {}",
-            error.message()
-        ));
-        self.peer_delivery_terminal_error(peer, request_id, message_id, unconfirmed)
+        self.peer_delivery_terminal_error(peer, request_id, message_id, error)
     }
 
     fn peer_delivery_terminal_error(
