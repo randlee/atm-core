@@ -271,8 +271,11 @@ def _validate_findings_before_query(ttl_dir: str, script_dir: Path) -> None:
             "cannot locate repository root containing .triage; findings validation cannot run"
         )
     triage_root = repo_root / ".triage"
+    ignored_phase_dirs = _load_ignored_phase_dirs(repo_root)
     findings_dirs = sorted(
-        path for path in triage_root.glob("*/findings") if path.is_dir()
+        path
+        for path in triage_root.glob("*/findings")
+        if path.is_dir() and path.parent.name not in ignored_phase_dirs
     ) if triage_root.exists() else []
     # An existing but empty .triage tree is a valid no-findings input.  Passing
     # the root directory still exercises the validator and gives a structured
