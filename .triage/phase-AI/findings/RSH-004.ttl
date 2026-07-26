@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RSH-004>
   a triage:Finding ;
   triage:findingId "RSH-004" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:title "delivered_request_json set has no size cap and lacks scenario-level partial-failure-then-retry test coverage" ;
   triage:description "crates/atm-daemon/src/runtime_health.rs:649-693 -- delivered_request_json: BTreeSet<String> was added to fix RSH-002 (partial-success retry re-transmission). Confirmed correct at the core-defect level (skip-if-already-delivered, retain-on-partial-failure, clear-only-on-full-success) by arch-qa, rust-service-hardening-agent, and req-qa at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt. Two residual, non-blocking gaps remain: (1) unbounded growth -- the set has no independent size cap and is only cleared by a fully successful pass; a chronically-unreachable peer across many explicit attempts could grow it beyond one batch's cap over the daemon's lifetime (arch-qa: Important; rust-service-hardening-agent: Minor). (2) no test evidence for the actual partial-failure-then-retry path (req-qa) -- the only batch test uses max_batch_messages: NonZeroU16::new(1), which can never exercise mid-batch skip/accumulate logic; the logic is code-correct by inspection but currently untested at the scenario level. Recommend a fix that adds an independent size/age cap on delivered_request_json plus a scenario-level test with max_batch_messages > 1 that induces a partial failure mid-batch and asserts correct retry behavior." ;
   triage:phaseId "phase-AI" ;
@@ -33,27 +35,27 @@
 <urn:atm:triage:worktree/pAI-s21/42fbd9fa>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-s22/a5aa6813>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-s23/c528137c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s24/c326cbe7>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7" ;
   triage:orderIndex 4 .

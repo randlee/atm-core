@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE>
   a triage:Finding ;
   triage:findingId "AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "Zero test coverage for reconcile_after_success / cooldown / batch-cap / age-filter" ;
   triage:description "Zero test coverage for reconcile_after_success and its cooldown (60s rate limiter, MAX_PEER_SYNC_COOLDOWN_ENTRIES=256), batch-cap (max_batch_messages), and age-filter (max_message_age) behavior in crates/atm-daemon/src/runtime_health.rs around line 608 (line numbers may have shifted). Introduced in sprint s16, present through s17. Sweep the runtime_health.rs implementation and any adjacent test module in the same crate to confirm whether dedicated unit/integration tests for these specific behaviors (cooldown expiry, MAX_PEER_SYNC_COOLDOWN_ENTRIES eviction, max_batch_messages capping, max_message_age filtering) exist on each branch." ;
   triage:phaseId "phase-AI" ;
@@ -47,48 +49,48 @@
 <urn:atm:triage:worktree/s11/bb20fd9a9290895c55ae9981a718f33e11e0a751>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s12/b6466aa17d9564b104d292485e26dd7614b65cb4>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s13/aecade2a23b264bb26afc3c941974aea2627e4ae>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s14/672ffc349b1faabc769e8f1e81cafede34479fb5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s15/b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s16/853abcfccad834ae36e441a995c3851333eb7a8e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
   triage:orderIndex 6 .
 
 <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
   triage:orderIndex 7 .

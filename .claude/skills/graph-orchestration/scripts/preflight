@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Dependency preflight wrapper.  Prefer PATH's python3, then common macOS/Linux
+# locations; preflight.py itself reports whether that interpreter has rdflib.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+for candidate in "${GRAPH_ORCH_PYTHON:-}" "$(command -v python3 2>/dev/null || true)" \
+  "$HOME/.local/bin/python3" "/opt/homebrew/bin/python3" "/usr/local/bin/python3"; do
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    exec "$candidate" "$SCRIPT_DIR/preflight.py" "$@"
+  fi
+done
+
+printf '%s\n' '{"success":false,"data":null,"error":{"code":"DEPENDENCY.PYTHON_NOT_FOUND","message":"python3 was not found; read references/installation-and-troubleshooting.md"}}'
+exit 2

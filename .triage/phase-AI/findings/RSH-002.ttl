@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RSH-002>
   a triage:Finding ;
   triage:findingId "RSH-002" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:title "reconcile_peer delivery loop fails fast on transport error with no partial-success tracking, causing duplicate redelivery on retry" ;
   triage:description "In crates/atm-daemon/src/runtime_health.rs, reconcile_peer/sync_peer's delivery loop (~lines 638-700) aborts on first transport error without recording which messages in the batch were already successfully delivered. A subsequent retried sync re-transmits already-delivered messages, compounding with the related missing rate-limit/watermark gap (AI24-IMPORTANT-002). Found by rust-service-hardening-agent during AICH-S4-FIX-2 recheck at 6d8ee8c3 on feature/pAI-s24-host-qualified-ack-receipt. Recommended to triage alongside AI24-IMPORTANT-002 since a watermark fix likely resolves both." ;
   triage:category "reliability" ;
@@ -76,27 +78,27 @@
 <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-s22/a5aa6813>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-s23/c528137c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s24/6d8ee8c3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "6d8ee8c3" ;
   triage:orderIndex 4 .

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-AI9-SPRINTDOC-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-AI9-SPRINTDOC-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T04:09:39Z"^^xsd:dateTime ;
   triage:title "AI.9 sprint doc frontmatter still status:proposed" ;
   triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports docs/plans/phase-ai/sprint-ai-9.md frontmatter is still `status: proposed`, not flipped to `complete`, despite the sprint being an executed/closing sprint. This is a recurring acceptance-gate blocker pattern seen on AI.6/AI.7/AI.8 as well. The pattern appears on both AI.9 and AI.10 worktrees, indicating the frontmatter must be updated when marking sprints as complete after their work is done." ;
   triage:phaseId "phase-AI" ;
@@ -46,20 +48,20 @@
 <urn:atm:triage:worktree/pAI-9/7cf40edd>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s9-https-peer-transport" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
   triage:headSha "7cf40edd" ;
   triage:orderIndex 9 .
 
 <urn:atm:triage:worktree/pAI-10/d461c936>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
   triage:headSha "d461c936" ;
   triage:orderIndex 10 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/3687ce58>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "3687ce58" ;
   triage:orderIndex 0 .

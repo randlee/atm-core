@@ -46,8 +46,16 @@ def print_fixture_summary(fixture_counts: list[tuple[str, int]]) -> None:
 def build_suite(repo_root: Path) -> unittest.TestSuite:
     loader = unittest.defaultTestLoader
     suite = unittest.TestSuite()
-    for test_path in sorted((repo_root / ".just/tests").glob("test_*.py")):
-        spec = importlib.util.spec_from_file_location(test_path.stem, test_path)
+    test_paths = sorted((repo_root / ".just/tests").glob("test_*.py"))
+    test_paths.extend(sorted((repo_root / "scripts/smoke").glob("test_*.py")))
+    for test_path in test_paths:
+        relative = test_path.relative_to(repo_root)
+        module_name = (
+            test_path.stem
+            if relative.parts[:2] == (".just", "tests")
+            else "atm_pytest_" + "_".join(relative.with_suffix("").parts)
+        )
+        spec = importlib.util.spec_from_file_location(module_name, test_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"unable to load test module from {test_path}")
         module = importlib.util.module_from_spec(spec)

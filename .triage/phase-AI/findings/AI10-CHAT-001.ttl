@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI10-CHAT-001>
   a triage:Finding ;
   triage:findingId "AI10-CHAT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
   triage:title "ack canonical_ack_write_request retained authenticated peer host" ;
   triage:description "Cross-host ack messages retained the authenticated source host in the ReplyTarget during message write. Previously, canonical_ack_write_request hard-coded ReplyTarget.to.host = None instead of reading the authenticated_source_host from the request context. This prevented acks from being routed back to the correct peer in cross-host scenarios. Fixed by: (1) Adding host field to ReplyTarget struct, (2) Wiring validate_reply_target to read authenticated_source_host and set target.host, (3) canonical_ack_write_request now uses target.host.clone() instead of hardcoded None. New test remote_ack_is_the_canonical_host_qualified_write confirms the fix." ;
   triage:phaseId "phase-AI" ;
@@ -25,6 +27,6 @@
 <urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "b2a76894" ;
   triage:orderIndex 0 .
