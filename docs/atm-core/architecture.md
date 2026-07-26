@@ -195,8 +195,9 @@ Required architectural rules:
   boundary bypass
 - typed error translation happens at the boundary layer, but must preserve
   discriminated error identity across store/ingress/export/service calls
-- `atm-core` owns ATM event and error models used by both CLI and daemon
-  `sc-observability` emitters
+- `atm-core` owns the service-facing error façade and ATM event models used by
+  both CLI and daemon `sc-observability` emitters; the dependency-light
+  `atm-error` crate owns the shared stable error-code vocabulary
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default
@@ -694,12 +695,13 @@ The exact design is owned by:
 
 ## 6. Error-Code Registry Boundary
 
-`atm-storage` owns the single source registry of ATM-owned error codes in source;
-`atm-core` re-exports it for core consumers.
+`atm-error` owns the dependency-light source registry of ATM-owned error codes;
+`atm-storage` and `atm-core` re-export the same type for their respective
+consumers.
 
 Architectural rules:
 
-- the source registry must live in `crates/atm-storage/src/error_codes.rs`
+- the source registry must live in `crates/atm-error/src/error_codes.rs`
 - `AtmError` must carry an `AtmErrorCode`
 - coarse `AtmErrorKind` classification must not replace the stable code
 - warning diagnostics emitted by `atm-core` must also select a registry code
