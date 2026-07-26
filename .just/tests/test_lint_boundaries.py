@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import textwrap
+import tomllib
 import unittest
 
 
@@ -12,7 +13,9 @@ if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
+from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import boundary_doc_section_lines
+from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 
@@ -1040,6 +1043,48 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             self.assertTrue(any("requires private implementation.type" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public re-export" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
+
+    def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
+        declared: set[str] = set()
+        for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            declared.update(data.get("ownership", {}).get("io_forbidden", []))
+
+        self.assertTrue(declared)
+        self.assertEqual(declared - set(IO_FORBIDDEN_SOURCE_PATTERNS), set())
+        self.assertTrue(all(patterns for patterns in IO_FORBIDDEN_SOURCE_PATTERNS.values()))
+
+    def test_io_forbidden_mapping_catches_temporary_source_violation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/mail_store.rs"
+            source_path.write_text(
+                "pub fn temporary_violation() {\n"
+                "    let _ = std::net::TcpStream::connect(\"127.0.0.1:1\");\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
 
 
 if __name__ == "__main__":

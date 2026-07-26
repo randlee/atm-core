@@ -4,6 +4,26 @@ Run this procedure for every release that changes daemon, HTTP, TLS, storage
 write, acknowledgement, or peer-transport code. It proves ATM message handling;
 a raw TCP connection is not evidence of success.
 
+## Progressive live-daemon commands
+
+Use the matched branch CLI and daemon selected by `daemon-switch`; these
+commands never start or stop a daemon themselves. Each command includes the
+rows from the preceding command and writes JSON plus an XHTML evidence pane
+under `reports/smoke/<feature>/`.
+
+```bash
+just smoke localhost
+just smoke local-ip
+just smoke crosshost m5 fastpc4
+```
+
+`localhost` proves host-qualified localhost send/read and requires-ack/ack.
+`local-ip` adds the daemon's advertised-IP route. `crosshost` runs both local
+features first, then asks each named SSH host to send into this host and proves
+the exact returned IDs are readable locally. It fails closed if the selected
+CLI or daemon version does not match the checked-out branch, a prerequisite
+row fails, or a required remote row is not receiver-visible.
+
 Each participating host runs the same repository runner with its own config:
 
 ```bash

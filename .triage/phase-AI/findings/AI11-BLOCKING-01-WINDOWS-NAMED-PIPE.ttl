@@ -14,13 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-01/pAI-11/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-11/8d0ccf01> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
-  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:highestFixedBranch "none" ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:reviewedBy "qa-triage", "quality-mgr" ;
   triage:notes "Post-merge audit finding. Scope: atm-core/protocol.rs + all call sites (13+ references across daemon/client/graft/cli). Deliverable evidence: docs/phase-ai/sprint-ai-6.md line 4, docs/project-plan.md phase-AI mandate. Architecture doc needs update: docs/atm-daemon/architecture.md:200-205 must remove stale named-pipe permission or add Phase-AI supersession clarification. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607); re-verified against current integrate/phase-AI and confirmed the cfg(windows) named-pipe path still exists unchanged at crates/atm-core/src/protocol.rs:184-222, so this finding remains genuinely open and was redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment." .
@@ -30,8 +29,9 @@
   triage:file "crates/atm-core/src/protocol.rs" ;
   triage:line 197 ;
   triage:snippet "platform_local_ipc_endpoint_path builds named pipe format on Windows platform" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- rg -n 'pipe|named.*endpoint|platform_local_ipc_endpoint_path' returned no matches; Windows named-pipe IPC code has been completely removed from protocol.rs. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match current reality. (2026-07-26)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .

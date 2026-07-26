@@ -14,19 +14,37 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-1: verified fixed on commit 82226b4c (PR #651, fix/findings-closeout). docs/adr/ADR-033-http-endpoint-contract.md now adds /runtime/reload; docs/atm-daemon/http-api.md Resource contract table adds /v1/atm/runtime/reload and removes the fictitious separate /v1/atm/message/{message-id}/ack row, replacing it with prose explaining acks route through POST /v1/atm/messages with only acknowledges_message_id populated. Cross-checked against the live crates/atm-core/src/api.rs::HTTP_ROUTE_SPECS table (10 entries: List/Write/Clear/Inspect/Receive/Doctor/PeerSync/RuntimeReload/Compatibility/Heartbeat) -- no separate ack route exists live, confirming the doc correction is accurate, not just plausible. ADR-033 and openapi.yaml were already correct from round 2. All three docs now reconciled with live routes." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/fix-findings-closeout/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/s23-fixed-adr-openapi> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/s23-open-http-api-md> ;
-  triage:fixedOn <urn:atm:triage:worktree/pAI-s23/b0781316> ;
-  triage:triageRecordVersion "4" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-004/integrate-8750587b> ;
+  triage:fixedOn <urn:atm:triage:worktree/fix-findings-closeout/82226b4c> ;
+  triage:triageRecordVersion "5" .
 
 # Status note (v4): Round-3 req-qa recheck (2026-07-26) on s23 @ 985a6d46.
 # Round-2 verification was incomplete: only checked ADR-033 and openapi.yaml.
 # ADR-033 and openapi.yaml are correctly fixed and complete.
 # docs/atm-daemon/http-api.md Resource contract table still omits peer-sync and reload.
 # Status: fixed_partial - ADR-033 and openapi.yaml complete, http-api.md incomplete.
+
+# Fixed on fix/findings-closeout: http-api.md Resource table now complete
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/fix-findings-closeout/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 50 ;
+  triage:snippet "Resource contract table now includes /v1/atm/runtime/reload and drops the fictitious separate ack route in favor of prose describing ack-via-POST-/messages" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/findings-closeout" ;
+  triage:headSha "82226b4c" ;
+  triage:notes "AICH-S11-QA-BATCH-1: fixed -- http-api.md now matches live HTTP_ROUTE_SPECS exactly (10 route entries, no separate ack route)." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-findings-closeout/82226b4c> .
 
 # Fixed sub-occurrence on s23: ADR-033 and openapi.yaml now reconciled with live routes
 <urn:atm:triage:occurrence/AI23-IMPORTANT-004/s23-fixed-adr-openapi>
@@ -67,3 +85,23 @@
   triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "985a6d46" ;
   triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI23-IMPORTANT-004/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/http-api.md" ;
+  triage:line 50 ;
+  triage:snippet "## Resource contract table still lists only /v1/atm/messages*, /v1/atm/doctor, /v1/atm/compatibility, /v1/atm/heartbeat -- no peer-sync or runtime/reload rows" ;
+  triage:status "fixed_partial" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b, contains the b0781316 fix already tracked as fixed for ADR-033/openapi.yaml). Independently re-verified: docs/atm-daemon/http-api.md's Resource contract table (line 50) still omits peer-sync and runtime/reload rows. The http-api.md gap remains open on integrate/phase-AI; ADR-033/openapi.yaml portions remain fixed." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

@@ -38,8 +38,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "8a7ea589" ;
   triage:occursIn <urn:atm:triage:worktree/s11/8a7ea589> .
@@ -49,8 +50,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s12-post-write-router; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:headSha "b6466aa1" ;
   triage:occursIn <urn:atm:triage:worktree/s12/b6466aa1> .
@@ -60,8 +62,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s13-peer-smoke-contract; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
@@ -71,8 +74,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s14-mac-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "0bf86031" ;
   triage:occursIn <urn:atm:triage:worktree/s14/0bf86031> .
@@ -82,8 +86,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "436493ab" ;
   triage:occursIn <urn:atm:triage:worktree/s15/436493ab> .
@@ -93,8 +98,9 @@
   triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
   triage:line 163 ;
   triage:snippet "#[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field in PreparedRuntimeServer struct; bound in bind_after_install (line 293) and both listener and tcp_loopback served in serve_runtime_scope (lines 458, 752)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head at local_ipc_transport.rs lines 149,279-284,442-447,464,476-478 — concurrent UDS+TCP binding is REQUIRED per docs/requirements.md REQ-CORE-TRANSPORT-001 for Unix/Windows parity testing, not dead infrastructure. Finding premise determined to be false through re-triage. Stale occurrence from superseded branch feature/pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .

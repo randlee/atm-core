@@ -115,7 +115,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             config = sample_config(log)
             config["cases"][1]["verification"]["assertions"]["receiver_visible"]["equals"] = "01TEST"
 
-            with patch.object(RUNNER.shutil, "which", return_value="/bin/echo"):
+            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 with self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"):
                     RUNNER.validate(config)
 

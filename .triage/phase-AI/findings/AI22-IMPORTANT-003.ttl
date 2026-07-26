@@ -14,9 +14,9 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/3> ;
@@ -25,9 +25,21 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s23/4> ;
-  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
-  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
-  triage:promoteTo <urn:atm:triage:worktree/s23/b88ca016> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-003/integrate-8750587b> ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate/8750587b> .
+
+# 2026-07-26 (quality-mgr): AI.23 merged into integrate/phase-AI via PR #629 (merge
+# commit 8750587b). Independently re-verified against integrate/phase-AI HEAD: the free
+# function is_same_host_peer_receipt no longer exists in crates/atm-core/src/send/mod.rs
+# at all; PreparedWrite::is_peer_receipt() (send/mod.rs:311-313) now delegates cleanly to
+# the single has_authenticated_peer_provenance() classifier (send/mod.rs:570-574), which
+# is also used directly at line 541 in place of the old is_same_host_peer_receipt call.
+# The overlapping-predicate duplication this finding describes has been eliminated on
+# integrate/phase-AI. Status remains "open" at the top level only because the s22/s23
+# occurrences below are stale pre-merge-forward snapshots on branches that never
+# themselves merged this fix forward -- not because the duplication persists on the
+# current integration branch.
 
 # Occurrences on s22
 <urn:atm:triage:occurrence/AI22-IMPORTANT-003/s22/1>
@@ -35,8 +47,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 311 ;
   triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_peer_receipt() now delegates to has_authenticated_peer_provenance(); is_same_host_peer_receipt() eliminated. Stale occurrence from superseded branch feature/pAI-s22-loopback-self-send-exemption; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
@@ -46,8 +59,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 540 ;
   triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_same_host_peer_receipt function eliminated; no equivalent call at line 540. Stale occurrence from superseded branch feature/pAI-s22-loopback-self-send-exemption; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
@@ -57,8 +71,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 569 ;
   triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_same_host_peer_receipt function completely eliminated; no definition exists. Stale occurrence from superseded branch feature/pAI-s22-loopback-self-send-exemption; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
@@ -68,8 +83,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 579 ;
   triage:snippet "if message.prepared.is_peer_receipt() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_peer_receipt() now delegates cleanly to has_authenticated_peer_provenance(); overlapping predicate duplication eliminated. Stale occurrence from superseded branch feature/pAI-s22-loopback-self-send-exemption; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
@@ -80,8 +96,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 311 ;
   triage:snippet "pub fn is_peer_receipt(&self) -> bool {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_peer_receipt() now delegates to has_authenticated_peer_provenance(); is_same_host_peer_receipt() eliminated. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
@@ -91,8 +108,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 540 ;
   triage:snippet "let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_same_host_peer_receipt function eliminated; no equivalent call at line 540. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
@@ -102,8 +120,9 @@
   triage:file "crates/atm-core/src/send/mod.rs" ;
   triage:line 569 ;
   triage:snippet "fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_same_host_peer_receipt function completely eliminated; no definition exists. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
@@ -113,13 +132,36 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 579 ;
   triage:snippet "if message.prepared.is_peer_receipt() {" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- is_peer_receipt() now delegates cleanly to has_authenticated_peer_provenance(); overlapping predicate duplication eliminated. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:occursIn <urn:atm:triage:worktree/s23/b88ca016> .
 
+# Fixed occurrence on integrate/phase-AI: the overlapping-predicate duplication is
+# eliminated -- is_same_host_peer_receipt no longer exists; is_peer_receipt() delegates
+# to the single has_authenticated_peer_provenance() classifier used everywhere.
+<urn:atm:triage:occurrence/AI22-IMPORTANT-003/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 311 ;
+  triage:snippet "pub fn is_peer_receipt(&self) -> bool { has_authenticated_peer_provenance(&self.outbound_request) } // FIXED: single classifier, is_same_host_peer_receipt removed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. is_same_host_peer_receipt no longer exists workspace-wide; is_peer_receipt() and the call site at send/mod.rs:541 both use has_authenticated_peer_provenance() as the sole classifier." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
 # Worktree snapshots
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
+
 <urn:atm:triage:worktree/integrate/e52fffb6>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;

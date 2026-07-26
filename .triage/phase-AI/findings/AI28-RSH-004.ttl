@@ -1,41 +1,54 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
 <urn:atm:triage:finding/AI28-RSH-004>
   a triage:Finding ;
   triage:findingId "AI28-RSH-004" ;
   triage:title "Only transport call deadline-checked in drain(), not DB read" ;
-  triage:description "The drain() function in peer_drain_coordinator.rs enforces a deadline (or timeout) for the network transport call when delivering messages to a peer, but does not enforce the same deadline on the prior database read that fetches the messages to deliver. In a scenario where the database is slow or overloaded, the DB read can consume the entire operation timeout without the coordinator knowing, leaving no time for the actual delivery attempt. This creates an asymmetry in deadline enforcement and reduces the reliability of the paging/delivery loop under database contention. The issue is not critical (most deliveries succeed quickly), but it's a hardening gap that should be closed. Fix recommended: apply deadline checks to the database read operation in the same way as the transport call, ensuring that both components are bounded. This might involve passing a deadline context to the database layer or explicitly checking elapsed time after the DB read completes." ;
-  triage:category "Service-Hardening" ;
-  triage:severity "Minor" ;
+  triage:description "The drain() function in peer_drain_coordinator.rs enforces a deadline (or timeout) for the network transport call when delivering messages to a peer, but does not enforce the same deadline on the prior database read that fetches the messages to deliver. Specifically, drain() now checks deadline.expired() immediately before and after the outbound.page_for_peer(...) call (lines 262-273), but page_for_peer itself takes no deadline/timeout parameter -- the DB read is bracketed by expiry checks, not actually bounded/interruptible. A slow or blocked SQLite read is not cancelled by the request deadline; only late-arriving results are rejected after the fact. Additionally, the OutboundMessageQuery::page_for_peer trait signature (contract.rs:663) lacks a deadline/budget parameter. This creates an asymmetry in deadline enforcement and reduces the reliability of the paging/delivery loop under database contention." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "Service-Hardening" ;
+  triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
-  triage:dispatchReady false ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S8 ;
   triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
-  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/1> ;
-  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/2> ;
+  triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/1>
+<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
-  triage:line 1 ;
-  triage:snippet "drain() paging loop: DB read is not deadline-checked, only transport call is" ;
+  triage:line 261 ;
+  triage:snippet "drain() function: deadline.expired() checked before/after page_for_peer() but no deadline passed to function" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "7163648b" ;
-  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
 
-<urn:atm:triage:worktree/pAI-s28/7163648b>
-  a triage:WorktreeSnapshot ;
+<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 663 ;
+  triage:snippet "OutboundMessageQuery::page_for_peer trait signature lacks deadline/budget parameter" ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:worktree/pAI-s28/b7d8488>
+  a triage:WorktreeSnapshot ;
   triage:path "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "7163648b" ;
-  triage:orderIndex 28 ;
-  triage:status "open" .
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:orderIndex 28 .

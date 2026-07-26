@@ -14,9 +14,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s12/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s13/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s14/1> ;
@@ -26,24 +26,24 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s20/1> ;
-  triage:openOn <urn:atm:triage:worktree/s12/2cb8271> ;
-  triage:openOn <urn:atm:triage:worktree/s13/34ffe67> ;
-  triage:openOn <urn:atm:triage:worktree/s14/6be7198> ;
-  triage:openOn <urn:atm:triage:worktree/s15/5a6bac5> ;
-  triage:openOn <urn:atm:triage:worktree/s16/b3749b9> ;
-  triage:openOn <urn:atm:triage:worktree/s17/f3af571> ;
-  triage:openOn <urn:atm:triage:worktree/s18/1c40c3a> ;
-  triage:openOn <urn:atm:triage:worktree/s19/fb781b2> ;
-  triage:openOn <urn:atm:triage:worktree/s20/51897df> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20/51897df> .
+  triage:fixedOn <urn:atm:triage:worktree/s12/2cb8271> ;
+  triage:fixedOn <urn:atm:triage:worktree/s13/34ffe67> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14/6be7198> ;
+  triage:fixedOn <urn:atm:triage:worktree/s15/5a6bac5> ;
+  triage:fixedOn <urn:atm:triage:worktree/s16/b3749b9> ;
+  triage:fixedOn <urn:atm:triage:worktree/s17/f3af571> ;
+  triage:fixedOn <urn:atm:triage:worktree/s18/1c40c3a> ;
+  triage:fixedOn <urn:atm:triage:worktree/s19/fb781b2> ;
+  triage:fixedOn <urn:atm:triage:worktree/s20/51897df> .
 
 <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-01-UNOWNED-MARKER-DELETE/s12/1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 177 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s12-post-write-router" ;
   triage:headSha "2cb8271" ;
   triage:occursIn <urn:atm:triage:worktree/s12/2cb8271> .
@@ -53,8 +53,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 178 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "34ffe67" ;
   triage:occursIn <urn:atm:triage:worktree/s13/34ffe67> .
@@ -64,8 +65,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 178 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "6be7198" ;
   triage:occursIn <urn:atm:triage:worktree/s14/6be7198> .
@@ -75,8 +77,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 178 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a6bac5" ;
   triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5> .
@@ -86,8 +89,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 190 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "b3749b9" ;
   triage:occursIn <urn:atm:triage:worktree/s16/b3749b9> .
@@ -97,8 +101,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 190 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "f3af571" ;
   triage:occursIn <urn:atm:triage:worktree/s17/f3af571> .
@@ -108,8 +113,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 190 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "1c40c3a" ;
   triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a> .
@@ -119,8 +125,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 190 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "fb781b2" ;
   triage:occursIn <urn:atm:triage:worktree/s19/fb781b2> .
@@ -130,8 +137,9 @@
   triage:file "scripts/smoke/run_peer_pair.py" ;
   triage:line 190 ;
   triage:snippet "marker.unlink()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 313-315 check marker ownership before unlink at line 324). Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "51897df" ;
   triage:occursIn <urn:atm:triage:worktree/s20/51897df> .

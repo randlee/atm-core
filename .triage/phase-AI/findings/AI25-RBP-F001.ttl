@@ -25,20 +25,32 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s26/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s27/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s28/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s29/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s30/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s27/1-migrated> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F001/s25/96377687> ;
   triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
   triage:openOn <urn:atm:triage:worktree/s24/c326cbe7> ;
   triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
-  triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
-  triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
-  triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
-  triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
-  triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> .
+
+# Fixed occurrence on integrate/phase-AI: both resolve_peer_addresses (plural) and
+# resolve_peer_address (singular) now use daemon_unavailable_with_cause. s26-s30 remain
+# open on their own branches (forked from a pre-fix commit) and still require
+# merge-forward; those branches have not yet merged.
+<urn:atm:triage:occurrence/AI25-RBP-F001/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 582 ;
+  triage:snippet "fn resolve_peer_address(host: &str, port: u16, timeout: Duration) -> Result<SocketAddr, AtmError> { ... .map_err(|source| { AtmError::daemon_unavailable_with_cause(...) }) } // FIXED: cause preserved" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 (PR #629) merged into integrate/phase-AI at 8750587b3e24c6e5a18e14315c363b6ea0f2d8e0. Independently re-verified: resolve_peer_addresses (https_transport.rs:548-577, plural) and resolve_peer_address (https_transport.rs:582-596, singular) both now use AtmError::daemon_unavailable_with_cause with the source preserved -- the singular hot-path function this finding's followup pass flagged as still-unfixed (a9e61fb0) is fixed on the current integration branch. s26-s30 occurrences remain open on their own not-yet-merged branches." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
 
 <urn:atm:triage:occurrence/AI25-RBP-F001/s21pre/1>
   a triage:Occurrence ;
@@ -124,55 +136,58 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 449 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s26-peer-write-deadline superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
 
-<urn:atm:triage:occurrence/AI25-RBP-F001/s27/1>
+# 2026-07-26 (quality-mgr, stale branch reconciliation): consolidated open occurrence from superseded branches onto s27.
+# The finding was partially fixed on s25 (resolve_peer_addresses now uses daemon_unavailable_with_cause) but
+# remains partially open (ServerName::try_from at line 179 still discards cause).
+<urn:atm:triage:occurrence/AI25-RBP-F001/s27/1-migrated>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
-  triage:line 449 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
+  triage:line 179 ;
+  triage:snippet "ServerName::try_from(host.clone()).map_err(|_source| { AtmError::validation(...) })" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "b5eec1bf" ;
-  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+  triage:headSha "35cb19f8" ;
+  triage:note "Consolidated from s26. ServerName::try_from still discards the underlying cause with |_source| pattern, though other error sites (TcpStream::connect_timeout, ClientConnection::new, PEM load) have been fixed to use daemon_unavailable_with_cause." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
 
-<urn:atm:triage:occurrence/AI25-RBP-F001/s28/1>
+# 2026-07-26 (quality-mgr, AICH-S5-QA-5): re-verified against feature/pAI-s25-peer-authority-resolution
+# @ 96377687 (PR #640, merge of fix/pAI-s25-local-findings @ 3265270e), independently confirmed by
+# ruthless-boundary-qa. All map_err sites in https_transport.rs that wrap a real std::error::Error
+# source use daemon_unavailable_with_cause, including resolve_peer_addresses (619-653) and
+# resolve_peer_address (656-678). Fix persists on this branch/commit.
+<urn:atm:triage:occurrence/AI25-RBP-F001/s25/96377687>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
-  triage:line 449 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "b5eec1bf" ;
-  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+  triage:line 656 ;
+  triage:snippet "fn resolve_peer_address(...) -> Result<SocketAddr, AtmError> { ... .map_err(|source| { AtmError::daemon_unavailable_with_cause(...) }) } // cause preserved, confirmed at 96377687" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:note "AICH-S5-QA-5 (PR #640): re-verified at 96377687, independently confirmed by ruthless-boundary-qa. Fix persists. NOTE: this finding's own occurrence history shows it reopened on s26-s30 (forked before the fix landed) -- a merge-forward propagation gap, not a regression in this diff. Team-lead should confirm s26-s30 rebase/merge-forward from this fix." ;
+  triage:occursIn <urn:atm:triage:worktree/s25/96377687> .
 
-<urn:atm:triage:occurrence/AI25-RBP-F001/s29/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/https_transport.rs" ;
-  triage:line 449 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:headSha "b5eec1bf" ;
-  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+<urn:atm:triage:worktree/s25/96377687>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "96377687" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:occurrence/AI25-RBP-F001/s30/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/https_transport.rs" ;
-  triage:line 449 ;
-  triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")) })" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:headSha "77252eca" ;
-  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
 
 <urn:atm:triage:worktree/s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
@@ -230,30 +245,9 @@
   triage:headSha "b5eec1bf" ;
   triage:orderIndex 6 .
 
-<urn:atm:triage:worktree/s27/b5eec1bf>
+<urn:atm:triage:worktree/s27/35cb19f8>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:path "feature/pAI-s27-peer-delivery-observability" ;
-  triage:headSha "b5eec1bf" ;
+  triage:headSha "35cb19f8" ;
   triage:orderIndex 7 .
-
-<urn:atm:triage:worktree/s28/b5eec1bf>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:headSha "b5eec1bf" ;
-  triage:orderIndex 8 .
-
-<urn:atm:triage:worktree/s29/b5eec1bf>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:headSha "b5eec1bf" ;
-  triage:orderIndex 9 .
-
-<urn:atm:triage:worktree/s30/77252eca>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:path "feature/pAI-s30-semver-http-compatibility" ;
-  triage:headSha "77252eca" ;
-  triage:orderIndex 10 .
