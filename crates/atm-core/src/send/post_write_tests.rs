@@ -7,7 +7,7 @@ use super::{SendMessageSource, WriteOutcome, write_mail_with_runtime_impl};
 use crate::boundary::{MailStoreMailboxMetadataRow, Message, MessageKey};
 use crate::delivery_policy::DeliveryHarnessPath;
 use crate::error_codes::AtmErrorCode;
-use crate::schema::{AtmMessageId, set_authenticated_source_host};
+use crate::schema::{AtmMessageId, set_authenticated_source_host, set_peer_outbound_write};
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -76,6 +76,53 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
             .expect("local route finish"),
         WriteOutcome::Sent(_)
     ));
+}
+
+#[test]
+fn authenticated_duplicate_peer_receipt_still_uses_one_local_post_write() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let origin_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+    let mut origin = send_request(tempdir.path()).with_origin_metadata(origin_id, timestamp);
+    origin.to = Some(
+        "recipient@test-team.192.168.128.82"
+            .parse()
+            .expect("advertised peer address"),
+    );
+
+    write_mail_with_runtime_impl(origin.clone(), &observability, &runtime).expect("origin write");
+    set_peer_outbound_write(
+        &mut runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")[0]
+            .envelope,
+        &"192.168.128.82".parse().expect("advertised peer host"),
+        "canonical peer request".to_string(),
+    );
+
+    let mut receipt = origin;
+    receipt.authenticated_source_host = Some("127.0.0.1".parse().expect("peer alias"));
+    let emitter = RecordingPostSendEmitter::succeed();
+    super::send_mail_with_runtime_impl(receipt, &observability, &runtime, Some(&emitter))
+        .expect("authenticated duplicate receipt");
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .len(),
+        1,
+        "the receipt retains the origin ULID row"
+    );
+    assert_eq!(
+        emitter.emitted().len(),
+        1,
+        "an authenticated receipt uses the normal local post-write route even when the certificate host is an alias"
+    );
 }
 
 #[test]

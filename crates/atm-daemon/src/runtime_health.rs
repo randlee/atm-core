@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -154,7 +153,6 @@ pub(crate) struct DaemonRequestDispatcher {
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
-    peer_sync_cooldown: std::sync::Mutex<HashMap<atm_core::types::HostName, std::time::Instant>>,
     peer_delivery_projection: PeerDeliveryProjection,
 }
 
@@ -435,7 +433,6 @@ impl DaemonRequestDispatcher {
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }
@@ -616,43 +613,19 @@ impl DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
-    fn reconcile_after_success(
+    /// Runs an explicitly requested bounded peer reconciliation.  Normal
+    /// successful foreground delivery never invokes this method: replaying
+    /// the just-delivered immutable write would amplify duplicate receipts.
+    fn reconcile_peer(
         &self,
         peer_host: &atm_core::types::HostName,
         peer: &atm_storage::TrustedPeer,
         transport: &dyn HttpsMessageTransport,
-        apply_cooldown: bool,
     ) -> Result<u16, AtmError> {
         let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
         policy.validate()?;
         if policy.max_message_age.is_zero() {
             return Ok(0);
-        }
-        if apply_cooldown {
-            let now = std::time::Instant::now();
-            let mut cooldown = self
-                .peer_sync_cooldown
-                .lock()
-                .map_err(|_| AtmError::daemon_unavailable("peer sync cooldown lock poisoned"))?;
-            if cooldown
-                .get(peer_host)
-                .is_some_and(|last| now.duration_since(*last) < Duration::from_secs(60))
-            {
-                return Ok(0);
-            }
-            // This is only a short-lived rate limiter, never delivery state.
-            // Evicting the oldest entry bounds memory without affecting message data.
-            const MAX_PEER_SYNC_COOLDOWN_ENTRIES: usize = 256;
-            if cooldown.len() >= MAX_PEER_SYNC_COOLDOWN_ENTRIES
-                && !cooldown.contains_key(peer_host)
-                && let Some(oldest) = cooldown
-                    .iter()
-                    .min_by_key(|(_, instant)| **instant)
-                    .map(|(host, _)| host.clone())
-            {
-                cooldown.remove(&oldest);
-            }
-            cooldown.insert(peer_host.clone(), now);
         }
         let not_before = atm_core::types::IsoTimestamp::from_datetime(
             chrono::Utc::now()
@@ -704,44 +677,11 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
             })?;
-        let delivered =
-            self.reconcile_after_success(&request.peer, &peer, transport.as_ref(), false)?;
+        let delivered = self.reconcile_peer(&request.peer, &peer, transport.as_ref())?;
         Ok(PeerSyncOutcome {
             peer: request.peer,
             delivered,
         })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reconcile_after_success_for_test(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<(), AtmError> {
-        self.reconcile_after_success(peer_host, peer, transport, true)
-            .map(|_| ())
-    }
-
-    #[cfg(test)]
-    pub(crate) fn seed_peer_sync_cooldown_for_test(
-        &self,
-        entries: impl IntoIterator<Item = (atm_core::types::HostName, std::time::Instant)>,
-    ) {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .extend(entries);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn peer_sync_cooldown_for_test(
-        &self,
-    ) -> HashMap<atm_core::types::HostName, std::time::Instant> {
-        self.peer_sync_cooldown
-            .lock()
-            .expect("peer sync cooldown lock")
-            .clone()
     }
 }
 
@@ -1136,7 +1076,6 @@ impl DaemonRequestDispatcher {
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_sync_cooldown: std::sync::Mutex::new(HashMap::new()),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }
     }

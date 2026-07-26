@@ -534,10 +534,11 @@ fn prepare_persisted_write<
         requires_ack,
         task_id.clone(),
     )?;
-    // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
-    // skips its duplicate row, but the ordinary post-write route still emits
-    // the visible local nudge once the peer receipt has completed.
-    let post_write_needed = persistence.newly_persisted || is_same_host_peer_receipt(&request);
+    // A peer receipt deliberately reuses its origin ULID. Storage skips a
+    // duplicate row, but the ordinary post-write route still handles the
+    // received event. This makes localhost, advertised-IP, and remote peer
+    // ingress use one route without relying on certificate-to-host aliases.
+    let post_write_needed = persistence.newly_persisted || is_authenticated_peer_receipt(&request);
     let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
     let outcome = finalize_send_outcome(
         runtime,
@@ -566,12 +567,8 @@ fn prepare_persisted_write<
     })
 }
 
-fn is_same_host_peer_receipt(request: &WriteRequest) -> bool {
-    request.authenticated_source_host.as_ref()
-        == request
-            .to
-            .as_ref()
-            .and_then(|destination| destination.host.as_ref())
+fn is_authenticated_peer_receipt(request: &WriteRequest) -> bool {
+    request.authenticated_source_host.is_some()
 }
 
 #[cfg(test)]
@@ -771,7 +768,13 @@ fn prepare_send_context<
         AtmError::validation("write request destination must be resolved before persistence")
     })?;
     let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient, target)?;
+    validate_non_self_recipient(
+        &canonical_sender,
+        &request.caller_team,
+        &recipient,
+        target,
+        request.authenticated_source_host.is_some(),
+    )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot = delivery_policy.resolve_write_recipient_snapshot(
@@ -929,6 +932,7 @@ pub(crate) fn validate_non_self_recipient(
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
     target: &AgentAddress,
+    authenticated_peer_ingress: bool,
 ) -> Result<(), AtmError> {
     let same_identity = sender
         .as_str()
@@ -936,7 +940,10 @@ pub(crate) fn validate_non_self_recipient(
         && sender_team
             .as_str()
             .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host.is_none() {
+    // Authenticated HTTPS ingress is an ordinary remote-host route. Its
+    // verified marker keeps a compatibility-normalized target from being
+    // mistaken for an unqualified local self-send.
+    if same_identity && target.host.is_none() && !authenticated_peer_ingress {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -963,6 +970,7 @@ mod self_address_tests {
             &"sender-a@test-team"
                 .parse::<AgentAddress>()
                 .expect("target"),
+            false,
         )
         .expect_err("case-variant self target must be rejected");
 
@@ -981,8 +989,26 @@ mod self_address_tests {
             &"sender-a@test-team.127.0.0.1"
                 .parse::<AgentAddress>()
                 .expect("host-qualified target"),
+            false,
         )
         .expect("host-qualified self target must use the ordinary peer route");
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_authenticated_peer_receipt_after_host_normalization() {
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            &"sender-a@test-team"
+                .parse::<AgentAddress>()
+                .expect("normalized target"),
+            true,
+        )
+        .expect("authenticated peer receipt must not become a local self-send");
     }
 }
 
