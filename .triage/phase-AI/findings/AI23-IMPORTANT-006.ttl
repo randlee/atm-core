@@ -5,7 +5,7 @@
   a triage:Finding ;
   triage:findingId "AI23-IMPORTANT-006" ;
   triage:foundAt "2026-07-25T18:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AICH-S30 ;
+  triage:foundIn triage:AICH-S9 ;
   triage:title "PostWriteRouter::dispatch re-derives peer-receipt status via ad-hoc inline check instead of calling canonical is_peer_receipt() accessor" ;
   triage:description "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:20 implements an ad-hoc inline check (if message.outbound_request.authenticated_source_host.is_some() { ... }) to determine whether a message is a peer receipt, instead of calling the canonical PreparedWrite::is_peer_receipt() accessor defined at crates/atm-core/src/send/mod.rs:323-326. This pattern mirrors the root cause of AI23-BLOCK-002 (two modules independently answering the same architectural question), with is_peer_receipt() effectively dead code (zero callers workspace-wide). The architectural risk is future drift between the inline check and the canonical definition when either is modified. Cross-reference: related to AI22-IMPORTANT-003 (broader overlapping-predicate pattern in send/mod.rs)." ;
   triage:phaseId "phase-AI" ;

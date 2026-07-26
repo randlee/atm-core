@@ -18,7 +18,7 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
-  triage:foundIn triage:AICH-S30 ;
+  triage:foundIn triage:AICH-S9 ;
   triage:foundAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery> ;
