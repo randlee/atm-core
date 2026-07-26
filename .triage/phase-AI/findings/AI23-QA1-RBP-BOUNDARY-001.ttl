@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-QA1-RBP-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "AI23-QA1-RBP-BOUNDARY-001" ;
+  triage:title "QA1 rust-best-practices and boundary violations in s30 ingress hardening" ;
+  triage:description "Four related code-quality issues identified during QA-1 pass on AI23-BLOCK-002 ingress hardening fix on feature/pAI-s30-semver-http-compatibility: (1) Match guard condition collapse in ApiRouter::route (runtime_health.rs:895-931): Multiple distinct failure conditions collapse into generic error codes with no per-condition stable identification. (2) Lock poisoning silent discard in PinnedClientVerifier::host_for_certificate (https_transport.rs:928-936): Uses peers.read().ok()? converting poisoned lock into indistinguishable error. (3) Missing architecture test for ingress trust-boundary enforcement. (4) Lint override style mismatch on production items (https_transport.rs:42, 181, 197, 329, 359)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "code-quality" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T21:05:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
+  triage:foundAt "2026-07-25T20:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-match-guard-collapse> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-lock-poisoning-discard> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-missing-boundary-test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-lint-override-style> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-match-guard-collapse>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 895 ;
+  triage:snippet "AuthenticatedIngress match arms with condition collapse in validation logic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
+
+<urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-lock-poisoning-discard>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 928 ;
+  triage:snippet "peers.read().ok()? silently discards poisoned lock via implicit Ok unwrap" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
+
+<urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-missing-boundary-test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 0 ;
+  triage:snippet "No dedicated architecture test pins ingress trust-boundary to single enforcement site" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
+
+<urn:atm:triage:occurrence/AI23-QA1-RBP-BOUNDARY-001/s30-lint-override-style>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 42 ;
+  triage:snippet "Production items with #[allow(dead_code, reason=...)] at lines 42, 181, 197, 329, 359" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/008e58e2> .
+
+<urn:atm:triage:worktree/s30/008e58e2>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:orderIndex 30 .

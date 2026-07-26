@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-004" ;
+  triage:title "RULE-003 file-size violation in crates/atm-daemon/src/runtime_health.rs" ;
+  triage:description "Global file size exceeds 1000-line non-test-code decomposition limit. crates/atm-daemon/src/runtime_health.rs non-test code spans lines 1-1022 (the #[cfg(test)] module begins at line 1023), exceeding the 1000-line limit. This violates RULE-003 zero-tolerance architecture file-size constraint. Suggested remediation: split runtime_health.rs into submodules under crates/atm-daemon/src/runtime_health/ (e.g. extract doctor-finding construction, dispatcher status/snapshot logic, or the ApiRouter::route match arms)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture/file-size" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S30 ;
+  triage:foundAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/2_s28_bounded_peer> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/3_s29_crosshost_smoke> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/4_s30_semver_http> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1083 ;
+  triage:snippet "non-test code: 1083 lines (file 1295 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "b8f9276b" ;
+  triage:occursIn <urn:atm:triage:worktree/0_integrate-phase-AI> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1259 ;
+  triage:snippet "non-test code: 1259 lines (file 1471 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:occursIn <urn:atm:triage:worktree/1_s27_peer_delivery> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/2_s28_bounded_peer>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1077 ;
+  triage:snippet "non-test code: 1077 lines (file 1289 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:occursIn <urn:atm:triage:worktree/2_s28_bounded_peer> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/3_s29_crosshost_smoke>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1077 ;
+  triage:snippet "non-test code: 1077 lines (file 1289 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:occursIn <urn:atm:triage:worktree/3_s29_crosshost_smoke> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/4_s30_semver_http>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1091 ;
+  triage:snippet "non-test code: 1091 lines (file 1303 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/4_s30_semver_http> .
+
+<urn:atm:triage:worktree/0_integrate-phase-AI>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "b8f9276b" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/1_s27_peer_delivery>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/2_s28_bounded_peer>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/3_s29_crosshost_smoke>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/4_s30_semver_http>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:orderIndex 4 .
