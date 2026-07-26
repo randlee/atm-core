@@ -12,15 +12,31 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified fixed on fix/close-out-round2-easy (673a6fff, PR #652). docs/atm-core/architecture.md gains a new '## 2.2 AI.23 Shared-Write Convergence Point' section defining the convergence point (ApiRouter::route), the shared-write-resource invariant (DaemonRequestDispatcher::route_write -> MessageWriter::write -> PostWriteRouter::dispatch), and cross-references to http-api.md/ADR-033/boundaries.md. docs/atm-core/requirements.md gains a matching 'AI.23 shared-write convergence constraint' bullet citing REQ-CORE-TRANSPORT-001/002. Both mirror the top-level docs/architecture.md and docs/requirements.md content per the sprint doc requirement (lines 154-168, 246-247)." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S3 ;
   triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/fix-close-out-round2-easy/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-arch> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-reqs> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/integrate-8750587b> ;
   triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-006/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 281 ;
+  triage:snippet "## 2.2 AI.23 Shared-Write Convergence Point -- convergence point (ApiRouter::route), shared-write-resource invariant, and matching requirements.md constraint added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: both docs/atm-core/architecture.md and docs/atm-core/requirements.md now carry AI.23-specific convergence-point/shared-write-resource sections mirroring the top-level docs." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
 
 # Missing AI.23 content in docs/atm-core/architecture.md
 <urn:atm:triage:occurrence/ATM-QA-006/s23-arch>

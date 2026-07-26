@@ -15,17 +15,33 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified Crimson's 'no edit needed' claim on fix/close-out-round2-easy (673a6fff, PR #652). Commit 673a6fff does not touch artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md at all (confirmed via git show --stat). Read the artifact's '## Canonical-path component evidence' section directly: it already names all required components -- ApiRouter::route, DaemonRequestDispatcher (route_write), MessageWriter::write, and PostWriteRouter::dispatch -- satisfying the sprint doc's exact required language. No-op close is genuinely correct, not an incorrect dismissal." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T20:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S3 ;
   triage:foundAt "2026-07-25T20:37:38Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/fix-close-out-round2-easy/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S22-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S23-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S24-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S25-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-IMPORTANT-005/integrate-8750587b> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI23-IMPORTANT-005/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 1 ;
+  triage:snippet "## Canonical-path component evidence names ApiRouter::route, DaemonRequestDispatcher, MessageWriter::write, and PostWriteRouter::dispatch" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: no-op close confirmed correct -- required component names already present in the artifact, unrelated to this commit's actual 3-file diff." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
 
 <urn:atm:triage:occurrence/AI23-IMPORTANT-005/S22-1>
   a triage:Occurrence ;
