@@ -163,7 +163,8 @@ def render_feature_pane(feature: str, cases: list[dict[str, Any]]) -> str:
     failures = [case["name"] for case in executed if case["status"] == "FAIL"]
     preflight = (
         f"<h2>Preflight</h2><p class=\"{'pass' if doctor['status'] == 'PASS' else 'fail'}\">"
-        f"<strong>Doctor {'passed' if doctor['status'] == 'PASS' else 'failed'}.</strong> {escape(doctor['detail'])}</p>"
+        f"<strong>Doctor {'passed' if doctor['status'] == 'PASS' else 'failed'}.</strong><br />"
+        f"{escape(doctor['detail']).replace(chr(10), '<br />')}</p>"
         if doctor
         else "<h2>Preflight</h2><p class=\"fail\">Doctor was not executed.</p>"
     )

@@ -78,12 +78,13 @@ class FeatureSmokeTests(unittest.TestCase):
         pane = RUNNER.render_feature_pane(
             "localhost",
             [
-                {"name": "doctor", "status": "PASS", "detail": "status: healthy\\nreadiness: ready"},
+                {"name": "doctor", "status": "PASS", "detail": "status: healthy\nreadiness: ready"},
                 {"name": "localhost send/read", "status": "PASS", "detail": "01TEST"},
             ],
         )
         self.assertIn("localhost send/read", pane)
         self.assertIn("Doctor passed", pane)
+        self.assertIn("healthy<br />readiness", pane)
         self.assertNotIn("<td>doctor</td>", pane)
 
     def test_artifact_segment_rejects_path_traversal(self):
