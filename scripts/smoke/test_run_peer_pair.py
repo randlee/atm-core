@@ -52,11 +52,9 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             log.write_text("ready\n", encoding="utf-8")
             config = sample_config(log)
 
-            with (
-                patch.object(RUNNER.shutil, "which", return_value="/bin/echo"),
-                patch.object(RUNNER, "run_command", side_effect=public_atm_command),
-            ):
-                self.assertEqual(RUNNER.execute(config, root / "evidence", 2), 0)
+            with patch.object(RUNNER.shutil, "which", return_value="/bin/echo"):
+                with patch.object(RUNNER, "run_command", side_effect=public_atm_command):
+                    self.assertEqual(RUNNER.execute(config, root / "evidence", 2), 0)
             evidence = (root / "evidence" / "peer-smoke-evidence.json").read_text(
                 encoding="utf-8"
             )
@@ -117,11 +115,9 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             config = sample_config(log)
             config["cases"][1]["verification"]["assertions"]["receiver_visible"]["equals"] = "01TEST"
 
-            with (
-                patch.object(RUNNER.shutil, "which", return_value="/bin/echo"),
-                self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"),
-            ):
-                RUNNER.validate(config)
+            with patch.object(RUNNER.shutil, "which", return_value="/bin/echo"):
+                with self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"):
+                    RUNNER.validate(config)
 
 
 def sample_config(log: Path):

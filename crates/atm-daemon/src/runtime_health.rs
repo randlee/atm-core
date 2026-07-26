@@ -897,10 +897,12 @@ impl ApiRouter for DaemonRequestDispatcher {
         if let RequestEnvelope::Write(write) = &request {
             match ingress {
                 AuthenticatedIngress::Local
-                    if write.origin_message_id.is_some() || write.origin_timestamp.is_some() =>
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_some()
+                        || write.origin_timestamp.is_some() =>
                 {
                     return Err(AtmError::validation(
-                        "local write requests must not supply origin message metadata",
+                        "local write requests must not supply peer provenance or origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Peer
