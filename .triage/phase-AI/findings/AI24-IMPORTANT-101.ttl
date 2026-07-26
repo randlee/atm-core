@@ -15,23 +15,28 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T10:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T10:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Independently verified via git show ac465283747d3186667fab7ad2f752b1c4c1a968 -- crates/atm-daemon/src/https_transport.rs: new test advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges (line ~983) uses a real DaemonRequestDispatcher (not RecordingRouter mock), real SQLite-backed persistence (dispatcher.dispatch(Receive) confirms the persisted recipient record), and a real socket-based GraftReceiverListener nudge round trip for both the peer write and the canonical ACK. This satisfies the sprint doc's real-adapter/persistence/nudge requirement. The pre-existing mocked advertised_ip_peer_send_and_ack_reach_the_shared_router test at line ~1358 is left in place as a separate lower-level transport-routing check, not as the ACK proof." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-101/S24-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI24-IMPORTANT-101/S24-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 1314 ;
   triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T10:47:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
   triage:occursIn <urn:atm:triage:worktree/S24-1daef214> .
 
 <urn:atm:triage:worktree/S24-1daef214>
