@@ -40,8 +40,8 @@ pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
-use atm_storage::RosterStore;
 use atm_storage::PeerConfigStore;
+use atm_storage::RosterStore;
 use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
