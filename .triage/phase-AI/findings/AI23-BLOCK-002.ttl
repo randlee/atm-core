@@ -22,14 +22,21 @@
   triage:foundAt "2026-07-25T20:40:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pAI-s30-semver-http-compatibility" ;
   triage:promoteToBranch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:highestFixedBranch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:highestFixedBranch "feature/pAI-s23-crosshost-shared-write-path" ;
   # Occurrences on s22 (where vulnerability was introduced)
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed> ;
   # Representative occurrences on open branches
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s25-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-primary> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
+
+# Closure note: s22-primary and s23 occurrences confirmed fixed at root/introduction site.
+# Round-2 fix verified on feature/pAI-s23-crosshost-shared-write-path @ b0781316.
+# Validated by 3 independent reviewers (quality-mgr, rust-qa-agent, team-lead).
+# Root cause (authenticated_source_host bare is_some() check) now replaced with ALL THREE field AND logic.
+# s25/s30 branches not yet re-verified post-merge-forward; status remains open until cascade verified.
 
 # Primary occurrence: Local ingress validation gap in ApiRouter::route
 <urn:atm:triage:occurrence/AI23-BLOCK-002/s22-primary>
@@ -67,6 +74,19 @@
   triage:headSha "9fd44444" ;
   triage:occursIn <urn:atm:triage:worktree/s30/9fd44444> .
 
+# Fixed occurrence on s23: authenticated_source_host validation now enforced
+<urn:atm:triage:occurrence/AI23-BLOCK-002/s23-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 919 ;
+  triage:snippet "AuthenticatedIngress::Peer if write.authenticated_source_host.is_none() || write.origin_message_id.is_none() || write.origin_timestamp.is_none() => ... // FIXED: requires ALL THREE fields via AND" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:note "Round-2 fix confirmed: combined validation at runtime_health.rs:919-940 (Peer ingress requires all 3 fields) and send/mod.rs:570-572 (is_authenticated_peer_receipt now properly validates). Regression test: runtime_health.rs:1136-1168 (local_write_rejects_forged_peer_provenance)." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b0781316> .
+
 # Secondary occurrence: is_peer_receipt() vulnerability in send/mod.rs (repeatable sweep finding)
 <urn:atm:triage:occurrence/AI23-BLOCK-002/s30-secondary-is-peer-receipt>
   a triage:Occurrence ;
@@ -93,6 +113,13 @@
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "9dfc8de1" ;
   triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s23/b0781316>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s30/9fd44444>
   a triage:WorktreeSnapshot ;

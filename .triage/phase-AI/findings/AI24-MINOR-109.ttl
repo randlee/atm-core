@@ -4,14 +4,14 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
-<urn:atm:triage:finding/RBP-F001>
+<urn:atm:triage:finding/AI24-MINOR-109>
   a triage:Finding ;
-  triage:findingId "RBP-F001" ;
-  triage:title "HttpRouteKind to HTTP_ROUTE_SPECS lookup is runtime .expect(), not compile/test-time exhaustiveness-checked" ;
-  triage:description "crates/atm-core/src/api.rs:143-148 route_spec(kind) resolves via linear .find().expect() scan of HTTP_ROUTE_SPECS instead of an exhaustive match; a new HttpRouteKind variant wired into route_kind_for_request but missing an HTTP_ROUTE_SPECS entry compiles cleanly and only panics at runtime. Re-confirmed present unchanged by ruthless-boundary-qa at the current worktree HEAD 1daef214 (existing record was last triaged at c326cbe7)." ;
+  triage:findingId "AI24-MINOR-109" ;
+  triage:title "openapi_declares_every_typed_http_codec_route test is a weaker duplicate of openapi_routes_match_live_router_surface" ;
+  triage:description "crates/atm/src/commands/api.rs:75-91 test openapi_declares_every_typed_http_codec_route (subset check: every live route must be documented) duplicates and is strictly subsumed by crates/atm/tests/openapi_surface.rs:131-154's openapi_routes_match_live_router_surface (full set-equality check in both directions). Recommend deleting the weaker api.rs test since the equality test is the single stronger canonical owner of route/doc parity." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "best-practices" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ruthless-boundary-qa" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
@@ -20,14 +20,14 @@
   triage:triagedAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/AI24-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-109/AI24-1> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/RBP-F001/AI24-1>
+<urn:atm:triage:occurrence/AI24-MINOR-109/AI24-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/api.rs" ;
-  triage:line 143 ;
-  triage:snippet "fn route_spec(kind: HttpRouteKind) -> HttpRouteSpec { *HTTP_ROUTE_SPECS.iter().find(|spec| spec.kind == kind).expect(...) }" ;
+  triage:file "crates/atm/src/commands/api.rs" ;
+  triage:line 76 ;
+  triage:snippet "fn openapi_declares_every_typed_http_codec_route()" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;

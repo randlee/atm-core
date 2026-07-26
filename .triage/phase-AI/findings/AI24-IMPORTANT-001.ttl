@@ -14,7 +14,9 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s21pre/1> ;
@@ -24,8 +26,8 @@
   triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
-  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
-  triage:promoteTo <urn:atm:triage:worktree/s24/7bb63e01> .
+  triage:fixedOn <urn:atm:triage:worktree/s24/1daef214> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/1daef214> .
 
 <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s21pre/1>
   a triage:Occurrence ;
@@ -65,11 +67,13 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 0 ;
   triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "7bb63e01" ;
-  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
 
 <urn:atm:triage:worktree/s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
@@ -92,9 +96,9 @@
   triage:headSha "c528137c" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/s24/7bb63e01>
+<urn:atm:triage:worktree/s24/1daef214>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "7bb63e01" ;
+  triage:headSha "1daef214" ;
   triage:orderIndex 4 .
