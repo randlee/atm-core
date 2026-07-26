@@ -144,7 +144,8 @@ fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
         }
     }
 
-    let peer_https = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
+    let peer_https =
+        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
     assert!(
         !peer_https.contains("AckRequest")
             && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
