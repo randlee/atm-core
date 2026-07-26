@@ -144,7 +144,7 @@ triage:c2 a triage:Completion ; triage:ofSprint triage:S2 ;
 
 
 class TestOpenFindingsForSprint:
-    def test_normalizes_case_orders_findings_and_retains_status_metadata(self):
+    def test_normalizes_case_orders_and_excludes_terminal_statuses(self):
         findings = PREFIX + """
 triage:minor a triage:Finding ; triage:findingId "M-1" ; triage:foundIn triage:S1 ;
     triage:foundAt "2026-07-01T09:00:00Z"^^xsd:dateTime ; triage:severity "MINOR" ; triage:description "minor" .
@@ -166,7 +166,6 @@ triage:unknown a triage:Finding ; triage:findingId "U-1" ; triage:foundIn triage
         )
         assert [(str(row[1]), str(row[2]), str(row[3])) for row in rows] == [
             ("U-1", "invalid", "medium"),
-            ("R-1", "blocking", "Blocking"),
             ("B-1", "blocking", "BLOCKING"),
             ("C-1", "blocking", "critical"),
             ("I-1", "important", "Important"),

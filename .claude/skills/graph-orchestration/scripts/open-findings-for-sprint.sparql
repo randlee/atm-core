@@ -1,10 +1,10 @@
 # open-findings-for-sprint.sparql — All unresolved findings for one sprint.
 #
-# Parameters: $SPRINT. Status is returned as metadata but does not hide a
-# finding: event-log Completion/Resolution is the lifecycle source used by the
-# cursor, and this result must stay consistent with that cursor. Results are
-# ordered for dispatch review: invalid severity first (fail closed), then
-# Blocking, Important, and Minor; ties use foundAt.
+# Parameters: $SPRINT. A terminal triage:status excludes a finding. Existing
+# repository findings use that status as their closure record; Resolution
+# events are honored too when present. Results are ordered for dispatch review:
+# invalid severity first (fail closed), then Blocking, Important, and Minor;
+# ties use foundAt.
 
 PREFIX triage: <urn:atm:triage:>
 
@@ -20,6 +20,15 @@ SELECT ?finding ?findingId ?severity ?rawSeverity ?status ?foundAt ?description 
     ?resolution a triage:Resolution ;
                 triage:resolves ?finding .
   }
+  FILTER (
+    !BOUND(?status)
+    || !(
+      LCASE(STR(?status)) IN (
+        "absent", "accepted", "closed", "dismissed", "false_positive",
+        "fixed", "fixed-ci-green", "inherited-fix", "invalid", "merged", "waived"
+      )
+    )
+  )
   BIND(LCASE(STR(?rawSeverity)) AS ?normalizedSeverity)
   BIND(
     IF(?normalizedSeverity IN ("blocking", "critical"), "blocking",
