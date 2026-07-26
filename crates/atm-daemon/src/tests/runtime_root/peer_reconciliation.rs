@@ -25,6 +25,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
             host: "peer.example.test".parse().expect("peer host"),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: NonZeroU16::new(43101).expect("port"),
         })
         .expect("save trusted peer");
 
@@ -72,8 +73,8 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         .expect("install failing transport");
     let error = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(ack.clone())))
-        .expect_err("failed remote acknowledgement must return the transport error");
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        .expect_err("failed remote acknowledgement must remain delivery-unconfirmed");
+    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing
             .attempted
@@ -133,6 +134,7 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
             host: peer.clone(),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: NonZeroU16::new(43101).expect("port"),
         })
         .expect("save trusted peer");
 
@@ -256,6 +258,7 @@ fn successful_peer_write_does_not_start_automatic_reconciliation() {
             host: peer.clone(),
             fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
             enabled: true,
+            https_port: NonZeroU16::new(43101).expect("port"),
         })
         .expect("save trusted peer");
     peer_store

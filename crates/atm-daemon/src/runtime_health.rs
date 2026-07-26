@@ -22,7 +22,7 @@ use atm_core::{
     protocol::{
         CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
         RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse, next_request_id,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
@@ -33,7 +33,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline};
+use crate::https_transport::{HttpsMessageTransport, HttpsRequestDeadline, resolve_peer_authority};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 #[cfg(test)]
@@ -638,9 +638,18 @@ impl PostWriteRouter for DaemonRequestDispatcher {
                 .emit_local_post_write(&self.service_runtime, &post_send_emitter);
             return Ok(());
         };
-        let peer = self.peer_config_store.trusted_peer(host)?.ok_or_else(|| {
-            AtmError::daemon_unavailable(format!("no trusted HTTPS peer is configured for {host}"))
-        })?;
+        let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
+        let request_id = next_request_id();
+        let message_id = message.outbound_request.origin_message_id;
+        self.record_peer_delivery_event(PeerDeliveryEvent {
+            kind: crate::peer_delivery_observability::PeerDeliveryEventKind::WritePersisted,
+            request_id,
+            message_id,
+            peer: peer.host.clone(),
+            error_code: None,
+            candidate_count: Some(1),
+            next_attempt_at: None,
+        });
         let transport = self
             .https_transport
             .lock()
@@ -654,13 +663,54 @@ impl PostWriteRouter for DaemonRequestDispatcher {
             &peer,
             HttpsRequestDeadline::default(),
         ) {
-            Ok(ResponseEnvelope::Error(error)) => Err(error),
+            Ok(ResponseEnvelope::Error(error)) => {
+                self.record_peer_delivery_event(PeerDeliveryEvent {
+                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
+                    request_id,
+                    message_id,
+                    peer: peer.host,
+                    error_code: Some(error.code()),
+                    candidate_count: Some(1),
+                    next_attempt_at: None,
+                });
+                Err(error)
+            }
             // The just-delivered immutable write is already the canonical peer
             // action. Replaying recent outbound records here re-delivered the
             // same-store receipt and amplified its nudge. Reconciliation is
             // explicit through the PeerSync resource below.
-            Ok(_) => Ok(()),
-            Err(error) => Err(error),
+            Ok(_) => {
+                self.record_peer_delivery_event(PeerDeliveryEvent {
+                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                    request_id,
+                    message_id,
+                    peer: peer.host,
+                    error_code: None,
+                    candidate_count: Some(1),
+                    next_attempt_at: None,
+                });
+                Ok(())
+            }
+            Err(error) => {
+                let error = if error.is_daemon_unavailable() {
+                    AtmError::remote_delivery_unconfirmed(format!(
+                        "local persistence completed but peer delivery was not confirmed: {}",
+                        error.message()
+                    ))
+                } else {
+                    error
+                };
+                self.record_peer_delivery_event(PeerDeliveryEvent {
+                    kind: crate::peer_delivery_observability::PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
+                    request_id,
+                    message_id,
+                    peer: peer.host,
+                    error_code: Some(error.code()),
+                    candidate_count: Some(1),
+                    next_attempt_at: None,
+                });
+                Err(error)
+            }
         }
     }
 }
