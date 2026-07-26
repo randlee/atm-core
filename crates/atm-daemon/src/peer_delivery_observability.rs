@@ -228,6 +228,8 @@ mod tests {
                     .parse()
                     .expect("valid peer host"),
                 error_code: None,
+                candidate_count: None,
+                next_attempt_at: None,
             });
         }
 
