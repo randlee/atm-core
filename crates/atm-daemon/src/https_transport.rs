@@ -69,6 +69,19 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
+
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        requests
+            .iter()
+            .cloned()
+            .map(|request| self.deliver(request, peer, deadline))
+            .collect()
+    }
 }
 
 struct TlsIdentity {
@@ -160,6 +173,60 @@ impl HttpsMessageTransport for HttpsTransport {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
+        self.open_connection(peer, deadline)?
+            .deliver(request, deadline)
+    }
+
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        let mut connection = self.open_connection(peer, deadline)?;
+        requests
+            .iter()
+            .cloned()
+            .map(|request| connection.deliver(request, deadline))
+            .collect()
+    }
+}
+
+enum HttpsPeerConnection {
+    MutualTls(Box<StreamOwned<ClientConnection, TcpStream>>),
+    Plaintext(TcpStream, HostName),
+}
+
+impl HttpsPeerConnection {
+    fn deliver(
+        &mut self,
+        request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        let request = RequestEnvelope::Write(Box::new(request));
+        match self {
+            Self::MutualTls(tls) => {
+                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
+                write_http_request(tls, &request)?;
+                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
+                read_http_response(tls, &request)
+            }
+            Self::Plaintext(stream, source_host) => {
+                apply_deadline(stream, remaining_budget(deadline)?)?;
+                write_plaintext_http_request_with_source_host(stream, &request, source_host)?;
+                apply_deadline(stream, remaining_budget(deadline)?)?;
+                read_http_response(stream, &request)
+            }
+        }
+    }
+}
+
+impl HttpsTransport {
+    fn open_connection(
+        &self,
+        peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<HttpsPeerConnection, AtmError> {
         if !peer.enabled {
             return Err(AtmError::validation("configured HTTPS peer is disabled"));
         }
@@ -168,13 +235,14 @@ impl HttpsMessageTransport for HttpsTransport {
         // the TLS authority; resolver output is never stored.
         let address =
             resolve_peer_address(&host, peer.https_port.get(), remaining_budget(deadline)?)?;
-        let mut stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?)
-            .map_err(|source| {
+        let stream = TcpStream::connect_timeout(&address, remaining_budget(deadline)?).map_err(
+            |source| {
                 AtmError::remote_delivery_unconfirmed(format!(
-                    "failed to connect to HTTPS peer {host}: {source}"
+                    "failed to connect to HTTPS peer {host}"
                 ))
-            })?;
-        let request = RequestEnvelope::Write(Box::new(request));
+                .with_cause(source)
+            },
+        )?;
         match &self.mode {
             HttpsTransportMode::MutualTls(identity) => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
@@ -194,16 +262,11 @@ impl HttpsMessageTransport for HttpsTransport {
                     })?;
                 let mut tls = StreamOwned::new(connection, stream);
                 complete_handshake_with_deadline(&mut tls, deadline)?;
-                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
-                write_http_request(&mut tls, &request)?;
-                apply_deadline(tls.get_ref(), remaining_budget(deadline)?)?;
-                read_http_response(&mut tls, &request)
+                Ok(HttpsPeerConnection::MutualTls(Box::new(tls)))
             }
             HttpsTransportMode::PlaintextTest { source_host } => {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
-                write_plaintext_http_request_with_source_host(&mut stream, &request, source_host)?;
-                apply_deadline(&stream, remaining_budget(deadline)?)?;
-                read_http_response(&mut stream, &request)
+                Ok(HttpsPeerConnection::Plaintext(stream, source_host.clone()))
             }
         }
     }

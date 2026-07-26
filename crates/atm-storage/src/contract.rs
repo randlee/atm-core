@@ -587,12 +587,20 @@ pub struct PeerSyncPolicy {
 /// Reconciliation is deliberately bounded; a policy may never widen one pass
 /// beyond this value.
 pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
+/// Recovery selects recent immutable writes only; wider windows risk timestamp
+/// arithmetic outside the representable range.
+pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 impl PeerSyncPolicy {
     pub fn validate(self) -> Result<Self, AtmError> {
         if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
             return Err(AtmError::peer_config_validation(
                 "peer sync max_batch_messages exceeds the hard limit of 100",
+            ));
+        }
+        if self.max_message_age > MAX_PEER_SYNC_MESSAGE_AGE {
+            return Err(AtmError::peer_config_validation(
+                "peer sync max_message_age exceeds the hard limit of 30 days",
             ));
         }
         Ok(self)
@@ -643,15 +651,20 @@ pub trait PeerConfigStore: Send + Sync {
 /// canonical message rather than in an outbox or delivery-state table.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StoredPeerWrite {
+    /// Ordering key retained with the immutable canonical write. This is a
+    /// transient scan cursor only; it is never delivery state.
+    pub created_at: IsoTimestamp,
+    pub message_id: AtmMessageId,
     pub request_json: String,
 }
 
 /// Read-only selection of local, immutable peer-directed messages.
 pub trait OutboundMessageQuery: Send + Sync {
-    fn recent_outbound_for_peer(
+    fn page_for_peer(
         &self,
         peer: &HostName,
         not_before: IsoTimestamp,
+        after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
 }
@@ -711,11 +724,12 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint, Message, MessageKey,
-        MessageQuery, MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore,
-        PrivateKeyRef, RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind,
-        RosterSnapshot, RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode,
-        TeamNudgeTemplateOverrideRow, derive_ack_requirement, sealed,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint,
+        MAX_PEER_SYNC_MESSAGE_AGE, Message, MessageKey, MessageQuery, MessageReceivedEvent,
+        MessageStore, NudgeTemplateOverrideStore, PeerSyncPolicy, PrivateKeyRef,
+        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
     use crate::error::AtmError;
@@ -723,6 +737,8 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
+    use std::num::NonZeroU16;
+    use std::time::Duration;
 
     #[derive(Default)]
     struct DummyStore;
@@ -977,5 +993,14 @@ mod tests {
     fn security_reference_newtypes_reject_blank_deserialization() {
         assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
         assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
+    }
+
+    #[test]
+    fn peer_sync_policy_rejects_windows_beyond_the_bounded_recovery_limit() {
+        let policy = PeerSyncPolicy {
+            max_message_age: MAX_PEER_SYNC_MESSAGE_AGE + Duration::from_secs(1),
+            max_batch_messages: NonZeroU16::new(1).expect("non-zero"),
+        };
+        assert!(policy.validate().is_err());
     }
 }

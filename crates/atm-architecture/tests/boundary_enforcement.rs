@@ -188,7 +188,7 @@ fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
     let root = workspace_root();
     let adapter = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
     let router =
-        read_source(&root.join("crates/atm-daemon/src/runtime_health/post_write_router.rs"));
+        read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
     let authority =
         read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_authority.rs"));
 
@@ -271,7 +271,7 @@ fn canonical_write_router_has_one_host_routing_decision() {
 #[test]
 fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
     let root = workspace_root();
-    let router_path = root.join("crates/atm-daemon/src/runtime_health/post_write_router.rs");
+    let router_path = root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs");
     let source = read_source(&router_path);
     let file = syn::parse_file(&source).unwrap_or_else(|error| {
         panic!("{} must remain valid Rust: {error}", router_path.display())
@@ -613,13 +613,20 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
             function.accesses_host = true;
         }
         let local_nudge = method.starts_with("emit_local_post_write");
-        let reconciliation_delivery = method == "deliver"
+        let reconciliation_delivery = (method == "deliver"
             && self.is_runtime_dispatcher_source()
             && self.current_function.is_some_and(|index| {
                 self.functions
                     .get(index)
                     .is_some_and(|function| function.name == "reconcile_peer")
-            });
+            }))
+            || (method == "deliver_page"
+                && self.is_peer_drain_coordinator_source()
+                && self.current_function.is_some_and(|index| {
+                    self.functions
+                        .get(index)
+                        .is_some_and(|function| function.name == "drain")
+                }));
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"
             || (method == "deliver" && self.is_https_transport_receiver(&node.receiver));
@@ -903,10 +910,16 @@ impl HostRoutingVisitor {
         })
     }
 
+    fn is_peer_drain_coordinator_source(&self) -> bool {
+        self.source_path.as_ref().is_some_and(|path| {
+            path.ends_with(Path::new("crates/atm-daemon/src/peer_drain_coordinator.rs"))
+        })
+    }
+
     fn is_post_write_router_helper(&self, name: &str) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new(
-                "crates/atm-daemon/src/runtime_health/post_write_router.rs",
+                "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
             )) && matches!(name, "emit_local_post_write" | "deliver_to_peer")
         })
     }

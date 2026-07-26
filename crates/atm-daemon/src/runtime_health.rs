@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -20,8 +19,9 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
-        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, PeerSyncDisposition, PeerSyncOutcome, PeerSyncRequest,
+        ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
@@ -35,16 +35,17 @@ use crate::daemon_runtime_observability::{
 };
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
-mod peer_authority;
-mod peer_sync;
-mod post_write_router;
+use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
+pub(crate) mod peer_authority;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 use atm_runtime::RuntimeAssembly;
+use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
-use atm_storage::{OutboundMessageQuery, PeerConfigStore};
+
+mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -152,24 +153,30 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
-    https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
-    peer_sync_progress: std::sync::Mutex<
-        HashMap<atm_core::types::HostName, Arc<std::sync::Mutex<PeerSyncProgress>>>,
-    >,
+    https_transport: Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
-    peer_delivery_projection: PeerDeliveryProjection,
-}
-
-/// Transient per-daemon guard for explicit sync requests. It is intentionally
-/// not durable transport state: a completed pass clears its watermark.
-#[derive(Default)]
-pub(super) struct PeerSyncProgress {
-    next_allowed_at: Option<std::time::Instant>,
-    in_flight: bool,
+    peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
 type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
+
+fn build_peer_delivery_coordinator(
+    peer_config_store: &Arc<dyn PeerConfigStore + Send + Sync>,
+    outbound_message_query: &Arc<dyn atm_storage::OutboundMessageQuery + Send + Sync>,
+    https_transport: &Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    projection: &Arc<PeerDeliveryProjection>,
+    observability: &SubsystemObservability,
+) -> Arc<dyn PeerDeliveryCoordinator> {
+    let coordinator_projection = Arc::clone(projection);
+    let coordinator_observability = observability.clone();
+    Arc::new(PeerDrainCoordinator::new(
+        Arc::clone(peer_config_store),
+        Arc::clone(outbound_message_query),
+        Arc::clone(https_transport),
+        Arc::new(move |event| coordinator_projection.record(event, &coordinator_observability)),
+    ))
+}
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -180,7 +187,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("doctor_ports", &self.doctor_ports)
             .field("roster_store_present", &self.roster_store.is_some())
             .field("peer_config_store", &"dyn PeerConfigStore")
-            .field("outbound_message_query", &"dyn OutboundMessageQuery")
             .field("https_transport", &"dyn HttpsMessageTransport")
             .field("runtime_reload_hook", &"runtime reload callback")
             .finish()
@@ -432,6 +438,15 @@ impl DaemonRequestDispatcher {
                 );
             }
         }
+        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
+        let peer_delivery_coordinator = build_peer_delivery_coordinator(
+            &peer_config_store,
+            &outbound_message_query,
+            &https_transport,
+            &peer_delivery_projection,
+            &runtime_health_observability,
+        );
         Self {
             home_dir,
             observability: Arc::clone(&observability),
@@ -441,11 +456,10 @@ impl DaemonRequestDispatcher {
             doctor_ports: runtime_assembly.doctor_ports,
             roster_store: Some(roster_store),
             peer_config_store,
-            outbound_message_query,
-            https_transport: std::sync::Mutex::new(None),
-            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
+            https_transport,
+            peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_delivery_projection: PeerDeliveryProjection::default(),
+            peer_delivery_projection,
         }
     }
 
@@ -470,27 +484,12 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
-    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
-        self.peer_delivery_projection
-            .record(event, &self.runtime_health_observability);
+    pub(crate) fn start_peer_drain_coordinator(&self) -> Result<(), AtmError> {
+        self.peer_delivery_coordinator.start()
     }
 
-    #[cfg(test)]
-    pub(crate) fn expire_peer_sync_cooldown_for_test(&self, peer: &atm_core::types::HostName) {
-        let progress = self
-            .peer_sync_progress
-            .lock()
-            .expect("peer sync progress map")
-            .get(peer)
-            .expect("the first sync creates peer progress")
-            .clone();
-        progress.lock().expect("peer sync progress").next_allowed_at =
-            Some(std::time::Instant::now() - Duration::from_secs(1));
-    }
-
-    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
-        self.peer_delivery_projection
-            .statuses(self.peer_config_store.as_ref())
+    pub(crate) fn stop_peer_drain_coordinator(&self) -> Result<(), AtmError> {
+        self.peer_delivery_coordinator.stop()
     }
 
     #[cfg(test)]
@@ -521,7 +520,7 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-struct MessageRecord {
+pub(super) struct MessageRecord {
     prepared: PreparedWrite,
     outbound_request: WriteRequest,
 }
@@ -530,7 +529,7 @@ trait MessageWriter: Send + Sync {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
 }
 
-trait PostWriteRouter: Send + Sync {
+pub(super) trait PostWriteRouter: Send + Sync {
     fn dispatch(
         &self,
         message: &mut MessageRecord,
@@ -551,7 +550,7 @@ impl DaemonRequestDispatcher {
     ) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Write(request) => self.route_write(*request, deadline),
-            request => self.dispatch_non_write(request, deadline),
+            request => self.dispatch_non_write(request),
         }
     }
 
@@ -581,11 +580,7 @@ impl DaemonRequestDispatcher {
         prepare_write_with_runtime(request, self.observability.as_ref(), &self.service_runtime)
     }
 
-    fn dispatch_non_write(
-        &self,
-        request: RequestEnvelope,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
+    fn dispatch_non_write(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
@@ -611,9 +606,9 @@ impl DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => Ok(ResponseEnvelope::Doctor(Box::new(
                 self.project_doctor_report(query)?,
             ))),
-            RequestEnvelope::PeerSync(request) => Ok(ResponseEnvelope::PeerSync(
-                self.sync_peer(request, deadline)?,
-            )),
+            RequestEnvelope::PeerSync(request) => {
+                Ok(ResponseEnvelope::PeerSync(self.sync_peer(request)?))
+            }
             RequestEnvelope::ReloadRuntimeView => {
                 self.reload_runtime_view()?;
                 Ok(ResponseEnvelope::RuntimeViewReloaded)
@@ -633,6 +628,34 @@ impl MessageWriter for DaemonRequestDispatcher {
                     .with_origin_metadata(message_id, prepared.persisted_timestamp()),
                 prepared,
             }
+        })
+    }
+}
+
+impl DaemonRequestDispatcher {
+    /// The canonical route and future recovery coordination use this sole
+    /// event-to-projection writer; no transport adapter owns delivery state.
+    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
+        self.peer_delivery_projection
+            .record(event, &self.runtime_health_observability);
+    }
+
+    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
+        self.peer_delivery_projection
+            .statuses(self.peer_config_store.as_ref())
+    }
+}
+
+impl DaemonRequestDispatcher {
+    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
+        let delivered = self.peer_delivery_coordinator.sync_peer(
+            &request.peer,
+            RequestDeadline::after(Duration::from_secs(5)),
+        )?;
+        Ok(PeerSyncOutcome {
+            peer: request.peer,
+            delivered,
+            disposition: PeerSyncDisposition::Completed,
         })
     }
 }
@@ -1014,6 +1037,17 @@ impl DaemonRequestDispatcher {
             crate::DaemonSubsystem::RuntimeHealth,
             std::sync::Arc::clone(&runtime_observability),
         );
+        let peer_config_store = runtime_assembly.peer_config_store();
+        let outbound_message_query = runtime_assembly.outbound_message_query();
+        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
+        let peer_delivery_coordinator = build_peer_delivery_coordinator(
+            &peer_config_store,
+            &outbound_message_query,
+            &https_transport,
+            &peer_delivery_projection,
+            &runtime_health_observability,
+        );
         Self {
             home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
@@ -1022,12 +1056,11 @@ impl DaemonRequestDispatcher {
             service_runtime: runtime_assembly.service_runtime.clone(),
             doctor_ports: runtime_assembly.doctor_ports.clone(),
             roster_store: Some(runtime_assembly.shared_roster_store_arc()),
-            peer_config_store: runtime_assembly.peer_config_store(),
-            outbound_message_query: runtime_assembly.outbound_message_query(),
-            https_transport: std::sync::Mutex::new(None),
-            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
+            peer_config_store,
+            https_transport,
+            peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_delivery_projection: PeerDeliveryProjection::default(),
+            peer_delivery_projection,
         }
     }
 }

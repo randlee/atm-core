@@ -12,13 +12,17 @@ use crate::SubsystemObservability;
 
 /// Retained, safe-to-log facts about a foreground peer-delivery attempt.
 /// This deliberately carries no payload, resolved IP address, credential, or
-/// receipt state. Recovery scheduling belongs to AI.28 and is intentionally
-/// absent until that sprint owns real scheduler facts.
+/// receipt state. AI.28 consumes the recovery variants without adding a
+/// second projection writer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,
     PeerDeliveryUnconfirmed,
+    PeerRecoveryScheduled,
+    PeerRecoveryAttempt,
+    PeerRecoveryConfirmed,
+    PeerRecoveryUnconfirmed,
 }
 
 impl PeerDeliveryEventKind {
@@ -27,6 +31,10 @@ impl PeerDeliveryEventKind {
             Self::WritePersisted => "write_persisted",
             Self::PeerDeliveryConfirmed => "peer_delivery_confirmed",
             Self::PeerDeliveryUnconfirmed => "peer_delivery_unconfirmed",
+            Self::PeerRecoveryScheduled => "peer_recovery_scheduled",
+            Self::PeerRecoveryAttempt => "peer_recovery_attempt",
+            Self::PeerRecoveryConfirmed => "peer_recovery_confirmed",
+            Self::PeerRecoveryUnconfirmed => "peer_recovery_unconfirmed",
         }
     }
 }
@@ -38,6 +46,8 @@ pub(crate) struct PeerDeliveryEvent {
     pub(crate) message_id: Option<AtmMessageId>,
     pub(crate) peer: HostName,
     pub(crate) error_code: Option<AtmErrorCode>,
+    pub(crate) candidate_count: Option<u32>,
+    pub(crate) next_attempt_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug, Default)]
@@ -129,6 +139,7 @@ impl PeerDeliveryProjection {
                 sequence,
             });
         tracked.sequence = sequence;
+        tracked.status.candidate_count = event.candidate_count;
         apply_event_to_status(&mut tracked.status, event);
     }
 }
@@ -141,7 +152,13 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
             "peer delivery outcome recorded",
         )
         .with_extra_string_field("request_id", event.request_id.to_string())
-        .with_extra_string_field("peer", event.peer.to_string());
+        .with_extra_string_field("peer", event.peer.to_string())
+        .with_extra_string_field(
+            "candidate_count",
+            event
+                .candidate_count
+                .map_or_else(|| "unknown".to_string(), |count| count.to_string()),
+        );
     if let Some(message_id) = event.message_id {
         retained_event = retained_event.with_message_id(message_id);
     }
@@ -149,26 +166,38 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
         retained_event =
             retained_event.with_extra_string_field("error_code", error_code.to_string());
     }
+    if let Some(next_attempt_at) = event.next_attempt_at {
+        retained_event =
+            retained_event.with_extra_string_field("next_attempt_at", next_attempt_at.to_string());
+    }
     observability.emit_event_or_warn(retained_event);
 }
 
 fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) {
     match event.kind {
         PeerDeliveryEventKind::WritePersisted => {}
-        PeerDeliveryEventKind::PeerDeliveryConfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryConfirmed
+        | PeerDeliveryEventKind::PeerRecoveryConfirmed => {
             status.quality = PeerLinkQuality::Healthy;
             status.last_success_at = Some(IsoTimestamp::now());
             status.last_error_code = None;
             status.next_attempt_at = None;
             status.drain = PeerDrainState::Idle;
         }
-        PeerDeliveryEventKind::PeerDeliveryUnconfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryUnconfirmed
+        | PeerDeliveryEventKind::PeerRecoveryUnconfirmed => {
             status.quality = peer_link_quality_for_error(event.error_code);
             status.last_failure_at = Some(IsoTimestamp::now());
             status.last_error_code = event.error_code;
-            status.next_attempt_at = None;
+            status.next_attempt_at = event.next_attempt_at;
             status.drain = PeerDrainState::Idle;
         }
+        PeerDeliveryEventKind::PeerRecoveryScheduled => {
+            status.quality = PeerLinkQuality::Degraded;
+            status.next_attempt_at = event.next_attempt_at;
+            status.drain = PeerDrainState::Connecting;
+        }
+        PeerDeliveryEventKind::PeerRecoveryAttempt => status.drain = PeerDrainState::Draining,
     }
 }
 
@@ -199,6 +228,8 @@ mod tests {
                     .parse()
                     .expect("valid peer host"),
                 error_code: None,
+                candidate_count: None,
+                next_attempt_at: None,
             });
         }
 

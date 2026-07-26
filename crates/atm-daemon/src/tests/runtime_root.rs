@@ -518,6 +518,15 @@ fn authenticated_peer_ingress_uses_canonical_writer_without_reforwarding() {
     let mut peer_write = write.clone();
     peer_write.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
 
+    let error = ApiRouter::route(
+        &dispatcher,
+        ApiRequest::new(RequestEnvelope::Write(Box::new(peer_write.clone()))),
+        AuthenticatedIngress::Local,
+        RequestDeadline::after(Duration::from_secs(1)),
+    )
+    .expect_err("local ingress must reject forged peer provenance");
+    assert!(error.is_validation());
+
     let response = ApiRouter::route(
         &dispatcher,
         ApiRequest::new(RequestEnvelope::Write(Box::new(peer_write.clone()))),
