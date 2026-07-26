@@ -15,9 +15,9 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-07-26T15:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-26T15:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S9 ;
   triage:foundAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI> ;
@@ -88,12 +88,14 @@
 <urn:atm:triage:occurrence/AI23-BLOCK-004/5_s24_host_qualified_ack>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 1065 ;
-  triage:snippet "non-test code: 1065 lines (file 1292 total) - quality-mgr/arch-qa confirmed recheck of PR #630" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 826 ;
+  triage:snippet "non-test code: 826 lines (file 1094 total) - FIXED via extraction of peer_sync.rs submodule; verified by quality-mgr authoritative tooling (python3 .just/check_line_counts.py)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T15:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
+  triage:headSha "ac465283" ;
   triage:occursIn <urn:atm:triage:worktree/5_s24_host_qualified_ack> .
 
 <urn:atm:triage:occurrence/AI23-BLOCK-004/6_s25_peer_authority>
@@ -157,7 +159,7 @@
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214" ;
+  triage:headSha "ac465283" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/6_s25_peer_authority>
