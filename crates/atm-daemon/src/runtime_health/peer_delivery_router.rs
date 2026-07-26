@@ -6,6 +6,7 @@ use atm_core::error::AtmError;
 use atm_core::protocol::next_request_id;
 
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
+use crate::peer_drain_coordinator::is_retryable_peer_error;
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 
 use super::peer_authority::resolve_peer_authority;
@@ -90,9 +91,7 @@ impl DaemonRequestDispatcher {
             .peer_delivery_coordinator
             .deliver_after_persist(&message.outbound_request, deadline)
         {
-            return if error.is_daemon_unavailable()
-                || error.code() == atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed
-            {
+            return if is_retryable_peer_error(&error) {
                 self.peer_delivery_unconfirmed(peer, request_id, message_id, error)
             } else {
                 self.peer_delivery_terminal_error(peer, request_id, message_id, error)

@@ -1,6 +1,6 @@
-use crate::address::AgentAddress;
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
+use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
@@ -349,11 +349,10 @@ impl DeliveryPolicyCoordinator {
     pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
         &self,
         runtime: &R,
-        address: &AgentAddress,
         recipient: &crate::send::ResolvedRecipient,
-        authenticated_source_host: bool,
+        provenance: ValidatedWriteProvenance,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        if address.host().is_some() && !authenticated_source_host {
+        if provenance.is_remote_origin() {
             return Ok(DeliveryRecipientSnapshot::remote(
                 recipient.agent.clone(),
                 recipient.team.clone(),

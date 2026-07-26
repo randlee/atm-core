@@ -14,15 +14,19 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "arch-ctm reported (message re: dbe489db) that command identity is now anchored to ATM_SMOKE_INSTALL_ROOT/bin/<executable> when that env var is set, closing the basename-only bypass. Independently re-verified against feature/pAI-s27-peer-delivery-observability @ dbe489db: scripts/smoke/run_peer_pair.py::require_public_client_command (~lines 96-104) resolves the expected path from ATM_SMOKE_INSTALL_ROOT and rejects any command[0] that does not resolve to that exact path, falling back to shutil.which() only when the env var is unset. Ran python3 -m pytest scripts/smoke/test_run_peer_pair.py -q -- 5 passed, including the new test_validation_rejects_path_shadow_when_install_root_is_selected asserting a RuntimeError containing 'does not resolve' for a shadow binary. Full scripts/smoke/ suite (35 tests) also passed. Note: this closes the PATH-shadow/absolute-path bypass when ATM_SMOKE_INSTALL_ROOT is set (the harness's actual runtime mode); a caller that omits the env var still falls back to basename-only shutil.which() resolution, which is a narrower residual than the original finding but not a full elimination of basename trust in every code path." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s20/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s27-fixed-dbe489db> ;
   triage:openOn <urn:atm:triage:worktree/s27> ;
   triage:promoteTo <urn:atm:triage:worktree/s27> .
 
@@ -97,6 +101,18 @@
   triage:headSha "35cb19f8" ;
   triage:occursIn <urn:atm:triage:worktree/s27> ;
   triage:notes "Consolidated/migrated occurrence: command allowlist enforcement still checks basename only (Path.name), bypassable via PATH shadowing or absolute-path attack binaries." .
+
+<urn:atm:triage:occurrence/RBQA-F002/s27-fixed-dbe489db>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 96 ;
+  triage:snippet "require_public_client_command anchors expected path to ATM_SMOKE_INSTALL_ROOT/bin/<executable>, rejecting any command[0] that does not resolve to it" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "dbe489db" ;
+  triage:note "Independently re-run: python3 -m pytest scripts/smoke/test_run_peer_pair.py -q (5 pass, incl. test_validation_rejects_path_shadow_when_install_root_is_selected) and full scripts/smoke/ suite (35 pass). Residual: basename-only shutil.which() fallback remains when ATM_SMOKE_INSTALL_ROOT is unset." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/dbe489db> .
 
 <urn:atm:triage:worktree/s16/b3749b90>
   a triage:WorktreeSnapshot ;
