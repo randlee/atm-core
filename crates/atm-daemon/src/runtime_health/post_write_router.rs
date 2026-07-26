@@ -12,40 +12,28 @@ use super::{DaemonGraftPostSendPort, DaemonRequestDispatcher, MessageRecord, Pos
 
 impl PostWriteRouter for DaemonRequestDispatcher {
     fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError> {
-        if message.prepared.is_peer_receipt() {
-            if message.prepared.is_same_store_peer_receipt() {
-                let mut event = self.runtime_health_observability.event(
-                    "peer_duplicate_write_skipped",
-                    "ok",
-                    "peer duplicate write skipped; continuing the ordinary local post-write action",
-                );
-                event.message_id = Some(message.prepared.persisted_message_id());
-                self.runtime_health_observability.emit_event_or_warn(event);
-            }
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
+        let host = message
+            .outbound_request
+            .to
+            .as_ref()
+            .and_then(|address| address.host());
+        if message.prepared.is_peer_receipt() && message.prepared.is_same_store_peer_receipt() {
+            let mut event = self.runtime_health_observability.event(
+                "peer_duplicate_write_skipped",
+                "ok",
+                "peer duplicate write skipped; continuing the ordinary local post-write action",
+            );
+            event.message_id = Some(message.prepared.persisted_message_id());
+            self.runtime_health_observability.emit_event_or_warn(event);
+        }
+        if message.prepared.is_peer_receipt() || host.is_none() {
+            let post_send_emitter = self.local_post_write_emitter();
             message
                 .prepared
                 .emit_local_post_write(&self.service_runtime, &post_send_emitter);
             return Ok(());
         }
-        let Some(host) = message
-            .outbound_request
-            .to
-            .as_ref()
-            .and_then(|address| address.host())
-        else {
-            let graft_post_send_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
-                Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
-            let post_send_emitter =
-                DaemonPostSendHookEmitter::new(Arc::clone(&graft_post_send_port));
-            message
-                .prepared
-                .emit_local_post_write(&self.service_runtime, &post_send_emitter);
-            return Ok(());
-        };
+        let host = host.expect("host-qualified writes are routed above");
         let peer = resolve_peer_authority(host, &self.peer_config_store.list_trusted_peers()?)?;
         let request_id = next_request_id();
         let message_id = message.outbound_request.origin_message_id;
@@ -104,6 +92,12 @@ impl PostWriteRouter for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn local_post_write_emitter(&self) -> DaemonPostSendHookEmitter {
+        let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
+            Arc::new(DaemonGraftPostSendPort::new(self.service_runtime.clone()));
+        DaemonPostSendHookEmitter::new(graft_port)
+    }
+
     fn record_unconfirmed_delivery(
         &self,
         peer: atm_core::types::HostName,

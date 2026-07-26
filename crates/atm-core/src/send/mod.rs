@@ -564,7 +564,8 @@ fn prepare_persisted_write<
     let post_write_needed = persistence.requires_post_write();
     let same_store_peer_receipt =
         persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
-    let messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
+    let messages =
+        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
         runtime,
         observability,
@@ -743,11 +744,12 @@ fn build_send_delivery_plan(
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
+    is_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
     crate::delivery_plan::LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
-        false,
+        is_ack,
     )
     .map(|message| vec![message])
     .map_err(|error| AtmError::mailbox_write(error.to_string()))

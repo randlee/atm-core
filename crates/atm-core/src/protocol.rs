@@ -523,7 +523,11 @@ mod tests {
     #[test]
     #[serial(env)]
     fn daemon_socket_path_rejects_override() {
-        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("/tmp/alternate.sock"))]);
+        let alternate_socket = std::env::temp_dir().join("alternate.sock");
+        let _env = EnvGuard::set_many([(
+            "ATM_DAEMON_SOCKET",
+            Some(alternate_socket.to_str().expect("temporary path is UTF-8")),
+        )]);
         assert!(daemon_socket_path().is_err());
     }
 

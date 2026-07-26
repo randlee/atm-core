@@ -4,14 +4,14 @@
 # Persisted file/path values are repository-relative. Runtime checkout paths
 # belong in the agent input only and must not be copied into this record.
 
-<urn:atm:triage:finding/RBP-F001>
+<urn:atm:triage:finding/AI24-MINOR-107>
   a triage:Finding ;
-  triage:findingId "RBP-F001" ;
-  triage:title "HttpRouteKind to HTTP_ROUTE_SPECS lookup is runtime .expect(), not compile/test-time exhaustiveness-checked" ;
-  triage:description "crates/atm-core/src/api.rs:143-148 route_spec(kind) resolves via linear .find().expect() scan of HTTP_ROUTE_SPECS instead of an exhaustive match; a new HttpRouteKind variant wired into route_kind_for_request but missing an HTTP_ROUTE_SPECS entry compiles cleanly and only panics at runtime. Re-confirmed present unchanged by ruthless-boundary-qa at the current worktree HEAD 1daef214 (existing record was last triaged at c326cbe7)." ;
+  triage:findingId "AI24-MINOR-107" ;
+  triage:title "Hardcoded /tmp/ literal in protocol.rs test violates cross-platform-guidelines" ;
+  triage:description "crates/atm-core/src/protocol.rs:509 test daemon_socket_path_rejects_override hardcodes the Unix literal \"/tmp/alternate.sock\" in ATM_DAEMON_SOCKET env var, violating the cross-platform-guidelines rule against hardcoded /tmp/ paths in test code. Not functionally broken (test only asserts is_err()), pre-existing from commit e5051fba (not introduced by this sprint), but in-scope under zero-tolerance policy. Every other test in the same file correctly uses std::env::temp_dir()." ;
   triage:phaseId "phase-AI" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "best-practices" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa-agent" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
@@ -20,14 +20,14 @@
   triage:triagedAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/AI24-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-107/AI24-1> ;
   triage:triageRecordVersion "1" .
 
-<urn:atm:triage:occurrence/RBP-F001/AI24-1>
+<urn:atm:triage:occurrence/AI24-MINOR-107/AI24-1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/api.rs" ;
-  triage:line 143 ;
-  triage:snippet "fn route_spec(kind: HttpRouteKind) -> HttpRouteSpec { *HTTP_ROUTE_SPECS.iter().find(|spec| spec.kind == kind).expect(...) }" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 509 ;
+  triage:snippet "EnvGuard::set_many([(\"ATM_DAEMON_SOCKET\", Some(\"/tmp/alternate.sock\"))])" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
