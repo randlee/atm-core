@@ -15,11 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-26T02:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S4 ;
   triage:foundAt "2026-07-26T02:19:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T14:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-004/4_s24_host_qualified_ack_receipt> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-004/5_s25_peer_authority_resolution> ;
   triage:triageRecordVersion "1" .
@@ -28,20 +30,20 @@
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/post_write_router.rs" ;
   triage:line 14 ;
-  triage:snippet "fn dispatch() spans lines 14-103 (90 lines), exceeds 80-line RULE-002 threshold; CI Just lint fails macos/ubuntu/windows at this head" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "fn dispatch() now ~78 lines (was 90), under 80-line RULE-002 threshold; extract of local_post_write_emitter() and record_unconfirmed_delivery() helpers confirmed by arch-qa and rust-qa-agent" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
   triage:occursIn <urn:atm:triage:worktree/4_s24_host_qualified_ack_receipt> .
 
 <urn:atm:triage:occurrence/AI24-BLOCK-004/5_s25_peer_authority_resolution>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/post_write_router.rs" ;
   triage:line 14 ;
-  triage:snippet "fn dispatch() spans lines 14-103 (90 lines), exceeds 80-line RULE-002 threshold; file byte-identical to s24, inherited via merge-forward" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:snippet "fn dispatch() now ~78 lines (was 90), under 80-line RULE-002 threshold; inherited fixed version via merge-forward from s24" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "b435fa6e17677df110d83bba7533811591f01a2a" ;
   triage:occursIn <urn:atm:triage:worktree/5_s25_peer_authority_resolution> .

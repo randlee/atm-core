@@ -429,10 +429,7 @@ where
         reload_runtime_view,
         publish_ready,
     } = context;
-    let (shutdown_beacon, signals) = (
-        Arc::new(ShutdownBeacon::default()),
-        Arc::new(ServeLoopSignals::default()),
-    );
+    let (shutdown_beacon, signals) = new_serve_loop_state();
     let lifecycle_waiter = spawn_runtime_lifecycle_waiter(
         scope,
         &signals,
@@ -480,6 +477,13 @@ where
     #[cfg(unix)]
     let shutdown_error = shutdown_error.or(tcp_error);
     finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {
+    (
+        Arc::new(ShutdownBeacon::default()),
+        Arc::new(ServeLoopSignals::default()),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
