@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH>
   a triage:Finding ;
   triage:findingId "AI17-QA1-MINOR-01-ERROR-CODE-MISMATCH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "New caller-context failures use generic MessageValidationFailed instead of dedicated CallerContextRequestInvalid" ;
   triage:description "New caller-context failure paths use the generic MessageValidationFailed error code instead of the existing dedicated CallerContextRequestInvalid code, which is unused elsewhere in the workspace." ;
   triage:phaseId "phase-AI" ;
@@ -60,6 +62,6 @@
 <urn:atm:triage:worktree/s17/5560bf8d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:orderIndex 17 .

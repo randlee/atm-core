@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI14-QA1-RBP-ERRORCODE>
   a triage:Finding ;
   triage:findingId "AI14-QA1-RBP-ERRORCODE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "local_http.rs collapses 5 distinct validation failures onto generic AtmErrorCode::MessageValidationFailed" ;
   triage:description "rust-best-practices-agent (RBP): crates/atm-core/src/local_http.rs collapses 5 structurally distinct validation failures onto the generic AtmErrorCode::MessageValidationFailed, losing caller-actionable distinction between failure modes. Important, non-blocking." ;
   triage:phaseId "phase-AI" ;
@@ -111,9 +113,9 @@
 <urn:atm:triage:occurrence/AI14-QA1-RBP-ERRORCODE/s16/6> a triage:Occurrence ; triage:file "crates/atm-core/src/local_http.rs" ; triage:line 140 ; triage:snippet "AtmError::validation(\"local HTTP endpoint record has no runtime directory\")" ; triage:status "open" ; triage:closed false ; triage:branch "feature/pAI-s16-offline-reconciliation" ; triage:headSha "1c23ac04" ; triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
 
 # --- WorktreeSnapshots ---
-<urn:atm:triage:worktree/s11/3642430d> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s11-post-merge-remediation" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ; triage:headSha "3642430d" ; triage:orderIndex 1 .
-<urn:atm:triage:worktree/s12/a8ea0017> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s12-post-write-router" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ; triage:headSha "a8ea0017" ; triage:orderIndex 2 .
-<urn:atm:triage:worktree/s13/2adc5fa1> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s13-peer-smoke-contract" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ; triage:headSha "2adc5fa1" ; triage:orderIndex 3 .
-<urn:atm:triage:worktree/s14/c5665204> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s14-mac-peer-smoke" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ; triage:headSha "c5665204" ; triage:orderIndex 4 .
-<urn:atm:triage:worktree/s15/5a7a762f> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s15-windows-peer-smoke" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ; triage:headSha "5a7a762f" ; triage:orderIndex 5 .
-<urn:atm:triage:worktree/s16/1c23ac04> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s16-offline-reconciliation" ; triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ; triage:headSha "1c23ac04" ; triage:orderIndex 6 .
+<urn:atm:triage:worktree/s11/3642430d> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s11-post-merge-remediation" ; triage:path "feature/pAI-s11-post-merge-remediation" ; triage:headSha "3642430d" ; triage:orderIndex 1 .
+<urn:atm:triage:worktree/s12/a8ea0017> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s12-post-write-router" ; triage:path "feature/pAI-s12-post-write-router" ; triage:headSha "a8ea0017" ; triage:orderIndex 2 .
+<urn:atm:triage:worktree/s13/2adc5fa1> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s13-peer-smoke-contract" ; triage:path "feature/pAI-s13-peer-smoke-contract" ; triage:headSha "2adc5fa1" ; triage:orderIndex 3 .
+<urn:atm:triage:worktree/s14/c5665204> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s14-mac-peer-smoke" ; triage:path "feature/pAI-s14-mac-peer-smoke" ; triage:headSha "c5665204" ; triage:orderIndex 4 .
+<urn:atm:triage:worktree/s15/5a7a762f> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s15-windows-peer-smoke" ; triage:path "feature/pAI-s15-windows-peer-smoke" ; triage:headSha "5a7a762f" ; triage:orderIndex 5 .
+<urn:atm:triage:worktree/s16/1c23ac04> a triage:WorktreeSnapshot ; triage:branch "feature/pAI-s16-offline-reconciliation" ; triage:path "feature/pAI-s16-offline-reconciliation" ; triage:headSha "1c23ac04" ; triage:orderIndex 6 .

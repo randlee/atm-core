@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-M2-AI3>
   a triage:Finding ;
   triage:findingId "ATM-QA-M2-AI3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T22:42:00Z"^^xsd:dateTime ;
   triage:title "Public AtmError fields allow constructing an error that bypasses error_catalog::render() -- explicitly deferred to AI.4 by the verdict itself" ;
   triage:description "AI3-QA-1 (rust-best-practices-agent, minor). AtmError's {code, message} fields are public, so a caller can hand-construct an AtmError without going through error_catalog::render(), skipping the canonical guidance-composition path. The AI3-QA-1 verdict itself notes this is an accepted gap for AI.3 -- AI.4 migrates every consumer to the catalog-backed constructors, at which point this can be closed by tightening field visibility or adding a constructor-only invariant. Not an AI.3 completion gap." ;
   triage:phaseId "phase-AI" ;
@@ -35,34 +37,34 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/0d448efe>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "0d448efe" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-4/3679a9b3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s4-error-consumer-migration" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
   triage:headSha "3679a9b3" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/52252a32>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "52252a32" ;
   triage:orderIndex 0 .

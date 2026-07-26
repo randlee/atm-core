@@ -52,8 +52,13 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             case = {
                 "message_ulid": "01TEST",
                 "verification": {
-                    "command": VERIFY_MESSAGE,
-                    "expected_json": {"message.message_id": "$message_ulid"},
+                    "assertions": {
+                        "receiver_visible": {
+                            "command": VERIFY_MESSAGE,
+                            "json_path": "message.message_id",
+                            "equals": "$message_ulid",
+                        }
+                    },
                     "forbidden_daemon_log_entries": ["peer delivery"],
                 },
             }
@@ -79,8 +84,13 @@ def sample_config(log: Path):
             "message_ulid": "01TEST",
             "command": REJECTED if typed_error else SUCCESS,
             "verification": {
-                "command": VERIFY_MESSAGE,
-                "expected_json": {"message.message_id": "$message_ulid"},
+                "assertions": {
+                    "receiver_visible": {
+                        "command": VERIFY_MESSAGE,
+                        "json_path": "message.message_id",
+                        "equals": "$message_ulid",
+                    }
+                },
             },
         }
         if typed_error:

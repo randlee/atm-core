@@ -14,12 +14,15 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:reassignReason "Fixed on the same branch (s24) by commit 6d8ee8c3 ('fix: align AI24 boundary guards with canonical routing'), confirmed by direct diff inspection -- the test assertion now checks for the MESSAGES_PATH constant instead of the removed literal string. Matches qa-evidence-master's AICH-S4-FIX2 result (blockers=0, result_time_utc 2026-07-25T08:22:21Z, just after the fix commit). TTL was never updated to closed after the fix landed; no re-fix needed." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-002/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-002/s24/2> ;
   triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
-  triage:promoteTo <urn:atm:triage:worktree/s24/7bb63e01> .
+  triage:fixedOn <urn:atm:triage:worktree/s24/6d8ee8c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/6d8ee8c3> .
 
 <urn:atm:triage:occurrence/AI24-BLOCK-002/s24/1>
   a triage:Occurrence ;
@@ -35,28 +38,47 @@
 <urn:atm:triage:worktree/s21pre/42fbd9fa>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s22/a5aa6813>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s23/c528137c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:orderIndex 3 ;
   triage:status "fixed" .
 
+<urn:atm:triage:occurrence/AI24-BLOCK-002/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 106 ;
+  triage:snippet "RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/6d8ee8c3> .
+
 <urn:atm:triage:worktree/s24/7bb63e01>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "7bb63e01" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s24/6d8ee8c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:orderIndex 4 ;
+  triage:status "contains-fix-verified" .

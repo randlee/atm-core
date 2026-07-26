@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI10-WINDOWS-001>
   a triage:Finding ;
   triage:findingId "AI10-WINDOWS-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T10:30:00-07:00"^^xsd:dateTime ;
   triage:title "Cross-host bidirectional HTTPS send and ack between macOS and Windows — hardware execution gap, not code defect" ;
   triage:description "Live execution proof that bidirectional HTTPS send and ack work correctly between a macOS host and a Windows host with authenticated mTLS and exact peer trust enforced, retaining chat-qualified addresses. This is a hardware-execution validation gap, not a code defect. The implementation is complete and correct; the gap is the absence of a physical Windows host running simultaneously with a macOS host to execute the full two-host cross-platform flow. Tracked in readiness.md as explicitly BLOCKED pending separate live-host execution." ;
   triage:phaseId "phase-AI" ;
@@ -26,6 +28,6 @@
 <urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "b2a76894" ;
   triage:orderIndex 0 .

@@ -36,6 +36,6 @@
 <urn:atm:triage:worktree/pAI-s21pre/5678337c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "5678337c" ;
   triage:orderIndex 1 .

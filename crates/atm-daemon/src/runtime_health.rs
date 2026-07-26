@@ -9,7 +9,7 @@ use atm_core::{
     clear::clear_mail_with_runtime,
     doctor::{
         self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary, PeerWireSecurityStatus,
+        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::{AtmError, AtmErrorCode},
     graft::{
@@ -32,7 +32,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::{HttpsMessageTransport, PeerWireSecurity};
+use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
 #[cfg(test)]
@@ -154,7 +154,6 @@ pub(crate) struct DaemonRequestDispatcher {
     https_transport: Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
-    peer_wire_security: PeerWireSecurity,
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
 }
 
@@ -399,7 +398,6 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
         runtime_assembly: RuntimeAssembly,
-        peer_wire_security: PeerWireSecurity,
     ) -> Self {
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
@@ -448,7 +446,6 @@ impl DaemonRequestDispatcher {
             https_transport,
             peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_wire_security,
             peer_delivery_projection,
         }
     }
@@ -786,10 +783,7 @@ impl DaemonRequestDispatcher {
             findings: peer_findings,
             peer_config: Some(peer_config),
             peer_links: self.peer_link_statuses(),
-            peer_wire_security: Some(match self.peer_wire_security {
-                PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls,
-                PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest,
-            }),
+            peer_wire_security: None,
         };
         let mut report = doctor::run_doctor_with_runtime_ports(
             query,
@@ -1076,7 +1070,6 @@ impl DaemonRequestDispatcher {
             https_transport,
             peer_delivery_coordinator,
             runtime_reload_hook: std::sync::Mutex::new(None),
-            peer_wire_security: PeerWireSecurity::MutualTls,
             peer_delivery_projection,
         }
     }

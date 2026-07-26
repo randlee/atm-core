@@ -24,13 +24,13 @@
 <urn:atm:triage:worktree/pAI-s30/77252eca>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "77252eca" ;
   triage:orderIndex 9 .
 
 <urn:atm:triage:worktree/pAI-s30/7ad54d25>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "7ad54d25" ;
   triage:orderIndex 9 .

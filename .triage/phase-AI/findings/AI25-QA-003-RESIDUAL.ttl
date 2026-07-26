@@ -40,69 +40,69 @@
 <urn:atm:triage:worktree/s21/42fbd9faa3c52c06b99784487e64152e6c658941>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s22/a5aa6813b3a8f440e586550a5c67187ed65428db>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813b3a8f440e586550a5c67187ed65428db" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s23/c528137cd07c8c329572cdb8e852faffb3fc9c94>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s24/c326cbe7f0fa6b1d612020c11854ecdcd5c2498f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7f0fa6b1d612020c11854ecdcd5c2498f" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s25/0265c94ff45ac97ec0427e8acc4309870c613789>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s25-peer-authority-resolution" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
   triage:headSha "0265c94ff45ac97ec0427e8acc4309870c613789" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s26/b5eec1bf4603069c90e5c2cde77908dcede7a533>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
   triage:orderIndex 6 .
 
 <urn:atm:triage:worktree/s27/b5eec1bf4603069c90e5c2cde77908dcede7a533>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
   triage:orderIndex 7 .
 
 <urn:atm:triage:worktree/s28/b5eec1bf4603069c90e5c2cde77908dcede7a533>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
   triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
   triage:orderIndex 8 .
 
 <urn:atm:triage:worktree/s29/b5eec1bf4603069c90e5c2cde77908dcede7a533>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
   triage:orderIndex 9 .
 
 <urn:atm:triage:worktree/s30/77252eca724b9c31480824ddbf11c982b83cf60b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "77252eca724b9c31480824ddbf11c982b83cf60b" ;
   triage:orderIndex 10 .

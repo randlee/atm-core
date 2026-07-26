@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RBQA-F010>
   a triage:Finding ;
   triage:findingId "RBQA-F010" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "Blank-line spacing drift before 'Historical status:' in newly-retired sections" ;
   triage:description "QA-4 on PR #590 found the two newly-retired sections added by this reset (DaemonInboxIngressAdapter, DaemonInboxExportAdapter) used 1 blank line before 'Historical status:', while pre-existing sibling retired sections (e.g. DaemonFileWatchEventSourceAdapter, DaemonReconcileCoordinatorAdapter) use 2 blank lines. Cosmetic drift from the established convention." ;
   triage:phaseId "phase-AI" ;
@@ -46,13 +48,13 @@
 <urn:atm:triage:worktree/pAI-1/f56ce35e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "f56ce35e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/d316f0b4>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "d316f0b4" ;
   triage:orderIndex 0 .
