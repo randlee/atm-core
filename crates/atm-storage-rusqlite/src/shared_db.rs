@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// Keep one permanent writer handle plus at most three concurrent reader handles so the
 /// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
@@ -273,6 +274,37 @@ impl SharedDb {
         let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         operation(&mut connection)
+    }
+
+    /// Runs one read with a caller-owned execution budget. SQLite's progress
+    /// callback interrupts VM execution when the budget expires, while the
+    /// matching busy timeout bounds lock acquisition. This is deliberately a
+    /// separate path so ordinary storage reads retain their existing policy.
+    pub(crate) fn with_connection_budget<T>(
+        &self,
+        budget: Duration,
+        operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
+    ) -> Result<T, AtmError> {
+        debug_assert_blocking_only("SharedDb::with_connection_budget");
+        if budget.is_zero() {
+            return Err(AtmError::mailbox_lock(
+                "sqlite query budget expired before the read started",
+            ));
+        }
+        let _connection_guard = self.acquire_connection_guard()?;
+        let mut connection = self.open_connection()?;
+        connection.busy_timeout(budget).map_err(|error| {
+            sqlite_error(
+                self.target.as_ref(),
+                "failed to configure sqlite query budget",
+                error,
+            )
+        })?;
+        let expires_at = Instant::now() + budget;
+        connection.progress_handler(1_000, Some(move || Instant::now() >= expires_at));
+        let result = operation(&mut connection);
+        connection.progress_handler(0, None::<fn() -> bool>);
+        result
     }
 
     /// Call only from blocking code paths; async callers must enter
@@ -734,6 +766,13 @@ pub(crate) fn sqlite_error(
                         "timed out waiting for sqlite database lock on {}",
                         target.display()
                     )),
+                },
+                rusqlite::ffi::ErrorCode::OperationInterrupted => match target {
+                    SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
+                    #[cfg(test)]
+                    SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(
+                        "sqlite query exceeded its caller-provided execution budget",
+                    ),
                 },
                 rusqlite::ffi::ErrorCode::CannotOpen => AtmError::mailbox_write(message),
                 rusqlite::ffi::ErrorCode::ReadOnly => AtmError::mailbox_write(message),

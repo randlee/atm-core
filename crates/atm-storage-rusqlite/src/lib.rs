@@ -60,8 +60,9 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
         not_before: StorageIsoTimestamp,
         after: Option<(StorageIsoTimestamp, AtmMessageId)>,
         limit: std::num::NonZeroU16,
+        budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError> {
-        self.db.with_connection(|connection| {
+        self.db.with_connection_budget(budget, |connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT message_at, message_key, json_extract(envelope_json, '$.peerOutbound.request')
@@ -718,6 +719,7 @@ mod tests {
                 not_before,
                 None,
                 NonZeroU16::new(10).expect("nonzero limit"),
+                std::time::Duration::from_secs(1),
             )
             .expect("query peer outbound writes");
 
@@ -757,6 +759,7 @@ mod tests {
                 timestamp,
                 None,
                 NonZeroU16::new(1).expect("nonzero limit"),
+                std::time::Duration::from_secs(1),
             )
             .expect("first page");
         assert_eq!(first_page.len(), 1, "page respects its configured cap");
@@ -767,6 +770,7 @@ mod tests {
                 timestamp,
                 Some((first_page[0].created_at, first_page[0].message_id)),
                 NonZeroU16::new(1).expect("nonzero limit"),
+                std::time::Duration::from_secs(1),
             )
             .expect("next page");
         assert_eq!(
@@ -775,6 +779,23 @@ mod tests {
             "exclusive cursor returns the next write"
         );
         assert_ne!(first_page[0].message_id, next_page[0].message_id);
+    }
+
+    #[test]
+    fn page_for_peer_rejects_an_expired_budget_before_opening_a_reader() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let target: HostName = "peer.example.test".parse().expect("target host");
+        let result = backend.outbound_message_query().page_for_peer(
+            &target,
+            IsoTimestamp::now(),
+            None,
+            NonZeroU16::new(1).expect("nonzero limit"),
+            std::time::Duration::ZERO,
+        );
+        assert!(
+            result.is_err(),
+            "an expired request must not start a DB read"
+        );
     }
 
     #[test]

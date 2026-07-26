@@ -6,7 +6,6 @@ use atm_core::error::AtmError;
 use atm_core::protocol::next_request_id;
 
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
-use crate::peer_drain_coordinator::is_retryable_peer_error;
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 
 use super::peer_authority::resolve_peer_authority;
@@ -91,25 +90,14 @@ impl DaemonRequestDispatcher {
             .peer_delivery_coordinator
             .deliver_after_persist(&message.outbound_request, deadline)
         {
-            return if is_retryable_peer_error(&error) {
-                self.peer_delivery_unconfirmed(peer, request_id, message_id, error)
-            } else {
-                self.peer_delivery_terminal_error(peer, request_id, message_id, error)
-            };
+            // Retry classification and scheduling belong to the coordinator;
+            // every foreground failure has the same retained projection event.
+            return self.peer_delivery_error(peer, request_id, message_id, error);
         }
         Ok(())
     }
-    fn peer_delivery_unconfirmed(
-        &self,
-        peer: atm_core::types::HostName,
-        request_id: atm_core::protocol::RequestId,
-        message_id: Option<atm_core::schema::AtmMessageId>,
-        error: AtmError,
-    ) -> Result<(), AtmError> {
-        self.peer_delivery_terminal_error(peer, request_id, message_id, error)
-    }
 
-    fn peer_delivery_terminal_error(
+    fn peer_delivery_error(
         &self,
         peer: atm_core::types::HostName,
         request_id: atm_core::protocol::RequestId,
