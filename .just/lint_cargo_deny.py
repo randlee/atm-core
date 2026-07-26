@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from lint_common import discover_repo_root
 from lint_common import workspace_crate_section_lines
@@ -16,6 +17,9 @@ DEPRECATED_CONFIG_LINES = (
     "vulnerability = ",
     "unlicensed = ",
 )
+DNS_RETRY_ATTEMPTS = 3
+DNS_RETRY_DELAY_SECONDS = 2
+DNS_RESOLUTION_FAILURE_MARKER = "could not resolve hostname"
 
 
 def build_command(repo_root: Path, config_path: Path) -> list[str]:
@@ -57,6 +61,32 @@ def emit_console_text(text: str, *, stream = sys.stdout) -> None:
     stream.flush()
 
 
+def is_dns_resolution_failure(completed: subprocess.CompletedProcess[str]) -> bool:
+    output = "\n".join((completed.stdout or "", completed.stderr or "")).lower()
+    return completed.returncode != 0 and DNS_RESOLUTION_FAILURE_MARKER in output
+
+
+def run_cargo_deny(command: list[str], repo_root: Path) -> subprocess.CompletedProcess[str]:
+    for attempt in range(1, DNS_RETRY_ATTEMPTS + 1):
+        completed = subprocess.run(
+            command,
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if not is_dns_resolution_failure(completed) or attempt == DNS_RETRY_ATTEMPTS:
+            return completed
+
+        print(
+            f"cargo-deny DNS resolution failed; retrying ({attempt}/{DNS_RETRY_ATTEMPTS})...",
+            file=sys.stderr,
+        )
+        time.sleep(DNS_RETRY_DELAY_SECONDS)
+
+    raise AssertionError("cargo-deny retry loop must return")
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Run cargo-deny with the repo policy.")
     parser.add_argument("--root", help="Repo root to inspect.")
@@ -71,13 +101,7 @@ def main(argv: list[str]) -> int:
         print(line)
 
     runtime_config = build_runtime_config(repo_root)
-    completed = subprocess.run(
-        build_command(repo_root, runtime_config),
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    completed = run_cargo_deny(build_command(repo_root, runtime_config), repo_root)
     if completed.stdout:
         emit_console_text(completed.stdout)
     if completed.stderr:
