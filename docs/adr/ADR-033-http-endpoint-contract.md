@@ -26,12 +26,10 @@ The initial stable application surface is resource-oriented REST under
 | `/messages/inspect` | `POST` non-mutating inspection/query |
 | `/messages` | `DELETE` clear selected messages where authorized |
 | `/messages/read` | `POST` owner-only read-state mutation |
-| `/message/{message-id}/ack` | `POST` acknowledgement |
 | `/doctor` | `GET` doctor report |
+| `/peers/{peer}/sync` | `POST` one explicit bounded replay of immutable stored writes for a registered peer |
 | `/compatibility` | `POST` compatibility preflight |
-| `/heartbeat` | `POST` team-member heartbeat |
-| `/peers/{peer}/sync` | `POST` bounded peer reconciliation |
-| `/runtime/reload` | `POST` authenticated runtime-view reload |
+| `/heartbeat` | `POST` runtime heartbeat |
 
 The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,
 status codes, pagination, and conditional mutation semantics before
@@ -41,6 +39,8 @@ body with the route's HTTP status. `POST /messages` builds the same internal
 canonical write for send and acknowledgement; an acknowledgement only has
 `acknowledges_message_id: Option<MessageId>` populated. It is not a separate
 resource, envelope, transport, or persistence path.
+`/message/{message-id}` is a `Location` identifier only; v1 does not register a
+separate message-by-id route.
 
 The HTTP API has an independent strict SemVer identity. Its major equals the
 `/v{major}` path segment. Same-major minor additions are compatible and patch

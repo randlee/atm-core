@@ -55,6 +55,7 @@ use atm_core::error::{AtmError, AtmErrorCode};
 pub use daemon_runtime_observability::{
     DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
 };
+pub use https_transport::PeerWireSecurity;
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
 #[cfg(not(windows))]
@@ -133,7 +134,18 @@ impl AtmHomeDir {
 pub fn run_daemon_with_observability(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<(), AtmError> {
-    composition::compose_runtime(observability)?.start()
+    run_daemon_with_observability_and_peer_wire_security(observability, PeerWireSecurity::MutualTls)
+}
+
+/// Run the daemon with an explicit process-local peer wire-security profile.
+///
+/// The caller is the daemon binary argument parser; this option is never read
+/// from workspace configuration or an environment variable.
+pub fn run_daemon_with_observability_and_peer_wire_security(
+    observability: Arc<dyn DaemonRuntimeObservability>,
+    peer_wire_security: PeerWireSecurity,
+) -> Result<(), AtmError> {
+    composition::compose_runtime(observability, peer_wire_security)?.start()
 }
 
 #[cfg(test)]

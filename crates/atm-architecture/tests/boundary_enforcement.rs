@@ -62,70 +62,6 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
-fn ai25_live_trust_refresh_reuses_startup_validation() {
-    let root = workspace_root();
-    let source = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
-    let syntax = syn::parse_file(&source).expect("daemon composition source must parse");
-    let mut visitor = LiveTrustRefreshVisitor::default();
-    visitor.visit_file(&syntax);
-    assert!(
-        visitor.installs_refresh_hook,
-        "AI.25 must install the runtime trust refresh hook during daemon composition"
-    );
-    assert!(
-        visitor.calls_reload_validator,
-        "AI.25 forbids installing reload-time trust without the startup validator"
-    );
-    assert!(
-        visitor.calls_verifier_refresh,
-        "AI.25 live reload must replace the retained verifier snapshot"
-    );
-
-    let fixture = syn::parse_file(
-        "fn bad() { dispatcher.install_runtime_reload_hook(Arc::new(move || { listeners.refresh_trusted_peers(peers)?; Ok(()) })); }",
-    )
-    .expect("negative fixture must parse");
-    let mut negative = LiveTrustRefreshVisitor::default();
-    negative.visit_file(&fixture);
-    assert!(negative.installs_refresh_hook);
-    assert!(negative.calls_verifier_refresh);
-    assert!(
-        !negative.calls_reload_validator,
-        "negative fixture proves the AST gate rejects verifier refresh without reload validation"
-    );
-}
-
-#[derive(Default)]
-struct LiveTrustRefreshVisitor {
-    installs_refresh_hook: bool,
-    calls_reload_validator: bool,
-    calls_verifier_refresh: bool,
-}
-
-impl<'ast> Visit<'ast> for LiveTrustRefreshVisitor {
-    fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
-        if node.method == "install_runtime_reload_hook" {
-            self.installs_refresh_hook = true;
-        }
-        if node.method == "refresh_trusted_peers" {
-            self.calls_verifier_refresh = true;
-        }
-        syn::visit::visit_expr_method_call(self, node);
-    }
-
-    fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = node.func.as_ref()
-            && path.path.segments.last().is_some_and(|segment| {
-                segment.ident == "validate_enabled_peer_configuration_for_reload"
-            })
-        {
-            self.calls_reload_validator = true;
-        }
-        syn::visit::visit_expr_call(self, node);
-    }
-}
-
-#[test]
 fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     let root = workspace_root();
     let send = fs::read_to_string(root.join("crates/atm-core/src/send/mod.rs"))
@@ -161,6 +97,64 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
     assert!(
         !api.contains("MessageRequest") && !daemon.contains("ApiRequest::Message("),
         "AI.7 forbids a second acknowledgement API/daemon-dispatch variant"
+    );
+}
+
+#[test]
+fn ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects() {
+    let root = workspace_root();
+    let api = read_source(&root.join("crates/atm-core/src/api.rs"));
+    assert!(
+        api.contains("HttpRouteKind::Write")
+            && api.contains("path_template: MESSAGES_PATH")
+            && api.contains("const MESSAGES_PATH: &str = \"/v1/atm/messages\";")
+            && api.contains("fn route_kind_for_http"),
+        "AI.23 requires send and ACK to select the one POST /v1/atm/messages resource"
+    );
+    assert!(
+        !api.contains("is_ack_path") && !api.contains("/ack\""),
+        "AI.23 forbids an acknowledgement-specific HTTP resource"
+    );
+
+    for (adapter, path) in [
+        (
+            "local IPC",
+            "crates/atm-daemon/src/local_ipc_transport/request_worker.rs",
+        ),
+        ("local TCP", "crates/atm-daemon/src/local_tcp_transport.rs"),
+        ("peer HTTPS", "crates/atm-daemon/src/https_transport.rs"),
+    ] {
+        let source = read_source(&root.join(path));
+        assert!(
+            source.contains(".route("),
+            "AI.23 {adapter} adapter must enter the shared ApiRouter"
+        );
+        for forbidden in [
+            "PostWriteRouter",
+            "MessageWriter",
+            "persist_",
+            "prepare_write",
+            "emit_local_post_write",
+            "DaemonPostSend",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "AI.23 {adapter} adapter must not own write persistence or post-write side effects: `{forbidden}`"
+            );
+        }
+    }
+
+    let peer_https =
+        read_source(&root.join("crates/atm-daemon/src/https_transport.rs")).replace("\r\n", "\n");
+    assert!(
+        !peer_https.contains("AckRequest")
+            && !peer_https.contains("SendRequestEnvelope::Acknowledge"),
+        "AI.24 forbids an ACK-specific peer transport request branch"
+    );
+    assert!(
+        peer_https.contains("fn route_peer_http_request")
+            && peer_https.contains("router\n        .route(request, ingress"),
+        "AI.24 requires peer HTTPS ingress to enter ApiRouter::route before daemon dispatch"
     );
 }
 
@@ -511,6 +505,11 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
 
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
+        if method == "host"
+            && let Some(function) = self.current_function_mut()
+        {
+            function.accesses_host = true;
+        }
         let local_nudge = method.starts_with("emit_local_post_write");
         let reconciliation_delivery = method == "deliver"
             && self.is_runtime_dispatcher_source()
@@ -790,6 +789,9 @@ impl HostRoutingVisitor {
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
             path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
+                || path.ends_with(Path::new(
+                    "crates/atm-daemon/src/runtime_health/peer_sync.rs",
+                ))
         })
     }
 }

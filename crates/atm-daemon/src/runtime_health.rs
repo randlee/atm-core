@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -19,9 +20,8 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        CompatibilityVerdict, PeerSyncOutcome, PeerSyncRequest, ReleaseVersion,
-        RuntimeLivenessState, RuntimeStatusSnapshot, SendResponseEnvelope,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        CompatibilityVerdict, ReleaseVersion, RuntimeLivenessState, RuntimeStatusSnapshot,
+        SendResponseEnvelope, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::{peek_mail_with_runtime, read_mail_with_runtime},
     schema::canonical_home_dir,
@@ -34,6 +34,8 @@ use crate::daemon_runtime_observability::{
 };
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
+mod peer_sync;
+mod post_write_router;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -41,8 +43,6 @@ use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_stat
 use atm_runtime::RuntimeAssembly;
 use atm_storage::RosterStore;
 use atm_storage::{OutboundMessageQuery, PeerConfigStore};
-
-mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
@@ -152,6 +152,9 @@ pub(crate) struct DaemonRequestDispatcher {
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
     outbound_message_query: Arc<dyn OutboundMessageQuery + Send + Sync>,
     https_transport: std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    peer_sync_progress: std::sync::Mutex<
+        HashMap<atm_core::types::HostName, Arc<std::sync::Mutex<peer_sync::PeerSyncProgress>>>,
+    >,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: PeerDeliveryProjection,
 }
@@ -432,6 +435,7 @@ impl DaemonRequestDispatcher {
             peer_config_store,
             outbound_message_query,
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }
@@ -456,6 +460,17 @@ impl DaemonRequestDispatcher {
             .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?;
         *slot = None;
         Ok(())
+    }
+
+    /// The one runtime-owned writer for retained peer delivery health.
+    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
+        self.peer_delivery_projection
+            .record(event, &self.runtime_health_observability);
+    }
+
+    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
+        self.peer_delivery_projection
+            .statuses(self.peer_config_store.as_ref())
     }
 
     #[cfg(test)]
@@ -486,7 +501,7 @@ fn with_shutdown_finalizer_registry<R>(
 
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
-pub(super) struct MessageRecord {
+struct MessageRecord {
     prepared: PreparedWrite,
     outbound_request: WriteRequest,
 }
@@ -495,39 +510,22 @@ trait MessageWriter: Send + Sync {
     fn write(&self, request: WriteRequest) -> Result<MessageRecord, AtmError>;
 }
 
-pub(super) trait PostWriteRouter: Send + Sync {
-    fn dispatch(
-        &self,
-        message: &mut MessageRecord,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError>;
+trait PostWriteRouter: Send + Sync {
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
-    #[cfg(test)]
     pub(crate) fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.dispatch_with_deadline(request, RequestDeadline::after(Duration::from_secs(5)))
-    }
-
-    fn dispatch_with_deadline(
-        &self,
-        request: RequestEnvelope,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
+            RequestEnvelope::Write(request) => self.route_write(*request),
             request => self.dispatch_non_write(request),
         }
     }
 
-    fn route_write(
-        &self,
-        request: WriteRequest,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
         if message.prepared.requires_post_write_route() {
-            PostWriteRouter::dispatch(self, &mut message, deadline)?;
+            PostWriteRouter::dispatch(self, &mut message)?;
         }
         let outcome = message
             .prepared
@@ -594,93 +592,6 @@ impl MessageWriter for DaemonRequestDispatcher {
                     .with_origin_metadata(message_id, prepared.persisted_timestamp()),
                 prepared,
             }
-        })
-    }
-}
-
-impl DaemonRequestDispatcher {
-    /// The canonical route and future recovery coordination use this sole
-    /// event-to-projection writer; no transport adapter owns delivery state.
-    pub(crate) fn record_peer_delivery_event(&self, event: PeerDeliveryEvent) {
-        self.peer_delivery_projection
-            .record(event, &self.runtime_health_observability);
-    }
-
-    pub(crate) fn peer_link_statuses(&self) -> Vec<atm_core::doctor::PeerLinkStatus> {
-        self.peer_delivery_projection
-            .statuses(self.peer_config_store.as_ref())
-    }
-}
-
-impl DaemonRequestDispatcher {
-    /// Runs an explicitly requested bounded peer reconciliation.  Normal
-    /// successful foreground delivery never invokes this method: replaying
-    /// the just-delivered immutable write would amplify duplicate receipts.
-    fn reconcile_peer(
-        &self,
-        peer_host: &atm_core::types::HostName,
-        peer: &atm_storage::TrustedPeer,
-        transport: &dyn HttpsMessageTransport,
-    ) -> Result<u16, AtmError> {
-        let policy = self.peer_config_store.peer_sync_policy(peer_host)?;
-        policy.validate()?;
-        if policy.max_message_age.is_zero() {
-            return Ok(0);
-        }
-        let not_before = atm_core::types::IsoTimestamp::from_datetime(
-            chrono::Utc::now()
-                - chrono::Duration::from_std(policy.max_message_age).map_err(|_source| {
-                    AtmError::validation("peer sync maximum message age is out of range")
-                })?,
-        );
-        let writes = self.outbound_message_query.recent_outbound_for_peer(
-            peer_host,
-            not_before,
-            policy.max_batch_messages,
-        )?;
-        let delivered = u16::try_from(writes.len()).map_err(|_| {
-            AtmError::validation("peer sync selection exceeded its configured batch limit")
-        })?;
-        // The peer transport contract honors this deadline. Keeping the whole
-        // pass bounded means shutdown never waits on an unbounded reconciliation
-        // loop or creates an independent worker/state machine.
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        for stored in writes {
-            if std::time::Instant::now() >= deadline {
-                return Err(AtmError::daemon_unavailable(
-                    "peer reconciliation exceeded its bounded request deadline",
-                ));
-            }
-            let request: WriteRequest =
-                serde_json::from_str(&stored.request_json).map_err(|_source| {
-                    AtmError::mailbox_read("stored immutable peer outbound write is invalid")
-                })?;
-            transport.deliver(
-                request,
-                peer,
-                RequestDeadline::after(Duration::from_secs(5)),
-            )?;
-        }
-        Ok(delivered)
-    }
-
-    fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
-        let peer = self
-            .peer_config_store
-            .trusted_peer(&request.peer)?
-            .ok_or_else(|| AtmError::peer_config_validation("unknown trusted peer"))?;
-        let transport = self
-            .https_transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("HTTPS peer transport is not enabled in this daemon")
-            })?;
-        let delivered = self.reconcile_peer(&request.peer, &peer, transport.as_ref())?;
-        Ok(PeerSyncOutcome {
-            peer: request.peer,
-            delivered,
         })
     }
 }
@@ -924,7 +835,7 @@ impl ApiRouter for DaemonRequestDispatcher {
                         || write.origin_timestamp.is_some() =>
                 {
                     return Err(AtmError::validation(
-                        "local write requests must not supply peer provenance or origin metadata",
+                        "local write requests must not supply authenticated peer provenance or origin metadata",
                     ));
                 }
                 AuthenticatedIngress::Peer
@@ -936,18 +847,26 @@ impl ApiRouter for DaemonRequestDispatcher {
                         "peer write requests require authenticated source provenance and immutable origin metadata",
                     ));
                 }
-                AuthenticatedIngress::Local | AuthenticatedIngress::Peer => {}
+                AuthenticatedIngress::UntrustedSmoke(_)
+                    if write.authenticated_source_host.is_some()
+                        || write.origin_message_id.is_none()
+                        || write.origin_timestamp.is_none() =>
+                {
+                    return Err(AtmError::validation(
+                        "plaintext smoke ingress must carry origin metadata but no authenticated peer identity",
+                    ));
+                }
+                AuthenticatedIngress::AnonymousSmoke => {
+                    return Err(AtmError::validation(
+                        "anonymous plaintext diagnostics cannot submit writes; include the X-ATM-Peer-Source-Host header only for an explicit smoke write",
+                    ));
+                }
+                AuthenticatedIngress::Local
+                | AuthenticatedIngress::Peer
+                | AuthenticatedIngress::UntrustedSmoke(_) => {}
             }
         }
-        if matches!(request, RequestEnvelope::ReloadRuntimeView)
-            && ingress != AuthenticatedIngress::Local
-        {
-            return Err(AtmError::validation(
-                "runtime reload is available only through authenticated local IPC",
-            ));
-        }
-        self.dispatch_with_deadline(request, deadline)
-            .map(ApiResponse::new)
+        self.dispatch(request).map(ApiResponse::new)
     }
 }
 
@@ -1077,6 +996,7 @@ impl DaemonRequestDispatcher {
             peer_config_store: runtime_assembly.peer_config_store(),
             outbound_message_query: runtime_assembly.outbound_message_query(),
             https_transport: std::sync::Mutex::new(None),
+            peer_sync_progress: std::sync::Mutex::new(HashMap::new()),
             runtime_reload_hook: std::sync::Mutex::new(None),
             peer_delivery_projection: PeerDeliveryProjection::default(),
         }
@@ -1088,84 +1008,8 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
-    use atm_core::api::{ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline};
-    use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
-    use atm_core::send::{SendMessageSource, WriteRequest};
-    use atm_core::types::{AgentName, TeamName};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
-
-    #[test]
-    fn authenticated_local_runtime_reload_runs_the_installed_trust_refresh_hook() {
-        let tempdir = tempfile::TempDir::new().expect("tempdir");
-        let dispatcher = DaemonRequestDispatcher::new_for_test(
-            tempdir.path().join("home"),
-            super::RuntimeStatusCache::default(),
-            tempdir.path().join("runtime.db"),
-        );
-        let refreshed = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let refresh_flag = Arc::clone(&refreshed);
-        dispatcher
-            .install_runtime_reload_hook(Arc::new(move || {
-                refresh_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                Ok(())
-            }))
-            .expect("install reload hook");
-
-        let response = dispatcher
-            .route(
-                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .expect("authenticated local reload routes")
-            .into_inner();
-        assert!(matches!(response, ResponseEnvelope::RuntimeViewReloaded));
-        assert!(refreshed.load(std::sync::atomic::Ordering::SeqCst));
-
-        let error = dispatcher
-            .route(
-                ApiRequest::new(RequestEnvelope::ReloadRuntimeView),
-                AuthenticatedIngress::Peer,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .expect_err("peer ingress must not control daemon reload");
-        assert!(error.is_validation());
-    }
-
-    #[test]
-    fn local_write_rejects_forged_peer_provenance() {
-        let tempdir = tempfile::TempDir::new().expect("tempdir");
-        let dispatcher = DaemonRequestDispatcher::new_for_test(
-            tempdir.path().join("home"),
-            super::RuntimeStatusCache::default(),
-            tempdir.path().join("runtime.db"),
-        );
-        let mut write = WriteRequest::new(
-            tempdir.path().join("home"),
-            tempdir.path().join("current"),
-            AgentName::from_validated("sender"),
-            "recipient@test-team",
-            TeamName::from_validated("test-team"),
-            SendMessageSource::Inline("forged provenance".to_string()),
-            None,
-            false,
-            None,
-            false,
-        )
-        .expect("write request");
-        write.authenticated_source_host = Some("peer.example.test".parse().expect("peer host"));
-
-        let error = dispatcher
-            .route(
-                ApiRequest::new(RequestEnvelope::Write(Box::new(write))),
-                AuthenticatedIngress::Local,
-                RequestDeadline::after(Duration::from_secs(1)),
-            )
-            .expect_err("local ingress must reject peer provenance from wire data");
-        assert!(error.is_validation());
-        assert!(error.message().contains("peer provenance"));
-    }
 
     struct ShutdownFinalizerDrainGuard;
 
