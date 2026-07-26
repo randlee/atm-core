@@ -76,6 +76,11 @@ pub(crate) fn set_peer_outbound_write(
         .insert(PEER_OUTBOUND_KEY.to_string(), Value::Object(value));
 }
 
+pub(crate) fn clear_transport_delivery_metadata(message: &mut InboxMessage) {
+    message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
+    message.extra.remove(PEER_OUTBOUND_KEY);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AckIntentFields {
     pub(crate) requires_ack: bool,

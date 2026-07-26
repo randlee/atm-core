@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI14-QA1-RBP-RECOVERYPATH>
   a triage:Finding ;
   triage:findingId "AI14-QA1-RBP-RECOVERYPATH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "local_http.rs reuses DaemonUnavailable error for capability revocation (wrong recovery path)" ;
   triage:description "rust-best-practices-agent (RBP): crates/atm-core/src/local_http.rs reuses the DaemonUnavailable error variant to signal capability revocation, which is a distinct failure mode from daemon-unreachable and implies the wrong caller recovery path (retry/backoff vs re-authenticate/re-register). Important, non-blocking." ;
   triage:phaseId "phase-AI" ;
@@ -98,41 +100,41 @@
 <urn:atm:triage:worktree/pAI-s11>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "3642430d" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-s12>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-s13>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/pAI-s14>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "c5665204" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pAI-s15>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a7a762f" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/pAI-s16>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 6 .

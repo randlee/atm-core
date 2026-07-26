@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES>
   a triage:Finding ;
   triage:findingId "AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T13:35:00Z"^^xsd:dateTime ;
   triage:title "Sprint doc's required focused-test categories incomplete" ;
   triage:description "Two of the sprint doc's five required focused-test categories are incomplete: (1) fully-absent-inputs case — all three overrides absent, no environment variables, should fail with identity_unavailable; (2) --chat-id+ATM_IDENTITY vs --as equivalence case — verifies that using --chat-id flag with ambient ATM_IDENTITY produces same caller_chat_id as qualified --as" ;
   triage:phaseId "phase-AI" ;
@@ -45,6 +47,6 @@
 <urn:atm:triage:worktree/pAI-s17/5560bf8d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:orderIndex 17 .
