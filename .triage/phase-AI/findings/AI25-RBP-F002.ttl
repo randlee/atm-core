@@ -50,8 +50,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 450 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
@@ -61,8 +62,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 450 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
@@ -72,8 +74,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 450 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
@@ -83,8 +86,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 450 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:headSha "b5eec1bf" ;
   triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
@@ -94,8 +98,9 @@
   triage:file "crates/atm-daemon/src/https_transport.rs" ;
   triage:line 450 ;
   triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "77252eca" ;
   triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .

@@ -36,8 +36,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance now properly handles two-hop transitive local bindings (line 304: 'let first = emit; let second = first') and Box::new wrapping (line 308). Comprehensive negative fixtures in canonical_write_router_rejects_all_mandated_negative_fixtures cover both cases. Defect resolved. Stale occurrence from superseded branch feature/pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "unknown" ;
   triage:occursIn <urn:atm:triage:worktree/s15> .
@@ -46,8 +47,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "unknown" ;
   triage:occursIn <urn:atm:triage:worktree/s16> .
@@ -56,8 +58,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "unknown" ;
   triage:occursIn <urn:atm:triage:worktree/s17> .
@@ -66,8 +69,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s18-graft-python-bindings; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "unknown" ;
   triage:occursIn <urn:atm:triage:worktree/s18> .
@@ -76,8 +80,9 @@
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
   triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s19-hermes-graft-integration; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "unknown" ;
   triage:occursIn <urn:atm:triage:worktree/s19> .

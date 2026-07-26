@@ -28,6 +28,7 @@ The initial stable application surface is resource-oriented REST under
 | `/messages/read` | `POST` owner-only read-state mutation |
 | `/doctor` | `GET` doctor report |
 | `/peers/{peer}/sync` | `POST` one explicit bounded replay of immutable stored writes for a registered peer |
+| `/runtime/reload` | `POST` reload the authenticated runtime view after local trust/configuration changes |
 | `/compatibility` | `POST` compatibility preflight |
 | `/heartbeat` | `POST` runtime heartbeat |
 

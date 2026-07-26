@@ -29,8 +29,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 650 ;
   triage:snippet "for stored in self.outbound_message_query.recent_outbound_for_peer(...) { ... transport.deliver(...)?; }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — reconcile_after_success refactored to reconcile_peer function (peer_sync.rs line 14). Now receives deadline parameter; cancellation implemented via deadline.remaining() check at line 39. Shutdown/cancellation token properly handled. (2026-07-26)" ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s16/853abcfc> .
@@ -40,8 +41,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 650 ;
   triage:snippet "for stored in self.outbound_message_query.recent_outbound_for_peer(...) { ... transport.deliver(...)?; }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s17-hermes-chat-identity contains propagated AI.16 reconciliation logic with deadline parameter. Closure based on forward-merge: AI.16 fix (deadline-based cancellation) is present in all downstream branches. (2026-07-26)" ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s17/2a5a57c8> .

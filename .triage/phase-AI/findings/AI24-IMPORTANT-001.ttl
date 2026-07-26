@@ -34,8 +34,9 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 0 ;
   triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s21pre; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
   triage:headSha "42fbd9fa" ;
   triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
@@ -45,8 +46,9 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 0 ;
   triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s22; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
   triage:headSha "a5aa6813" ;
   triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
@@ -56,8 +58,9 @@
   triage:file "crates/atm-core/src/api.rs" ;
   triage:line 0 ;
   triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s23; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "c528137c" ;
   triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .

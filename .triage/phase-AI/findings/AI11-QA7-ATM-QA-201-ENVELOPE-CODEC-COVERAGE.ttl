@@ -32,10 +32,11 @@
 <urn:atm:triage:occurrence/AI11-QA7-ATM-QA-201-ENVELOPE-CODEC-COVERAGE/s11/1>
   a triage:Occurrence ;
   triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
-  triage:line 353 ;
-  triage:snippet "fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 1255 ;
+  triage:snippet "fn ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- dedicated test ai11_deletion_gate_detector_rejects_retired_envelope_wire_codec_ast_fixtures() exists at line 1255 with AST fixtures validating rejection of FrameHeader, FrameCodec, read_framed_request, write_framed_response constructs. Defect closed. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match reality. (2026-07-26)" ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "bb20fd9a" ;
   triage:occursIn <urn:atm:triage:worktree/s11/bb20fd9a> .

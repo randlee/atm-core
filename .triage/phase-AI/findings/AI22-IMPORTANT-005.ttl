@@ -14,18 +14,35 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-1: verified fixed. The actual code fix (message_validation_error's recovery param un-prefixed and routed through AtmError::validation_with_recovery, which formats '{message}\\n  Recovery: {recovery}') landed earlier on commit a48e6886 ('fix: close AI24 routing and replay findings'), predating fix/findings-closeout's HEAD. Commit 82226b4c (PR #651) only updates the two build_message_source tests to assert the tailored recovery text instead of generic substrings -- confirmed via git show 82226b4c -- crates/atm/src/commands/send.rs. Recovery guidance genuinely reaches the emitted CLI error. CI fully green on PR #651." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/fix-findings-closeout/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s21pre/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s23/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-005/integrate-8750587b> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s24/af2fbb83> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/fix-findings-closeout/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation_with_recovery(message, recovery).into() }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/findings-closeout" ;
+  triage:headSha "82226b4c" ;
+  triage:notes "AICH-S11-QA-BATCH-1: fixed -- recovery text reaches the emitted error via validation_with_recovery; underlying code fix predates this branch (a48e6886), this commit updates tests to match." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-findings-closeout/82226b4c> .
 
 <urn:atm:triage:occurrence/AI22-IMPORTANT-005/pAI-s21pre/1>
   a triage:Occurrence ;
@@ -98,3 +115,23 @@
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "af2fbb83" ;
   triage:orderIndex 4 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI22-IMPORTANT-005/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/send.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn message_validation_error(message: impl Into<String>, _recovery: impl Into<String>) -> anyhow::Error { atm_core::error::AtmError::validation(message.into()).into() } // _recovery still discarded" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: message_validation_error's _recovery parameter is still discarded (underscore-prefixed, unused) in favor of a generic fallback. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
