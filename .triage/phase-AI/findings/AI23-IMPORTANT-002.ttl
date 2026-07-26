@@ -94,20 +94,20 @@
 <urn:atm:triage:worktree/AI23/b88ca016>
   a triage:WorktreeSnapshot ;
   triage:branch "AI.23" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
   triage:headSha "b88ca016" ;
   triage:orderIndex 23 .
 
 <urn:atm:triage:worktree/AI24/fc9832b3>
   a triage:WorktreeSnapshot ;
   triage:branch "AI.24" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "fc9832b3" ;
   triage:orderIndex 24 .
 
 <urn:atm:triage:worktree/AI26/b5eec1bf>
   a triage:WorktreeSnapshot ;
   triage:branch "AI.26" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
   triage:headSha "b5eec1bf" ;
   triage:orderIndex 26 .

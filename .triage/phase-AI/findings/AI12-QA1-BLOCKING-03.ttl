@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI12-QA1-BLOCKING-03>
   a triage:Finding ;
   triage:findingId "AI12-QA1-BLOCKING-03" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "Rewritten AST boundary test cannot detect the BLOCKING-01/02 leaks; does not validly close AI11-BLOCKING-03-POSTWRITEROUTER-NOOP" ;
   triage:description "The rewritten canonical_write_router_has_one_host_routing_decision test (introduced in pAI-s12-post-write-router, a8ea0017) uses an AST visitor to enforce AI.12 routing constraints. However, the visitor's violation detection logic gates all violations behind is_runtime_dispatcher_source() || source_path.is_none(), which means violations in canonical write modules other than runtime_health.rs are silently dropped. Violations in crates/atm-core/src/send/mod.rs where BLOCKING-01 exists will not be caught. Additionally, the negative fixtures test (canonical_write_router_rejects_all_mandated_negative_fixtures) only exercises the fixture validation helper; it does not confirm that the main test would reject actual production violations. The sprint doc mandates that AST-based boundary tests must scan all files in the canonical write path, record all occurrences, and provide negative fixture validation. This test does neither for files outside runtime_health.rs." ;
   triage:phaseId "phase-AI" ;
@@ -85,41 +87,41 @@
 <urn:atm:triage:worktree/s11/3642430d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "3642430d" ;
   triage:orderIndex 11 .
 
 <urn:atm:triage:worktree/s12/a8ea0017>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
   triage:orderIndex 12 .
 
 <urn:atm:triage:worktree/s13/2adc5fa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 13 .
 
 <urn:atm:triage:worktree/s14/ef0e5e2b>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "ef0e5e2b" ;
   triage:orderIndex 14 .
 
 <urn:atm:triage:worktree/s15/5a7a762f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a7a762f" ;
   triage:orderIndex 15 .
 
 <urn:atm:triage:worktree/s16/1c23ac04>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 16 .

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/RBQA-F009>
   a triage:Finding ;
   triage:findingId "RBQA-F009" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "DAEMON-PREAG-RESET-1 citation has no defining/anchor reference" ;
   triage:description "QA-4 on PR #590 found the DAEMON-PREAG-RESET-1 citation used across retired boundary sections had no defining/anchor reference anywhere in the worktree, unlike sibling citations (e.g. AD.4) which are defined and cross-referenced. Citation resolved nowhere, only repeated bare mentions." ;
   triage:phaseId "phase-AI" ;
@@ -35,13 +37,13 @@
 <urn:atm:triage:worktree/pAI-1/f56ce35e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "f56ce35e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/d316f0b4>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "d316f0b4" ;
   triage:orderIndex 0 .

@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION>
   a triage:Finding ;
   triage:findingId "AI17-QA1-BLOCKING-02-CLI-AS-REGRESSION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "resolve_cli_inspection_caller_context unconditionally resolves ambient ATM_IDENTITY before --as check" ;
   triage:description "resolve_cli_inspection_caller_context calls resolve_identity_component(None) to resolve ambient_identity unconditionally before checking overrides.identity_override, so `atm list --as <agent>` / `atm peek --as <agent>` fails with IdentityUnavailable when ATM_IDENTITY is unset. Breaks documented '--as, else ATM_IDENTITY' OR semantics (requirements.md 4.1). Untested by existing suite." ;
   triage:phaseId "phase-AI" ;
@@ -33,6 +35,6 @@
 <urn:atm:triage:worktree/pAI-s17/5560bf8d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s17-hermes-chat-identity" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
   triage:headSha "5560bf8d" ;
   triage:orderIndex 17 .

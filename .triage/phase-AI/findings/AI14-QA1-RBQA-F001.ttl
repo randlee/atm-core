@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI14-QA1-RBQA-F001>
   a triage:Finding ;
   triage:findingId "AI14-QA1-RBQA-F001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:title "Dual concurrent local-ingress listeners on Unix (UDS + HTTP loopback)" ;
   triage:description "crates/atm-daemon/src/local_ipc_transport.rs is compiled #[cfg(not(windows))] (lib.rs:21) -- primary Unix/Mac local-IPC server. Its PreparedRuntimeServer struct carries a #[cfg(unix)] tcp_loopback: LocalTcpLoopbackServer field (local_ipc_transport.rs:162-163), and bind_after_install binds it (local_ipc_transport.rs:291-298) alongside the UDS LocalSocketListener -- both run as live threads (serve_runtime_scope, lines 458 and 752). crates/atm-daemon/src/local_tcp_transport.rs:55-57 self-documents this as 'Secondary Unix local ingress used for UDS/TCP parity.' Meanwhile crates/atm-daemon-client/src/lib.rs:148-151 (resolve_daemon_local_ipc_endpoint) resolves exclusively through atm_core::local_http::local_http_record_path -- client fully migrated off UDS (commits dbd112e2, c5665204), but server still binds/serves both UDS accept loop and HTTP loopback listener concurrently on every Mac daemon start -- dead/unreferenced-by-any-client production infrastructure kept alive, not removed. Single-receive-path boundary violation." ;
   triage:phaseId "phase-AI" ;
@@ -99,42 +101,42 @@
 <urn:atm:triage:worktree/s11/3642430d>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s11-post-merge-remediation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
   triage:headSha "3642430d" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/s12/a8ea0017>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s12-post-write-router" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
   triage:headSha "a8ea0017" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/s13/2adc5fa1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s13-peer-smoke-contract" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
   triage:headSha "2adc5fa1" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/s14/c5665204>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s14-mac-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
   triage:headSha "c5665204" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/s15/5a7a762f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s15-windows-peer-smoke" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
   triage:headSha "5a7a762f" ;
   triage:orderIndex 5 .
 
 <urn:atm:triage:worktree/s16/1c23ac04>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s16-offline-reconciliation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
   triage:headSha "1c23ac04" ;
   triage:orderIndex 6 .
 

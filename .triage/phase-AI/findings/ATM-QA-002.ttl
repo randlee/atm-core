@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/ATM-QA-002>
   a triage:Finding ;
   triage:findingId "ATM-QA-002" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
   triage:title "Sprint-doc cross-branch divergence: feature-branch sprint-ai-2.md hand-edited, never propagated to planning branch" ;
   triage:description "AI2-QA-1 (req-qa) on PR #597: the feature-branch copy of sprint-ai-2.md was hand-edited to status: complete with an updated Contract block (fn open(&self, durable_state_root: &Path) -> Result<StorageHandles, AtmError>, matching the real shipped signature) that was never propagated back to the authoritative planning-branch copy (still stale, fn open(&self, scope: &HostRuntimeScope) -> ...). The planning branch is the designated single source of truth per the assignment contract. Related to ATM-QA-001 (same underlying doc-sync gap)." ;
   triage:phaseId "phase-AI" ;
@@ -35,27 +37,27 @@
 <urn:atm:triage:worktree/pAI-1/c479452e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-1-daemon-preag-reset" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
   triage:headSha "c479452e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pAI-2/770dd8ed>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s2-storage-topology" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
   triage:headSha "770dd8ed" ;
   triage:orderIndex 2 .
 
 <urn:atm:triage:worktree/pAI-3/c9d62ff6>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s3-error-contract-foundation" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
   triage:headSha "c9d62ff6" ;
   triage:orderIndex 3 .
 
 <urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "00fe6608" ;
   triage:orderIndex 0 .

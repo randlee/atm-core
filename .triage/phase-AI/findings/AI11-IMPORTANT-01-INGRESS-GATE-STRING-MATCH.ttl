@@ -4,6 +4,8 @@
 <urn:atm:triage:finding/AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH>
   a triage:Finding ;
   triage:findingId "AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:title "canonical_write_router_has_one_host_routing_decision uses string matching; AST-based check deferred then never delivered" ;
   triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Sprint-ai-6.md Deliverable 8 explicitly required AST-based boundary checking ('String matching is not an acceptable graph check') and was granted a Closure Waiver deferring the implementation to AI.7 'where the writer and post-write router types are introduced.' AI.7 is now merged and complete but never delivered the AST-based check. The test at crates/atm-architecture/tests/boundary_enforcement.rs:82-112 (canonical_write_router_has_one_host_routing_decision) remains pure string matching using source.contains(...) and source.matches(...).count() semantics. The waiver's deferred condition was met (AI.7 types exist) but the required deliverable was never fulfilled. Verdict: waiver condition satisfied but enforcement not delivered; this is a regression against an explicitly documented requirement with a specific deferral timeline." ;
   triage:phaseId "phase-AI" ;
@@ -37,13 +39,13 @@
 <urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-AI" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:orderIndex 999 .
 
 <urn:atm:triage:worktree/pAI-s20/bed07594>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "bed07594" ;
   triage:orderIndex 20 .
