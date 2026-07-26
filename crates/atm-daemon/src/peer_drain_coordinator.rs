@@ -1,0 +1,786 @@
+//! Bounded, in-memory recovery of immutable peer-directed writes.
+//!
+//! This owns scheduling only. Records remain in canonical storage and the
+//! transport remains a transport-only capability; no outbox, receipt, cursor,
+//! payload, or per-message state is retained here.
+//! The post-write router classifies a caller's immediate result; this module
+//! alone owns bounded retry eligibility and backoff for unconfirmed delivery.
+
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
+
+use atm_core::RequestDeadline;
+use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
+use atm_core::protocol::{ResponseEnvelope, next_request_id};
+use atm_core::send::WriteRequest;
+use atm_core::types::{HostName, IsoTimestamp};
+use atm_storage::{OutboundMessageQuery, PeerConfigStore, TrustedPeer};
+
+use crate::https_transport::HttpsMessageTransport;
+use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
+use crate::runtime_health::peer_authority::resolve_peer_authority;
+
+const INITIAL_BACKOFF: Duration = Duration::from_secs(60);
+const MAX_BACKOFF: Duration = Duration::from_secs(15 * 60);
+const MAX_PEER_DRAIN_SLOTS: usize = 256;
+
+/// The only non-durable per-peer recovery state. In particular this never
+/// holds a message, cursor, payload, receipt, or attempted-delivery history.
+#[derive(Debug)]
+struct PeerDrainSlot {
+    running: bool,
+    requested_generation: u64,
+    observed_generation: u64,
+    next_attempt_at: Option<Instant>,
+    backoff: Duration,
+}
+
+impl Default for PeerDrainSlot {
+    fn default() -> Self {
+        Self {
+            running: false,
+            requested_generation: 0,
+            observed_generation: 0,
+            next_attempt_at: None,
+            backoff: INITIAL_BACKOFF,
+        }
+    }
+}
+
+fn schedule_retry(slot: &mut PeerDrainSlot, now: Instant) -> Duration {
+    let delay = slot.backoff;
+    slot.next_attempt_at = Some(now + delay);
+    slot.backoff = slot.backoff.saturating_mul(2).min(MAX_BACKOFF);
+    delay
+}
+
+fn retry_timestamp(delay: Duration) -> IsoTimestamp {
+    IsoTimestamp::from_datetime(
+        chrono::Utc::now() + chrono::Duration::from_std(delay).expect("bounded backoff"),
+    )
+}
+
+pub(crate) fn is_retryable_peer_error(error: &AtmError) -> bool {
+    matches!(
+        error.code(),
+        AtmErrorCode::DaemonUnavailable | AtmErrorCode::RemoteDeliveryUnconfirmed
+    )
+}
+
+pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
+    fn deliver_after_persist(
+        &self,
+        request: &WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError>;
+
+    fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError>;
+
+    fn start(&self) -> Result<(), AtmError>;
+
+    fn stop(&self) -> Result<(), AtmError>;
+}
+
+pub(crate) struct PeerDrainCoordinator {
+    peers: Arc<dyn PeerConfigStore + Send + Sync>,
+    outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
+    transport: Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    slots: Arc<(Mutex<BTreeMap<HostName, PeerDrainSlot>>, Condvar)>,
+    record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
+    stop: Arc<AtomicBool>,
+    worker: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+impl std::fmt::Debug for PeerDrainCoordinator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerDrainCoordinator")
+            .field("peers", &"dyn PeerConfigStore")
+            .field("outbound", &"dyn OutboundMessageQuery")
+            .finish_non_exhaustive()
+    }
+}
+
+impl PeerDrainCoordinator {
+    pub(crate) fn new(
+        peers: Arc<dyn PeerConfigStore + Send + Sync>,
+        outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
+        transport: Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+        record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
+    ) -> Self {
+        Self {
+            peers,
+            outbound,
+            transport,
+            slots: Arc::new((Mutex::new(BTreeMap::new()), Condvar::new())),
+            record,
+            stop: Arc::new(AtomicBool::new(false)),
+            worker: Mutex::new(None),
+        }
+    }
+
+    fn slots(&self) -> Result<MutexGuard<'_, BTreeMap<HostName, PeerDrainSlot>>, AtmError> {
+        self.slots
+            .0
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("peer drain coordinator slot lock poisoned"))
+    }
+
+    fn acquire(&self, host: &HostName, deadline: RequestDeadline) -> Result<(), AtmError> {
+        let mut slots = self.slots()?;
+        if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(host) {
+            return Err(AtmError::daemon_unavailable(
+                "peer drain coordinator capacity exhausted",
+            ));
+        }
+        let slot = slots.entry(host.clone()).or_default();
+        slot.requested_generation = slot.requested_generation.saturating_add(1);
+        while slots.get(host).is_some_and(|slot| slot.running) {
+            let Some(remaining) = deadline
+                .remaining()
+                .filter(|remaining| !remaining.is_zero())
+            else {
+                return Err(AtmError::remote_delivery_unconfirmed(
+                    "peer delivery remained behind the active drain until the request deadline",
+                ));
+            };
+            let (guard, timeout) = self.slots.1.wait_timeout(slots, remaining).map_err(|_| {
+                AtmError::daemon_unavailable("peer drain coordinator slot lock poisoned")
+            })?;
+            slots = guard;
+            if timeout.timed_out() && slots.get(host).is_some_and(|slot| slot.running) {
+                return Err(AtmError::remote_delivery_unconfirmed(
+                    "peer delivery remained behind the active drain until the request deadline",
+                ));
+            }
+        }
+        slots.entry(host.clone()).or_default().running = true;
+        Ok(())
+    }
+
+    fn release(&self, host: &HostName) -> Result<(), AtmError> {
+        if let Some(slot) = self.slots()?.get_mut(host) {
+            slot.running = false;
+            slot.observed_generation = slot.requested_generation;
+        }
+        self.slots.1.notify_all();
+        Ok(())
+    }
+
+    fn mark_generation_observed(&self, host: &HostName) -> Result<(), AtmError> {
+        if let Some(slot) = self.slots()?.get_mut(host) {
+            slot.observed_generation = slot.requested_generation;
+        }
+        Ok(())
+    }
+
+    fn generation_changed(&self, host: &HostName) -> Result<bool, AtmError> {
+        Ok(self
+            .slots()?
+            .get(host)
+            .is_some_and(|slot| slot.requested_generation != slot.observed_generation))
+    }
+
+    fn reset_backoff(&self, host: &HostName) -> Result<(), AtmError> {
+        if let Some(slot) = self.slots()?.get_mut(host) {
+            slot.backoff = INITIAL_BACKOFF;
+            slot.next_attempt_at = None;
+        }
+        Ok(())
+    }
+
+    fn record(
+        &self,
+        kind: PeerDeliveryEventKind,
+        peer: HostName,
+        error: Option<&AtmError>,
+        candidates: Option<u32>,
+        next_attempt_at: Option<IsoTimestamp>,
+    ) {
+        (self.record)(PeerDeliveryEvent {
+            kind,
+            request_id: next_request_id(),
+            message_id: None,
+            peer,
+            error_code: error.map(AtmError::code),
+            candidate_count: candidates,
+            next_attempt_at,
+        });
+    }
+
+    fn configured_peer(&self, host: &HostName) -> Result<TrustedPeer, AtmError> {
+        resolve_peer_authority(host, &self.peers.list_trusted_peers()?)
+    }
+
+    fn recovery_context(
+        &self,
+        host: &HostName,
+    ) -> Result<
+        (
+            TrustedPeer,
+            atm_storage::PeerSyncPolicy,
+            Arc<dyn HttpsMessageTransport>,
+            IsoTimestamp,
+        ),
+        AtmError,
+    > {
+        let peer = self.configured_peer(host)?;
+        let policy = self.peers.peer_sync_policy(host)?.validate()?;
+        let transport = self
+            .transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::remote_delivery_unconfirmed(
+                    "HTTPS peer transport is not enabled in this daemon",
+                )
+            })?;
+        let not_before = IsoTimestamp::from_datetime(
+            chrono::Utc::now()
+                - chrono::Duration::from_std(policy.max_message_age).map_err(|_| {
+                    AtmError::validation("peer sync maximum message age is out of range")
+                })?,
+        );
+        Ok((peer, policy, transport, not_before))
+    }
+
+    fn drain(&self, host: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
+        let (peer, policy, transport, not_before) = self.recovery_context(host)?;
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryAttempt,
+            host.clone(),
+            None,
+            None,
+            None,
+        );
+        let mut after = None;
+        let mut delivered = 0_u16;
+        self.mark_generation_observed(host)?;
+        loop {
+            if deadline.expired() {
+                return self.failed(
+                    host,
+                    AtmError::remote_delivery_unconfirmed(
+                        "peer reconciliation exceeded its bounded request deadline",
+                    ),
+                );
+            }
+            let page =
+                self.outbound
+                    .page_for_peer(host, not_before, after, policy.max_batch_messages)?;
+            if deadline.expired() {
+                return self.failed(
+                    host,
+                    AtmError::remote_delivery_unconfirmed(
+                        "peer reconciliation exceeded its bounded request deadline",
+                    ),
+                );
+            }
+            if page.is_empty() {
+                if self.generation_changed(host)? {
+                    self.mark_generation_observed(host)?;
+                    after = None;
+                    continue;
+                }
+                return self.finish_drain(host, delivered);
+            }
+            let requests = Self::decode_page_requests(&page)?;
+            let responses = match transport.deliver_page(&requests, &peer, deadline) {
+                Ok(responses) => responses,
+                Err(error) => {
+                    return self
+                        .failed(host, AtmError::remote_delivery_unconfirmed(error.message()));
+                }
+            };
+            if responses.len() != page.len() {
+                return self.failed(
+                    host,
+                    AtmError::remote_delivery_unconfirmed(
+                        "HTTPS peer transport returned fewer responses than canonical writes",
+                    ),
+                );
+            }
+            for (stored, response) in page.iter().zip(responses) {
+                if let ResponseEnvelope::Error(error) = response {
+                    return if is_retryable_peer_error(&error) {
+                        self.failed(host, error)
+                    } else {
+                        Err(error)
+                    };
+                }
+                delivered = delivered.saturating_add(1);
+                after = Some((stored.created_at, stored.message_id));
+            }
+            if page.len() < usize::from(policy.max_batch_messages.get()) {
+                return self.finish_drain(host, delivered);
+            }
+        }
+    }
+
+    fn decode_page_requests(
+        page: &[atm_storage::StoredPeerWrite],
+    ) -> Result<Vec<WriteRequest>, AtmError> {
+        page.iter()
+            .map(|stored| {
+                serde_json::from_str(&stored.request_json).map_err(|_| {
+                    AtmError::mailbox_read("stored immutable peer outbound write is invalid")
+                })
+            })
+            .collect()
+    }
+
+    fn finish_drain(&self, host: &HostName, delivered: u16) -> Result<u16, AtmError> {
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryConfirmed,
+            host.clone(),
+            None,
+            Some(u32::from(delivered)),
+            None,
+        );
+        self.reset_backoff(host)?;
+        Ok(delivered)
+    }
+
+    fn failed<T>(&self, host: &HostName, error: AtmError) -> Result<T, AtmError> {
+        let next_attempt_at = {
+            let mut slots = self.slots()?;
+            let slot = slots.entry(host.clone()).or_default();
+            let delay = schedule_retry(slot, Instant::now());
+            retry_timestamp(delay)
+        };
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryUnconfirmed,
+            host.clone(),
+            Some(&error),
+            None,
+            Some(next_attempt_at),
+        );
+        self.record(
+            PeerDeliveryEventKind::PeerRecoveryScheduled,
+            host.clone(),
+            Some(&error),
+            None,
+            Some(next_attempt_at),
+        );
+        Err(error)
+    }
+
+    fn deliver_current(
+        &self,
+        request: &WriteRequest,
+        host: &HostName,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        let peer = self.configured_peer(host)?;
+        let transport = self
+            .transport
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::remote_delivery_unconfirmed(
+                    "HTTPS peer transport is not enabled in this daemon",
+                )
+            })?;
+        match transport.deliver(request.clone(), &peer, deadline) {
+            Ok(ResponseEnvelope::Error(error)) => Err(error),
+            Ok(_) => {
+                self.record(
+                    PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                    host.clone(),
+                    None,
+                    Some(1),
+                    None,
+                );
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn worker_coordinator(&self) -> Self {
+        Self {
+            peers: Arc::clone(&self.peers),
+            outbound: Arc::clone(&self.outbound),
+            transport: Arc::clone(&self.transport),
+            slots: Arc::clone(&self.slots),
+            record: Arc::clone(&self.record),
+            stop: Arc::clone(&self.stop),
+            worker: Mutex::new(None),
+        }
+    }
+
+    fn schedule_startup_recovery(&self) -> Result<(), AtmError> {
+        for peer in self
+            .peers
+            .list_trusted_peers()?
+            .into_iter()
+            .filter(|peer| peer.enabled)
+        {
+            let policy = self.peers.peer_sync_policy(&peer.host)?.validate()?;
+            if policy.max_message_age.is_zero() {
+                continue;
+            }
+            let not_before = IsoTimestamp::from_datetime(
+                chrono::Utc::now()
+                    - chrono::Duration::from_std(policy.max_message_age).map_err(|_| {
+                        AtmError::validation("peer sync maximum message age is out of range")
+                    })?,
+            );
+            if self
+                .outbound
+                .page_for_peer(&peer.host, not_before, None, policy.max_batch_messages)?
+                .is_empty()
+            {
+                continue;
+            }
+            let next_attempt_at = retry_timestamp(INITIAL_BACKOFF);
+            let mut slots = self.slots()?;
+            if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(&peer.host) {
+                return Err(AtmError::daemon_unavailable(
+                    "peer drain coordinator capacity exhausted",
+                ));
+            }
+            slots.entry(peer.host.clone()).or_default().next_attempt_at =
+                Some(Instant::now() + INITIAL_BACKOFF);
+            drop(slots);
+            self.record(
+                PeerDeliveryEventKind::PeerRecoveryScheduled,
+                peer.host,
+                None,
+                None,
+                Some(next_attempt_at),
+            );
+        }
+        Ok(())
+    }
+
+    fn run_scheduled_recovery(&self) {
+        while !self.stop.load(Ordering::SeqCst) {
+            let mut slots = match self.slots() {
+                Ok(slots) => slots,
+                Err(error) => {
+                    tracing::error!(subsystem = "peer_drain", action = "schedule", %error, "peer recovery worker stopped after slot lock failure");
+                    return;
+                }
+            };
+            let due = {
+                let now = Instant::now();
+                slots.iter_mut().find_map(|(host, slot)| {
+                    (slot.next_attempt_at.is_some_and(|next| next <= now) && !slot.running).then(
+                        || {
+                            slot.running = true;
+                            host.clone()
+                        },
+                    )
+                })
+            };
+            drop(slots);
+            if let Some(host) = due {
+                let _ = self.drain(&host, RequestDeadline::after(Duration::from_secs(5)));
+                if let Err(error) = self.release(&host) {
+                    tracing::error!(subsystem = "peer_drain", action = "release", %error, "peer drain slot release failed");
+                }
+                continue;
+            }
+            std::thread::park_timeout(Duration::from_millis(250));
+        }
+    }
+}
+
+impl PeerDeliveryCoordinator for PeerDrainCoordinator {
+    fn deliver_after_persist(
+        &self,
+        request: &WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<(), AtmError> {
+        let host = request
+            .to
+            .as_ref()
+            .and_then(|address| address.host())
+            .ok_or_else(|| {
+                AtmError::validation("peer delivery coordinator requires a host-qualified write")
+            })?
+            .clone();
+        if self
+            .peers
+            .peer_sync_policy(&host)?
+            .validate()?
+            .max_message_age
+            .is_zero()
+        {
+            return self.deliver_current(request, &host, deadline);
+        }
+        self.acquire(&host, deadline)?;
+        let result = self.drain(&host, deadline);
+        self.release(&host)?;
+        result.map(|count| {
+            self.record(
+                PeerDeliveryEventKind::PeerDeliveryConfirmed,
+                host,
+                None,
+                Some(u32::from(count)),
+                None,
+            );
+        })
+    }
+
+    fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
+        if self
+            .peers
+            .peer_sync_policy(peer)?
+            .validate()?
+            .max_message_age
+            .is_zero()
+        {
+            return Ok(0);
+        }
+        self.acquire(peer, deadline)?;
+        let result = self.drain(peer, deadline);
+        self.release(peer)?;
+        result
+    }
+
+    fn start(&self) -> Result<(), AtmError> {
+        self.schedule_startup_recovery()?;
+        let mut worker = self.worker.lock().map_err(|_| {
+            AtmError::daemon_unavailable("peer drain coordinator worker lock poisoned")
+        })?;
+        if worker.is_none() {
+            self.stop.store(false, Ordering::SeqCst);
+            let coordinator = self.worker_coordinator();
+            *worker = Some(
+                std::thread::Builder::new()
+                    .name("atm-peer-drain".to_string())
+                    .spawn(move || coordinator.run_scheduled_recovery())
+                    .map_err(|_| {
+                        AtmError::daemon_unavailable("failed to start peer drain worker")
+                    })?,
+            );
+        }
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AtmError> {
+        self.stop.store(true, Ordering::SeqCst);
+        let worker = self
+            .worker
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("peer drain coordinator worker lock poisoned")
+            })?
+            .take();
+        if let Some(worker) = worker {
+            worker.join().map_err(|_| {
+                AtmError::daemon_unavailable("peer drain worker panicked during shutdown")
+            })?;
+        }
+        self.slots()?.clear();
+        self.slots.1.notify_all();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        INITIAL_BACKOFF, MAX_BACKOFF, PeerDrainCoordinator, PeerDrainSlot, is_retryable_peer_error,
+        retry_timestamp, schedule_retry,
+    };
+    use atm_core::RequestDeadline;
+    use atm_core::error::AtmError;
+    use atm_core::types::{HostName, IsoTimestamp};
+    use atm_storage::{
+        HttpsInterface, LocalCertificate, OutboundMessageQuery, PeerConfigStore, PeerSyncPolicy,
+        StoredPeerWrite, TrustedPeer,
+    };
+    use chrono::Utc;
+    use std::sync::{Arc, mpsc};
+    use std::time::{Duration, Instant};
+
+    struct EmptyPeerStore;
+
+    impl PeerConfigStore for EmptyPeerStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            Ok(Vec::new())
+        }
+        fn save_interface(&self, _: &HttpsInterface) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_interface(&self, _: std::net::SocketAddr) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            Ok(None)
+        }
+        fn save_local_certificate(&self, _: &LocalCertificate) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            Ok(Vec::new())
+        }
+        fn trusted_peer(&self, _: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
+            Ok(None)
+        }
+        fn save_trusted_peer(&self, _: &TrustedPeer) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_trusted_peer(&self, _: &HostName) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn peer_sync_policy(&self, _: &HostName) -> Result<PeerSyncPolicy, AtmError> {
+            Ok(PeerSyncPolicy::default())
+        }
+    }
+
+    struct EmptyOutbound;
+
+    impl OutboundMessageQuery for EmptyOutbound {
+        fn page_for_peer(
+            &self,
+            _: &HostName,
+            _: IsoTimestamp,
+            _: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
+            _: std::num::NonZeroU16,
+        ) -> Result<Vec<StoredPeerWrite>, AtmError> {
+            Ok(Vec::new())
+        }
+    }
+
+    fn coordinator_for_slots() -> Arc<PeerDrainCoordinator> {
+        Arc::new(PeerDrainCoordinator::new(
+            Arc::new(EmptyPeerStore),
+            Arc::new(EmptyOutbound),
+            Arc::new(std::sync::Mutex::new(None)),
+            Arc::new(|_| {}),
+        ))
+    }
+
+    #[test]
+    fn retry_backoff_starts_at_one_minute_caps_and_resets() {
+        let mut slot = PeerDrainSlot::default();
+        let now = Instant::now();
+        assert_eq!(schedule_retry(&mut slot, now), INITIAL_BACKOFF);
+        assert_eq!(slot.next_attempt_at, Some(now + INITIAL_BACKOFF));
+        for _ in 0..8 {
+            schedule_retry(&mut slot, now);
+        }
+        assert_eq!(slot.backoff, MAX_BACKOFF);
+        slot.backoff = INITIAL_BACKOFF;
+        slot.next_attempt_at = None;
+        assert_eq!(slot.backoff, Duration::from_secs(60));
+        assert!(slot.next_attempt_at.is_none());
+    }
+
+    #[test]
+    fn generation_change_requires_another_final_scan() {
+        let mut slot = PeerDrainSlot {
+            requested_generation: 2,
+            observed_generation: 1,
+            ..PeerDrainSlot::default()
+        };
+        assert_ne!(slot.requested_generation, slot.observed_generation);
+        slot.observed_generation = slot.requested_generation;
+        assert_eq!(slot.requested_generation, slot.observed_generation);
+    }
+
+    #[test]
+    fn only_unconfirmed_delivery_errors_schedule_recovery() {
+        assert!(is_retryable_peer_error(
+            &AtmError::remote_delivery_unconfirmed("offline")
+        ));
+        assert!(!is_retryable_peer_error(&AtmError::peer_config_validation(
+            "bad peer"
+        )));
+    }
+
+    #[test]
+    fn scheduled_timestamp_reports_the_real_backoff_not_the_current_instant() {
+        let before = Utc::now();
+        let scheduled = retry_timestamp(INITIAL_BACKOFF).into_inner();
+        assert!(scheduled >= before + chrono::Duration::seconds(59));
+    }
+
+    #[test]
+    fn failed_recovery_records_the_real_next_attempt_timestamp() {
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded_events = Arc::clone(&events);
+        let coordinator = PeerDrainCoordinator::new(
+            Arc::new(EmptyPeerStore),
+            Arc::new(EmptyOutbound),
+            Arc::new(std::sync::Mutex::new(None)),
+            Arc::new(move |event| recorded_events.lock().expect("event lock").push(event)),
+        );
+        let host: HostName = "peer.example.test".parse().expect("host");
+        let before = Utc::now();
+        let _: Result<(), _> = coordinator.failed(
+            &host,
+            AtmError::remote_delivery_unconfirmed("peer unavailable"),
+        );
+        let scheduled = events
+            .lock()
+            .expect("event lock")
+            .iter()
+            .find_map(|event| event.next_attempt_at)
+            .expect("scheduled event timestamp")
+            .into_inner();
+        assert!(scheduled >= before + chrono::Duration::seconds(59));
+    }
+
+    #[test]
+    fn same_host_waiter_is_released_without_polling_after_the_active_lease() {
+        let coordinator = coordinator_for_slots();
+        let host: HostName = "peer.example.test".parse().expect("host");
+        coordinator
+            .acquire(&host, RequestDeadline::after(Duration::from_secs(1)))
+            .expect("first lease");
+        let (started, started_rx) = mpsc::sync_channel(1);
+        let waiting = Arc::clone(&coordinator);
+        let waiting_host = host.clone();
+        let waiter = std::thread::spawn(move || {
+            started.send(()).expect("report waiter");
+            waiting.acquire(
+                &waiting_host,
+                RequestDeadline::after(Duration::from_secs(1)),
+            )
+        });
+        started_rx.recv().expect("waiter starts");
+        let wait_until = Instant::now() + Duration::from_secs(1);
+        while coordinator
+            .slots()
+            .expect("slot lock")
+            .get(&host)
+            .is_some_and(|slot| slot.requested_generation < 2)
+        {
+            assert!(
+                Instant::now() < wait_until,
+                "waiter must contend for the slot"
+            );
+            std::thread::yield_now();
+        }
+        coordinator.release(&host).expect("release first lease");
+        waiter.join().expect("join waiter").expect("waiter lease");
+    }
+
+    #[test]
+    fn coordinator_rejects_a_new_host_once_slot_capacity_is_reached() {
+        let coordinator = coordinator_for_slots();
+        let mut slots = coordinator.slots().expect("slot lock");
+        for index in 0..super::MAX_PEER_DRAIN_SLOTS {
+            slots.insert(
+                format!("peer-{index}.example.test").parse().expect("host"),
+                PeerDrainSlot::default(),
+            );
+        }
+        drop(slots);
+        let host: HostName = "overflow.example.test".parse().expect("host");
+        assert!(
+            coordinator
+                .acquire(&host, RequestDeadline::after(Duration::from_secs(1)))
+                .is_err()
+        );
+    }
+}
