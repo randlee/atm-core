@@ -9,6 +9,7 @@ only displays its already-calculated values.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
@@ -18,10 +19,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from rdflib import Graph, Namespace, RDF
+    from rdflib import Graph, Literal, Namespace, RDF
     _RDFLIB_ERROR = None
 except ImportError as exc:  # pragma: no cover - environment error
-    Graph = Namespace = RDF = None  # type: ignore[assignment]
+    Graph = Literal = Namespace = RDF = None  # type: ignore[assignment]
     _RDFLIB_ERROR = str(exc)
 
 
@@ -152,10 +153,13 @@ def _sprints(structure: Graph, phase: str) -> list[dict[str, Any]]:
             continue
         order_values = list(structure.objects(subject, TRIAGE.order))
         criteria_values = list(structure.objects(subject, TRIAGE.criteria))
+        branch_values = list(structure.objects(subject, TRIAGE.branch))
         if len(order_values) != 1:
             raise ReportError(f"{_local(subject)} must have exactly one triage:order")
         if len(criteria_values) != 1:
             raise ReportError(f"{_local(subject)} must have exactly one triage:criteria")
+        if len(branch_values) > 1:
+            raise ReportError(f"{_local(subject)} may have at most one triage:branch")
         order_text = str(order_values[0]).strip()
         if not re.fullmatch(r"[0-9]+", order_text):
             raise ReportError(f"{_local(subject)} triage:order must be an integer")
@@ -166,8 +170,10 @@ def _sprints(structure: Graph, phase: str) -> list[dict[str, Any]]:
         result.append(
             {
                 "id": _local(subject),
+                "iri": str(subject),
                 "order": order,
                 "criteria": str(criteria_values[0]),
+                "branch": str(branch_values[0]) if branch_values else None,
             }
         )
     if not result:
@@ -225,28 +231,6 @@ def _qa_runs(master: Any) -> dict[str, dict[str, Any]]:
         if previous is None or (candidate and (previous_dt is None or candidate > previous_dt)):
             latest[sprint] = run
     return latest
-
-
-def _metadata(metadata: Any) -> dict[str, dict[str, Any]]:
-    if metadata is None:
-        return {}
-    if not isinstance(metadata, dict) or not isinstance(metadata.get("sprints"), list):
-        raise ReportError("metadata must contain a sprints array")
-    values = metadata["sprints"]
-    result: dict[str, dict[str, Any]] = {}
-    for item in values:
-        if not isinstance(item, dict) or not item.get("id"):
-            raise ReportError("metadata.sprints entries must be objects with an id")
-        key = str(item["id"])
-        if key in result:
-            raise ReportError(f"metadata contains duplicate sprint {key}")
-        result[key] = item
-    return result
-
-
-def _count(run: dict[str, Any] | None, name: str) -> int | None:
-    value = run.get(name) if run else None
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
 def _phase_sprint(criteria: str) -> str | None:
@@ -309,24 +293,6 @@ def _source_path(path: Path | None, root: Path) -> str | None:
         return str(path.relative_to(root))
     except ValueError:
         return f"<external>/{path.name}"
-
-
-def _validate_metadata(item: dict[str, Any], sprint: str) -> None:
-    for field in ("branch", "head_sha", "target_branch", "pr_url", "ci_status", "ci_url", "merge_commit", "merged_at_utc", "assignment_ack_message_id", "assignment_ack_time_utc"):
-        if item.get(field) is not None and not isinstance(item[field], str):
-            raise ReportError(f"metadata {sprint}.{field} must be a string or null")
-    if item.get("pr_number") is not None and (not isinstance(item["pr_number"], int) or isinstance(item["pr_number"], bool)):
-        raise ReportError(f"metadata {sprint}.pr_number must be an integer or null")
-    if item.get("merged") is not None and not isinstance(item["merged"], bool):
-        raise ReportError(f"metadata {sprint}.merged must be boolean or null")
-
-
-def _validate_qa(run: dict[str, Any] | None, sprint: str) -> None:
-    if run is None:
-        return
-    for field in ("blockers", "important", "minor"):
-        if field in run and run[field] is not None and (not isinstance(run[field], int) or isinstance(run[field], bool) or run[field] < 0):
-            raise ReportError(f"QA run {sprint}.{field} must be a non-negative integer or null")
 
 
 def _findings_dir(root: Path, plan_phase: str | None) -> Path:
@@ -427,11 +393,201 @@ def _run_findings_validator(
     return payload
 
 
+def _graph_runner():
+    """Load graph-orchestration's public graph/query helpers once.
+
+    The report must use the same finding membership and resolution semantics as
+    dispatch.  Loading that module is preferable to a parallel Turtle loader or
+    a report-specific copy of ``open-findings-for-sprint.sparql``.
+    """
+    runner_path = (
+        Path(__file__).resolve().parents[2]
+        / "graph-orchestration"
+        / "scripts"
+        / "query_runner.py"
+    )
+    spec = importlib.util.spec_from_file_location("triage_report_graph_runner", runner_path)
+    if spec is None or spec.loader is None:
+        raise ReportError(f"cannot load graph query runner: {runner_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _live_counts(phase_path: Path, sprints: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """Return unresolved B/I/M counts using graph-orchestration's query.
+
+    This is the report's gate source.  QA evidence records review provenance;
+    they never override the current unresolved-finding state.
+    """
+    runner = _graph_runner()
+    query = (
+        Path(__file__).resolve().parents[2]
+        / "graph-orchestration"
+        / "scripts"
+        / "open-findings-for-sprint.sparql"
+    )
+    try:
+        graph = runner.load_graph(str(phase_path))
+    except Exception as exc:  # noqa: BLE001 - normalize graph runner failures
+        raise ReportError(f"could not load live finding graph: {exc}") from exc
+
+    results: dict[str, dict[str, int]] = {}
+    for sprint in sprints:
+        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        bindings = {"SPRINT": runner.URIRef(sprint["iri"])}
+        if branch:
+            bindings["BRANCH"] = Literal(branch)
+        # Legacy structure rows may intentionally have no branch convention.
+        # Keep those rows on the query's origin-sprint compatibility path; all
+        # mapped delivery sprints use occurrence-level branch scoping.
+        try:
+            rows = runner.run_sparql(
+                graph,
+                query,
+                bindings,
+            )
+        except Exception as exc:  # noqa: BLE001 - normalize SPARQL failures
+            raise ReportError(f"could not query live findings for {sprint['id']}: {exc}") from exc
+        counts = {"blockers": 0, "important": 0, "minor": 0}
+        for row in rows:
+            severity = str(row[2])
+            if severity == "blocking":
+                counts["blockers"] += 1
+            elif severity == "important":
+                counts["important"] += 1
+            elif severity == "minor":
+                counts["minor"] += 1
+            else:
+                raise ReportError(
+                    f"{sprint['id']}: live findings query returned invalid severity {severity!r}"
+                )
+        results[sprint["id"]] = counts
+    return results
+
+
+def _branch_from_criteria(criteria: str) -> str | None:
+    """Derive the documented sprint-branch convention from a criteria path.
+
+    ``triage:branch`` is preferred when a phase records it explicitly.  The
+    fallback keeps existing phase-AI records useful until that field is added
+    to their structure graph.
+    """
+    match = re.fullmatch(
+        r"sprint-([a-z][a-z0-9]*)-([0-9]+)(?:-(pre))?-(.+)",
+        Path(criteria).stem,
+    )
+    if not match:
+        return None
+    prefix, number, suffix, slug = match.groups()
+    return f"feature/p{prefix.upper()}-s{number}{suffix or ''}-{slug}"
+
+
+def _origin_repo(root: Path) -> str | None:
+    """Return owner/repo for a GitHub origin without hard-coding a repository."""
+    try:
+        origin = _git(root, "remote", "get-url", "origin")
+    except ReportError:
+        return None
+    match = re.search(r"github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$", origin)
+    return f"{match.group(1)}/{match.group(2)}" if match else None
+
+
+def _github_prs(root: Path, repo: str, branch: str) -> list[dict[str, Any]] | None:
+    """Read the complete PR history for one branch; return None if unavailable."""
+    command = [
+        "gh", "pr", "list", "--repo", repo, "--head", branch, "--state", "all",
+        "--limit", "100", "--json",
+        "number,state,headRefName,headRefOid,baseRefName,mergeCommit,mergedAt,url,"
+        "statusCheckRollup,createdAt",
+    ]
+    try:
+        result = subprocess.run(command, cwd=root, text=True, capture_output=True, check=False)
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, list) else None
+
+
+def _ci_status(checks: Any) -> str | None:
+    if not isinstance(checks, list) or not checks:
+        return None
+    conclusions = [
+        str(check.get("conclusion") or check.get("status") or "").upper()
+        for check in checks if isinstance(check, dict)
+    ]
+    if any(value in {"FAILURE", "FAILED", "ERROR", "TIMED_OUT", "CANCELLED"} for value in conclusions):
+        return "fail"
+    if any(value in {"IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED"} for value in conclusions):
+        return "pending"
+    if conclusions and all(value in {"SUCCESS", "NEUTRAL", "SKIPPED"} for value in conclusions):
+        return "pass"
+    return None
+
+
+def _current_pr(prs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Prefer the newest open replay over an older merged attempt."""
+    if not prs:
+        return None
+    open_prs = [pr for pr in prs if pr.get("state") == "OPEN"]
+    candidates = open_prs or prs
+    return max(candidates, key=lambda pr: str(pr.get("createdAt") or pr.get("mergedAt") or ""))
+
+
+def _github_state(root: Path, sprints: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], str | None]:
+    """Collect current PR/CI state and preserve replay history per sprint."""
+    repo = _origin_repo(root)
+    if repo is None:
+        return {}, None
+    states: dict[str, dict[str, Any]] = {}
+    for sprint in sprints:
+        branch = sprint["branch"] or _branch_from_criteria(sprint["criteria"])
+        if branch is None:
+            states[sprint["id"]] = {}
+            continue
+        prs = _github_prs(root, repo, branch)
+        if prs is None:
+            states[sprint["id"]] = {"branch": branch}
+            continue
+        current = _current_pr(prs)
+        if current is None:
+            states[sprint["id"]] = {"branch": branch, "delivery_attempts": []}
+            continue
+        merge = current.get("mergeCommit")
+        merge_oid = merge.get("oid") if isinstance(merge, dict) else None
+        states[sprint["id"]] = {
+            "branch": branch,
+            "head_sha": current.get("headRefOid"),
+            "target_branch": current.get("baseRefName"),
+            "pr_number": current.get("number"),
+            "pr_url": current.get("url"),
+            "ci_status": _ci_status(current.get("statusCheckRollup")),
+            "merged": current.get("state") == "MERGED",
+            "merge_commit": merge_oid,
+            "merged_at_utc": current.get("mergedAt"),
+            "delivery_attempts": [
+                {
+                    "pr_number": pr.get("number"),
+                    "head_sha": pr.get("headRefOid"),
+                    "state": pr.get("state"),
+                    "merged_at_utc": pr.get("mergedAt"),
+                    "url": pr.get("url"),
+                }
+                for pr in sorted(prs, key=lambda pr: str(pr.get("createdAt") or ""))
+            ],
+        }
+    return states, repo
+
+
 def build_report(
     integration_root: Path,
     phase: str | None = None,
     qa_master: Path | None = None,
-    metadata: Path | None = None,
 ) -> dict[str, Any]:
     """Build canonical report data. No presentation-layer inference occurs here."""
     if _RDFLIB_ERROR:
@@ -458,34 +614,28 @@ def build_report(
     if not qa_master.is_absolute():
         qa_master = root / qa_master
     qa_data = _json(qa_master)
-    if metadata is not None and not metadata.is_absolute():
-        metadata = root / metadata
-    metadata_data = _json(metadata) if metadata else None
     # Validate raw findings before calculating a single row.  This prevents
     # query_runner's phase scoping from hiding malformed or orphan records.
     findings_dir = _findings_dir(root, plan_phase)
     validation = _run_findings_validator(root, findings_dir, structure_path, events_path)
     qa = _qa_runs(qa_data)
-    meta = _metadata(metadata_data)
+    live_counts = _live_counts(phase_path, sprints)
+    github, github_repo = _github_state(root, sprints)
     dev = _dev_states(events)
     data_gaps: list[str] = []
     if events is None:
         data_gaps.append(f"events file not found: {events_path}")
     if qa_data is None:
         data_gaps.append(f"QA evidence master not found: {qa_master}")
-    if metadata is None:
-        data_gaps.append("PR/CI/branch/merge metadata not supplied; those cells are unknown")
-    elif metadata_data is None:
-        data_gaps.append(f"metadata not found: {metadata}")
+    if github_repo is None:
+        data_gaps.append("GitHub origin is unavailable; PR/CI/merge cells are unknown")
 
     rows: list[dict[str, Any]] = []
     for sprint in sprints:
         sid = sprint["id"]
         run = qa.get(sid)
-        item = meta.get(sid, {})
-        _validate_metadata(item, sid)
-        _validate_qa(run, sid)
-        counts = {name: _count(run, name) for name in ("blockers", "important", "minor")}
+        item = github.get(sid, {})
+        counts = live_counts[sid]
         verdict = str(run.get("verdict", "")) if run else None
         if not verdict and run and isinstance(run.get("pass"), bool):
             verdict = "PASS" if run["pass"] else "FAIL"
@@ -523,7 +673,11 @@ def build_report(
                     "blockers": counts["blockers"],
                     "important": counts["important"],
                     "minor": counts["minor"],
-                    "count_basis": run.get("count_basis") if run else None,
+                    "count_basis": "live unresolved TTL findings",
+                    "reported_counts": {
+                        name: run.get(name) if run else None
+                        for name in ("blockers", "important", "minor")
+                    },
                 },
                 "branch": item.get("branch"),
                 "head_sha": item.get("head_sha"),
@@ -535,23 +689,16 @@ def build_report(
                 "merged": item.get("merged") if isinstance(item.get("merged"), bool) else None,
                 "merge_commit": item.get("merge_commit"),
                 "merged_at_utc": item.get("merged_at_utc"),
-                "assignment_ack_message_id": item.get("assignment_ack_message_id"),
-                "assignment_ack_time_utc": item.get("assignment_ack_time_utc"),
+                "delivery_attempts": item.get("delivery_attempts", []),
                 "quality_gate": quality_gate,
                 "ready_to_merge": ready,
             }
         )
         if run is None:
             data_gaps.append(f"{sid}: no authoritative QA run")
-        else:
-            for field in ("blockers", "important", "minor"):
-                if counts[field] is None:
-                    data_gaps.append(f"{sid}: QA {field} count is missing or null")
-        if sid not in meta:
-            data_gaps.append(f"{sid}: no explicit PR/CI/branch/merge metadata")
-        for field in ("branch", "head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged", "assignment_ack_message_id", "assignment_ack_time_utc"):
+        for field in ("branch", "head_sha", "target_branch", "pr_number", "pr_url", "ci_status", "merged"):
             if item.get(field) is None:
-                data_gaps.append(f"{sid}: metadata {field} is missing or null")
+                data_gaps.append(f"{sid}: GitHub {field} is missing or unknown")
 
     for index, row in enumerate(rows):
         previous = rows[:index]
@@ -624,7 +771,7 @@ def build_report(
             "structure": str(structure_path.relative_to(root)),
             "events": str(events_path.relative_to(root)) if events_path.is_file() else None,
             "qa_master": _source_path(qa_master, root),
-            "metadata": _source_path(metadata, root),
+            "github_repo": github_repo,
         },
     }
 
@@ -634,14 +781,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--integration-root", type=Path)
     parser.add_argument("--phase")
     parser.add_argument("--qa-master", type=Path)
-    parser.add_argument("--metadata", type=Path)
     parser.add_argument("--format", choices=("table", "detailed", "json", "vars"), default="table")
     parser.add_argument("--mode", choices=("table", "detailed"), default="table", help="template display mode for --format vars")
     parser.add_argument("--json", action="store_true", help="alias for --format json")
     args = parser.parse_args(argv)
     try:
         root = args.integration_root or discover_integration_root(Path.cwd())
-        report = build_report(root, args.phase, args.qa_master, args.metadata)
+        report = build_report(root, args.phase, args.qa_master)
     except ReportError as exc:
         print(json.dumps({"kind": "error", "error": str(exc)}, sort_keys=True))
         return 2

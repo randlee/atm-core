@@ -207,8 +207,28 @@ def load_graph(ttl_dir: str, *, include_findings: bool = True) -> Graph:
             if not in_scope_findings:
                 continue
             for finding in in_scope_findings:
-                for triple in file_graph.triples((finding, None, None)):
-                    g.add(triple)
+                # Keep occurrence/worktree provenance with the finding.  The
+                # live triage report uses occurrence branch/status to scope a
+                # gate, and dropping these linked records here would make the
+                # SPARQL query see no branch occurrence at all.
+                pending = [finding]
+                linked: set = set()
+                linked_predicates = {
+                    TRIAGE.hasOccurrence,
+                    TRIAGE.occursIn,
+                    TRIAGE.openOn,
+                    TRIAGE.promoteTo,
+                    TRIAGE.closedOn,
+                }
+                while pending:
+                    subject = pending.pop()
+                    if subject in linked:
+                        continue
+                    linked.add(subject)
+                    for predicate, obj in file_graph.predicate_objects(subject):
+                        g.add((subject, predicate, obj))
+                        if predicate in linked_predicates and isinstance(obj, URIRef):
+                            pending.append(obj)
                 for resolution in file_graph.subjects(TRIAGE.resolves, finding):
                     for triple in file_graph.triples((resolution, None, None)):
                         g.add(triple)

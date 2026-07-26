@@ -10,6 +10,7 @@ spec = importlib.util.spec_from_file_location("triage_report", SCRIPT)
 triage_report = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(triage_report)
+GITHUB_STATE = triage_report._github_state
 
 PREFIX = "@prefix triage: <urn:atm:triage:> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
 
@@ -26,6 +27,26 @@ def _validator_passes(monkeypatch):
             "summary": {"files": 1, "findings": 1, "errors": 0, "warnings": 0},
         },
     )
+    monkeypatch.setattr(
+        triage_report,
+        "_github_state",
+        lambda _root, sprints: (
+            {
+                sprint["id"]: {
+                    "branch": sprint["branch"],
+                    "head_sha": f"{sprint['id']}-sha",
+                    "target_branch": "integrate/phase-ai",
+                    "pr_number": sprint["order"],
+                    "pr_url": f"https://example.test/pr/{sprint['order']}",
+                    "ci_status": "pass",
+                    "merged": sprint["order"] == 1,
+                    "delivery_attempts": [],
+                }
+                for sprint in sprints
+            },
+            "example/test",
+        ),
+    )
 
 
 def _inputs(tmp_path: Path):
@@ -35,8 +56,8 @@ def _inputs(tmp_path: Path):
     (structure_dir / "structure.ttl").write_text(
         PREFIX
         + "triage:PhaseAICH a triage:Phase .\n"
-        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-21-pre.md\" .\n"
-        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-22.md\" .\n"
+        + "triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-21-pre.md\" ; triage:branch \"feature/s1\" .\n"
+        + "triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria \"docs/plans/phase-ai/sprint-ai-22.md\" ; triage:branch \"feature/s2\" .\n"
     )
     (structure_dir / "events.ttl").write_text(
         PREFIX
@@ -50,7 +71,25 @@ def _inputs(tmp_path: Path):
         PREFIX
         + "triage:F1 a triage:Finding ; triage:findingId \"F1\" ; "
         + "triage:foundIn triage:AICH-S1 ; "
-        + "triage:foundAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime .\n"
+        + "triage:foundAt \"2026-07-25T03:00:00Z\"^^xsd:dateTime ; "
+        + "triage:severity \"blocking\" ; triage:description \"live blocker\" ; "
+        + "triage:hasOccurrence triage:O1 .\n"
+        + "triage:F2 a triage:Finding ; triage:findingId \"F2\" ; "
+        + "triage:foundIn triage:AICH-S1 ; "
+        + "triage:foundAt \"2026-07-25T04:00:00Z\"^^xsd:dateTime ; "
+        + "triage:severity \"minor\" ; triage:description \"live minor\" ; "
+        + "triage:hasOccurrence triage:O2 .\n"
+        + "triage:F3 a triage:Finding ; triage:findingId \"F3\" ; "
+        + "triage:foundIn triage:AICH-S2 ; "
+        + "triage:foundAt \"2026-07-25T05:00:00Z\"^^xsd:dateTime ; "
+        + "triage:severity \"blocking\" ; triage:description \"closed\" ; "
+        + "triage:status \"fixed\" ; triage:hasOccurrence triage:O3 .\n"
+        + "triage:O1 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+        + "triage:status \"open\" ; triage:closed false .\n"
+        + "triage:O2 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+        + "triage:status \"open\" ; triage:closed false .\n"
+        + "triage:O3 a triage:Occurrence ; triage:branch \"feature/s2\" ; "
+        + "triage:status \"fixed\" ; triage:closed true .\n"
     )
     qa_path = root / "qa.json"
     qa_path.write_text(json.dumps({"runs": [
@@ -58,22 +97,21 @@ def _inputs(tmp_path: Path):
         {"run_id": "S1-review", "aich_sprint": "AICH-S1", "run_type": "reviewer-only", "result_time_utc": "2026-07-25T04:00:00Z", "verdict": "PASS", "blockers": 0, "important": 0, "minor": 0},
         {"run_id": "S2-QA1", "aich_sprint": "AICH-S2", "run_type": "qa", "result_time_utc": "2026-07-25T05:00:00Z", "verdict": "PASS", "blockers": 0, "important": 0, "minor": 0},
     ]}))
-    metadata = root / "metadata.json"
-    metadata.write_text(json.dumps({"sprints": [
-        {"id": "AICH-S1", "branch": "feature/s1", "head_sha": "abc", "pr_number": 1, "ci_status": "pass", "merged": True},
-        {"id": "AICH-S2", "branch": "feature/s2", "head_sha": "def", "pr_number": 2, "ci_status": "pending", "merged": False},
-    ]}))
-    return root, qa_path, metadata
+    return root, qa_path
 
 
-def test_latest_authoritative_qa_and_gates(tmp_path):
-    root, qa, metadata = _inputs(tmp_path)
-    report = triage_report.build_report(root, "AICH", qa, metadata)
+def test_live_ttl_counts_override_qa_snapshot_and_drive_gates(tmp_path):
+    root, qa = _inputs(tmp_path)
+    report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
     assert first["qa"]["run_id"] == "S1-QA1"  # reviewer-only is excluded
     assert first["qa"]["blockers"] == 1
+    assert first["qa"]["important"] == 0  # live TTL, not QA snapshot's 2
+    assert first["qa"]["minor"] == 1
+    assert first["qa"]["reported_counts"] == {"blockers": 1, "important": 2, "minor": 0}
     assert first["ready_to_merge"] is False
     assert first["ok_to_merge"] is False
+    assert second["qa"]["blockers"] == 0  # fixed TTL finding is excluded
     assert second["ready_to_merge"] is True
     assert second["previous_sprints_merged"] is True
     assert second["ok_to_merge"] is True
@@ -81,15 +119,45 @@ def test_latest_authoritative_qa_and_gates(tmp_path):
     assert "| AICH-S1 (AI.21-pre) | ✅ | ❌ | ✅ | #1 🏁 |" in report["table"]
 
 
-def test_unknown_merge_is_fail_closed(tmp_path):
-    root, qa, _ = _inputs(tmp_path)
+def test_github_state_replaces_manual_metadata(tmp_path):
+    root, qa = _inputs(tmp_path)
     report = triage_report.build_report(root, "AICH", qa)
     first, second = report["rows"]
-    assert first["merged"] is None
-    assert first["ok_to_merge"] is False  # blockers are known and nonzero
-    assert second["previous_sprints_merged"] is None
-    assert second["ok_to_merge"] is None
-    assert report["data_gaps"]
+    assert first["merged"] is True
+    assert second["previous_sprints_merged"] is True
+    assert second["ok_to_merge"] is True
+    assert not any("metadata" in gap for gap in report["data_gaps"])
+
+
+def test_live_ttl_counts_do_not_require_qa_snapshot(tmp_path):
+    root, _ = _inputs(tmp_path)
+    report = triage_report.build_report(root, "AICH", root / "missing-qa.json")
+    first = report["rows"][0]
+    assert first["qa"]["blockers"] == 1
+    assert first["qa"]["important"] == 0
+    assert "QA evidence master not found" in report["data_gaps"][0]
+
+
+def test_live_counts_scope_promoted_finding_to_open_downstream_branch(tmp_path):
+    root, qa = _inputs(tmp_path)
+    findings = root / ".triage" / "phase-AI" / "findings" / "S1.ttl"
+    with findings.open("a") as stream:
+        stream.write(
+            "triage:F4 a triage:Finding ; triage:findingId \"F4\" ; "
+            "triage:foundIn triage:AICH-S1 ; "
+            "triage:foundAt \"2026-07-25T06:00:00Z\"^^xsd:dateTime ; "
+            "triage:severity \"blocking\" ; triage:description \"promoted\" ; "
+            "triage:hasOccurrence triage:O4S1, triage:O4S2 .\n"
+            "triage:O4S1 a triage:Occurrence ; triage:branch \"feature/s1\" ; "
+            "triage:status \"closed\" ; triage:closed true .\n"
+            "triage:O4S2 a triage:Occurrence ; triage:branch \"feature/s2\" ; "
+            "triage:status \"open\" ; triage:closed false .\n"
+        )
+
+    report = triage_report.build_report(root, "AICH", qa)
+    first, second = report["rows"]
+    assert first["qa"]["blockers"] == 1  # F1; closed S1 occurrence of F4 is ignored
+    assert second["qa"]["blockers"] == 1  # F4 is open on S2's own branch
 
 
 def test_missing_integration_worktree_is_structured_error(tmp_path, monkeypatch):
@@ -111,20 +179,8 @@ def test_malformed_structure_is_report_error(tmp_path):
         raise AssertionError("malformed structure must fail")
 
 
-def test_malformed_metadata_is_report_error(tmp_path):
-    root, qa, _ = _inputs(tmp_path)
-    metadata = root / "bad-metadata.json"
-    metadata.write_text(json.dumps({"sprints": [{"id": "AICH-S1", "ci_status": True}]}))
-    try:
-        triage_report.build_report(root, "AICH", qa, metadata)
-    except triage_report.ReportError as exc:
-        assert "ci_status" in str(exc)
-    else:
-        raise AssertionError("malformed metadata must fail")
-
-
 def test_duplicate_structure_orders_are_report_error(tmp_path):
-    root, _, _ = _inputs(tmp_path)
+    root, _ = _inputs(tmp_path)
     structure = root / ".sprints" / "AICH" / "structure.ttl"
     structure.write_text(
         PREFIX
@@ -141,7 +197,7 @@ def test_duplicate_structure_orders_are_report_error(tmp_path):
 
 
 def test_findings_validator_is_called_before_rows(tmp_path, monkeypatch):
-    root, qa, metadata = _inputs(tmp_path)
+    root, qa = _inputs(tmp_path)
     calls = []
 
     def validator(*args):
@@ -149,7 +205,7 @@ def test_findings_validator_is_called_before_rows(tmp_path, monkeypatch):
         return {"kind": "validation:pass", "diagnostics": []}
 
     monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
-    report = triage_report.build_report(root, "AICH", qa, metadata)
+    report = triage_report.build_report(root, "AICH", qa)
     assert len(calls) == 1
     assert calls[0][1].name == "findings"
     assert calls[0][2].name == "structure.ttl"
@@ -158,7 +214,7 @@ def test_findings_validator_is_called_before_rows(tmp_path, monkeypatch):
 
 
 def test_findings_validator_subprocess_passes_for_valid_schema(tmp_path):
-    root, _, _ = _inputs(tmp_path)
+    root, _ = _inputs(tmp_path)
     findings_dir = root / ".triage" / "phase-AI" / "findings"
     result = triage_report._run_findings_validator(
         root,
@@ -170,7 +226,7 @@ def test_findings_validator_subprocess_passes_for_valid_schema(tmp_path):
 
 
 def test_validator_failure_blocks_report(tmp_path, monkeypatch):
-    root, qa, metadata = _inputs(tmp_path)
+    root, qa = _inputs(tmp_path)
 
     def validator(*args):
         raise triage_report.ReportError(
@@ -179,7 +235,7 @@ def test_validator_failure_blocks_report(tmp_path, monkeypatch):
 
     monkeypatch.setattr(triage_report, "_run_findings_validator", validator)
     with pytest.raises(triage_report.ReportError, match="validation blocked"):
-        triage_report.build_report(root, "AICH", qa, metadata)
+        triage_report.build_report(root, "AICH", qa)
 
 
 def test_phase_sprint_accepts_non_ai_prefix_and_rejects_bad_convention():
@@ -187,3 +243,68 @@ def test_phase_sprint_accepts_non_ai_prefix_and_rejects_bad_convention():
     assert triage_report._phase_sprint("docs/sprint-ak-7-pre-notes.md") == "AK.7-pre"
     with pytest.raises(triage_report.ReportError, match="unsupported sprint criteria"):
         triage_report._phase_sprint("docs/sprint-ak-not-number.md")
+
+
+def test_current_open_replay_beats_historical_merged_pr():
+    merged = {
+        "number": 631,
+        "state": "MERGED",
+        "createdAt": "2026-07-25T16:09:01Z",
+        "mergedAt": "2026-07-25T16:26:53Z",
+    }
+    replay = {
+        "number": 640,
+        "state": "OPEN",
+        "createdAt": "2026-07-25T22:38:23Z",
+    }
+    assert triage_report._current_pr([merged, replay]) == replay
+
+
+def test_branch_fallback_uses_ttl_criteria_name():
+    assert triage_report._branch_from_criteria(
+        "docs/plans/phase-ai/sprint-ai-21-pre-crosshost-evidence-harness.md"
+    ) == "feature/pAI-s21pre-crosshost-evidence-harness"
+    assert triage_report._branch_from_criteria(
+        "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md"
+    ) == "feature/pAI-s22-loopback-self-send-exemption"
+
+
+def test_github_state_prefers_open_replay_and_retains_merged_history(tmp_path, monkeypatch):
+    root, _ = _inputs(tmp_path)
+    structure = triage_report._parse_ttl(root / ".sprints" / "AICH" / "structure.ttl")
+    sprints = triage_report._sprints(structure, "AICH")
+    monkeypatch.setattr(triage_report, "_origin_repo", lambda _root: "example/test")
+    monkeypatch.setattr(
+        triage_report,
+        "_github_prs",
+        lambda _root, _repo, branch: [
+            {
+                "number": 631,
+                "state": "MERGED",
+                "createdAt": "2026-07-25T16:09:01Z",
+                "mergedAt": "2026-07-25T16:26:53Z",
+                "headRefOid": "old",
+                "baseRefName": "integrate/phase-ai",
+                "mergeCommit": {"oid": "merge"},
+                "url": "https://example.test/631",
+                "statusCheckRollup": [{"conclusion": "SUCCESS"}],
+            },
+            {
+                "number": 640,
+                "state": "OPEN",
+                "createdAt": "2026-07-25T22:38:23Z",
+                "mergedAt": None,
+                "headRefOid": "new",
+                "baseRefName": "integrate/phase-ai",
+                "mergeCommit": None,
+                "url": "https://example.test/640",
+                "statusCheckRollup": [{"conclusion": "FAILURE"}],
+            },
+        ] if branch == "feature/s1" else [],
+    )
+    state, repo = GITHUB_STATE(root, sprints)
+    assert repo == "example/test"
+    assert state["AICH-S1"]["pr_number"] == 640
+    assert state["AICH-S1"]["merged"] is False
+    assert state["AICH-S1"]["ci_status"] == "fail"
+    assert [attempt["pr_number"] for attempt in state["AICH-S1"]["delivery_attempts"]] == [631, 640]
