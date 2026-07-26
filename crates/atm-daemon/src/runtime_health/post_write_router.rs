@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
+use atm_core::api::RequestDeadline;
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::{ResponseEnvelope, next_request_id};
 
-use crate::https_transport::{HttpsRequestDeadline, resolve_peer_authority};
+use crate::https_transport::resolve_peer_authority;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::post_send_emitter::DaemonPostSendHookEmitter;
 
@@ -57,7 +58,7 @@ impl PostWriteRouter for DaemonRequestDispatcher {
         match transport.deliver(
             message.outbound_request.clone(),
             &peer,
-            HttpsRequestDeadline::default(),
+            RequestDeadline::after(std::time::Duration::from_secs(5)),
         ) {
             Ok(ResponseEnvelope::Error(error)) => {
                 self.record_unconfirmed_delivery(peer.host, request_id, message_id, error)

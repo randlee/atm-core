@@ -11,7 +11,7 @@ impl HttpsMessageTransport for BlockingPeerDelivery {
         &self,
         _request: WriteRequest,
         peer: &TrustedPeer,
-        _deadline: HttpsRequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         if peer.host == self.blocked_peer {
             self.started.send(()).expect("report blocked peer delivery");
