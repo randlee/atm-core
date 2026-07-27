@@ -14,10 +14,10 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:closedBy "quality-mgr" ;
   triage:closureNote "AICH-S7-QA-FIX-2: verified fixed on commit bb34e71a (PR #642, feature/pAI-s27-peer-delivery-observability) -- scripts/smoke/run_peer_pair.py:295 now has 'if not after.startswith(daemon_log_before)' guard, refusing an unverified delta and surfacing daemon_log_delta in the outcome instead of silently passing on rotation/truncation. Confirmed via direct git show of current branch head, not self-report." ;
