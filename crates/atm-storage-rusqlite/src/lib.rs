@@ -53,6 +53,8 @@ impl SqliteOutboundMessageQuery {
     }
 }
 
+impl atm_storage::contract::sealed::Sealed for SqliteOutboundMessageQuery {}
+
 impl OutboundMessageQuery for SqliteOutboundMessageQuery {
     fn page_for_peer(
         &self,

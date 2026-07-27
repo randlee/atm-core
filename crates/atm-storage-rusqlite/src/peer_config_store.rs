@@ -18,6 +18,8 @@ impl SqlitePeerConfigStore {
     }
 }
 
+impl atm_storage::contract::sealed::Sealed for SqlitePeerConfigStore {}
+
 impl PeerConfigStore for SqlitePeerConfigStore {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
         self.db.with_connection(|connection| {

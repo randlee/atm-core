@@ -30,10 +30,12 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::https_transport::HttpsMessageTransport;
+use crate::https_transport::{HttpsMessageTransport, SharedHttpsTransport};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
 mod doctor_reporting;
-use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
+use crate::peer_drain_coordinator::{
+    PEER_SYNC_REQUEST_DEADLINE, PeerDeliveryCoordinator, PeerDrainCoordinator,
+};
 pub(crate) mod peer_authority;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -160,7 +162,7 @@ pub(crate) struct DaemonRequestDispatcher {
     doctor_ports: atm_core::doctor::RuntimeDoctorPorts,
     roster_store: Option<Arc<dyn RosterStore + Send + Sync>>,
     peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
-    https_transport: Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    https_transport: SharedHttpsTransport,
     peer_delivery_coordinator: Arc<dyn PeerDeliveryCoordinator>,
     runtime_reload_hook: std::sync::Mutex<Option<RuntimeReloadHook>>,
     peer_delivery_projection: Arc<PeerDeliveryProjection>,
@@ -171,7 +173,7 @@ type RuntimeReloadHook = Arc<dyn Fn() -> Result<(), AtmError> + Send + Sync>;
 fn build_peer_delivery_coordinator(
     peer_config_store: &Arc<dyn PeerConfigStore + Send + Sync>,
     outbound_message_query: &Arc<dyn atm_storage::OutboundMessageQuery + Send + Sync>,
-    https_transport: &Arc<std::sync::Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    https_transport: &SharedHttpsTransport,
     projection: &Arc<PeerDeliveryProjection>,
     observability: &SubsystemObservability,
 ) -> Arc<dyn PeerDeliveryCoordinator> {
@@ -445,7 +447,7 @@ impl DaemonRequestDispatcher {
                 );
             }
         }
-        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let https_transport: SharedHttpsTransport = Arc::new(Mutex::new(None));
         let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
         let peer_delivery_coordinator = build_peer_delivery_coordinator(
             &peer_config_store,
@@ -651,7 +653,7 @@ impl DaemonRequestDispatcher {
     fn sync_peer(&self, request: PeerSyncRequest) -> Result<PeerSyncOutcome, AtmError> {
         let delivered = self.peer_delivery_coordinator.sync_peer(
             &request.peer,
-            RequestDeadline::after(Duration::from_secs(5)),
+            RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE),
         )?;
         Ok(PeerSyncOutcome {
             peer: request.peer,
@@ -969,7 +971,7 @@ impl DaemonRequestDispatcher {
         );
         let peer_config_store = runtime_assembly.peer_config_store();
         let outbound_message_query = runtime_assembly.outbound_message_query();
-        let https_transport = Arc::new(std::sync::Mutex::new(None));
+        let https_transport: SharedHttpsTransport = Arc::new(Mutex::new(None));
         let peer_delivery_projection = Arc::new(PeerDeliveryProjection::default());
         let peer_delivery_coordinator = build_peer_delivery_coordinator(
             &peer_config_store,

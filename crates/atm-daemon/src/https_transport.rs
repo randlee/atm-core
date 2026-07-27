@@ -10,7 +10,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use atm_core::api::{
@@ -88,6 +88,8 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
             .collect()
     }
 }
+
+pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;
 
 struct TlsIdentity {
     certificates: Vec<CertificateDer<'static>>,

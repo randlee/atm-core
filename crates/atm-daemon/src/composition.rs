@@ -1,7 +1,7 @@
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::https_transport::{
-    HttpsListenerSet, HttpsMessageTransport, HttpsTransport, PeerWireSecurity,
+    HttpsListenerSet, HttpsMessageTransport, HttpsTransport, PeerWireSecurity, SharedHttpsTransport,
 };
 #[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
@@ -135,7 +135,7 @@ pub(crate) struct RuntimeComposition {
     // This is deliberately a transport-only capability. The canonical writer
     // chooses when to call it; this composition root never passes storage or
     // post-write state into the HTTPS adapter.
-    https_transport: Mutex<Option<Arc<dyn HttpsMessageTransport>>>,
+    https_transport: SharedHttpsTransport,
     https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
@@ -238,7 +238,7 @@ impl RuntimeComposition {
             request_dispatcher,
             peer_config_store,
             peer_wire_security,
-            https_transport: Mutex::new(None),
+            https_transport: Arc::new(Mutex::new(None)),
             https_listeners,
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,

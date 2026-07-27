@@ -1,6 +1,6 @@
 use crate::config;
 
-fn load_team_config(team_dir: &std::path::Path) {
+fn load_workspace_config(team_dir: &std::path::Path) {
     let _ = config::load_team_config(team_dir);
 }
 
