@@ -14,8 +14,12 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — lint-config.toml [env_var_boundary].forbidden_env_vars now reads [\"ATM_TEAM\", \"ATM_IDENTITY\", \"ATM_CHAT_ID\"]. Confirmed via direct grep of current file, not self-report." ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-MINOR-02-ENV-VAR-LINT-GAP/pAI-s17/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;
