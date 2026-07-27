@@ -7,7 +7,7 @@ This repository is now the source of truth for publishing:
 - `agent-team-mail`
 - `agent-team-mail-core`
 
-The current Phase AI branch candidate is `1.3.2-beta-24` (AI.24); its CLI and
+The current Phase AI branch candidate is `1.4.0-beta-ai`; its CLI and
 daemon must be switched and run as a matching pair for branch smoke evidence.
 
 The installed command remains `atm`.
