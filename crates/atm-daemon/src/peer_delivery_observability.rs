@@ -52,10 +52,10 @@ pub(crate) struct PeerDeliveryEvent {
 
 #[derive(Debug, Default)]
 pub(crate) struct PeerDeliveryProjection {
-    // Each event or doctor read takes this lock only long enough to update or
-    // clone one small, bounded map. Writes must serialize the sequence number;
-    // an RwLock would add contention and poisoning surface without a material
-    // read-side benefit for this low-frequency observability projection.
+    // This map is tiny, bounded, and updated/read as a whole snapshot. A
+    // Mutex keeps projection and sequence updates atomic; lock hold time is
+    // limited to the in-memory BTreeMap work. Writes must serialize the
+    // sequence number, so an RwLock adds complexity without useful read width.
     statuses: Mutex<PeerDeliveryProjectionState>,
 }
 

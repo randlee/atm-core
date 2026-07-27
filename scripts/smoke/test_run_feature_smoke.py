@@ -34,7 +34,18 @@ class FeatureSmokeTests(unittest.TestCase):
         with mock.patch.object(RUNNER, "run_live", return_value=0) as run_live:
             with mock.patch.object(RUNNER.sys, "argv", ["smoke", "crosshost", "m5", "fastpc4"]):
                 self.assertEqual(RUNNER.main(), 0)
-        run_live.assert_called_once_with("crosshost", ["m5", "fastpc4"])
+        run_live.assert_called_once_with("crosshost-send", ["m5", "fastpc4"])
+
+    def test_crosshost_ack_passes_all_hostnames_to_live_runner(self):
+        with mock.patch.object(RUNNER, "run_live", return_value=0) as run_live:
+            with mock.patch.object(RUNNER.sys, "argv", ["smoke", "crosshost-ack", "m5"]):
+                self.assertEqual(RUNNER.main(), 0)
+        run_live.assert_called_once_with("crosshost-ack", ["m5"])
+
+    def test_crosshost_feature_requires_a_peer(self):
+        with mock.patch.object(RUNNER.sys, "argv", ["smoke", "crosshost-send"]):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "requires one or more SSH hostnames"):
+                RUNNER.main()
 
     def test_fixture_level_retains_existing_runner(self):
         completed = mock.Mock(returncode=0)
@@ -104,6 +115,85 @@ class FeatureSmokeTests(unittest.TestCase):
     def test_message_has_text_requires_exact_body(self):
         self.assertTrue(RUNNER.message_has_text({"text": "exact"}, "exact"))
         self.assertFalse(RUNNER.message_has_text({"text": "different"}, "exact"))
+
+    def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
+        report = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.3.2-beta.28"},
+            "daemon_context": {"version": "1.3.2-beta.28"},
+        }
+        self.assertTrue(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+        report["daemon_context"]["version"] = "1.3.2-beta.27"
+        self.assertFalse(RUNNER.doctor_ready(report, "1.3.2-beta.28"))
+
+    def test_advertised_host_from_json_requires_enabled_host(self):
+        self.assertEqual(
+            RUNNER.advertised_host_from_json(
+                {"interfaces": [{"enabled": False, "advertise_host": "old"}, {"enabled": True, "advertise_host": "m5.local"}]}
+            ),
+            "m5.local",
+        )
+        with self.assertRaisesRegex(RUNNER.SmokeError, "no enabled"):
+            RUNNER.advertised_host_from_json({"interfaces": [{"enabled": False, "advertise_host": "old"}]})
+
+    def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
+        sent = {"message_id": "01SEND"}
+        remote_read = {"message": {"message_id": "01SEND", "text": "smoke-crosshost-send-m5-STAMP"}}
+        cases = []
+
+        class Clock:
+            @staticmethod
+            def now(_timezone):
+                return type("FixedTime", (), {"strftime": lambda self, _format: "STAMP"})()
+
+        with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(sent), "stderr": ""}), mock.patch.object(
+            RUNNER, "remote_command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(remote_read), "stderr": ""}
+        ), mock.patch.object(RUNNER, "datetime", Clock):
+            RUNNER.crosshost_send(cases, "atm", "atm", "agent", "team", "m5", "m5.local")
+        self.assertEqual(cases[-1]["status"], "PASS")
+        self.assertEqual(cases[-1]["detail"], "01SEND")
+
+    def test_crosshost_ack_verifies_reverse_reply_linkage(self):
+        sent = {"message_id": "01SEND"}
+        remote_read = {
+            "message": {
+                "message_id": "01SEND",
+                "text": "smoke-crosshost-ack-m5-STAMP",
+                "requires_ack": True,
+            }
+        }
+        remote_ack = {"reply_disposition": {"kind": "sent", "reply_message_id": "01REPLY"}}
+        cases = []
+
+        class Clock:
+            @staticmethod
+            def now(_timezone):
+                return type("FixedTime", (), {"strftime": lambda self, _format: "STAMP"})()
+
+        def local_command(argv, timeout=15.0):
+            return {"exit_code": 0, "stdout": __import__("json").dumps(sent), "stderr": ""}
+
+        def remote(peer, atm, args, timeout=20.0):
+            if args[0] == "read":
+                return {"exit_code": 0, "stdout": __import__("json").dumps(remote_read), "stderr": ""}
+            return {"exit_code": 0, "stdout": __import__("json").dumps(remote_ack), "stderr": ""}
+
+        def local_reply(atm, team, expected, timeout=12.0):
+            return {
+                "message_id": expected,
+                "text": "smoke-crosshost-reply-m5-STAMP",
+                "acknowledgesMessageId": "01SEND",
+            }
+
+        with mock.patch.object(RUNNER, "command", side_effect=local_command), mock.patch.object(
+            RUNNER, "remote_command", side_effect=remote
+        ), mock.patch.object(RUNNER, "wait_for_message", side_effect=local_reply), mock.patch.object(
+            RUNNER, "datetime", Clock
+        ):
+            RUNNER.crosshost_ack(cases, "atm", "atm", "agent", "team", "m5", "m5.local")
+        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS"])
+        self.assertEqual(cases[-1]["detail"], "01REPLY")
 
 
 if __name__ == "__main__":

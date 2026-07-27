@@ -1,0 +1,18 @@
+{
+  "format": "phase-ai-ai27-doctor-version-evidence/v1",
+  "finding_id": "AI27-ATMQA-004",
+  "captured_at_utc": "2026-07-26T23:19:40Z",
+  "source_commit": "5e91a889",
+  "expected_release": "1.3.2-beta.27",
+  "command": "HOME=<isolated> ATM_HOME=<isolated> ATM_TEAM=atm-dev ATM_IDENTITY=doctor-evidence cargo run -p agent-team-mail --bin atm -- doctor --json",
+  "cli_binary_version": "atm 1.3.2-beta.27",
+  "doctor_json": {
+    "client_context.version": "1.3.2-beta.29",
+    "daemon_context.version": "1.3.2-beta.29",
+    "summary.status": "healthy",
+    "summary.error_count": 0
+  },
+  "result": "not_matching",
+  "limitation": "The beta.27 CLI correctly built from source commit 5e91a889, but doctor routes through the host-wide singleton endpoint. The already-running singleton daemon is beta.29, and the current protocol does not permit an alternate socket or per-ATM_HOME daemon. Stopping or replacing that daemon would alter shared host state, so this artifact records the observed mismatch instead of claiming beta.27 client/daemon evidence.",
+  "next_action": "Re-run the same command after the host singleton is intentionally stopped and a beta.27 atm-daemon binary is launched for this evidence capture."
+}

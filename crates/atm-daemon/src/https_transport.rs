@@ -5,6 +5,7 @@
 //! It has no mailbox, roster, acknowledgement, nudge, receipt, retry, or
 //! replay state.
 
+use std::any::Any;
 use std::fmt;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -335,17 +336,20 @@ impl HttpsListenerSet {
             .iter()
             .filter(|interface| interface.enabled)
             .map(|interface| {
-                let listener = TcpListener::bind(interface.bind_addr).map_err(|_source| {
+                let listener = TcpListener::bind(interface.bind_addr).map_err(|source| {
                     AtmError::daemon_unavailable(format!(
                         "failed to bind configured peer HTTP listener {}",
                         interface.bind_addr
                     ))
+                    .with_cause(source)
                 })?;
-                listener.set_nonblocking(true).map_err(|_source| {
+                listener.set_nonblocking(true).map_err(|source| {
                     AtmError::daemon_unavailable("failed to configure peer HTTP listener")
+                        .with_cause(source)
                 })?;
-                let address = listener.local_addr().map_err(|_source| {
+                let address = listener.local_addr().map_err(|source| {
                     AtmError::daemon_unavailable("failed to inspect configured peer HTTP listener")
+                        .with_cause(source)
                 })?;
                 Ok((listener, address))
             })
@@ -372,8 +376,9 @@ impl HttpsListenerSet {
                         thread_requests,
                     )
                 })
-                .map_err(|_source| {
+                .map_err(|source| {
                     AtmError::daemon_unavailable("failed to start peer HTTP listener")
+                        .with_cause(source)
                 })?;
             listeners.push(HttpsListener {
                 address,
@@ -399,8 +404,9 @@ impl HttpsListenerSet {
         }
         for listener in &mut self.listeners {
             if let Some(thread) = listener.thread.take() {
-                thread.join().map_err(|_| {
+                thread.join().map_err(|panic| {
                     AtmError::daemon_unavailable("HTTPS listener worker panicked during shutdown")
+                        .with_cause(panic_payload_message(panic.as_ref()))
                 })?;
             }
         }
@@ -579,8 +585,9 @@ fn handle_peer_connection(
     apply_deadline(&stream, remaining_budget(deadline)?)?;
     match security {
         ListenerSecurity::MutualTls { config, verifier } => {
-            let connection = ServerConnection::new(config).map_err(|_source| {
+            let connection = ServerConnection::new(config).map_err(|source| {
                 AtmError::daemon_unavailable("failed to initialize HTTPS peer TLS server")
+                    .with_cause(source)
             })?;
             let mut tls = StreamOwned::new(connection, stream);
             complete_server_handshake_with_deadline(&mut tls, deadline)?;
@@ -607,10 +614,11 @@ fn route_peer_http_request(
         .header(PLAINTEXT_PEER_SOURCE_HOST_HEADER)
         .map(str::parse)
         .transpose()
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::validation(
                 "invalid X-ATM-Peer-Source-Host header; use a valid configured test host or restart without --peer-wire-security plaintext-test",
             )
+            .with_cause(source)
         })?;
     let mut request = decode_request(request)?;
     let ingress = match (authenticated_source_host, plaintext_source_host) {
@@ -764,7 +772,10 @@ fn client_config(identity: &TlsIdentity, peer: &TrustedPeer) -> Result<ClientCon
             identity.certificates.clone(),
             identity.private_key.clone_key(),
         )
-        .map_err(|_source| AtmError::validation("configured TLS certificate/key pair is invalid"))
+        .map_err(|source| {
+            AtmError::validation("configured TLS certificate/key pair is invalid")
+                .with_cause(source)
+        })
 }
 
 fn server_config(
@@ -778,7 +789,10 @@ fn server_config(
             identity.certificates.clone(),
             identity.private_key.clone_key(),
         )
-        .map_err(|_source| AtmError::validation("configured TLS certificate/key pair is invalid"))
+        .map_err(|source| {
+            AtmError::validation("configured TLS certificate/key pair is invalid")
+                .with_cause(source)
+        })
 }
 
 fn install_tls_provider() {
@@ -899,10 +913,9 @@ impl ClientCertVerifier for PinnedClientVerifier {
 
 impl PinnedClientVerifier {
     fn replace(&self, peers: Vec<TrustedPeer>) -> Result<(), AtmError> {
-        let mut current = self
-            .peers
-            .write()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned"))?;
+        let mut current = self.peers.write().map_err(|source| {
+            AtmError::daemon_unavailable("HTTPS peer verifier lock poisoned").with_cause(source)
+        })?;
         *current = peers.into_iter().filter(|peer| peer.enabled).collect();
         Ok(())
     }
@@ -939,6 +952,16 @@ fn normalize_fingerprint(value: &str) -> String {
         .filter(char::is_ascii_hexdigit)
         .collect::<String>()
         .to_ascii_lowercase()
+}
+
+fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "non-string panic payload".to_string()
+    }
 }
 
 #[cfg(test)]

@@ -1001,10 +1001,13 @@ impl HostRoutingVisitor {
 
     fn is_runtime_dispatcher_source(&self) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
-            path.ends_with(Path::new("crates/atm-daemon/src/runtime_health.rs"))
-                || path.ends_with(Path::new(
+            is_path_suffix(
+                path,
+                &[
+                    "crates/atm-daemon/src/runtime_health.rs",
                     "crates/atm-daemon/src/runtime_health/peer_sync.rs",
-                ))
+                ],
+            )
         })
     }
 
@@ -1016,15 +1019,22 @@ impl HostRoutingVisitor {
 
     fn is_post_write_router_helper(&self, name: &str) -> bool {
         self.source_path.as_ref().is_some_and(|path| {
-            path.ends_with(Path::new(
-                "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs",
-            )) && matches!(name, "emit_local_post_write" | "deliver_to_peer")
+            is_path_suffix(
+                path,
+                &["crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"],
+            ) && is_delivery_function_name(name)
         })
     }
 }
 
 fn is_delivery_function_name(name: &str) -> bool {
     name.starts_with("emit_local_post_write") || name == "deliver_to_peer"
+}
+
+fn is_path_suffix(path: &Path, suffixes: &[&str]) -> bool {
+    suffixes
+        .iter()
+        .any(|suffix| path.ends_with(Path::new(suffix)))
 }
 
 fn collect_use_aliases(file: &syn::File, aliases: &mut Vec<(String, String)>) {

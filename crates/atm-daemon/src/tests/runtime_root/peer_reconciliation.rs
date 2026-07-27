@@ -32,7 +32,7 @@ impl HttpsMessageTransport for BlockingPeerDelivery {
 
 #[test]
 #[serial_test::serial(env)]
-fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
+fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -98,7 +98,7 @@ fn failed_peer_ack_keeps_source_pending_until_the_shared_write_retries() {
         message_id: source_message_id,
         reply_body: "acknowledged".to_string(),
     };
-    let failing = Arc::new(FailingHttpsDelivery::default());
+    let failing = Arc::new(ResponseWriteFailure::default());
     dispatcher
         .install_https_transport(failing.clone())
         .expect("install failing transport");

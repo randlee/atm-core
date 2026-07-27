@@ -118,7 +118,7 @@ fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
 
 #[test]
 #[serial_test::serial(env)]
-fn local_https_delivery_failure_preserves_daemon_unavailable() {
+fn connection_handler_failure_preserves_daemon_unavailable() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -148,7 +148,7 @@ fn local_https_delivery_failure_preserves_daemon_unavailable() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
     dispatcher
-        .install_https_transport(Arc::new(FailingHttpsDelivery::daemon_unavailable()))
+        .install_https_transport(Arc::new(ConnectionHandlerFailure::default()))
         .expect("install unavailable HTTPS delivery");
 
     let error = dispatcher

@@ -7,10 +7,7 @@ use atm_core::{
     RequestEnvelope, ResponseEnvelope,
     boundary::{self, GraftNudgeTarget, PostSendHookEvent},
     clear::clear_mail_with_runtime,
-    doctor::{
-        self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorFinding, DoctorQuery,
-        DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
-    },
+    doctor::{self, DaemonRuntimeDoctorReport, DoctorExecutionContext, DoctorQuery, DoctorReport},
     error::{AtmError, AtmErrorCode},
     graft::{
         GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
@@ -35,6 +32,7 @@ use crate::daemon_runtime_observability::{
 };
 use crate::https_transport::HttpsMessageTransport;
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryProjection};
+mod doctor_reporting;
 use crate::peer_drain_coordinator::{PeerDeliveryCoordinator, PeerDrainCoordinator};
 pub(crate) mod peer_authority;
 #[cfg(test)]
@@ -44,7 +42,7 @@ use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_stat
 use atm_runtime::RuntimeAssembly;
 use atm_storage::PeerConfigStore;
 use atm_storage::RosterStore;
-
+use doctor_reporting::{daemon_observability_finding, finalize_doctor_report};
 mod peer_delivery_router;
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -842,42 +840,6 @@ impl DaemonRequestDispatcher {
     }
 }
 
-fn finalize_doctor_report(report: &mut DoctorReport) {
-    report.recommendations = report
-        .findings
-        .iter()
-        .filter_map(|finding| finding.remediation.clone())
-        .collect();
-    let status = doctor::health::status_from_findings(&report.findings);
-    let (info_count, warning_count, error_count) = doctor_finding_counts(&report.findings);
-    report.summary = DoctorSummary {
-        status,
-        message: doctor_summary_message(status).to_string(),
-        info_count,
-        warning_count,
-        error_count,
-    };
-}
-
-fn doctor_finding_counts(findings: &[DoctorFinding]) -> (usize, usize, usize) {
-    findings.iter().fold(
-        (0usize, 0usize, 0usize),
-        |(info, warning, error), finding| match finding.severity {
-            DoctorSeverity::Info => (info + 1, warning, error),
-            DoctorSeverity::Warning => (info, warning + 1, error),
-            DoctorSeverity::Error => (info, warning, error + 1),
-        },
-    )
-}
-
-fn doctor_summary_message(status: DoctorStatus) -> &'static str {
-    match status {
-        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-        DoctorStatus::Warning => "ATM doctor completed with warnings",
-        DoctorStatus::Error => "ATM doctor found critical issues",
-    }
-}
-
 impl ApiRouter for DaemonRequestDispatcher {
     fn route(
         &self,
@@ -917,53 +879,6 @@ impl ApiRouter for DaemonRequestDispatcher {
         }
         self.dispatch_with_deadline(request, deadline)
             .map(ApiResponse::new)
-    }
-}
-
-fn daemon_observability_finding(
-    health: &atm_core::observability::AtmObservabilityHealth,
-) -> DoctorFinding {
-    let path = health
-        .active_log_path
-        .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "<unavailable>".to_string());
-    let detail = health
-        .detail
-        .as_ref()
-        .map(|detail| format!(" Detail: {detail}"))
-        .unwrap_or_default();
-    match health.logging_state {
-        atm_core::observability::AtmObservabilityHealthState::Healthy => DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
-            message: format!(
-                "daemon retained observability sink is healthy at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: None,
-        },
-        atm_core::observability::AtmObservabilityHealthState::Degraded => DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
-            message: format!(
-                "daemon retained observability sink is degraded at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: Some(
-                "Inspect the daemon retained log path and sink errors, then re-run `atm doctor`."
-                    .to_string(),
-            ),
-        },
-        atm_core::observability::AtmObservabilityHealthState::Unavailable => DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthFailed,
-            message: format!(
-                "daemon retained observability sink is unavailable at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
-            ),
-            remediation: Some(
-                "Restore the daemon retained-log path and confirm it is writable before re-running `atm doctor`."
-                    .to_string(),
-            ),
-        },
     }
 }
 
