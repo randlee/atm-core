@@ -966,7 +966,7 @@ fn panic_payload_message(payload: &(dyn Any + Send)) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{TcpListener, TcpStream};
+    use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream, UdpSocket};
     use std::str::FromStr as _;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
@@ -1000,6 +1000,23 @@ mod tests {
             enabled: true,
             https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         }
+    }
+
+    /// Resolve an address owned by this host without relying on a fixed
+    /// workstation subnet. UDP connect selects the route's local address but
+    /// does not send a packet, making this suitable for an in-process proof.
+    fn non_loopback_interface() -> (IpAddr, HostName) {
+        let probe = UdpSocket::bind(("0.0.0.0", 0)).expect("bind route probe");
+        probe
+            .connect(("192.0.2.1", 9))
+            .expect("select a non-loopback route");
+        let address = probe.local_addr().expect("inspect route probe").ip();
+        assert!(
+            !address.is_loopback() && !address.is_unspecified(),
+            "the advertised-IP proof requires a non-loopback interface, got {address}"
+        );
+        let host = address.to_string().parse().expect("route host");
+        (address, host)
     }
 
     use rustls::pki_types::ServerName;
@@ -1223,6 +1240,7 @@ mod tests {
     #[serial_test::serial(env)]
     fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() {
         crate::tests::install_retained_runtime_factory();
+        let (advertised_ip, advertised_host) = non_loopback_interface();
         let tempdir = tempfile::TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
         let workspace_dir = tempdir.path().join("workspace");
@@ -1297,14 +1315,14 @@ mod tests {
         ));
         let certificate = test_certificate();
         let peer = TrustedPeer {
-            host: "localhost".parse().expect("peer host"),
+            host: advertised_host.clone(),
             fingerprint: certificate.fingerprint.clone(),
             enabled: true,
             https_port: std::num::NonZeroU16::new(43101).expect("peer port"),
         };
         let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {
-                bind_addr: "127.0.0.1:0".parse().expect("advertised-IP bind"),
+                bind_addr: SocketAddr::new(advertised_ip, 0),
                 advertise_host: peer.host.clone(),
                 enabled: true,
             }],
@@ -1318,7 +1336,7 @@ mod tests {
         let config = client_config(&identity, &peer).expect("client config");
         let connection = ClientConnection::new(
             Arc::new(config),
-            ServerName::try_from("localhost".to_string()).expect("server name"),
+            ServerName::try_from(peer.host.to_string()).expect("server name"),
         )
         .expect("client connection");
         let stream = TcpStream::connect(address).expect("connect advertised IP listener");
@@ -1330,7 +1348,7 @@ mod tests {
                 atm_home.clone(),
                 workspace_dir.clone(),
                 ROLE_TEAM_LEAD.parse().expect("sender"),
-                "qa-a@test-team.127.0.0.1",
+                &format!("qa-a@test-team.{advertised_host}"),
                 team.clone(),
                 SendMessageSource::Inline("advertised-IP real peer write".to_string()),
                 None,
@@ -1487,19 +1505,20 @@ mod tests {
 
     #[test]
     fn advertised_ip_peer_send_and_ack_reach_the_shared_router() {
+        let (advertised_ip, advertised_host) = non_loopback_interface();
         let certificate = test_certificate();
         let identity = TlsIdentity::load(&certificate).expect("load test identity");
         let router = Arc::new(RecordingRouter::default());
         let peer = TrustedPeer {
-            host: "localhost".parse().expect("host"),
+            host: advertised_host.clone(),
             fingerprint: certificate.fingerprint.clone(),
             enabled: true,
             https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
         };
         let listener = HttpsListenerSet::bind_enabled(
             &[HttpsInterface {
-                bind_addr: "127.0.0.1:0".parse().expect("bind address"),
-                advertise_host: "localhost".parse().expect("host"),
+                bind_addr: SocketAddr::new(advertised_ip, 0),
+                advertise_host: peer.host.clone(),
                 enabled: true,
             }],
             &certificate,
@@ -1511,7 +1530,7 @@ mod tests {
         let config = client_config(&identity, &peer).expect("client config");
         let connection = ClientConnection::new(
             Arc::new(config),
-            ServerName::try_from("localhost".to_string()).expect("server name"),
+            ServerName::try_from(peer.host.to_string()).expect("server name"),
         )
         .expect("client connection");
         let mut tls = StreamOwned::new(connection, stream);
@@ -1520,7 +1539,7 @@ mod tests {
             std::env::temp_dir(),
             std::env::temp_dir(),
             "sender".parse().expect("sender"),
-            "recipient@test-team.192.168.128.82",
+            &format!("recipient@test-team.{advertised_host}"),
             "test-team".parse().expect("team"),
             SendMessageSource::Inline("message".to_string()),
             None,
@@ -1568,7 +1587,7 @@ mod tests {
         assert_eq!(write.origin_message_id, Some(origin_message_id));
         assert_eq!(
             write.to.as_ref().expect("destination").host(),
-            Some(&"192.168.128.82".parse().expect("advertised IP"))
+            Some(&advertised_host)
         );
         assert!(write.acknowledges_message_id.is_none());
         let ApiRequest::Write(ack) = &requests[1] else {
