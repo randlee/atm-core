@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AI-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-AI-003" ;
+  triage:title "daemon_observability.rs exceeds RULE-003 1000-line non-test ceiling" ;
+  triage:description "crates/atm-daemon/bin_support/daemon_observability.rs non-test body is 1302 lines (test mod starts at 1049; re-verified total is 1302, larger than originally cited 1203) -- RULE-003 violation, needs module split." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AI-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AI-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "1302 non-test lines, exceeds 1000-line RULE-003 ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .

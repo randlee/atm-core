@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBP-F011>
+  a triage:Finding ;
+  triage:findingId "RBP-F011" ;
+  triage:title "PeerConfigStore/OutboundMessageQuery unsealed while sibling storage-boundary traits are sealed" ;
+  triage:description "crates/atm-storage/src/contract.rs:625 -- PeerConfigStore/OutboundMessageQuery are unsealed while every sibling storage-boundary trait in the same file is sealed via sealed::Sealed; all implementors verified internal-only." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F011/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F011/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 625 ;
+  triage:snippet "PeerConfigStore/OutboundMessageQuery unsealed, siblings sealed" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
