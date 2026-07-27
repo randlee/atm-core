@@ -66,6 +66,9 @@ mod tests {
             .expect_err("reserved invalid host must fail");
         assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         assert!(error.cause().is_some(), "DNS source cause must be retained");
-        assert!(error.message().contains("verify forward DNS"));
+        assert!(
+            error.message().contains("forward DNS"),
+            "the bounded resolver reports an actionable forward-DNS recovery path: {error:?}"
+        );
     }
 }

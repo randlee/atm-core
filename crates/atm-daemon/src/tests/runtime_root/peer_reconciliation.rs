@@ -1,5 +1,6 @@
 use super::*;
 use atm_core::ack::AckRequest;
+use atm_storage::MessageQuery;
 
 struct BlockingPeerDelivery {
     blocked_peer: atm_storage::HostName,
@@ -30,6 +31,46 @@ impl HttpsMessageTransport for BlockingPeerDelivery {
             },
         ))
     }
+}
+
+struct ReconciliationReceiverDelivery {
+    receiver: Arc<DaemonRequestDispatcher>,
+    source_host: atm_storage::HostName,
+    deliveries: std::sync::Mutex<usize>,
+}
+
+impl HttpsMessageTransport for ReconciliationReceiverDelivery {
+    fn deliver(
+        &self,
+        mut request: WriteRequest,
+        _peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        request.authenticated_source_host = Some(self.source_host.clone());
+        *self.deliveries.lock().expect("delivery count lock") += 1;
+        ApiRouter::route(
+            self.receiver.as_ref(),
+            ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+            AuthenticatedIngress::Peer,
+            deadline,
+        )
+        .map(|response| response.into_inner())
+    }
+}
+
+fn recipient_message_count(db_path: &std::path::Path, recipient: &str) -> usize {
+    open_sqlite_boundary(db_path)
+        .expect("sqlite boundary")
+        .message_store_arc()
+        .list_messages(&MessageQuery {
+            team: TEST_TEAM.parse().expect("team"),
+            agent: recipient.parse().expect("recipient"),
+            sender: None,
+            task_id: None,
+            limit: None,
+        })
+        .expect("list recipient inbox")
+        .len()
 }
 
 #[test]
@@ -251,6 +292,132 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     assert_eq!(
         delivered[0].origin_message_id, delivered[2].origin_message_id,
         "reconciliation reuses the canonical immutable write and its original ULID"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let source_home = tempdir.path().join("source-home");
+    let source_workspace = tempdir.path().join("source-workspace");
+    let source_db = tempdir.path().join("source.db");
+    let receiver_home = tempdir.path().join("receiver-home");
+    let receiver_workspace = tempdir.path().join("receiver-workspace");
+    let receiver_db = tempdir.path().join("receiver.db");
+    for directory in [
+        &source_home,
+        &source_workspace,
+        &receiver_home,
+        &receiver_workspace,
+    ] {
+        std::fs::create_dir_all(directory).expect("test directory");
+    }
+    write_team_config(&source_home, &[]);
+    write_team_config(&receiver_home, &[]);
+    add_member_via_retained_admin(
+        &source_db,
+        &source_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &source_workspace,
+    );
+    add_member_via_retained_admin(
+        &receiver_db,
+        &receiver_home,
+        TEST_TEAM,
+        "receiver",
+        &receiver_workspace,
+    );
+
+    let receiver_host: atm_storage::HostName =
+        "receiver.example.test".parse().expect("receiver host");
+    let source_host: atm_storage::HostName = "source.example.test".parse().expect("source host");
+    let source_peers = open_sqlite_boundary(&source_db)
+        .expect("source sqlite boundary")
+        .peer_config_store();
+    source_peers
+        .save_trusted_peer(&TrustedPeer {
+            host: receiver_host.clone(),
+            fingerprint: "sha256:receiver".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        })
+        .expect("save receiver peer");
+    source_peers
+        .save_peer_sync_policy(
+            &receiver_host,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: std::num::NonZeroU16::new(8).expect("batch cap"),
+            },
+        )
+        .expect("enable reconciliation");
+    open_sqlite_boundary(&receiver_db)
+        .expect("receiver sqlite boundary")
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: source_host.clone(),
+            fingerprint: "sha256:source".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        })
+        .expect("save source peer");
+
+    let receiver = Arc::new(DaemonRequestDispatcher::new_for_test(
+        receiver_home.clone(),
+        RuntimeStatusCache::new(),
+        receiver_db.clone(),
+    ));
+    let source = DaemonRequestDispatcher::new_for_test(
+        source_home.clone(),
+        RuntimeStatusCache::new(),
+        source_db,
+    );
+    let delivery = Arc::new(ReconciliationReceiverDelivery {
+        receiver,
+        source_host,
+        deliveries: std::sync::Mutex::new(0),
+    });
+    source
+        .install_https_transport(delivery.clone())
+        .expect("install receiver transport");
+
+    source
+        .dispatch(RequestEnvelope::Write(Box::new(
+            SendRequest::new(
+                source_home,
+                source_workspace,
+                ROLE_TEAM_LEAD.parse().expect("sender"),
+                "receiver@test-team.receiver.example.test",
+                TEST_TEAM.parse().expect("team"),
+                SendMessageSource::Inline("reconcile once".to_string()),
+                None,
+                true,
+                None,
+                false,
+            )
+            .expect("peer write"),
+        )))
+        .expect("initial reconciliation delivery");
+    assert_eq!(recipient_message_count(&receiver_db, "receiver"), 1);
+
+    let sync = source
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: receiver_host,
+        }))
+        .expect("repeat reconciliation delivery");
+    assert!(matches!(sync, ResponseEnvelope::PeerSync(_)));
+    assert_eq!(
+        *delivery.deliveries.lock().expect("delivery count lock"),
+        2,
+        "the receiver sees the original delivery and its reconciliation duplicate"
+    );
+    assert_eq!(
+        recipient_message_count(&receiver_db, "receiver"),
+        1,
+        "the receiving daemon retains one immutable inbox row for an identical reconciliation duplicate"
     );
 }
 

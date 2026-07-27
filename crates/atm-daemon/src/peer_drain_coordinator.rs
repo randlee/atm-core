@@ -137,13 +137,31 @@ impl PeerDrainCoordinator {
             .map_err(|_| AtmError::daemon_unavailable("peer drain coordinator slot lock poisoned"))
     }
 
+    /// Makes room only by discarding a fully idle slot. Running drains and
+    /// scheduled retries remain live recovery state and are never evicted.
+    fn reserve_slot(
+        slots: &mut BTreeMap<HostName, PeerDrainSlot>,
+        host: &HostName,
+    ) -> Result<(), AtmError> {
+        if slots.contains_key(host) || slots.len() < MAX_PEER_DRAIN_SLOTS {
+            return Ok(());
+        }
+        let idle_host = slots
+            .iter()
+            .find(|(_, slot)| !slot.running && slot.next_attempt_at.is_none())
+            .map(|(host, _)| host.clone());
+        if let Some(idle_host) = idle_host {
+            slots.remove(&idle_host);
+            return Ok(());
+        }
+        Err(AtmError::daemon_unavailable(
+            "peer drain coordinator capacity exhausted",
+        ))
+    }
+
     fn acquire(&self, host: &HostName, deadline: RequestDeadline) -> Result<(), AtmError> {
         let mut slots = self.slots()?;
-        if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(host) {
-            return Err(AtmError::daemon_unavailable(
-                "peer drain coordinator capacity exhausted",
-            ));
-        }
+        Self::reserve_slot(&mut slots, host)?;
         let slot = slots.entry(host.clone()).or_default();
         slot.requested_generation = slot.requested_generation.saturating_add(1);
         while slots.get(host).is_some_and(|slot| slot.running) {
@@ -470,11 +488,7 @@ impl PeerDrainCoordinator {
             }
             let next_attempt_at = retry_timestamp(INITIAL_BACKOFF);
             let mut slots = self.slots()?;
-            if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(&peer.host) {
-                return Err(AtmError::daemon_unavailable(
-                    "peer drain coordinator capacity exhausted",
-                ));
-            }
+            Self::reserve_slot(&mut slots, &peer.host)?;
             slots.entry(peer.host.clone()).or_default().next_attempt_at =
                 Some(Instant::now() + INITIAL_BACKOFF);
             drop(slots);
@@ -728,6 +742,7 @@ mod tests {
     #[derive(Default)]
     struct CapturingOutbound {
         not_before: Mutex<Vec<IsoTimestamp>>,
+        limits: Mutex<Vec<NonZeroU16>>,
     }
 
     impl OutboundMessageQuery for CapturingOutbound {
@@ -736,13 +751,14 @@ mod tests {
             _: &HostName,
             not_before: IsoTimestamp,
             _: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
-            _: NonZeroU16,
+            limit: NonZeroU16,
             _: Duration,
         ) -> Result<Vec<StoredPeerWrite>, AtmError> {
             self.not_before
                 .lock()
                 .expect("captured cutoff lock")
                 .push(not_before);
+            self.limits.lock().expect("captured limit lock").push(limit);
             Ok(Vec::new())
         }
     }
@@ -894,13 +910,16 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_rejects_a_new_host_once_slot_capacity_is_reached() {
+    fn coordinator_rejects_a_new_host_when_every_slot_has_live_recovery_state() {
         let coordinator = coordinator_for_slots();
         let mut slots = coordinator.slots().expect("slot lock");
         for index in 0..super::MAX_PEER_DRAIN_SLOTS {
             slots.insert(
                 format!("peer-{index}.example.test").parse().expect("host"),
-                PeerDrainSlot::default(),
+                PeerDrainSlot {
+                    next_attempt_at: Some(Instant::now() + Duration::from_secs(60)),
+                    ..PeerDrainSlot::default()
+                },
             );
         }
         drop(slots);
@@ -910,6 +929,35 @@ mod tests {
                 .acquire(&host, RequestDeadline::after(Duration::from_secs(1)))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn coordinator_evicts_an_idle_slot_when_capacity_is_reached() {
+        let coordinator = coordinator_for_slots();
+        let mut slots = coordinator.slots().expect("slot lock");
+        let evicted: HostName = "idle.example.test".parse().expect("host");
+        slots.insert(evicted.clone(), PeerDrainSlot::default());
+        for index in 1..super::MAX_PEER_DRAIN_SLOTS {
+            slots.insert(
+                format!("scheduled-{index}.example.test")
+                    .parse()
+                    .expect("host"),
+                PeerDrainSlot {
+                    next_attempt_at: Some(Instant::now() + Duration::from_secs(60)),
+                    ..PeerDrainSlot::default()
+                },
+            );
+        }
+        drop(slots);
+
+        let new_host: HostName = "new.example.test".parse().expect("host");
+        coordinator
+            .acquire(&new_host, RequestDeadline::after(Duration::from_secs(1)))
+            .expect("an idle slot must make room for a new peer");
+        let slots = coordinator.slots().expect("slot lock");
+        assert!(slots.contains_key(&new_host));
+        assert!(!slots.contains_key(&evicted));
+        assert_eq!(slots.len(), super::MAX_PEER_DRAIN_SLOTS);
     }
 
     #[test]
@@ -951,6 +999,15 @@ mod tests {
         assert!(
             cutoff >= before - age && cutoff <= after - age,
             "storage must receive the actual max_message_age lower bound"
+        );
+        assert_eq!(
+            outbound
+                .limits
+                .lock()
+                .expect("captured limit lock")
+                .as_slice(),
+            &[NonZeroU16::new(1).expect("non-zero")],
+            "reconciliation forwards the configured page cap to storage"
         );
     }
 }
