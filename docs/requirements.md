@@ -3629,7 +3629,9 @@ mail correctness.
   test adapter.
 
   Required behavior:
-  - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
+  - Unix same-host clients use HTTP over UDS through the shared
+    `atm-daemon-client` facade and may use HTTP over loopback TCP; consumers
+    such as `atm-graft` must not take a direct `interprocess` dependency.
     Windows same-host clients use HTTP over loopback TCP only
   - normal remote peers use HTTPS over TCP; the explicit daemon-only
     `plaintext-test` smoke profile is governed by

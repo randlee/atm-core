@@ -34,7 +34,8 @@ fn local_ipc_client_preflight_round_trips_ack_required_send_after_add_member_ros
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
-    let socket_path = atm_core::home::host_runtime_dir_from_home(&atm_home).join("daemon.sock");
+    let socket_path = atm_core::home::host_runtime_dir_from_home(&atm_home)
+        .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
         .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)

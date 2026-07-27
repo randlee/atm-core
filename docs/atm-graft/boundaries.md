@@ -67,5 +67,7 @@ Rules:
 - it is not a second daemon request path; graft `send`, `read`, and `ack` use
   the shared daemon HTTP client
 - `interprocess::local_socket` and Windows named-pipe references are forbidden
-  inside `atm-graft`; the Cargo edge to `interprocess` is forbidden as well
+  inside `atm-graft`; a direct Cargo edge to `interprocess` is forbidden as
+  well. Unix UDS support is permitted only transitively through the approved
+  `atm-daemon-client` facade.
 - it must not dispatch daemon requests or access SQLite/storage directly

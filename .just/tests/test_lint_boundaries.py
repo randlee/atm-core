@@ -9,6 +9,7 @@ import unittest
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = JUST_DIR.parent
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
@@ -197,6 +198,21 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
+    def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
+        manifest = tomllib.loads(
+            (REPO_ROOT / "crates/atm-graft/Cargo.toml").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("interprocess", manifest["dependencies"])
+        rendered = [
+            violation.render()
+            for violation in collect_boundary_violations(REPO_ROOT)
+        ]
+        self.assertNotIn(
+            "crates/atm-graft/Cargo.toml [dependencies]: "
+            "BOUNDARY-GraftSharedClientConsumer forbids edge atm-graft -> interprocess",
+            rendered,
+        )
+
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         (repo_root / ".just").mkdir()
