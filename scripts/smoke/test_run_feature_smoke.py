@@ -42,6 +42,12 @@ class FeatureSmokeTests(unittest.TestCase):
                 self.assertEqual(RUNNER.main(), 0)
         run_live.assert_called_once_with("crosshost-ack", ["m5"])
 
+    def test_crosshost_curl_tls_passes_all_hostnames_to_live_runner(self):
+        with mock.patch.object(RUNNER, "run_live", return_value=0) as run_live:
+            with mock.patch.object(RUNNER.sys, "argv", ["smoke", "crosshost-curl-tls", "m5"]):
+                self.assertEqual(RUNNER.main(), 0)
+        run_live.assert_called_once_with("crosshost-curl-tls", ["m5"])
+
     def test_crosshost_feature_requires_a_peer(self):
         with mock.patch.object(RUNNER.sys, "argv", ["smoke", "crosshost-send"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "requires one or more SSH hostnames"):
@@ -137,6 +143,64 @@ class FeatureSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(RUNNER.SmokeError, "no enabled"):
             RUNNER.advertised_host_from_json({"interfaces": [{"enabled": False, "advertise_host": "old"}]})
 
+    def test_remote_command_supplies_configured_peer_identity(self):
+        result = {"exit_code": 0, "stdout": "{}", "stderr": ""}
+        with mock.patch.dict(
+            os.environ,
+            {"ATM_SMOKE_REMOTE_IDENTITY": "cm5:smoke", "ATM_SMOKE_REMOTE_TEAM": "atm-m5"},
+            clear=False,
+        ), mock.patch.object(RUNNER, "command", return_value=result) as command:
+            self.assertEqual(RUNNER.remote_command("m5", "/opt/homebrew/bin/atm", ["doctor", "--json"]), result)
+        self.assertEqual(
+            command.call_args.args[0],
+            [
+                "ssh",
+                "m5",
+                "env",
+                "ATM_IDENTITY=cm5:smoke",
+                "ATM_TEAM=atm-m5",
+                "/opt/homebrew/bin/atm",
+                "doctor",
+                "--json",
+            ],
+        )
+
+    def test_curl_doctor_records_real_route_evidence_in_both_directions(self):
+        doctor = {
+            "summary": {"status": "healthy"},
+            "runtime_status": {"readiness": "ready"},
+            "client_context": {"version": "1.4.0-beta-ai"},
+            "daemon_context": {"version": "1.4.0-beta-ai"},
+        }
+        result = {"exit_code": 0, "stdout": __import__("json").dumps(doctor), "stderr": ""}
+        cases = []
+        with mock.patch.object(RUNNER, "certificate_bundle", return_value="/tmp/local-bundle.pem"), mock.patch.object(
+            RUNNER,
+            "remote_command",
+            return_value={
+                "exit_code": 0,
+                "stdout": __import__("json").dumps({"private_key_ref": "/tmp/remote-bundle.pem"}),
+                "stderr": "",
+            },
+        ), mock.patch.object(RUNNER, "remote_shell", side_effect=[result, result]), mock.patch.object(
+            RUNNER, "command", return_value=result
+        ) as command, mock.patch.object(
+            RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
+        ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"):
+            RUNNER.curl_doctor(
+                cases,
+                "m5",
+                "atm",
+                "/opt/homebrew/bin/atm",
+                "192.0.2.20",
+                "1.4.0-beta-ai",
+                plaintext=False,
+            )
+        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS"])
+        curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
+        self.assertEqual(len(curl_calls), 1)
+        self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[0])
+
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}
         remote_read = {"message": {"message_id": "01SEND", "text": "smoke-crosshost-send-m5-STAMP"}}
@@ -148,11 +212,31 @@ class FeatureSmokeTests(unittest.TestCase):
                 return type("FixedTime", (), {"strftime": lambda self, _format: "STAMP"})()
 
         with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(sent), "stderr": ""}), mock.patch.object(
-            RUNNER, "remote_command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(remote_read), "stderr": ""}
+            RUNNER, "remote_command", side_effect=lambda _peer, _atm, args, timeout=20.0: {
+                "exit_code": 0,
+                "stdout": __import__("json").dumps(remote_read if args[0] == "read" else sent),
+                "stderr": "",
+            }
+        ), mock.patch.object(
+            RUNNER,
+            "wait_for_message",
+            return_value={"message_id": "01SEND", "text": "smoke-crosshost-send-reverse-m5-STAMP"},
         ), mock.patch.object(RUNNER, "datetime", Clock):
-            RUNNER.crosshost_send(cases, "atm", "atm", "agent", "team", "m5", "m5.local")
-        self.assertEqual(cases[-1]["status"], "PASS")
-        self.assertEqual(cases[-1]["detail"], "01SEND")
+            RUNNER.crosshost_send(
+                cases,
+                "atm",
+                "atm",
+                "agent",
+                "team",
+                "peer",
+                "peer-team",
+                "m5",
+                "m5.local",
+                "127.0.0.1",
+            )
+        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS"])
+        self.assertEqual(cases[0]["detail"], "01SEND")
+        self.assertEqual(cases[1]["detail"], "01SEND")
 
     def test_crosshost_ack_verifies_reverse_reply_linkage(self):
         sent = {"message_id": "01SEND"}
@@ -172,18 +256,35 @@ class FeatureSmokeTests(unittest.TestCase):
                 return type("FixedTime", (), {"strftime": lambda self, _format: "STAMP"})()
 
         def local_command(argv, timeout=15.0):
-            return {"exit_code": 0, "stdout": __import__("json").dumps(sent), "stderr": ""}
+            response = remote_ack if argv[1] == "ack" else sent
+            return {"exit_code": 0, "stdout": __import__("json").dumps(response), "stderr": ""}
 
         def remote(peer, atm, args, timeout=20.0):
             if args[0] == "read":
-                return {"exit_code": 0, "stdout": __import__("json").dumps(remote_read), "stderr": ""}
-            return {"exit_code": 0, "stdout": __import__("json").dumps(remote_ack), "stderr": ""}
+                response = remote_read if args[args.index("--message-id") + 1] == "01SEND" else {
+                    "message": {
+                        "message_id": "01REPLY",
+                        "text": "smoke-crosshost-reverse-reply-m5-STAMP",
+                        "acknowledgesMessageId": "01SEND",
+                    }
+                }
+            elif args[0] == "ack":
+                response = remote_ack
+            else:
+                response = sent
+            return {"exit_code": 0, "stdout": __import__("json").dumps(response), "stderr": ""}
 
         def local_reply(atm, team, expected, timeout=12.0):
+            if expected == "01REPLY":
+                return {
+                    "message_id": expected,
+                    "text": "smoke-crosshost-reply-m5-STAMP",
+                    "acknowledgesMessageId": "01SEND",
+                }
             return {
                 "message_id": expected,
-                "text": "smoke-crosshost-reply-m5-STAMP",
-                "acknowledgesMessageId": "01SEND",
+                "text": "smoke-crosshost-ack-reverse-m5-STAMP",
+                "requires_ack": True,
             }
 
         with mock.patch.object(RUNNER, "command", side_effect=local_command), mock.patch.object(
@@ -191,9 +292,20 @@ class FeatureSmokeTests(unittest.TestCase):
         ), mock.patch.object(RUNNER, "wait_for_message", side_effect=local_reply), mock.patch.object(
             RUNNER, "datetime", Clock
         ):
-            RUNNER.crosshost_ack(cases, "atm", "atm", "agent", "team", "m5", "m5.local")
-        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS"])
-        self.assertEqual(cases[-1]["detail"], "01REPLY")
+            RUNNER.crosshost_ack(
+                cases,
+                "atm",
+                "atm",
+                "agent",
+                "team",
+                "peer",
+                "peer-team",
+                "m5",
+                "m5.local",
+                "127.0.0.1",
+            )
+        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS", "PASS", "PASS"])
+        self.assertEqual(cases[1]["detail"], "01REPLY")
 
 
 if __name__ == "__main__":
