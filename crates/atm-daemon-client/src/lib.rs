@@ -3,7 +3,6 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
@@ -18,12 +17,21 @@ use interprocess::local_socket::prelude::*;
 use std::net::TcpStream;
 use std::sync::Mutex;
 
+pub use atm_core::doctor::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport,
+};
 pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
 
 mod compatibility;
+mod http_exchange;
 mod local_transport;
 
 pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
+use http_exchange::{
+    apply_local_ipc_deadline, load_local_http_record, read_http_response_with_deadline,
+    set_stream_read_timeout, set_stream_write_timeout, write_local_http_request,
+};
 pub use local_transport::{LocalDaemonTransport, local_daemon_transport};
 
 /// Upper bound for waiting on a daemon just spawned by the CLI to publish its
@@ -36,44 +44,6 @@ const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 // result instead of racing the client's identical socket-read timeout.
 const LOCAL_IPC_RESPONSE_GRACE: Duration = Duration::from_millis(250);
 const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapConnectOutcome {
-    Connected,
-    NotFound,
-    Timeout,
-    Failed,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapLaunchGateOutcome {
-    Launched,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapAutoStartOutcome {
-    AutoStarted,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct BootstrapTraceReport {
-    pub daemon_connect: BootstrapConnectOutcome,
-    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
-    pub daemon_auto_start: BootstrapAutoStartOutcome,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connect_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub launch_gate_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_start_detail: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapCommandEvent {
@@ -538,121 +508,6 @@ fn exchange_uds_request(
         AtmError::daemon_unavailable_with_cause("failed to flush daemon UDS request", source)
     })?;
     atm_core::api::read_http_response(&mut stream, request)
-}
-
-fn write_local_http_request(
-    writer: &mut TcpStream,
-    request: &RequestEnvelope,
-    record_path: &Path,
-) -> Result<(), AtmError> {
-    let record = load_local_http_record(record_path)?;
-    let capability = record.capability()?.to_base64url();
-    atm_core::api::write_http_request_with_headers(
-        writer,
-        request,
-        &[(
-            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
-            capability.as_str(),
-        )],
-    )
-}
-
-fn load_local_http_record(
-    record_path: &Path,
-) -> Result<atm_core::local_http::LocalHttpEndpointRecord, AtmError> {
-    let contents = fs::read(record_path).map_err(|source| {
-        AtmError::daemon_unavailable_with_cause(
-            format!(
-                "failed to read local HTTP endpoint record {}: {source}",
-                record_path.display()
-            ),
-            source,
-        )
-    })?;
-    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(&contents)
-        .map_err(|source| {
-        AtmError::daemon_unavailable_with_cause(
-            format!(
-                "failed to parse local HTTP endpoint record {}: {source}",
-                record_path.display()
-            ),
-            source,
-        )
-    })?;
-    record.capability()?;
-    let owner_instance_id =
-        atm_core::local_http::owner_instance_id_for_local_http_record(record_path)?;
-    if record.daemon_instance_id != owner_instance_id {
-        return Err(AtmError::daemon_unavailable(
-            "local HTTP endpoint record belongs to a different daemon instance",
-        ));
-    }
-    Ok(record)
-}
-
-fn set_stream_write_timeout(stream: &TcpStream, timeout: Option<Duration>) -> std::io::Result<()> {
-    stream.set_write_timeout(timeout)
-}
-
-fn set_stream_read_timeout(stream: &TcpStream, timeout: Option<Duration>) -> std::io::Result<()> {
-    stream.set_read_timeout(timeout)
-}
-
-fn read_http_response_with_deadline(
-    mut stream: TcpStream,
-    request: &RequestEnvelope,
-    _request_deadline: Duration,
-    _recv_deadline_support: LocalIpcDeadlineSupport,
-) -> Result<ResponseEnvelope, AtmError> {
-    if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
-        return read_http_response_with_helper(stream, request.clone(), _request_deadline);
-    }
-    atm_core::api::read_http_response(&mut stream, request)
-}
-
-fn read_http_response_with_helper(
-    mut stream: TcpStream,
-    request: RequestEnvelope,
-    request_deadline: Duration,
-) -> Result<ResponseEnvelope, AtmError> {
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    thread::Builder::new()
-        .name("local-ipc-http-response-read-helper".to_string())
-        .spawn(move || {
-            let result = atm_core::api::read_http_response(&mut stream, &request);
-            if result_tx.send(result).is_err() {
-                tracing::debug!("daemon HTTP response reader timed out before helper completion");
-            }
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable_with_cause(
-                "failed to spawn daemon HTTP response read helper",
-                source,
-            )
-        })?;
-    result_rx
-        .recv_timeout(request_deadline)
-        .map_err(|error| match error {
-            mpsc::RecvTimeoutError::Timeout => {
-                AtmError::daemon_unavailable("timed out reading daemon HTTP response")
-            }
-            mpsc::RecvTimeoutError::Disconnected => AtmError::daemon_unavailable(
-                "daemon HTTP response read helper disconnected unexpectedly",
-            ),
-        })?
-}
-
-fn apply_local_ipc_deadline(
-    result: std::io::Result<()>,
-    message: &'static str,
-) -> Result<LocalIpcDeadlineSupport, AtmError> {
-    match result {
-        Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
-            Ok(LocalIpcDeadlineSupport::Unsupported)
-        }
-        Err(source) => Err(AtmError::daemon_unavailable_with_cause(message, source)),
-    }
 }
 
 pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {
