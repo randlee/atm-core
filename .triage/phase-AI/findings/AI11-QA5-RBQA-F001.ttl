@@ -151,4 +151,5 @@
 <urn:atm:triage:finding/AI11-QA5-RBQA-F001>
   triage:status "scope-mismatch" ;
   triage:dispatchReady false ;
-  triage:resolutionGuidance "HOLD -- see AI14-QA1-RBQA-F001 for full correction. docs/requirements.md REQ-CORE-TRANSPORT-001 mandates concurrent UDS+TCP-loopback on Unix for parity testing; this finding's dead-code premise conflicts with that documented requirement and needs re-triage, not implementation." .
+  triage:resolutionGuidance "HOLD -- see AI14-QA1-RBQA-F001 for full correction. docs/requirements.md REQ-CORE-TRANSPORT-001 mandates concurrent UDS+TCP-loopback on Unix for parity testing; this finding's dead-code premise conflicts with that documented requirement and needs re-triage, not implementation." ;
+  triage:correctionNote "2026-07-26 (quality-mgr): identical disposition as recorded in AI14-QA1-RBQA-F001.ttl (same defect pair, same PR). QA-1 on PR #665 (commit 780a8870) verdict: FAIL -- see AI14-QA1-RBQA-F001.ttl correctionNote for full evidence (BLOCKING boundary-lint bypass reintroducing atm-graft->interprocess, critical error-surface collapse, critical Windows compile break, bisection-confirmed Ubuntu test regression, CI red on both Windows lint and Ubuntu test). Not closing; fix direction confirmed correct, this commit is not yet the resolution." .
