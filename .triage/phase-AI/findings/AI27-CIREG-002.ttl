@@ -91,3 +91,31 @@
   triage:path "feature/pAI-s30-semver-http-compatibility" ;
   triage:headSha "9a4eda4e" ;
   triage:orderIndex 30 .
+
+# Append-only reconciliation closure. The original finding and open s30
+# occurrences above remain the historical record; these later blocks are the
+# authoritative last-block-wins state after independent current-tip and CI
+# verification.
+<urn:atm:triage:finding/AI27-CIREG-002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Verified on integrate/phase-AI@b0510a3e: commits 003d7e04 and 737ac7ea initialize candidate_count and next_attempt_at at every PeerDeliveryEvent construction site; b422978b retains the matching atm-error 1.3.2-beta-30 path-dependency pin. PR #623 was merged and its 8/8 checks, including windows-latest Just lint, passed. Local just lint passes 22/22. No production-code change is required by this reconciliation." ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-1>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:note "Closed by independent current-tip inspection: PR #623 merge a6342ba9 plus 003d7e04/737ac7ea populate candidate_count and next_attempt_at at all construction sites; PR #623 windows-latest Just lint passed." .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-2>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:note "Closed by independent current-tip inspection: PR #623 merge a6342ba9 and b422978b retain atm-error 1.3.2-beta-30 in crates/atm-storage/Cargo.toml, matching the workspace; PR #623 windows-latest Just lint passed." .

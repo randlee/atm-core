@@ -40,3 +40,20 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+# Append-only reconciliation closure. The preceding open blocks preserve the
+# audit trail; this later block is the authoritative last-block-wins state.
+<urn:atm:triage:finding/ATM-QA-103>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Resolved by the append-only AI27-CIREG-002 reconciliation: current-tip source inspection, local just lint, and PR #623's green Windows Just lint establish that the finding-level status and all recorded occurrences are fixed. No code change is required." .
+
+<urn:atm:triage:occurrence/ATM-QA-103/1>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureNote "Closed by the append-only AI27-CIREG-002 reconciliation after current-tip source inspection, local just lint, and PR #623's green Windows Just lint." .
