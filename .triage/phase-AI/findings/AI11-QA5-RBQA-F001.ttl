@@ -156,3 +156,10 @@
 
 <urn:atm:triage:finding/AI11-QA5-RBQA-F001>
   triage:correctionNote "2026-07-27 (quality-mgr): QA-2 on PR #665 fix-round-2 (commit 7a49a7f4) verdict: FAIL -- see AI14-QA1-RBQA-F001.ttl correctionNote for full evidence. Same disposition as the AI14 pair: architecture now looks resolved (client UDS-preferred by default, verified with a real bound-listener test) but the commit does not build on Windows, so not closing against a non-compiling commit. Remains OPEN pending a real green Windows build." .
+
+<urn:atm:triage:finding/AI11-QA5-RBQA-F001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): identical disposition to AI14-QA1-RBQA-F001.ttl (same defect pair, same PR) -- see that record's closureNote for full QA-3 evidence. PR #665 commit 5ef43130: all 7 review targets satisfied, all 8 CI legs green (verified live), diff from QA-2 is a 3-line minimal import-gating fix with no other production changes. Closing finding; merge still requires team-lead action with explicit user authorization." .
