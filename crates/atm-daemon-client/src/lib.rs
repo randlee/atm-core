@@ -1144,10 +1144,9 @@ mod tests {
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
         apply_local_ipc_deadline, exchange_request_with_transport, next_auto_start_poll_interval,
         resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
-        try_connect_with_transport,
     };
     #[cfg(unix)]
-    use super::{FailedAutoStartChild, reap_failed_auto_start};
+    use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
