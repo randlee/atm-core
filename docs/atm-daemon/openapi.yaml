@@ -82,8 +82,9 @@ paths:
   /runtime/reload:
     post:
       operationId: reloadRuntimeView
+      requestBody: { required: true, content: { application/json: { schema: { type: 'null' } } } }
       responses:
-        '200': { description: Runtime view reloaded }
+        '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
         default: { $ref: '#/components/responses/AtmError' }
 components:
   parameters:

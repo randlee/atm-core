@@ -92,12 +92,12 @@ impl DaemonRequestDispatcher {
         {
             // Retry classification and scheduling belong to the coordinator;
             // every foreground failure has the same retained projection event.
-            return self.peer_delivery_error(peer, request_id, message_id, error);
+            return self.record_peer_delivery_failure(peer, request_id, message_id, error);
         }
         Ok(())
     }
 
-    fn peer_delivery_error(
+    fn record_peer_delivery_failure(
         &self,
         peer: atm_core::types::HostName,
         request_id: atm_core::protocol::RequestId,

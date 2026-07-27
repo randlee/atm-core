@@ -54,8 +54,8 @@ pub(crate) struct PeerDeliveryEvent {
 pub(crate) struct PeerDeliveryProjection {
     // This map is tiny, bounded, and updated/read as a whole snapshot. A
     // Mutex keeps projection and sequence updates atomic; lock hold time is
-    // limited to the in-memory BTreeMap work, so writer contention is bounded
-    // and a RwLock would add complexity without useful concurrent read width.
+    // limited to the in-memory BTreeMap work. Writes must serialize the
+    // sequence number, so an RwLock adds complexity without useful read width.
     statuses: Mutex<PeerDeliveryProjectionState>,
 }
 

@@ -128,7 +128,43 @@ fn canonical_writer_persists_before_router_owned_local_nudge() {
 }
 
 #[test]
-fn authenticated_duplicate_peer_receipt_still_uses_one_local_post_write() {
+fn same_host_peer_duplicate_still_routes_one_local_nudge() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let emitter = RecordingPostSendEmitter::succeed();
+    let mut origin = send_request(tempdir.path());
+    origin.to = Some(
+        "recipient@test-team.localhost"
+            .parse()
+            .expect("same-store peer target"),
+    );
+    write_mail_with_runtime_impl(origin, &observability, &runtime).expect("origin write persists");
+    let origin = {
+        let records = runtime.persisted_records.lock().expect("persisted records");
+        assert_eq!(records.len(), 1, "origin write persists one record");
+        records[0].envelope.clone()
+    };
+    let message_id = origin.message_id.expect("origin ULID");
+    let timestamp = origin.timestamp;
+
+    let mut receipt = send_request(tempdir.path()).with_origin_metadata(message_id, timestamp);
+    receipt.to = Some(
+        "recipient@test-team.localhost"
+            .parse()
+            .expect("same-store peer target"),
+    );
+    receipt.authenticated_source_host = Some("localhost".parse().expect("host"));
+    let mut prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
+        .expect("same-host receipt is an idempotent write");
+
+    assert!(prepared.requires_post_write_route());
+    prepared.emit_local_post_write_for_test(&runtime, &emitter);
+    assert_eq!(emitter.emitted().len(), 1);
+}
+
+#[test]
+fn authenticated_duplicate_peer_receipt_for_advertised_ip_uses_one_local_post_write() {
     let tempdir = tempdir().expect("tempdir");
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
@@ -172,6 +208,76 @@ fn authenticated_duplicate_peer_receipt_still_uses_one_local_post_write() {
         1,
         "an authenticated receipt uses the normal local post-write route even when the certificate host is an alias"
     );
+}
+
+#[test]
+fn duplicate_ulid_ignores_transport_only_peer_metadata() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+    let mut origin = send_request(tempdir.path()).with_origin_metadata(message_id, timestamp);
+    origin.to = Some(
+        "recipient@test-team.localhost"
+            .parse()
+            .expect("peer target"),
+    );
+    write_mail_with_runtime_impl(origin, &observability, &runtime).expect("origin write");
+
+    let mut receipt = send_request(tempdir.path()).with_origin_metadata(message_id, timestamp);
+    receipt.authenticated_source_host = Some("localhost".parse().expect("host"));
+    let prepared = write_mail_with_runtime_impl(receipt, &observability, &runtime)
+        .expect("transport-only peer metadata must not conflict");
+
+    assert!(!prepared.requires_post_write_route());
+}
+
+#[test]
+fn authenticated_peer_ack_message_uses_the_shared_write_pipeline() {
+    let tempdir = tempdir().expect("tempdir");
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let mut source = send_request(tempdir.path());
+    source.requires_ack = true;
+    write_mail_with_runtime_impl(source, &observability, &runtime)
+        .expect("pending source message persists before its peer acknowledgement");
+    let source = {
+        let records = runtime.persisted_records.lock().expect("persisted records");
+        assert_eq!(records.len(), 1, "one source message persists");
+        records[0].clone()
+    };
+    let acknowledged_message_id = source.envelope.message_id.expect("source message ULID");
+    runtime
+        .mailbox_rows
+        .lock()
+        .expect("mailbox rows")
+        .push(MailStoreMailboxMetadataRow {
+            message_key: source.message_key,
+            message_id: Some(acknowledged_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            from_agent: source.envelope.from,
+            source_chat_id: None,
+            destination_chat_id: None,
+            summary: None,
+            message_at: source.envelope.timestamp,
+            read: false,
+            requires_ack: true,
+            pending_ack: true,
+            acknowledged_at: None,
+            expires_at: None,
+            task_id: source.envelope.task_id,
+        });
+    let mut request =
+        send_request(tempdir.path()).with_origin_metadata(AtmMessageId::new(), IsoTimestamp::now());
+    request.authenticated_source_host = Some("peer.example.test".parse().expect("host"));
+    request.acknowledges_message_id = Some(acknowledged_message_id);
+
+    let prepared = write_mail_with_runtime_impl(request, &observability, &runtime)
+        .expect("authenticated peer acknowledgement is a canonical write, not a local command");
+
+    assert!(prepared.requires_post_write_route());
 }
 
 #[test]

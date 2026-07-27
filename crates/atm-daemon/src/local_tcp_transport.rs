@@ -269,18 +269,20 @@ impl PreparedRuntimeServer {
             }
             match listener.accept() {
                 Ok((stream, peer)) => {
-                    if !peer.ip().is_loopback()
-                        || registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS
-                    {
+                    if !peer.ip().is_loopback() {
                         continue;
                     }
+                    registry.reap_finished_dispatches()?;
+                    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
+                    else {
+                        continue;
+                    };
                     let router = Arc::clone(&router);
                     let capability = capability.clone();
-                    let dispatch_registry = Arc::clone(&registry);
                     let force_shutdown = Arc::clone(&force_shutdown);
                     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
                     let join_handle = thread::spawn(move || {
-                        let _active = dispatch_registry.register();
+                        let _active = active_connection;
                         let _ =
                             handle_connection(stream, router, &capability, force_shutdown.as_ref());
                         let _ = completion_tx.send(());

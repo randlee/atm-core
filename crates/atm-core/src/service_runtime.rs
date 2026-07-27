@@ -17,6 +17,13 @@ use crate::schema::InboxMessage;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum WorkspaceConfigAccess {
+    #[default]
+    Client,
+    Disabled,
+}
+
 /// Invoke a closure with the installed retained local runtime.
 #[doc(hidden)]
 pub fn with_default_local_service_runtime<T>(
@@ -78,6 +85,7 @@ pub struct LocalServiceRuntime {
         std::sync::Arc<dyn crate::boundary::NudgeTemplateOverrideStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    workspace_config_access: WorkspaceConfigAccess,
 }
 
 impl LocalServiceRuntime {
@@ -94,7 +102,15 @@ impl LocalServiceRuntime {
             roster_store,
             nudge_template_override_store,
             non_claude_outbound,
+            workspace_config_access: WorkspaceConfigAccess::Client,
         }
+    }
+
+    /// Returns the daemon-owned runtime view. A system daemon must not read a
+    /// caller-supplied workspace path while handling an IPC or peer request.
+    pub fn without_workspace_config(mut self) -> Self {
+        self.workspace_config_access = WorkspaceConfigAccess::Disabled;
+        self
     }
 
     pub fn load_roster_member(
@@ -247,7 +263,7 @@ pub(crate) fn append_notification_log_at_path(
 
 impl RetainedServiceRuntime for LocalServiceRuntime {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
-        config::load_config(current_dir)
+        load_workspace_config(self.workspace_config_access, current_dir)
     }
 
     fn load_nudge_template_override(
@@ -315,6 +331,33 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
+    }
+}
+
+fn load_workspace_config(
+    access: WorkspaceConfigAccess,
+    current_dir: &Path,
+) -> Result<Option<AtmConfig>, AtmError> {
+    match access {
+        WorkspaceConfigAccess::Client => config::load_config(current_dir),
+        WorkspaceConfigAccess::Disabled => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod workspace_config_tests {
+    use super::{WorkspaceConfigAccess, load_workspace_config};
+
+    #[test]
+    fn disabled_runtime_never_reads_a_callers_workspace_config() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::write(workspace.path().join(".atm.toml"), "not valid toml = [")
+            .expect("fixture config");
+
+        let config = load_workspace_config(WorkspaceConfigAccess::Disabled, workspace.path())
+            .expect("daemon config access is disabled");
+
+        assert!(config.is_none());
     }
 }
 

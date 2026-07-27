@@ -192,6 +192,7 @@ impl RuntimeComposition {
         runtime_assembly: RuntimeAssembly,
         peer_wire_security: PeerWireSecurity,
     ) -> Result<Self, AtmError> {
+        let runtime_assembly = runtime_assembly.for_daemon();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         // Runtime status snapshots are read on the hot doctor/status path, so

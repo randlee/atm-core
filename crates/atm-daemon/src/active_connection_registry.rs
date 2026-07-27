@@ -64,6 +64,35 @@ impl ActiveConnectionRegistry {
         }
     }
 
+    /// Reserve a connection slot before spawning its worker.  Admission is
+    /// decided atomically so an accept loop cannot over-admit while a newly
+    /// spawned worker has not yet incremented the counter.
+    #[cfg(any(windows, test))]
+    pub(crate) fn try_register(
+        self: &Arc<Self>,
+        maximum_connections: usize,
+    ) -> Option<ActiveConnectionGuard> {
+        let mut current = self.active_connections.load(Ordering::SeqCst);
+        loop {
+            if current >= maximum_connections {
+                return None;
+            }
+            match self.active_connections.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => {
+                    return Some(ActiveConnectionGuard {
+                        registry: Arc::clone(self),
+                    });
+                }
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
     pub(crate) fn register_dispatch_work(self: &Arc<Self>) -> ActiveDispatchGuard {
         self.active_dispatches.fetch_add(1, Ordering::SeqCst);
         ActiveDispatchGuard {
@@ -342,6 +371,21 @@ mod tests {
         assert!(
             error.message().contains("daemon dispatch thread panicked"),
             "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
+    fn connection_admission_is_atomic_and_recovers_after_drop() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let first = registry.try_register(1).expect("first slot admitted");
+        assert!(
+            registry.try_register(1).is_none(),
+            "cap must reject admission"
+        );
+        drop(first);
+        assert!(
+            registry.try_register(1).is_some(),
+            "released slot must become available again"
         );
     }
 
