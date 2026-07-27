@@ -623,14 +623,19 @@ mod tests {
     };
     use atm_core::RequestDeadline;
     use atm_core::error::AtmError;
+    use atm_core::protocol::ResponseEnvelope;
+    use atm_core::send::WriteRequest;
     use atm_core::types::{HostName, IsoTimestamp};
     use atm_storage::{
         HttpsInterface, LocalCertificate, OutboundMessageQuery, PeerConfigStore, PeerSyncPolicy,
         StoredPeerWrite, TrustedPeer,
     };
     use chrono::Utc;
-    use std::sync::{Arc, mpsc};
+    use std::num::NonZeroU16;
+    use std::sync::{Arc, Mutex, mpsc};
     use std::time::{Duration, Instant};
+
+    use crate::https_transport::HttpsMessageTransport;
 
     struct EmptyPeerStore;
 
@@ -679,6 +684,79 @@ mod tests {
             _: Duration,
         ) -> Result<Vec<StoredPeerWrite>, AtmError> {
             Ok(Vec::new())
+        }
+    }
+
+    struct ConfiguredPeerStore {
+        peer: TrustedPeer,
+        policy: PeerSyncPolicy,
+    }
+
+    impl PeerConfigStore for ConfiguredPeerStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            Ok(Vec::new())
+        }
+        fn save_interface(&self, _: &HttpsInterface) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_interface(&self, _: std::net::SocketAddr) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            Ok(None)
+        }
+        fn save_local_certificate(&self, _: &LocalCertificate) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            Ok(vec![self.peer.clone()])
+        }
+        fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
+            Ok((host == &self.peer.host).then(|| self.peer.clone()))
+        }
+        fn save_trusted_peer(&self, _: &TrustedPeer) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_trusted_peer(&self, _: &HostName) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn peer_sync_policy(&self, _: &HostName) -> Result<PeerSyncPolicy, AtmError> {
+            Ok(self.policy)
+        }
+    }
+
+    #[derive(Default)]
+    struct CapturingOutbound {
+        not_before: Mutex<Vec<IsoTimestamp>>,
+    }
+
+    impl OutboundMessageQuery for CapturingOutbound {
+        fn page_for_peer(
+            &self,
+            _: &HostName,
+            not_before: IsoTimestamp,
+            _: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
+            _: NonZeroU16,
+            _: Duration,
+        ) -> Result<Vec<StoredPeerWrite>, AtmError> {
+            self.not_before
+                .lock()
+                .expect("captured cutoff lock")
+                .push(not_before);
+            Ok(Vec::new())
+        }
+    }
+
+    struct NeverCalledTransport;
+
+    impl HttpsMessageTransport for NeverCalledTransport {
+        fn deliver(
+            &self,
+            _: WriteRequest,
+            _: &TrustedPeer,
+            _: RequestDeadline,
+        ) -> Result<ResponseEnvelope, AtmError> {
+            panic!("an empty recovery page must not call the peer transport")
         }
     }
 
@@ -831,6 +909,48 @@ mod tests {
             coordinator
                 .acquire(&host, RequestDeadline::after(Duration::from_secs(1)))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn recovery_passes_max_message_age_cutoff_to_storage() {
+        let host: HostName = "peer.example.test".parse().expect("host");
+        let max_message_age = Duration::from_secs(60);
+        let outbound = Arc::new(CapturingOutbound::default());
+        let transport: Arc<dyn HttpsMessageTransport> = Arc::new(NeverCalledTransport);
+        let coordinator = PeerDrainCoordinator::new(
+            Arc::new(ConfiguredPeerStore {
+                peer: TrustedPeer {
+                    host: host.clone(),
+                    fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+                    enabled: true,
+                    https_port: NonZeroU16::new(43101).expect("port"),
+                },
+                policy: PeerSyncPolicy {
+                    max_message_age,
+                    max_batch_messages: NonZeroU16::new(1).expect("batch cap"),
+                },
+            }),
+            outbound.clone(),
+            Arc::new(Mutex::new(Some(transport))),
+            Arc::new(|_| {}),
+        );
+
+        let before = Utc::now();
+        assert_eq!(
+            coordinator
+                .drain(&host, RequestDeadline::after(Duration::from_secs(1)))
+                .expect("empty recovery drain"),
+            0
+        );
+        let after = Utc::now();
+        let captured = outbound.not_before.lock().expect("captured cutoff lock");
+        assert_eq!(captured.len(), 1, "one empty page query is sufficient");
+        let cutoff = captured[0].into_inner();
+        let age = chrono::Duration::from_std(max_message_age).expect("bounded age");
+        assert!(
+            cutoff >= before - age && cutoff <= after - age,
+            "storage must receive the actual max_message_age lower bound"
         );
     }
 }
