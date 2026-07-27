@@ -42,6 +42,6 @@
 <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:headSha "d36709b1" ;
   triage:orderIndex 29 .

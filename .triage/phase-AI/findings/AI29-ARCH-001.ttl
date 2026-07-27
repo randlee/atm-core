@@ -11,7 +11,7 @@
   triage:severity "Important" ;
   triage:status "open" ;
   triage:repeatable false ;
-  triage:foundIn "AICH-S10" ;
+  triage:foundIn triage:AICH-S10 ;
   triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence_AI29-ARCH-001_8b4bea66> ;
   triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
@@ -29,6 +29,6 @@
 <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
   triage:headSha "8b4bea66" ;
   triage:orderIndex 29 .
