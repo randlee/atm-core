@@ -15,8 +15,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Resolved in AI27-CIREG-002 reconciliation: finding-level status now matches all fixed occurrences after independent current-tip and CI verification. No code change was required." ;
   triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-PHASE-END-QA-1 ;
   triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
@@ -28,8 +32,9 @@
   triage:file ".triage/phase-AI/findings/AI27-CIREG-002.ttl" ;
   triage:line 18 ;
   triage:snippet "finding-level status open at line 18 and 74, contradicting occurrence-level fixed markers" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "AI27-CIREG-002 finding-level status was reconciled to fixed after current-tip source inspection, local just lint, and green PR #623 Windows Just lint." ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
