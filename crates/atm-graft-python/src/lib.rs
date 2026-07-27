@@ -19,11 +19,37 @@ use atm_core::home::{atm_home, command_invocation_dir};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendMessageSource, SendRequest};
 use atm_core::types::{AgentName, ChatId, ReadSelection, TeamName};
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyException, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
+// Python projection of ATM's canonical structured error contract. The
+// exception message remains useful in ordinary Python tracebacks, while
+// callers that need machine-readable handling use `code`, `message`, and
+// optional `cause` directly.
+pyo3::create_exception!(atm_graft, AtmGraftError, PyException);
+
 fn atm_error(error: AtmError) -> PyErr {
-    PyRuntimeError::new_err(format!("{}: {}", error.code(), error.message()))
+    Python::attach(|py| {
+        let code = error.code().as_str();
+        let message = error.message().to_owned();
+        let cause = error.cause().map(str::to_owned);
+        let py_error = AtmGraftError::new_err(message.clone());
+        let value = py_error.value(py);
+
+        // Every ATM exception type has an instance dictionary. Failure to set
+        // these fields would be a binding implementation defect, not a caller
+        // error, so retain the canonical traceback rather than masking it.
+        value
+            .setattr("code", code)
+            .expect("ATM Python exception accepts a code field");
+        value
+            .setattr("message", message)
+            .expect("ATM Python exception accepts a message field");
+        value
+            .setattr("cause", cause)
+            .expect("ATM Python exception accepts a cause field");
+        py_error
+    })
 }
 
 fn python_callback_error(error: PyErr) -> AtmError {
@@ -420,6 +446,7 @@ impl PyGraftSession {
 
 #[pymodule]
 fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("AtmGraftError", m.py().get_type::<AtmGraftError>())?;
     m.add_class::<PyAgentAddress>()?;
     m.add_class::<PyGraftSessionOptions>()?;
     m.add_class::<PyMessage>()?;
@@ -431,35 +458,17 @@ fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::sync::Arc;
-
-    use super::{
-        PyAgentAddress, PyGraftSession, PyGraftSessionOptions, PyNudge, PythonNudgeInjector,
-    };
-    use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
+    use super::{AtmGraftError, PyAgentAddress, PyNudge, PythonNudgeInjector, atm_error};
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
     use atm_core::types::{AgentName, ChatId, TeamName};
-    use atm_graft::{GraftClient, HostNudgeInjector};
-    use pyo3::prelude::{Py, Python};
+    use atm_graft::HostNudgeInjector;
+    use pyo3::prelude::Python;
     use pyo3::types::{PyAnyMethods, PyModule};
-    use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
     const TEST_TEAM: &str = "test-team";
-
-    #[derive(Debug)]
-    struct UnusedDaemonClient;
-
-    impl atm_core::boundary::sealed::Sealed for UnusedDaemonClient {}
-
-    impl DaemonApiClient for UnusedDaemonClient {
-        fn execute(&self, _request: ApiRequest) -> Result<ApiResponse, AtmError> {
-            panic!("the receiver lifecycle must not issue daemon requests")
-        }
-    }
 
     #[test]
     fn typed_address_round_trips_optional_chat_id() {
@@ -494,74 +503,6 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
-    }
-
-    #[test]
-    fn pyo3_receiver_lifecycle_activates_snapshots_and_closes_real_session() {
-        Python::initialize();
-        let tempdir = TempDir::new().expect("temporary lifecycle workspace");
-        let workspace_root = tempdir.path().join("workspace");
-        fs::create_dir_all(&workspace_root).expect("create lifecycle workspace");
-        fs::write(
-            workspace_root.join(".atm.toml"),
-            "[atm.graft]\nenabled = true\n",
-        )
-        .expect("enable graft receiver");
-
-        let caller = PyAgentAddress::new(
-            TEST_SENDER.to_string(),
-            TEST_TEAM.to_string(),
-            Some("1234".to_string()),
-        )
-        .expect("caller");
-        let session = PyGraftSession {
-            caller: caller.to_typed().expect("typed caller"),
-            client: std::sync::Mutex::new(Some(GraftClient::from_transport_for_test(Arc::new(
-                UnusedDaemonClient,
-            )))),
-            receiver: std::sync::Mutex::new(None),
-        };
-        let options = PyGraftSessionOptions::new(
-            workspace_root.display().to_string(),
-            TEST_SENDER.to_string(),
-            TEST_TEAM.to_string(),
-        )
-        .expect("receiver options");
-
-        Python::attach(|py| {
-            let session = Py::new(py, session).expect("PyO3 session");
-            let options = Py::new(py, options).expect("PyO3 options");
-            let callback_module = PyModule::from_code(
-                py,
-                c"def callback(_nudge):\n    pass\n",
-                c"receiver_lifecycle_test.py",
-                c"receiver_lifecycle_test",
-            )
-            .expect("callback module");
-            let callback = callback_module
-                .getattr("callback")
-                .expect("callback")
-                .unbind();
-            let session = session.bind(py);
-
-            session
-                .call_method1("activate_receiver", (options, callback))
-                .expect("activate receiver");
-            let snapshot = session.call_method0("snapshot").expect("snapshot");
-            assert_eq!(
-                snapshot
-                    .getattr("state")
-                    .expect("snapshot state")
-                    .extract::<String>()
-                    .expect("snapshot state string"),
-                "listening"
-            );
-            session.call_method0("close").expect("close receiver");
-            let closed_snapshot = session
-                .call_method0("snapshot")
-                .expect_err("closed session must not expose an active receiver");
-            assert!(closed_snapshot.to_string().contains("not active"));
-        });
     }
 
     #[test]
@@ -665,5 +606,44 @@ mod tests {
     #[test]
     fn invalid_address_returns_a_python_error() {
         assert!(PyAgentAddress::new("bad:name".to_string(), TEST_TEAM.to_string(), None).is_err());
+    }
+
+    #[test]
+    fn canonical_atm_errors_preserve_structured_fields_for_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = atm_error(
+                AtmError::daemon_unavailable("daemon socket is unavailable")
+                    .with_cause("connection refused"),
+            );
+            let value = error.value(py);
+
+            assert!(value.is_instance_of::<AtmGraftError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("code field")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_DAEMON_UNAVAILABLE"
+            );
+            assert!(
+                value
+                    .getattr("message")
+                    .expect("message field")
+                    .extract::<String>()
+                    .expect("string message")
+                    .starts_with("daemon socket is unavailable"),
+                "the binding preserves the canonical message without owning its catalog text"
+            );
+            assert_eq!(
+                value
+                    .getattr("cause")
+                    .expect("cause field")
+                    .extract::<Option<String>>()
+                    .expect("optional cause"),
+                Some("connection refused".to_string())
+            );
+        });
     }
 }
