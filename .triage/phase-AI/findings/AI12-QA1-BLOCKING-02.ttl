@@ -15,6 +15,9 @@
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/src/send/mod.rs and crates/atm-daemon/src/runtime_health.rs for any nudge/hook::emit_post_send_effects call sites outside PostWriteRouter::dispatch" ;
   triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-02/s20/1> ;
@@ -28,7 +31,7 @@
   triage:snippet "prepared.emit_local_post_write_with_runtime(runtime, post_send_emitter);" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- early emit_local_post_write_with_runtime call removed from production path (line 618 now uses emit_local_post_write_for_test in test-only harness). Production emission now exclusively via PostWriteRouter::dispatch (runtime_health/post_write_router.rs:38). Stale occurrence from superseded branch feature/pAI-s20-hermes-bridge-deployment; closing to match reality. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- atm-core/src/send/mod.rs:243-261 exposes post-write emission, with test-only use at :632-633; production emission is exclusively runtime_health/peer_delivery_router.rs:57-73. Stale occurrence from superseded branch; closing to match current reality. (2026-07-27)" ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "34392e5c" ;
   triage:description "Early emit_local_post_write_with_runtime call in MessageWriter::write for any non-dry-run message, BEFORE router is invoked" ;
@@ -41,7 +44,7 @@
   triage:snippet "message.prepared.emit_local_post_write(&self.service_runtime, &post_send_emitter);" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- double-emit issue resolved. Early emit removed from production path; production emission now exclusively via PostWriteRouter::dispatch (runtime_health/post_write_router.rs:38) when is_peer_receipt() OR host.is_none(). Router is the single source of truth for nudge emission. Stale occurrence from superseded branch feature/pAI-s20-hermes-bridge-deployment; closing to match reality. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- atm-core/src/send/mod.rs:243-261 is the post-write emission surface (test-only use at :632-633); production emission is exclusively runtime_health/peer_delivery_router.rs:57-73. Router is the single source of truth for nudge emission. Stale occurrence from superseded branch; closing to match current reality. (2026-07-27)" ;
   triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
   triage:headSha "34392e5c" ;
   triage:description "Router DOES emit nudge when host is None, but this is AFTER the writer already emitted it" ;

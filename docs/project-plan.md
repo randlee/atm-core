@@ -948,10 +948,15 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI — HTTP daemon and minimal cross-host transport [PLANNED]
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.30; readiness blocked]
 
 Planning branch: `plan/phase-ai-planning`
 Integration branch: `integrate/phase-AI`
+
+Implementation is merged through AI.30. Post-AI.30 legacy-finding and
+hardening cleanup is in progress on follow-up branches. This implementation
+status does not close the phase: [`docs/plans/phase-ai/readiness.md`](./plans/phase-ai/readiness.md)
+still blocks release pending physical two-Mac and Mac↔Windows peer evidence.
 
 AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
 baseline. It retains only the local-IPC singleton while deleting peer transport,
@@ -972,12 +977,30 @@ Implementation Branches:
 | `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
 | `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
 | `AI.7` | `complete` | `feature/pAI-s7-canonical-write-path` | canonical write request, single host-routing seam, and collapsed send/ack ingress |
-| `AI.8` | `in progress` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
-| `AI.9` | `in progress` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
-| `AI.10` | `in progress` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout |
-| `AI.11` | `in progress` | `feature/pAI-s11-post-merge-remediation` | route-specific HTTP bodies and Windows loopback-TCP local transport |
+| `AI.8` | `complete` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
+| `AI.9` | `complete` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
+| `AI.10` | `complete` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout; live physical-peer rows remain readiness blockers |
+| `AI.11` | `complete` | `feature/pAI-s11-post-merge-remediation` | route-specific HTTP bodies and Windows loopback-TCP local transport |
 | `AI.12` | `complete` | `feature/pAI-s12-post-write-router` | canonical post-write peer routing and immutable outbound persistence |
 | `AI.13` | `complete` | `feature/pAI-s13-peer-smoke-contract` | repository-owned peer-pair smoke runner and release evidence contract |
+| `AI.14` | `complete` | `feature/pAI-s14-mac-peer-smoke` | physical Mac↔Mac peer-pair proof implementation; live evidence remains blocked |
+| `AI.15` | `complete` | `feature/pAI-s15-windows-peer-smoke` | physical Mac↔Windows peer-pair proof implementation; live evidence remains blocked |
+| `AI.16` | `complete` | `feature/pAI-s16-offline-reconciliation` | durable-age-bounded canonical-message reconciliation |
+| `AI.17` | `complete` | `feature/pAI-s17-hermes-chat-identity` | ambient `ATM_CHAT_ID` identity context |
+| `AI.18` | `complete` | `feature/pAI-s18-graft-python-bindings` | PyO3/Maturin graft client/nudge binding |
+| `AI.19` | `complete` | `feature/pAI-s19-hermes-graft-integration` | typed Hermes graft bridge after canonical persistence |
+| `AI.20` | `complete` | `feature/pAI-s20-hermes-bridge-deployment` | per-profile launchd bridge deployment and runbook |
+| `AI.21` | `complete` | `feature/pAI-s21-hermes-closure` | retained Hermes end-to-end production evidence |
+| `AI.21-pre` | `complete` | `feature/pAI-s21pre-crosshost-evidence-harness` | supported peer-smoke harness and plaintext-test diagnostic profile |
+| `AI.22` | `complete` | `feature/pAI-s22-loopback-self-send-exemption` | host-qualified self-send exemption and advertised-IP proof path |
+| `AI.23` | `complete` | `feature/pAI-s23-crosshost-shared-write-path` | one shared HTTP write path and post-write router |
+| `AI.24` | `complete` | `feature/pAI-s24-host-qualified-ack-receipt` | host-qualified ACK receipt and peer nudge |
+| `AI.25` | `complete` | `feature/pAI-s25-peer-authority-resolution` | hostname/pin peer authority and live trust refresh |
+| `AI.26` | `complete` | `feature/pAI-s26-peer-write-deadline` | propagated peer-write deadline |
+| `AI.27` | `complete` | `feature/pAI-s27-peer-delivery-observability` | truthful peer delivery outcomes and terminal events |
+| `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
+| `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
+| `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

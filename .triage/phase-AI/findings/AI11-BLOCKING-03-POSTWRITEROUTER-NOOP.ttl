@@ -15,15 +15,17 @@
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/2>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/3> ;
   triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
-  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
-  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:highestFixedBranch "none" ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:reviewedBy "qa-triage", "quality-mgr" ;
-  triage:notes "Post-merge audit finding. CRITICAL: dispatchReady=false because this requires explicit scope decision (move host check vs correct contract). Scope: crates/atm-daemon/src/runtime_health.rs + sprint-ai-7.md + crates/atm-architecture/tests/boundary_enforcement.rs. This finding SUPERSEDES AI7-BLOCKING-02-POSTWRITEROUTER-ROUTING: prior finding acknowledged no-op PostWriteRouter but incorrectly characterized it as 'correctly deferred' when it is structurally incompatible with the written contract and should have been marked OPEN. Option A (preferred per contract): move request.to...host.is_some() check from route_write into PostWriteRouter::dispatch, making PostWriteRouter the single host-routing decision point. Option B: update sprint-ai-7.md contract lines 40-41 to document that route_write makes the local/remote decision, and PostWriteRouter is only for local-nudge handling. Either option requires updating boundary_enforcement.rs to match the chosen contract. BLOCKING: cannot dispatch fixes before scope decision is made. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607); re-verified against current integrate/phase-AI and confirmed route_write still makes the host-branch decision at runtime_health.rs before calling MessageWriter::write, and PostWriteRouter::dispatch remains the same no-op (debug_assert + let _ = message; Ok(())). Finding remains genuinely open and was redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment." .
+  triage:notes "Post-merge audit finding. The historical route_write host-check, dispatch_remote_write path, and no-op router were superseded by the current write-then-delegate implementation. Citation-only closure verified against integrate/phase-AI: runtime_health.rs:558-566 delegates and runtime_health/peer_delivery_router.rs:14-53 is the sole host-routing/delivery point. No remediation dispatch is required for this record." .
 
 <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/1>
   a triage:Occurrence ;
@@ -32,7 +34,7 @@
   triage:snippet "fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { if request.to.as_ref().is_some_and(|address| address.host.is_some()) { return self.dispatch_remote_write(request); }" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — code refactored away. dispatch_remote_write function eliminated. route_write (runtime_health.rs line 539) now calls MessageWriter::write, then conditionally calls PostWriteRouter::dispatch. No host-check in route_write; routing decision moved to PostWriteRouter::dispatch (post_write_router.rs line 14-92). Contract now enforced: PostWriteRouter is sole host-routing point. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health.rs:558-566 writes and delegates; the sole host-routing/delivery point is runtime_health/peer_delivery_router.rs:14-53. (2026-07-27)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
@@ -44,7 +46,7 @@
   triage:snippet "fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { ... transport.deliver(request, &peer, HttpsRequestDeadline::default()) }" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — dispatch_remote_write function removed. All peer delivery now goes through PostWriteRouter::dispatch (post_write_router.rs line 14). Contract violation fixed: PostWriteRouter is now the sole peer delivery routing point. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health.rs:558-566 performs the write/delegation and runtime_health/peer_delivery_router.rs:14-53 is the sole host-routing/delivery point; no separate dispatch_remote_write path remains. (2026-07-27)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
@@ -56,7 +58,7 @@
   triage:snippet "impl PostWriteRouter for DaemonRequestDispatcher { fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> { debug_assert!(...); let _ = message; Ok(()) } }" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — PostWriteRouter::dispatch is no longer a no-op. Current implementation (post_write_router.rs line 14-92) performs full peer delivery routing and observability recording. Trait method signature changed; now receives deadline parameter and performs actual routing work. Contract violation fixed. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health/peer_delivery_router.rs:14-53 performs the host-routing/delivery work and observability recording after runtime_health.rs:558-566 delegates. (2026-07-27)" ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "8d0ccf01" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
