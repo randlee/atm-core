@@ -8,6 +8,12 @@ depends_on: AI.21-pre, AI.26, AI.27
 
 # AI.28 — bounded peer recovery after connectivity loss
 
+> **Superseded operating rules:** AI.31 and AI.32 replace this sprint's
+> foreground-wait, oldest-first, one-socket delivery mechanics. The durable
+> recovery intent remains: immutable SQLite records are the sole recovery
+> input; no outbox or durable delivery state is permitted. Current work must
+> follow AI.31/AI.32 and `REQ-CORE-TRANSPORT-005B`.
+
 ## Release candidate
 
 - First commit: set every releasable ATM assembly to `1.3.2-beta-28`; record

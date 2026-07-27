@@ -22,35 +22,34 @@ pub struct PeerSyncPolicy {
 
 The policy defaults to disabled. An operator enables it with the peer CLI and
 may request a one-shot sync. A host-qualified local outbound persistence or a
-peer-delivery failure signals the one bounded per-host drain coordinator. The
-coordinator queries storage for local outbound canonical records addressed to
-that exact peer and newer than `now - max_message_age`, then submits each
-unchanged record to `PeerHttpTransport`.
+peer-delivery failure signals the bounded non-durable scheduler. The scheduler
+queries storage for local outbound canonical records addressed to that exact
+peer and newer than `now - max_message_age`, then submits unchanged records to
+`PeerHttpTransport` as independent jobs.
 
-Each scan advances a transient exclusive `(created_at, message_ulid)` lower
-bound through pages of at most `max_batch_messages`, ordered oldest first,
-until it observes an empty page, a transport failure, or cancellation. One
-in-memory lease per `HostName` covers storage paging, one HTTP(S) connection in
-the active wire-security profile, sequential ordinary `WriteRequest`
-submissions, and final rescan. It carries only running
-state, a wake generation, next attempt time, and backoff; it stores no message
-ID, payload, cursor, receipt, or delivery result. A persisted write increments
-the generation. Before lease release, an empty final scan must observe the same
-generation; otherwise it scans again. A post-release signal starts the next
-lease.
+Each scheduler scan pages eligible records through the storage trait and
+enqueues ordinary `WriteRequest` jobs. Global and per-host bounds limit
+concurrent jobs; an in-flight ULID may be coalesced. The scheduler makes no
+delivery-order promise across independent messages, does not require a stream,
+and does not define a durable cursor. It holds only transient host/message-ID
+work markers, bounded timing, and backoff—never a payload, receipt, retry
+history, or delivery result. A persisted write signals the host. A signal that
+arrives during a scan or active job requires another eligibility scan before
+the host becomes idle; a restart safely drops transient work and later
+rediscovers immutable records through normal idempotent delivery.
 
 The post-write router calls the one coordinator handoff for every
-host-qualified origin write after canonical persistence. A foreground request
-waits behind that same host lease and older ordered records only within its
-existing request deadline; it never opens a second socket. This transient
-request-local wait is neither a coordinator slot field nor durable delivery
-state. Its timeout is the one truthful unconfirmed outcome defined by ADR-041.
+host-qualified origin write after canonical persistence. It signals bounded
+background work and returns; foreground admission never waits for another
+message, DNS, connection, TLS, or peer receipt. A remote outcome is recorded
+asynchronously and remains distinct from local admission under ADR-041.
 
 After a delivery failure, the coordinator schedules the same host no earlier
 than 60 seconds, then with exponential backoff capped at 15 minutes while
 eligible records remain. Restart waits the same minimum before an eligible
-attempt. Explicit one-shot sync uses the same lease and connection. There is no
-ping, empty-peer monitor, batch endpoint, or recovery-specific router.
+attempt. Explicit one-shot sync uses the same scheduler and ordinary endpoint.
+There is no ping, empty-peer monitor, batch endpoint, or recovery-specific
+router.
 
 The storage trait—not the daemon or transport—owns the backend-neutral query.
 There is no outbox, replay store, retry queue, background monitor, cursor,

@@ -189,16 +189,20 @@ integration; they do not alter it.
 | AI.28 | `feature/pAI-s28-bounded-peer-recovery` | Backed-off bounded reconciliation after connectivity loss |
 | AI.29 | `feature/pAI-s29-crosshost-smoke-rerun` | Receiver-proven Mac↔Windows physical smoke evidence |
 | AI.30 | `feature/pAI-s30-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
+| AI.31 | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work is signalled after response |
+| AI.32 | `feature/pAI-s32-independent-peer-jobs` | Bounded non-durable per-ULID peer jobs; no cross-command delivery-order promise or stream abstraction |
+| AI.33 | `feature/pAI-s33-admission-capacity-smoke` | Isolated 1,000/s admission proof and ten-run, endpoint-explicit local/cross-host smoke report |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
 Findings are fixed on their owning sprint before forward merge.
 
 For every remaining Phase AI implementation sprint, the first commit sets the
-workspace release for every releasable ATM assembly to
-`1.3.2-beta-<sprint-number>` (for example, AI.22 is `1.3.2-beta-22`). Runtime
-evidence starts only after `atm doctor --json` reports matching CLI and daemon
-release values; release labels are diagnostic, not protocol admission.
+workspace release for every releasable ATM assembly to the current Phase AI
+prerelease plus the sprint number (for example, AI.31 is
+`1.4.0-beta-ai.31`). Runtime evidence starts only after `atm doctor --json`
+reports matching CLI and daemon release values; release labels are diagnostic,
+not protocol admission.
 
 ## Verification matrix
 

@@ -3916,13 +3916,47 @@ mail correctness.
   - deadline, disconnect, or failed response after dispatch returns the typed
     `REMOTE_DELIVERY_UNCONFIRMED` error, never `DAEMON_UNAVAILABLE` when the
     local daemon accepted the request
-  - accepted work remains runtime-tracked and is cancelled on deadline expiry
-    or local disconnect; detached delivery is forbidden
+  - local admission completes at the SQLite response boundary. Later bounded
+    peer work is runtime-tracked independently of the closed local connection;
+    it is not detached, because the scheduler owns cancellation, concurrency,
+    and observability, but it is not cancelled by the completed admission
+    request
   - the possible remote side effect is resolved only by repeating the same
     immutable ULID through ordinary idempotent write handling
   - daemon logs record `write_persisted`, `peer_delivery_confirmed`, or
     `peer_delivery_unconfirmed`; terminal handler/response-write failures are
     retained structured events
+
+- `REQ-CORE-TRANSPORT-005B` The local daemon must admit and respond to at
+  least 1,000 host-qualified `send` requests per second through the public ATM
+  API.
+
+  Required behavior:
+  - the SQLite transaction that durably persists the immutable origin record
+    is the only synchronous operation on the admission-response path. Once it
+    commits, the daemon returns the typed local admission response; peer-job
+    signalling, DNS, connection, TLS, remote receipt, duplicate handling,
+    acknowledgement, and nudge work run asynchronously
+  - the response proves only local admission. Remote acceptance remains the
+    separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
+    local admission response must never claim remote delivery
+  - distinct CLI/API write requests are independent. ATM makes no ordering
+    promise between their delivery attempts, even when they target the same
+    peer. Byte ordering is required only within one HTTP request/response
+    exchange, and an acknowledgement is correlated solely by its immutable
+    message ULID
+  - post-commit work uses a bounded, non-durable scheduler. It may hold
+    transient `HostName`/message-ULID jobs and in-flight coalescing markers,
+    but no payload, receipt, retry history, delivery result, or durable
+    checkpoint. A restart drops that work and rebuilds eligibility from the
+    immutable SQLite records and enabled peer policy
+  - the throughput requirement applies while the destination peer is
+    unavailable as well as healthy. Release evidence runs ten consecutive
+    one-second admission intervals against one release-built daemon using a
+    disposable isolated `ATM_HOME` and SQLite database; it must never run
+    against a shared or production ATM store. Each interval has at least 1,000
+    accepted requests and responses. Mock routers, direct dispatcher calls,
+    and disabled peer delivery do not satisfy this evidence
 
 - `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
   recent immutable outbound writes after connectivity loss without delivery
@@ -3930,24 +3964,21 @@ mail correctness.
 
   Required behavior:
   - policy selects a bounded send window and batch; zero window disables it
-  - exactly one non-durable drain lease exists per canonical peer hostname;
-    it owns storage paging, one connection, ordered sends, and final rescan,
-    but contains no message ID, payload, cursor, receipt, or attempt history
-  - every drain advances a transient exclusive `(created_at, message_ulid)`
-    lower bound through pages of at most `max_batch_messages`, ordered
-    oldest-first, until an empty page, transport failure, or cancellation. It
-    sends ordinary canonical writes sequentially on one HTTP(S) connection;
-    no batch request shape or recovery-only endpoint is allowed. The lower
-    bound is dropped with the in-memory lease and is never durable state
-  - every newly persisted outbound write signals a per-host generation. The
-    drain must re-scan before lease release if that generation changes, and a
-    post-release signal starts the next lease; no write may be lost in the
-    final-scan/release race
-  - the post-write router has one `PeerDeliveryCoordinator::deliver_after_persist`
-    handoff for host-qualified writes. It serializes a foreground write behind
-    the same host lease and existing older backlog; it must not open a second
-    socket or bypass ordered canonical records. A request-local wait ends at
-    its existing deadline and is never durable or per-message delivery state
+  - the non-durable scheduler bounds global and per-host in-flight delivery
+    jobs. It may coalesce duplicate in-flight ULIDs, but it makes no ordering
+    promise across distinct messages and owns no durable delivery state
+  - a scheduler scan pages eligible exact-peer records through the storage
+    trait and enqueues ordinary canonical writes. It has no batch request
+    shape, recovery-only endpoint, or durable cursor; restart/next signal may
+    safely rediscover an immutable ULID through idempotent recipient storage
+  - every newly persisted outbound write signals scheduling. A signal arriving
+    during a scan or active work must cause a further eligibility scan before
+    the host is considered idle; no write may be lost between scan completion
+    and idle transition
+  - the post-write router has one `PeerDeliveryCoordinator::signal_after_persist`
+    handoff for host-qualified writes. It signals bounded background work after
+    local admission and never waits for DNS, a socket, TLS, remote receipt, or
+    another message's delivery
   - first recovery attempt is no earlier than 60 seconds; later failures use
     exponential backoff capped at 15 minutes
   - recovery submits original ULIDs through normal HTTPS; no ping, outbox,

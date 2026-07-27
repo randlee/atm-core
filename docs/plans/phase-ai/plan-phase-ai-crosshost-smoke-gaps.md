@@ -32,6 +32,9 @@ solely to diagnose connectivity and proves no production security property.
 | Wi-Fi/VPN loss leaves recent persisted writes without recovery | AI.28 | bounded per-peer reconciliation schedule with backoff |
 | smoke treated local `outcome sent` as receipt | AI.29 | receiver-side ULID evidence and physical rerun |
 | product releases block compatible CLI/daemon pairs | AI.30 | explicit schema and HTTP SemVer compatibility contract |
+| foreground peer delivery blocks local daemon response | AI.31 | SQLite-only local admission followed by non-durable peer-job signalling |
+| recovery assumes an ordered peer stream | AI.32 | bounded independent ULID jobs with no cross-command ordering promise |
+| no isolated 1,000/s proof or comprehensible two-host ladder | AI.33 | disposable-db capacity harness and ten-run local/cross-host HTML evidence |
 
 The TLS trust-snapshot/restart observation is closed by AI.25's daemon-owned
 atomic configuration refresh. The five Windows sends in the first smoke remain
@@ -44,7 +47,7 @@ AI.21-pre evidence harness ─> AI.22 self-send guard ─> AI.23 shared write en
                                                                                        ├─> AI.25 peer authority ────────────┐
                                                                                        └─> AI.26 deadline/error contract ─> AI.27 outcome truth ─> AI.28 recovery
 AI.30 schema/HTTP compatibility ───────────────────────────────────────────────┘
-AI.24 + AI.25–AI.28 + AI.30 ─> AI.29 physical rerun
+AI.24 + AI.25–AI.28 + AI.30 ─> AI.29 physical rerun ─> AI.31 local admission ─> AI.32 independent jobs ─> AI.33 capacity/smoke evidence
 ```
 
 AI.21-pre closes the retained smoke harness/security-profile adoption before
@@ -68,8 +71,11 @@ so tested CLI/daemon builds are not artificially blocked by release-label drift.
 - A single absolute request deadline governs every local and remote leg.
 - A remote write is successful only after peer HTTP acceptance; local
   persistence is separately observable, never proof of receiver receipt.
-- A failed peer write may schedule bounded reconciliation of existing immutable
-  records, but it may not create a per-message queue, receipt, or retry state.
+- A failed peer write may schedule bounded non-durable work over existing
+  immutable records. Its transient queue may reference a hostname/ULID but may
+  not retain payload, receipt, retry history, or durable delivery state.
+- Independent CLI/API writes have no cross-command delivery-order guarantee;
+  acknowledgement correlation is by immutable ULID.
 - Every repeated immutable ULID follows the same write path and remains
   idempotent. No finding authorizes an outbox, replay queue, receipt, retry
   worker, or parallel acknowledgement workflow.
@@ -81,8 +87,9 @@ so tested CLI/daemon builds are not artificially blocked by release-label drift.
   changes the HTTP resource, `WriteRequest`, router, persistence, post-write,
   or production TLS/allowlist evidence contract.
 - Each sprint's first commit sets matching workspace CLI/daemon release
-  metadata to `1.3.2-beta-<sprint-number>` and verifies it with
-  `atm doctor --json` before runtime evidence.
+  metadata to the current Phase AI prerelease plus its sprint number (for
+  example, AI.31 is `1.4.0-beta-ai.31`) and verifies it with `atm doctor
+  --json` before runtime evidence.
 
 ## Required validation
 
