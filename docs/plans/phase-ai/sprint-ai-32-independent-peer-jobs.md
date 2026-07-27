@@ -13,7 +13,7 @@ depends_on: AI.31
 The daemon schedules independent immutable-ULID peer-delivery jobs after
 local admission. It bounds work globally and per host, but does not promise
 delivery order between separate CLI/API writes and does not create a stream,
-outbox, or durable retry system.
+outbox, durable retry system, or delivery state machine.
 
 ## Why
 
@@ -27,12 +27,12 @@ requirement.
 
 1. First commit sets every releasable assembly to `1.4.0-beta-ai.32` and
    records matching branch CLI/daemon values through `atm doctor --json`.
-2. Refactor `crates/atm-daemon/src/peer_drain_coordinator.rs` into the only
-   owner of a bounded, non-durable scheduler. It may use a bounded channel,
-   work semaphore, and in-flight `HashSet<MessageId>`/host accounting. Its
-   state may contain only hostname, message ULID, timing/backoff, and
-   concurrency counters—never payload, receipt, remote result, checkpoint,
-   or retry history.
+2. Replace `crates/atm-daemon/src/peer_drain_coordinator.rs` with the only
+   owner of a small bounded, non-durable work queue. It may use a bounded
+   channel, work semaphore, and in-flight `HashSet<MessageId>`/host accounting.
+   Its state may contain only hostname, message ULID, one next-eligible time,
+   and concurrency counters—never a slot state machine, payload, receipt,
+   remote result, checkpoint, cursor, generation, or retry history.
 3. Replace AI.28's ordered `PeerDrainSlot`/cursor contract with storage paging
    that returns eligible immutable records for one exact hostname. Enqueue an
    independent job for each ULID, coalescing an already-in-flight ULID. Do not
@@ -51,7 +51,17 @@ requirement.
    controls, not ordering controls. Different hosts must make progress
    independently.
 
-## Required tests
+## Paths to delete
+
+- AI.28's `PeerDrainSlot` ordered cursor/lower-bound state and any
+  oldest-first or one-socket assertion.
+- `acquire`, `release`, generation comparison, `Condvar` waiting,
+  `run_scheduled_recovery`, and 250-ms polling from
+  `peer_drain_coordinator.rs`.
+- Any product contract or test that treats independent same-peer sends as a
+  FIFO stream rather than independent immutable ULID jobs.
+
+## Required validation
 
 - Three same-peer writes submitted concurrently can reach a controlled peer in
   any completion order; all retain their original distinct ULIDs and produce
@@ -61,11 +71,14 @@ requirement.
   whose receiver duplicate remains idempotent.
 - Per-host and global limits block excess *worker* starts without blocking a
   new local SQLite admission response.
+- A source-boundary test rejects `PeerDrainSlot`, `Condvar`, generation fields,
+  ordered cursor state, and fixed polling from the replacement scheduler.
 - One stalled host cannot prevent a second host job from starting within its
   own bound.
 - A send followed by its generated acknowledgement proves the ACK refers to
   the delivered message ULID; no test asserts incidental order between
   independently submitted sends.
+- `just lint`, `just test`, and branch-daemon `just smoke localhost` pass.
 
 ## Acceptance criteria
 
@@ -74,7 +87,6 @@ requirement.
 - All peer work is bounded, non-durable, and rebuildable from immutable SQLite
   records after restart.
 - Ordinary localhost, self-IP, and cross-host traffic use the same HTTP route.
-- `just lint`, `just test`, and branch-daemon `just smoke localhost` pass.
 
 ## Non-goals
 

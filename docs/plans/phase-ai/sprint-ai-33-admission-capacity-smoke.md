@@ -15,6 +15,23 @@ Release-built ATM proves ten consecutive one-second intervals of at least
 database. The smoke runner also produces a compact, endpoint-explicit report
 for ten repetitions of each local and available cross-host check.
 
+## Throughput rule
+
+The 1,000/s gate is a design-simplification gate, not a timeout-tuning
+exercise. Before raising a timeout, adding a retry, adding a queue depth, or
+adding a worker, implementation must remove work from the admission path:
+peer scans, DNS, socket/TLS work, remote response waits, duplicate delivery,
+acknowledgement, and nudge work belong after the SQLite response. If the gate
+fails, record the measured path and remove or relocate the unnecessary
+foreground step; do not mask it with a longer deadline, retry loop, or larger
+buffer.
+
+The harness must emit per-stage admission timing—runtime-view validation,
+SQLite transaction, post-commit signal, and response write—so a failure names
+the expensive synchronous step. It must fail if any peer/store-read/network/
+hook stage appears before the response boundary. This is evidence for removal,
+not a license to add profiling state to production delivery.
+
 ## Deliverables
 
 1. First commit sets every releasable assembly to `1.4.0-beta-ai.33` and
@@ -54,7 +71,7 @@ for ten repetitions of each local and available cross-host check.
    verify the same ULID in the receiver inbox and, for ack-required, verify
    message delivery/read plus the reply acknowledgement's successful delivery.
 
-## Required tests
+## Required validation
 
 - Unit tests reject production/shared `ATM_HOME`, retain all ten attempts in
   JSON, and render a FAIL row with the first failing attempt rather than hiding
@@ -65,6 +82,9 @@ for ten repetitions of each local and available cross-host check.
   version, and doctor state on a cross-host report.
 - A test proves a received acknowledgement is correlated by ULID, not arrival
   order or a constant fixture value.
+- `just lint`, `just test`, `just smoke localhost`, and the isolated capacity
+  command pass on the branch daemon. Cross-host rows are run only when peers
+  are available; unavailable infrastructure is reported NOT-RUN, never PASS.
 
 ## Acceptance criteria
 
@@ -74,9 +94,6 @@ for ten repetitions of each local and available cross-host check.
   row FAIL and preserves evidence.
 - Cross-host report makes origin/destination and both endpoint identities
   obvious without reading source or raw logs.
-- `just lint`, `just test`, `just smoke localhost`, and the isolated capacity
-  command pass on the branch daemon. Cross-host rows are run only when peers
-  are available; unavailable infrastructure is reported NOT-RUN, never PASS.
 
 ## Non-goals
 

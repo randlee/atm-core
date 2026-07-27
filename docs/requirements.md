@@ -3937,6 +3937,13 @@ mail correctness.
     commits, the daemon returns the typed local admission response; peer-job
     signalling, DNS, connection, TLS, remote receipt, duplicate handling,
     acknowledgement, and nudge work run asynchronously
+  - admission validation uses request data plus the daemon-owned reloadable
+    runtime view. It performs no per-request config-file read, peer-config or
+    policy store read, outbound-page read, DNS lookup, socket/TLS operation,
+    hook, or nudge before responding. An acknowledgement resolves its source,
+    inserts its immutable reply, and conditionally marks the source
+    acknowledged within one SQLite transaction; it has no application-layer
+    source read before that transaction
   - the response proves only local admission. Remote acceptance remains the
     separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
     local admission response must never claim remote delivery
