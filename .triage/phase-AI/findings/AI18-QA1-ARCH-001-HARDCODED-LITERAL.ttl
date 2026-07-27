@@ -21,7 +21,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ARCH-001-HARDCODED-LITERAL/s19/1> ;
   triage:openOn <urn:atm:triage:worktree/s18/b8f46a1a> ;
   triage:openOn <urn:atm:triage:worktree/s19/2e22b6b4> ;
-  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> .
+  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- still OPEN, not eligible for close/waive. scripts/test_atm_graft_python.py:43,45,47 still hardcodes the literals 'omega-prime'/'hermes' inline in a Python -c string with zero justification comment anywhere in surrounding code. No change from the originally-triaged state. Confirmed via direct file read, not self-report." .
 
 <urn:atm:triage:occurrence/AI18-QA1-ARCH-001-HARDCODED-LITERAL/s18/1>
   a triage:Occurrence ;

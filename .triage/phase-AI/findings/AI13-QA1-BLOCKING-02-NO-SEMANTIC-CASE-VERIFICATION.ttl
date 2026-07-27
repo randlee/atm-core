@@ -49,7 +49,8 @@
   triage:openOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
   triage:openOn <urn:atm:triage:worktree/s19/fb781b27> ;
   triage:openOn <urn:atm:triage:worktree/s20/51897df0> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20/51897df0> .
+  triage:promoteTo <urn:atm:triage:worktree/s20/51897df0> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- PARTIALLY fixed, still OPEN overall, not eligible for full close/waive. scripts/smoke/run_peer_pair.py now has genuine semantic verification: REQUIRED_ASSERTIONS (lines 38-50) requires duplicate_ulid to declare single_record_retained/no_ack_mutation and failed_remote_ack to declare ack_source_unchanged/no_remote_ack_state -- exactly the invariants this finding said were missing -- and verify_semantics() (lines 266-300) actually executes each assertion's real ATM CLI command via run_command(), parses real JSON stdout, and compares the extracted json_path value against the expected value (or absence); this is genuine runtime-state verification, not config-shape validation only. However, the finding's occurrences also name scripts/smoke/run_thorough_shared_host.py and scripts/smoke/run_graft_same_host.py as having 'shallow verification also present'; both still gate solely on exit_code == 0 with no equivalent semantic-assertion mechanism. The core run_peer_pair.py complaint is resolved; the sibling-script complaint is not. Confirmed via direct code read, not self-report." .
 
 <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/1>
   a triage:Occurrence ;
