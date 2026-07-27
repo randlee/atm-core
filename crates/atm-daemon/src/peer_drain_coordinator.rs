@@ -70,6 +70,15 @@ pub(crate) fn is_retryable_peer_error(error: &AtmError) -> bool {
     )
 }
 
+fn remote_delivery_error_with_cause(error: AtmError) -> AtmError {
+    let detail = error.detail().to_owned();
+    let source = error
+        .cause()
+        .map(|cause| format!("{}; source cause: {cause}", error.message()))
+        .unwrap_or_else(|| error.message().to_owned());
+    AtmError::remote_delivery_unconfirmed(detail).with_cause(source)
+}
+
 pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
     fn deliver_after_persist(
         &self,
@@ -269,8 +278,7 @@ impl PeerDrainCoordinator {
                 );
             }
             let page =
-                self.outbound
-                    .page_for_peer(host, not_before, after, policy.max_batch_messages)?;
+                self.page_for_peer(host, not_before, after, policy.max_batch_messages, deadline)?;
             if deadline.expired() {
                 return self.failed(
                     host,
@@ -291,8 +299,7 @@ impl PeerDrainCoordinator {
             let responses = match transport.deliver_page(&requests, &peer, deadline) {
                 Ok(responses) => responses,
                 Err(error) => {
-                    return self
-                        .failed(host, AtmError::remote_delivery_unconfirmed(error.message()));
+                    return self.failed(host, remote_delivery_error_with_cause(error));
                 }
             };
             if responses.len() != page.len() {
@@ -320,13 +327,31 @@ impl PeerDrainCoordinator {
         }
     }
 
+    fn page_for_peer(
+        &self,
+        host: &HostName,
+        not_before: IsoTimestamp,
+        after: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
+        limit: std::num::NonZeroU16,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<atm_storage::StoredPeerWrite>, AtmError> {
+        let budget = deadline.remaining().ok_or_else(|| {
+            AtmError::remote_delivery_unconfirmed(
+                "peer reconciliation exceeded its bounded request deadline",
+            )
+        })?;
+        self.outbound
+            .page_for_peer(host, not_before, after, limit, budget)
+    }
+
     fn decode_page_requests(
         page: &[atm_storage::StoredPeerWrite],
     ) -> Result<Vec<WriteRequest>, AtmError> {
         page.iter()
             .map(|stored| {
-                serde_json::from_str(&stored.request_json).map_err(|_| {
+                serde_json::from_str(&stored.request_json).map_err(|source| {
                     AtmError::mailbox_read("stored immutable peer outbound write is invalid")
+                        .with_cause(source)
                 })
             })
             .collect()
@@ -432,7 +457,13 @@ impl PeerDrainCoordinator {
             );
             if self
                 .outbound
-                .page_for_peer(&peer.host, not_before, None, policy.max_batch_messages)?
+                .page_for_peer(
+                    &peer.host,
+                    not_before,
+                    None,
+                    policy.max_batch_messages,
+                    Duration::from_secs(5),
+                )?
                 .is_empty()
             {
                 continue;
@@ -645,6 +676,7 @@ mod tests {
             _: IsoTimestamp,
             _: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
             _: std::num::NonZeroU16,
+            _: Duration,
         ) -> Result<Vec<StoredPeerWrite>, AtmError> {
             Ok(Vec::new())
         }
@@ -695,6 +727,24 @@ mod tests {
         assert!(!is_retryable_peer_error(&AtmError::peer_config_validation(
             "bad peer"
         )));
+    }
+
+    #[test]
+    fn malformed_stored_request_preserves_the_json_parser_cause() {
+        let error = PeerDrainCoordinator::decode_page_requests(&[StoredPeerWrite {
+            created_at: IsoTimestamp::now(),
+            message_id: atm_core::schema::AtmMessageId::new(),
+            request_json: "{malformed".to_string(),
+        }])
+        .expect_err("malformed retained JSON must be rejected");
+        assert_eq!(
+            error.code(),
+            atm_core::error_codes::AtmErrorCode::MailboxReadFailed
+        );
+        assert!(
+            error.cause().is_some_and(|cause| !cause.is_empty()),
+            "the parser diagnostic must remain available as the structured cause"
+        );
     }
 
     #[test]

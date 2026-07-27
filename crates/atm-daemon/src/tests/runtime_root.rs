@@ -123,40 +123,66 @@ impl HttpsMessageTransport for RecordingHttpsDelivery {
 }
 
 #[derive(Default)]
-struct FailingHttpsDelivery {
+struct ConnectionHandlerFailure {
     attempted: std::sync::Mutex<Vec<WriteRequest>>,
-    unavailable: bool,
 }
 
-impl FailingHttpsDelivery {
-    fn daemon_unavailable() -> Self {
-        Self {
-            attempted: std::sync::Mutex::new(Vec::new()),
-            unavailable: true,
-        }
-    }
+#[derive(Default)]
+struct RouteFailure {
+    attempted: std::sync::Mutex<Vec<WriteRequest>>,
 }
 
-impl HttpsMessageTransport for FailingHttpsDelivery {
+#[derive(Default)]
+struct ResponseWriteFailure {
+    attempted: std::sync::Mutex<Vec<WriteRequest>>,
+}
+
+fn record_failed_delivery(attempted: &std::sync::Mutex<Vec<WriteRequest>>, request: WriteRequest) {
+    attempted
+        .lock()
+        .expect("peer transport recording lock")
+        .push(request);
+}
+
+impl HttpsMessageTransport for ConnectionHandlerFailure {
     fn deliver(
         &self,
         request: WriteRequest,
         _peer: &TrustedPeer,
         _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        self.attempted
-            .lock()
-            .expect("peer transport recording lock")
-            .push(request);
-        if self.unavailable {
-            Err(AtmError::daemon_unavailable(
-                "intentional local transport failure",
-            ))
-        } else {
-            Err(AtmError::remote_delivery_unconfirmed(
-                "intentional peer transport uncertainty",
-            ))
-        }
+        record_failed_delivery(&self.attempted, request);
+        Err(AtmError::daemon_unavailable(
+            "intentional connection-handler failure",
+        ))
+    }
+}
+
+impl HttpsMessageTransport for RouteFailure {
+    fn deliver(
+        &self,
+        request: WriteRequest,
+        _peer: &TrustedPeer,
+        _deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        record_failed_delivery(&self.attempted, request);
+        Err(AtmError::remote_delivery_unconfirmed(
+            "intentional route failure",
+        ))
+    }
+}
+
+impl HttpsMessageTransport for ResponseWriteFailure {
+    fn deliver(
+        &self,
+        request: WriteRequest,
+        _peer: &TrustedPeer,
+        _deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        record_failed_delivery(&self.attempted, request);
+        Err(AtmError::remote_delivery_unconfirmed(
+            "intentional response-write failure",
+        ))
     }
 }
 
@@ -334,7 +360,7 @@ fn failed_peer_route_returns_transport_error_after_canonical_persistence() {
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let transport = Arc::new(FailingHttpsDelivery::default());
+    let transport = Arc::new(RouteFailure::default());
     dispatcher
         .install_https_transport(transport.clone())
         .expect("install failing HTTPS delivery");
