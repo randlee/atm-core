@@ -14,8 +14,12 @@
   triage:triageMode "initial_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-daemon/src/local_tcp_transport.rs and any other #[cfg(windows)] transport/listener code introduced by AI.11" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — crates/atm-daemon/src/local_tcp_transport.rs serve_with_runtime_hooks now uses an ActiveConnectionRegistry/TrackedDispatchHandle (lines 251,276,290-294) to track every spawned connection thread, and calls drain_active_connections_for_shutdown(..., hooks.graceful_drain_deadline, hooks.force_cancel_deadline, ...) on shutdown (lines 256-263) -- the deadlines are now honored, not discarded. Test tcp_listener_drain_honors_the_force_cancel_deadline (line 672) exercises this directly. Confirmed via direct code read, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s12/1> ;

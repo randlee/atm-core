@@ -14,8 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md frontmatter line 4 now reads 'status: complete'. Confirmed via direct file read, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T13:45:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-BLOCKING-01-DOC-STATUS/pAI-s17/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d20c48cffb234d3ee5cd4e010b55f51fe> .

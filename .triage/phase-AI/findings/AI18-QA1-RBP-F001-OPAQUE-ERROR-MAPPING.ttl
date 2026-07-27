@@ -14,22 +14,26 @@
   triage:severity "critical" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING/s19/1> ;
   triage:openOn <urn:atm:triage:worktree/s18/b8f46a1a> ;
   triage:openOn <urn:atm:triage:worktree/s19/2e22b6b4> ;
-  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> .
+  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> ;
+  triage:closureNote "2026-07-26 (quality-mgr): QA-verified fix commit 2da40b45 (PR #664, 'fix(ai18): preserve structured errors in Python bindings') against all 4 review targets, independently, not by self-report. (1) atm_graft.AtmGraftError export confirmed real via pyo3::create_exception! plus m.add(\"AtmGraftError\", ...) in #[pymodule] fn atm_graft. (2) atm_error() now sets real .code/.message/.cause attributes on the exception instance (via setattr) instead of collapsing everything into PyRuntimeError::new_err(format!(...)). (3) New test canonical_atm_errors_preserve_structured_fields_for_python independently reproduced locally (cargo test -p atm-graft-python: 7/7 pass) -- proves AtmError::daemon_unavailable(...).with_cause(\"connection refused\") round-trips through the FFI boundary with code==ATM_DAEMON_UNAVAILABLE, message preserved, and cause==Some(\"connection refused\"), a genuine end-to-end proof not a shape-only check. (4) No regression to closed AI.18 findings: diff touches only lib.rs's error-mapping function and module registration, does not touch scripts/test_atm_graft_python.py (ARCH-001/002, already closed invalid) or lifecycle-test code (AI18-LIFECYCLE-QA-1, closed via PR #661). CI: gh pr checks 664 all 8 legs pass. Local: just lint 22/22 pass; just test 120 passed/1 pre-existing-unrelated DNS failure (same known flake as PR #661/#662/#663). QA report posted to PR #664; PASS verdict sent to team-lead. Closing as fixed. 2026-07-26 (quality-mgr): corrective ruthless-boundary-qa dispatch (required by this task's original <workflow> step, initially skipped -- self-caught, not user-caught) independently confirms disposition fixed/justified-and-retained: AtmError is the boundary's declared crossing contract (boundaries/atm-graft/shared-client-consumer.toml [contracts] error_types = [\"AtmError\"]), so surfacing code/message/cause as Python attributes is in-scope for this crate's translation-layer role, not new leakage; and the .expect() panics on setattr (the concern I had independently flagged but not yet formally recorded) are confirmed defensible -- workspace Cargo.toml has no panic=\"abort\" override, atm_error() is only called from within #[pymethods]/#[new] bodies, and PyO3's FFI trampoline catches such panics and re-raises them as a Python-visible PanicException rather than aborting the process. No residual action; closure stands as-is." .
 
 <urn:atm:triage:occurrence/AI18-QA1-RBP-F001-OPAQUE-ERROR-MAPPING/s18/1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/src/lib.rs" ;
   triage:line 25 ;
   triage:snippet "fn atm_error(error: AtmError) -> PyErr { PyRuntimeError::new_err(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s18-graft-python-bindings" ;
   triage:headSha "b8f46a1a" ;
   triage:occursIn <urn:atm:triage:worktree/s18/b8f46a1a> .
@@ -39,8 +43,8 @@
   triage:file "crates/atm-graft-python/src/lib.rs" ;
   triage:line 22 ;
   triage:snippet "fn atm_error(error: AtmError) -> PyErr { PyRuntimeError::new_err(...) }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s19-hermes-graft-integration" ;
   triage:headSha "2e22b6b4" ;
   triage:occursIn <urn:atm:triage:worktree/s19/2e22b6b4> .

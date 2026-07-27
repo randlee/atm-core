@@ -213,6 +213,7 @@ dependencies = [
  "agent-team-mail-core",
  "atm-graft",
  "pyo3",
+ "tempfile",
 ]
 
 [[package]]

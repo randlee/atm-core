@@ -129,6 +129,51 @@ def require_semantic_assertion(value: Any, name: str) -> None:
         fail(f"config field `{name}.equals` must be a scalar")
 
 
+LOG_EVENT_SELECTOR_KEYS = frozenset({
+    "action",
+    "level",
+    "message",
+    "outcome",
+    "service",
+    "target",
+    "fields",
+})
+
+
+def require_log_event_selector(value: Any, name: str) -> None:
+    if not isinstance(value, dict) or not value:
+        fail(f"config field `{name}` must be a non-empty event selector object")
+    if not all(isinstance(key, str) and key for key in value):
+        fail(f"config field `{name}` must use non-empty string selector keys")
+    unknown = sorted(set(value).difference(LOG_EVENT_SELECTOR_KEYS))
+    if unknown:
+        fail(f"config field `{name}` has unsupported selector keys: {', '.join(unknown)}")
+    for key, expected in value.items():
+        if key == "fields":
+            if not isinstance(expected, dict) or not expected:
+                fail(f"config field `{name}.fields` must be a non-empty object")
+            if not all(
+                isinstance(field, str)
+                and field
+                and isinstance(field_value, (str, int, float, bool, type(None)))
+                and (not isinstance(field_value, str) or field_value.strip())
+                for field, field_value in expected.items()
+            ):
+                fail(f"config field `{name}.fields` must map names to scalar values")
+        elif isinstance(expected, str) and not expected.strip():
+            fail(f"config field `{name}.{key}` must be a non-empty scalar")
+        elif not isinstance(expected, (str, int, float, bool, type(None))):
+            fail(f"config field `{name}.{key}` must be a scalar")
+
+
+def require_log_event_selectors(value: Any, name: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        fail(f"config field `{name}` must be an array of event selector objects")
+    for index, selector in enumerate(value):
+        require_log_event_selector(selector, f"{name}[{index}]")
+    return value
+
+
 def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_log_file: bool) -> None:
     verification = case.get("verification")
     if not isinstance(verification, dict):
@@ -150,16 +195,26 @@ def require_semantic_verification(case: dict[str, Any], name: str, daemon_has_lo
                 f"config field `{name}.verification.assertions.{assertion_name}.equals` "
                 "must bind to `$message_ulid`"
             )
-    forbidden_log_entries = verification.get("forbidden_daemon_log_entries", [])
-    if not isinstance(forbidden_log_entries, list) or not all(
-        isinstance(entry, str) and entry for entry in forbidden_log_entries
-    ):
-        fail(f"config field `{name}.verification.forbidden_daemon_log_entries` must be a string array")
+    if "forbidden_daemon_log_entries" in verification:
+        fail(
+            f"config field `{name}.verification.forbidden_daemon_log_entries` was removed; "
+            "use required_daemon_log_events or forbidden_daemon_log_events"
+        )
+    required_log_events = require_log_event_selectors(
+        verification.get("required_daemon_log_events", []),
+        f"{name}.verification.required_daemon_log_events",
+    )
+    forbidden_log_events = require_log_event_selectors(
+        verification.get("forbidden_daemon_log_events", []),
+        f"{name}.verification.forbidden_daemon_log_events",
+    )
+    if (required_log_events or forbidden_log_events) and not daemon_has_log_file:
+        fail(f"{name}.verification daemon log events require daemon.log_file")
     if case["id"] == "untrusted_or_allowlist_rejection":
         if not daemon_has_log_file:
             fail("untrusted_or_allowlist_rejection requires daemon.log_file")
-        if not forbidden_log_entries:
-            fail("untrusted_or_allowlist_rejection requires forbidden_daemon_log_entries")
+        if not required_log_events:
+            fail("untrusted_or_allowlist_rejection requires required_daemon_log_events")
 
 
 def validate(config: dict[str, Any]) -> None:
@@ -263,6 +318,79 @@ def resolved_expectation(value: Any, case: dict[str, Any]) -> Any:
     return case["message_ulid"] if value == "$message_ulid" else value
 
 
+def daemon_log_event_matches(event: dict[str, Any], selector: dict[str, Any]) -> bool:
+    fields = event.get("fields")
+    nested_fields = fields if isinstance(fields, dict) else {}
+    for key, expected in selector.items():
+        if key == "fields":
+            if not all(nested_fields.get(field) == value for field, value in expected.items()):
+                return False
+            continue
+        observed = event.get(key)
+        if observed is None and key in nested_fields:
+            observed = nested_fields[key]
+        if observed != expected:
+            return False
+    return True
+
+
+def parse_daemon_log_events(delta: str) -> tuple[list[dict[str, Any]], int]:
+    events: list[dict[str, Any]] = []
+    malformed_lines = 0
+    for line in delta.splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            malformed_lines += 1
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+        else:
+            malformed_lines += 1
+    return events, malformed_lines
+
+
+def verify_daemon_log_events(
+    verification: dict[str, Any],
+    daemon_log_before: str,
+    daemon_log_file: Any,
+    outcome: dict[str, Any],
+) -> None:
+    required = verification.get("required_daemon_log_events", [])
+    forbidden = verification.get("forbidden_daemon_log_events", [])
+    if not required and not forbidden:
+        return
+    after = log_snapshot(daemon_log_file)
+    if not after.startswith(daemon_log_before):
+        outcome["failures"].append(
+            "daemon log rotated or truncated during semantic verification; refusing an unverified delta"
+        )
+        outcome["daemon_log_delta"] = sanitize(after)[-8192:]
+        return
+    delta = after[len(daemon_log_before) :]
+    events, malformed_lines = parse_daemon_log_events(delta)
+    outcome["daemon_log_delta"] = sanitize(delta)[-8192:]
+    outcome["daemon_log_event_count"] = len(events)
+    outcome["daemon_log_malformed_lines"] = malformed_lines
+    if malformed_lines:
+        outcome["failures"].append(
+            f"daemon log delta contains {malformed_lines} non-JSON line(s); "
+            "cannot verify structured daemon log events"
+        )
+    for selector in required:
+        if not any(daemon_log_event_matches(event, selector) for event in events):
+            outcome["failures"].append(
+                f"daemon log did not contain required structured rejection event {selector!r}"
+            )
+    for selector in forbidden:
+        if any(daemon_log_event_matches(event, selector) for event in events):
+            outcome["failures"].append(
+                f"daemon log recorded forbidden structured event {selector!r}"
+            )
+
+
 def verify_semantics(
     case: dict[str, Any], timeout: float, daemon_log_before: str, daemon_log_file: Any
 ) -> dict[str, Any]:
@@ -295,21 +423,7 @@ def verify_semantics(
             outcome["failures"].append(
                 f"semantic assertion `{assertion_name}` expected {expected!r}, got {actual!r}"
             )
-    if forbidden := verification.get("forbidden_daemon_log_entries", []):
-        after = log_snapshot(daemon_log_file)
-        if not after.startswith(daemon_log_before):
-            outcome["failures"].append(
-                "daemon log rotated or truncated during semantic verification; refusing an unverified delta"
-            )
-            outcome["daemon_log_delta"] = sanitize(after)[-8192:]
-            return outcome
-        delta = after[len(daemon_log_before):]
-        for entry in forbidden:
-            if entry in delta:
-                outcome["failures"].append(
-                    f"daemon log recorded forbidden post-rejection entry {entry!r}"
-                )
-        outcome["daemon_log_delta"] = sanitize(delta)[-8192:]
+    verify_daemon_log_events(verification, daemon_log_before, daemon_log_file, outcome)
     if not outcome["failures"]:
         outcome["status"] = "pass"
     return outcome

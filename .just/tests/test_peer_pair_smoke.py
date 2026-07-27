@@ -37,6 +37,13 @@ READ_OUTCOME = {
     "bucket_counts": {"unread": 0, "pending_ack": 1, "history": 0},
     "message": {"message_id": "01TEST", "requires_ack": True},
 }
+REJECTION_EVENT = {
+    "action": "request",
+    "outcome": "rejected",
+    "message": "HTTPS peer request was rejected before or during shared API routing",
+    "fields": {"subsystem": "https_transport"},
+}
+ROUTING_EVENT = {"action": "peer_delivery", "outcome": "write_persisted"}
 
 
 def assertion(path: str, value: object = "$message_ulid") -> dict[str, object]:
@@ -85,7 +92,8 @@ def sample_config(log: Path) -> dict[str, object]:
         if case["expect"] == "typed_error":
             case["typed_error_code"] = "ATM_REJECTED"
         if case_id == "untrusted_or_allowlist_rejection":
-            case["verification"]["forbidden_daemon_log_entries"] = ["routing-attempt"]
+            case["verification"]["required_daemon_log_events"] = [REJECTION_EVENT]
+            case["verification"]["forbidden_daemon_log_events"] = [ROUTING_EVENT]
         cases.append(case)
     return {
         "schema_version": 1,
@@ -142,15 +150,20 @@ class PeerPairSmokeTests(unittest.TestCase):
             RUNNER.run_command = original
         self.assertEqual(result["status"], "pass")
 
-    def test_semantic_verification_rejects_routing_after_rejection(self):
+    def test_semantic_verification_rejects_missing_structured_rejection_event(self):
         with tempfile.TemporaryDirectory() as temp:
             log = Path(temp) / "daemon.log"
-            log.write_text("before\nrouting-attempt\n", encoding="utf-8")
+            log.write_text(
+                "before\n"
+                + json.dumps({"action": "peer_delivery", "outcome": "write_persisted"})
+                + "\n",
+                encoding="utf-8",
+            )
             case = {
                 "message_ulid": "01TEST",
                 "verification": {
                     "assertions": {"rejected_before_routing": assertion("count", 0)},
-                    "forbidden_daemon_log_entries": ["routing-attempt"],
+                    "required_daemon_log_events": [REJECTION_EVENT],
                 },
             }
             original = RUNNER.run_command
@@ -163,7 +176,7 @@ class PeerPairSmokeTests(unittest.TestCase):
             finally:
                 RUNNER.run_command = original
             self.assertEqual(result["status"], "fail")
-            self.assertIn("forbidden post-rejection", result["failures"][0])
+            self.assertIn("required structured rejection event", result["failures"][-1])
 
     def test_teardown_never_deletes_runtime_without_matching_pid_marker(self):
         with tempfile.TemporaryDirectory() as temp:
