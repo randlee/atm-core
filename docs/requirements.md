@@ -2029,6 +2029,7 @@ The retained `teams` surface for initial release is:
 - `atm teams`
 - `atm teams add-member`
 - `atm teams update-member`
+- `atm teams remove-member`
 - `atm teams backup`
 - `atm teams restore`
 
@@ -2037,7 +2038,6 @@ orchestration commands such as:
 - `spawn`
 - `join`
 - `resume`
-- `remove-member`
 - `cleanup`
 
 ### 12.3 Required Behavior
@@ -2073,6 +2073,14 @@ Bare `atm teams` must:
 - project the repaired metadata deterministically into compatibility
   `config.json`
 - preserve unchanged member metadata when a field is not supplied
+
+`atm teams remove-member` must:
+- require the caller identity to belong to the target team
+- validate that the target team and member exist
+- remove exactly the requested member from the canonical roster
+- allow removing the last member or the currently authenticated caller
+- leave the removed member's inbox state untouched
+- support human-readable and pretty-printed JSON output
 
 `atm teams backup` must:
 - create a timestamped snapshot under the ATM team backup area

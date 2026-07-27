@@ -26,8 +26,9 @@ mod projection;
 mod restore;
 
 pub use member_mutation::{
-    AddMemberOutcome, AddMemberRequest, MemberName, UpdateMemberOutcome, UpdateMemberRequest,
-    add_member_with_roster_store, update_member_with_roster_store,
+    AddMemberOutcome, AddMemberRequest, MemberName, RemoveMemberOutcome, RemoveMemberRequest,
+    UpdateMemberOutcome, UpdateMemberRequest, add_member_with_roster_store,
+    remove_member_with_roster_store, update_member_with_roster_store,
 };
 
 /// One discovered team and its current member count.
@@ -452,11 +453,12 @@ mod tests {
 
     use super::{
         AddMemberRequest, BackupRequest, ClearNudgeTemplateOverrideRequest,
-        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RestoreRequest,
-        SetNudgeTemplateOverrideRequest, UpdateMemberRequest, add_member_with_roster_store,
-        backup_team_with_roster_store, clear_nudge_template_override_with_store,
-        disable_nudge_template_override_with_store, list_members_with_roster_store,
-        list_teams_with_roster_store, set_nudge_template_override_with_store,
+        DisableNudgeTemplateOverrideRequest, MemberName, MembersQuery, RemoveMemberRequest,
+        RestoreRequest, SetNudgeTemplateOverrideRequest, UpdateMemberRequest,
+        add_member_with_roster_store, backup_team_with_roster_store,
+        clear_nudge_template_override_with_store, disable_nudge_template_override_with_store,
+        list_members_with_roster_store, list_teams_with_roster_store,
+        remove_member_with_roster_store, set_nudge_template_override_with_store,
         update_member_with_roster_store,
     };
     use crate::boundary::{
@@ -1089,6 +1091,99 @@ mod tests {
         .expect_err("missing member");
 
         assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn remove_member_removes_exact_roster_entry() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, TEST_RECIPIENT),
+            ],
+        );
+
+        let outcome = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect("remove member");
+
+        assert_eq!(outcome.action, "remove-member");
+        assert_eq!(outcome.member.as_str(), TEST_RECIPIENT);
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        assert_eq!(
+            roster
+                .iter()
+                .map(|member| member.agent_name.as_str())
+                .collect::<Vec<_>>(),
+            vec![ROLE_TEAM_LEAD, TEST_SENDER]
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_missing_member_without_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_SENDER)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect_err("missing member");
+
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_cross_team_caller_before_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_SENDER)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                "other-team".parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect_err("cross-team caller");
+
+        assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
+        assert!(error.message().contains("caller team"));
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
     }
 
     #[test]
