@@ -249,9 +249,9 @@ impl HttpsTransport {
                 apply_deadline(&stream, remaining_budget(deadline)?)?;
                 let config = client_config(identity, peer)?;
                 let server_name = ServerName::try_from(host.clone()).map_err(|source| {
-                    AtmError::validation(
-                        "configured HTTPS peer host is not a valid TLS server name",
-                    )
+                    AtmError::validation(format!(
+                        "configured HTTPS peer host is not a valid TLS server name: {source}",
+                    ))
                     .with_cause(source)
                 })?;
                 let connection =
