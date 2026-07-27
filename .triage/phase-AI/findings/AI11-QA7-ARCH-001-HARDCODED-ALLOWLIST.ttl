@@ -25,7 +25,8 @@
   triage:highestFixedBranch "feature/pAI-s12-post-write-router" ;
   triage:references "PR #607: https://github.com/randlee/atm-core/pull/607#issuecomment-5050812060" ;
   triage:references "commit bb20fd9a" ;
-  triage:notes "QA-7 fast-follow on top of AI11-QA5-ATM-QA-002-DELETION-GATE-TEST.ttl, which is already closed as fixed citing bb20fd9a and must NOT be reopened or touched. Do not modify that finding's ttl file." .
+  triage:notes "QA-7 fast-follow on top of AI11-QA5-ATM-QA-002-DELETION-GATE-TEST.ttl, which is already closed as fixed citing bb20fd9a and must NOT be reopened or touched. Do not modify that finding's ttl file." ;
+  triage:correctionNote "quality-mgr (2026-07-26): independent re-verification per team-lead directive on task #1177, not trusting the existing occurrence closureNote. Confirmed directly against crates/atm-architecture/tests/boundary_enforcement.rs at integrate/phase-AI head: fn ai11_deletion_gate_rejects_retired_windows_transport_ast_and_dependencies (L1343) now calls ai11_guarded_workspace_sources(&root) (L1358), which is defined at L1663 and performs collect_rust_files(&root.join(\"crates\"), &mut files) -- a genuine full-workspace recursive sweep, not the old 5-file guarded_sources allowlist. grep confirms no remaining `guarded_sources` array literal anywhere in the file; the sibling helper is also reused at L1438 for a second guard, matching the pattern the original finding asked for. Existing closureNote's disposition is CONFIRMED correct. No edits needed beyond this confirmation." .
 
 <urn:atm:triage:finding/AI11-QA7-ARCH-001-HARDCODED-ALLOWLIST>
   triage:assignedTo "cwin" ;
