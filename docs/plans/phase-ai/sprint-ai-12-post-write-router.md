@@ -1,6 +1,6 @@
 ---
 title: AI.12 canonical post-write router
-status: proposed
+status: complete
 branch: feature/pAI-s12-post-write-router
 worktree: ../atm-core-worktrees/feature/pAI-s12-post-write-router
 target: integrate/phase-AI
@@ -34,8 +34,11 @@ difference.
    writer for every write, then invoke `PostWriteRouter::dispatch` once.
 2. Keep persistence and optional acknowledgement mutation inside the canonical
    writer. Neither local nudge nor HTTPS transport can run before it succeeds.
-3. Move the only `destination.host` inspection and local-vs-peer selection into
-  `PostWriteRouter::dispatch`. The peer adapter carries the exact origin ULID
+3. Move the only delivery `destination.host` inspection and local-vs-peer
+  selection into `PostWriteRouter::dispatch`. The authenticated receiving
+  ingress may inspect a host-qualified address solely to select its local
+  persistence-admission rule; it must not nudge, deliver, or select a route.
+  The peer adapter carries the exact origin ULID
   and immutable message fields, but consumes the origin-only destination
   routing selector before receiver-side dispatch to prevent forwarding loops.
 4. For an empty destination host, the router emits exactly one local post-write
@@ -68,17 +71,20 @@ difference.
 
 - A nudge is emitted only after the associated message is durable and visible
   to a read. Duplicate ULID writes do not create a second row or nudge.
-- The origin creates the message ULID once. Peer transport carries that exact
-  immutable ULID, and the receiving host persists that same ID; no receiving
-  adapter, router, or storage method may generate a replacement ID.
+- The origin creates the message ULID and timestamp once. Peer transport
+  carries those exact immutable fields, and the receiving host persists that
+  same ID and timestamp; no receiving adapter, router, or storage method may
+  generate replacements.
 - A repeated ULID is idempotent only when every immutable message field matches
   the existing record. A mismatched payload for an existing ULID is a typed
   conflict: retain the original row, emit a structured error log for follow-up,
   return an error, and perform no nudge, acknowledgement mutation, or peer
   delivery. It is never a panic or overwrite.
 - A receiver-side acknowledgement mutation occurs only after its acknowledgement
-  write is durable. A failed peer delivery never marks the remote message
-  acknowledged.
+  write is durable and its one router-selected peer delivery succeeds. The
+  router consumes the canonical resolved reply payload, so acknowledgement and
+  send do not have separate outbound paths. A failed peer delivery never marks
+  the remote message acknowledged.
 - Router failure is returned as the post-write delivery result; it does not
   introduce an outbox or alter the immutable message payload.
 - Socket family, listener address, and peer address never decide message
@@ -112,8 +118,9 @@ Use an AST-aware check, not raw text matching, to prove:
 
 1. exactly one production `ApiRouter`, `MessageWriter`, and `PostWriteRouter`
    implementation owns write flow;
-2. `destination.host` selection occurs only in the `PostWriteRouter`
-   implementation;
+2. delivery selection on `destination.host` occurs only in the
+   `PostWriteRouter` implementation; authenticated receiving ingress may use a
+   host-qualified origin only for local roster admission, never routing;
 3. storage write and acknowledgement mutation calls occur only in the canonical
    writer; and
 4. nudge and `PeerHttpTransport::deliver` calls occur only in the post-write
@@ -121,7 +128,8 @@ Use an AST-aware check, not raw text matching, to prove:
 
 The check resolves module/use aliases before evaluating calls and has negative
 fixtures for a second writer, a pre-write nudge, a pre-write peer send, and a
-host check outside the router.
+delivery host check outside the router, while retaining a positive fixture for
+the documented receiving-host roster-admission check.
 
 ## Non-goals
 
@@ -137,8 +145,24 @@ host check outside the router.
 - All write ingress paths satisfy the ordered shared pipeline.
 - `just lint`, `just test`, AST boundary tests, and ordering/idempotency tests
   pass.
-- The implementation contains fewer routing/persistence branches than the
-  baseline; report the deleted symbols and net LOC with the closure evidence.
+- The implementation removes the pre-persistence `route_write` remote branch
+  and no-op router; report the deleted symbols and net LOC with closure
+  evidence.
+
+## Implementation record
+
+- `route_write` no longer branches on `destination.host` before the canonical
+  writer. `PostWriteRouter::dispatch` is the sole daemon host-routing point
+  and invokes peer delivery only after a successful durable write.
+- A host-qualified origin writes a non-roster-backed immutable outbound record
+  into the existing message storage contract. This is not an outbox, queue,
+  replay store, or receipt state: it is the same canonical message record,
+  retained before its one peer-delivery attempt.
+- `WriteRequest.origin_message_id` is assigned once by the origin canonical
+  writer, carried by the peer HTTP payload, and accepted only from authenticated
+  peer ingress. Local clients cannot provide it. The receiver therefore stores
+  the same ULID while the peer adapter removes only the destination routing
+  selector.
 
 ## Required validation
 

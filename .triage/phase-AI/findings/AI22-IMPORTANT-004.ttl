@@ -1,0 +1,193 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-IMPORTANT-004>
+  a triage:Finding ;
+  triage:findingId "AI22-IMPORTANT-004" ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:title "AgentAddress permits invalid host-without-team state, panics via Display::fmt Err rather than surfacing typed error" ;
+  triage:description "AgentAddress (crates/atm-core/src/address.rs) has all-public fields and represents an invalid combination (host present, team absent) that the type does not prevent at construction. Any caller can build AgentAddress { team: None, host: Some(_), .. } directly, bypassing FromStr's validation. Display::fmt only guards this case by returning Err(fmt::Error); blanket ToString/format! machinery calls .expect(...) on the Display::fmt result, so any code calling .to_string() or format!(\"{}\", addr) on such a value panics rather than surfacing a typed error. Verified across all open branches." ;
+  triage:category "architecture" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-1: verified fixed on commit 82226b4c (PR #651, fix/findings-closeout). Display::fmt's (None, Some(host)) arm (crates/atm-core/src/address.rs) no longer calls unreachable!()/returns Err(fmt::Error) -- it now writes a total '<invalid-agent-address: ... without team>' string. Regression test display_reports_invalid_internal_state_without_panicking added, using std::panic::catch_unwind to assert no panic and the exact rendered string. CI fully green (8/8 legs) on PR #651. Confirmed by direct code read, not self-report." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/fix-findings-closeout/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s21pre/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s22/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s23/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s24/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-004/integrate-8750587b> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/af2fbb83> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/fix-findings-closeout/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 142 ;
+  triage:snippet "(None, Some(host)) => write!(f, \"<invalid-agent-address: {identity} has host {host} without team>\")," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/findings-closeout" ;
+  triage:headSha "82226b4c" ;
+  triage:notes "AICH-S11-QA-BATCH-1: fixed -- Display::fmt is now total, no panic path; regression test added and passing in CI." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-findings-closeout/82226b4c> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub struct AgentAddress { pub agent: AgentName, pub chat_id: Option<ChatId>, pub team: Option<TeamName>, pub host: Option<HostName>, }" ;
+  triage:description "Struct with all-public fields permits construction of invalid state (host:Some, team:None) bypassing FromStr validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s21pre/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 86 ;
+  triage:snippet "(None, Some(_)) => Err(fmt::Error)," ;
+  triage:description "Display::fmt returns Err(fmt::Error) for invalid state instead of typed error; any .to_string() or format!() call panics via .expect() in stdlib machinery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub struct AgentAddress { pub agent: AgentName, pub chat_id: Option<ChatId>, pub team: Option<TeamName>, pub host: Option<HostName>, }" ;
+  triage:description "Struct with all-public fields permits construction of invalid state (host:Some, team:None) bypassing FromStr validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s22/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 86 ;
+  triage:snippet "(None, Some(_)) => Err(fmt::Error)," ;
+  triage:description "Display::fmt returns Err(fmt::Error) for invalid state instead of typed error; any .to_string() or format!() call panics via .expect() in stdlib machinery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub struct AgentAddress { pub agent: AgentName, pub chat_id: Option<ChatId>, pub team: Option<TeamName>, pub host: Option<HostName>, }" ;
+  triage:description "Struct with all-public fields permits construction of invalid state (host:Some, team:None) bypassing FromStr validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 86 ;
+  triage:snippet "(None, Some(_)) => Err(fmt::Error)," ;
+  triage:description "Display::fmt returns Err(fmt::Error) for invalid state instead of typed error; any .to_string() or format!() call panics via .expect() in stdlib machinery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub struct AgentAddress { pub agent: AgentName, pub chat_id: Option<ChatId>, pub team: Option<TeamName>, pub host: Option<HostName>, }" ;
+  triage:description "Struct with all-public fields permits construction of invalid state (host:Some, team:None) bypassing FromStr validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/pAI-s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 86 ;
+  triage:snippet "(None, Some(_)) => Err(fmt::Error)," ;
+  triage:description "Display::fmt returns Err(fmt::Error) for invalid state instead of typed error; any .to_string() or format!() call panics via .expect() in stdlib machinery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/af2fbb83> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/af2fbb83>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "af2fbb83" ;
+  triage:orderIndex 4 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/AI22-IMPORTANT-004/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/address.rs" ;
+  triage:line 11 ;
+  triage:snippet "pub struct AgentAddress { pub agent: AgentName, pub chat_id: Option<ChatId>, pub team: Option<TeamName>, pub host: Option<HostName>, } // still permits invalid host-without-team state" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: AgentAddress struct shape and its fmt::Display impl (address.rs:79-80) are unchanged by the AI.23 provenance fix. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

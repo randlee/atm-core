@@ -72,13 +72,11 @@ Primary files in scope:
 - `crates/atm-daemon/src/local_ipc_transport.rs`
 - `crates/atm-daemon/src/local_ipc_connection.rs`
 - `crates/atm-daemon/src/lifecycle_control.rs`
-- `crates/atm-daemon/src/peer_transport.rs`
 
 Category ownership:
 - daemon unavailable:
   - `crates/atm-daemon-client/src/lib.rs`
   - `crates/atm-daemon/src/composition.rs`
-  - `crates/atm-daemon/src/peer_transport.rs`
 - socket connect failures:
   - `crates/atm-daemon-client/src/lib.rs`
   - `crates/atm-daemon/src/local_ipc_transport.rs`

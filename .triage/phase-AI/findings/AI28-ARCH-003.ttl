@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-ARCH-003>
+  a triage:Finding ;
+  triage:findingId "AI28-ARCH-003" ;
+  triage:title "Duplicated coordinator-construction wiring between prod and test paths" ;
+  triage:description "The bounded peer recovery coordinator is instantiated and wired into the runtime via similar (but slightly inconsistent) code paths in production vs. test initialization. The duplicated logic makes future refactoring harder and risks divergence between how the coordinator is configured in real deployments vs. tests. This is a code-smell issue, not a functional bug, but duplication should be eliminated through a shared factory or builder pattern. Fix recommended: extract the coordinator construction logic into a single factory function that both prod and test paths call, parametrized by the small differences needed (e.g., test-specific mock transport vs. real transport). This reduces maintenance risk and ensures consistency." ;
+  triage:category "Architecture" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:50:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head bd529df7 (not accepted from arch-ctm's self-report; his stated function name build_peer_delivery_coordinator differs slightly from the message text's 'make_peer_delivery_coordinator' but the substance checks out). grep confirms exactly 3 PeerDrainCoordinator::new call sites total: (1) runtime_health.rs:172, the sole production site, wrapped in factory fn build_peer_delivery_coordinator (runtime_health.rs:162-178); (2)/(3) peer_drain_coordinator.rs:654 (coordinator_for_slots() test helper) and :711 (inline test construction), both inside #[cfg(test)] (module starts line 587) and both use injected fakes (EmptyPeerStore, EmptyOutbound). No second production wiring path exists; the finding's premise (prod/test divergence needing a shared factory) is stale -- production already has a single-owner factory function." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 172 ;
+  triage:snippet "Production coordinator initialization logic: Arc::new(PeerDrainCoordinator::new(...)) inside build_peer_delivery_coordinator() factory fn" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "bd529df7" ;
+  triage:note "Single production construction site, already wrapped in a factory fn (build_peer_delivery_coordinator, lines 162-178). Verified on current head bd529df7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-003/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 654 ;
+  triage:snippet "Test-path coordinator initialization logic (coordinator_for_slots() test helper, uses injected fakes, not a divergent prod path)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "bd529df7" ;
+  triage:note "Confirmed inside #[cfg(test)] (module starts line 587), uses injected fakes EmptyPeerStore/EmptyOutbound. Not a second production wiring path -- finding premise stale. Verified on current head bd529df7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

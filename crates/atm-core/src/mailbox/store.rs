@@ -162,10 +162,12 @@ mod tests {
 
         InboxMessage {
             from: from.parse::<AgentName>().expect("agent name"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: false,

@@ -1,0 +1,155 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI26-ATMQA-002>
+  a triage:Finding ;
+  triage:findingId "AI26-ATMQA-002" ;
+  triage:foundAt "2026-07-25T07:54:44Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:title "Required deterministic delayed-peer/cancellation/retry/tracked-work tests from sprint-ai-26 were not added" ;
+  triage:description "Quality-mgr independently reviewed feature/pAI-s26-peer-write-deadline @ dc079fff8a96a5441e1eda3c790383670589f2f9 (AICH-S6, sprint-ai-26 peer-write-deadline). docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md's Required validation section calls for: Deterministic delayed-peer tests for budget propagation, disconnect, cancellation, and retry with the original ULID; runtime tracked-work test. Follow-up pass (AICH-S6-FIX-1, 2026-07-25T15:12Z) on feature/pAI-s27-peer-delivery-observability @ f7b779ab50ea8ff6f35ab02388b7dab23df9c3db shows: 4 of 5 named properties are now covered by genuine tests (budget propagation, disconnect, retry-with-original-ULID, runtime tracked-work). The 5th property — local-side cancellation race test — is STILL MISSING. This gap is a specific missing test: no deterministic test simulates local-side cancellation (connection close / caller-side deadline expiry) while a delayed peer delivery is in-flight, asserting that the tracked dispatch worker is cancelled/joined rather than silently detached or falsely reporting success. This test implements sprint AI.26's acceptance criterion 3 ('a cancellation race cannot claim remote success') and ADR-041's cancellation-safety claim at the delayed-peer level." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T15:12:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-25T15:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S6-FIX-2 recheck PASS (all 3 reviewers): new test local_client_close_during_delayed_peer_delivery_never_reports_success_or_leaks_work at peer_reconciliation.rs:157-273 confirmed as a real local-IPC client/server interaction proving worker join/no-leak on local-side cancellation. See /Users/randlee/.config/atm/share/atm-dev/aich-s6-fix2-verdict.md." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/budget-propagation> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/disconnect> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/retry-original-ulid> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/tracked-work> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/cancellation> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/f7b779ab> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s27/f7b779ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/budget-propagation>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Deterministic delayed-peer test: budget propagation end-to-end. Covers RequestDeadline/remaining_budget helpers on delayed response from peer." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/disconnect>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Deterministic delayed-peer test: disconnect mid-flight. Covers peer connection close behavior during delayed delivery." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/retry-original-ulid>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Deterministic delayed-peer test: retry with original ULID. Covers peer retry behavior after timeout/disconnect with original message identifier." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/tracked-work>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "Runtime tracked-work test: verifies dispatch worker resource tracking during delayed peer delivery lifecycle." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-002/pAI-s27/cancellation>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 0 ;
+  triage:snippet "FIXED on efb92da0: local_client_close_during_delayed_peer_delivery_never_reports_success_or_leaks_work (peer_reconciliation.rs:157-273). Real local-IPC client/server, real drop(stream) cancellation mid-flight, asserts production shutdown path joins the tracked dispatch worker without leak/hang. Verified independently by req-qa/arch-qa/rust-qa-agent." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "efb92da0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/f7b779ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

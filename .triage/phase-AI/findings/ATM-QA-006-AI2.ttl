@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006-AI2>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-AI2" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T00:00:00Z"^^xsd:dateTime ;
+  triage:title "docs/architecture.md refers to the concrete SQLite crate as 'atm-rusqlite' instead of the real crate name 'atm-storage-rusqlite'" ;
+  triage:description "AI2-QA-1 (req-qa, minor). docs/architecture.md still refers to the concrete SQLite crate as 'atm-rusqlite' in prose instead of the actual crate name 'atm-storage-rusqlite' (pre-existing drift, surfaced by this sprint's diff proximity). Confirmed present unchanged (10 occurrences) on feature/pAI-s2-storage-topology, feature/pAI-s3-error-contract-foundation, and integrate/phase-AI." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-AI2/pAI-3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-3/c9d62ff6> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-3/c9d62ff6> ;
+  triage:highestOpenBranch "feature/pAI-s3-error-contract-foundation" ;
+  triage:resolution "Fixed on feature/pAI-s2-storage-topology closure round; see PR #597 Windows validation notes." ;
+  triage:triagedAt "2026-07-20T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-006-AI2/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "10 prose occurrences of 'atm-rusqlite' where actual crate name is 'atm-storage-rusqlite'" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "c9d62ff6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/c9d62ff6> .
+
+<urn:atm:triage:worktree/pAI-1/c479452e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "c479452e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-2/770dd8ed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s2-storage-topology" ;
+  triage:path "feature/pAI-s2-storage-topology" ;
+  triage:headSha "770dd8ed" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-3/c9d62ff6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "c9d62ff6" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/00fe6608>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "00fe6608" ;
+  triage:orderIndex 0 .

@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-001" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:title "AICH-S4-FIX-1 batch breaks AI.12 single-host-routing-decision invariant" ;
+  triage:description "rust-qa-agent bisected: test canonical_write_router_has_one_host_routing_decision (crates/atm-architecture/tests/boundary_enforcement.rs:160) passes at af2fbb83 (the commit immediately preceding the AICH-S4-FIX-1 batch) but fails at HEAD (7bb63e01), asserting 'AI.12 requires PostWriteRouter::dispatch to make the sole host decision' (left==right check, 0 vs 1). The reconcile_after_success removal done to fix AI22-BLOCK-004 appears to have split or relocated the host-routing decision point. Confirmed via direct bisection against the pre-batch commit, not a stale/flaky test. Reported by quality-mgr in QA verdict for AICH-S4-FIX-1 (feature/pAI-s24-host-qualified-ack-receipt @ 7bb63e01), file /Users/randlee/.config/atm/share/atm-dev/ai24-fix-batch-verdict.md." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "architecture" ;
+  triage:severity "Blocking" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:reassignReason "Fixed on the same branch (s24) by commit 6d8ee8c3 ('fix: align AI24 boundary guards with canonical routing'), confirmed by direct diff inspection -- reconcile_after_success renamed/split to reconcile_peer restoring the single host-routing-decision invariant. This matches qa-evidence-master's AICH-S4-FIX2 result (blockers=0, result_time_utc 2026-07-25T08:22:21Z, just after the fix commit). TTL was never updated to closed after the fix landed; no re-fix needed." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-001/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-001/s24/2> ;
+  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/6d8ee8c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/6d8ee8c3> ;
+  triage:highestOpenBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:highestFixedBranch "feature/pAI-s24-host-qualified-ack-receipt" .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 104 ;
+  triage:snippet "fn canonical_write_router_has_one_host_routing_decision() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-001/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 104 ;
+  triage:snippet "fn canonical_write_router_has_one_host_routing_decision() {" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/6d8ee8c3> .
+
+<urn:atm:triage:worktree/s24/7bb63e01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s24/6d8ee8c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:orderIndex 4 ;
+  triage:status "contains-fix-verified" .

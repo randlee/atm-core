@@ -17,7 +17,6 @@ pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
     LocalIpcTransport,
-    PeerTransport,
     RuntimeHealth,
     HostOwnership,
     LifecycleControl,
@@ -31,7 +30,6 @@ impl DaemonSubsystem {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
             Self::LocalIpcTransport => "local_ipc_transport",
-            Self::PeerTransport => "peer_transport",
             Self::RuntimeHealth => "runtime_health",
             Self::HostOwnership => "host_ownership",
             Self::LifecycleControl => "lifecycle_control",
@@ -95,6 +93,11 @@ impl DaemonEvent {
 
     pub(crate) fn with_agent(mut self, agent: AgentName) -> Self {
         self.agent = Some(agent);
+        self
+    }
+
+    pub(crate) fn with_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.message_id = Some(message_id);
         self
     }
 

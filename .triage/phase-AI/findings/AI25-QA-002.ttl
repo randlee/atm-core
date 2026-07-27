@@ -1,0 +1,177 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-QA-002>
+  a triage:Finding ;
+  triage:findingId "AI25-QA-002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "just lint fails the version check -- winget manifest still 1.3.1" ;
+  triage:description ".winget/randlee.agent-team-mail.yaml still says PackageVersion 1.3.1, not updated to match the workspace version bump to 1.3.2-beta.25. Causes just lint to fail its version-consistency check." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified on fix/close-out-round2-easy (673a6fff, PR #652). .winget/randlee.agent-team-mail.yaml PackageVersion now reads 1.3.2-beta.25, matching the workspace Cargo.toml version exactly. Commit 673a6fff does not itself touch this file -- confirmed via git log --follow that the version bump was already applied by an earlier commit (95dbb094) on this branch's history, predating this batch. No scope mismatch; the version-consistency check now genuinely passes." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/fix-close-out-round2-easy/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-QA-002/s29/1> ;
+  triage:openOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
+  triage:fixedOn <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.2-beta.25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: version now matches workspace Cargo.toml (1.3.2-beta.25); just lint version-consistency check passes." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/s25/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:orderIndex 5 ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/s26/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b5eec1bf" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:orderIndex 6 ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/s27/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b5eec1bf" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:orderIndex 7 ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/s28/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b5eec1bf" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:orderIndex 8 ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-QA-002/s29/1>
+  a triage:Occurrence ;
+  triage:file ".winget/randlee.agent-team-mail.yaml" ;
+  triage:line 2 ;
+  triage:snippet "PackageVersion: 1.3.1" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "b5eec1bf" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:orderIndex 9 ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

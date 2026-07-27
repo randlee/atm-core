@@ -31,7 +31,7 @@ target: integrate/phase-AI
 ## Release candidate
 
 - First commit: set the workspace release for every releasable ATM assembly to
-  `1.3.2-beta-22`. CLI and daemon versions must move together; `atm doctor
+  `1.3.2-beta.22`. CLI and daemon versions must move together; `atm doctor
   --json` is the authoritative runtime check before same-host evidence.
 
 ## Exact Targets
@@ -155,7 +155,7 @@ pub(crate) fn validate_non_self_recipient(
 - `agent:<chat-id>@team.<host>` parses and renders with the same `chat_id` and
   `host`; both values pass unchanged through `validate_non_self_recipient` and
   `resolve_recipient` into the canonical request.
-- Release-built CLI and daemon both report `1.3.2-beta-22` through
+- Release-built CLI and daemon both report `1.3.2-beta.22` through
   `atm doctor --json` before the proof runs.
 - An independent quality review runs the release-built branch daemon through
   the real CLI and advertised-IP TCP listener. Its evidence names the router,

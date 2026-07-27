@@ -137,6 +137,18 @@ build:
 test mode='default':
     {{python_cmd}} .just/run_tests.py {{mode}}
 
+# Build the PyO3 extension with Maturin and prove Python can import it.
+test-graft-python:
+    {{python_cmd}} scripts/test_atm_graft_python.py
+
+# Build the PyO3 extension and run the Hermes graft reference-adapter tests.
+test-hermes-graft-bridge:
+    {{python_cmd}} .just/run_hermes_graft_bridge_tests.py
+
+# Validate a Hermes bridge registry; append --active only for real operator profiles.
+verify-hermes-bridge-deployment profile_registry *args:
+    scripts/phase-ai/run-hermes-bridge-probes.sh {{profile_registry}} {{args}}
+
 # Remove workspace build artifacts.
 clean:
     cargo clean
@@ -149,9 +161,13 @@ lint target='all':
 validate target='all':
     {{python_cmd}} scripts/validate_release.py {{target}}
 
-# Run the Phase Z smoke harness.
-smoke level='normal':
-    {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts
+# Run one named smoke feature. `localhost` and `local-ip` exercise the
+# currently-running branch daemon. Cross-host stages use only public ATM CLI
+# commands over SSH against already-running peer daemons: preflight, exact
+# send/read, then the acknowledgement round trip. Fixture levels retain their
+# existing names.
+smoke feature='normal' *hosts:
+    {{python_cmd}} scripts/smoke/run_feature_smoke.py {{feature}} {{hosts}}
 
 # Generate architecture visualization artifacts.
 view target='all':

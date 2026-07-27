@@ -11,8 +11,8 @@ impl WriterStatementCache {
     ) -> SqlResult<usize> {
         let mut statement = cached(
             connection,
-            "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, message_id, parent_message_id, thread_mode, recorded_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, source_chat_id, destination_chat_id, message_text, summary, message_at, message_id, parent_message_id, thread_mode, recorded_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
              ON CONFLICT(team, agent, message_key) DO NOTHING;",
         )?;
         statement.execute(params)

@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-EVIDENCE-GAP>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-EVIDENCE-GAP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "AI.14 physical two-Mac evidence gap (req-qa ATM-QA-001..005 combined)" ;
+  triage:description "QA-1 req-qa found all evidence under artifacts/phase-ai/ai14/ is single-host loopback-only (local-receiver-read.json:16 self-labels 'AI14 local HTTP loopback proof'). Sprint doc's own Non-closure clause (sprint-ai-14-mac-peer-smoke.md:44-47) explicitly forbids treating loopback proof as a substitute for physical two-Mac closure. None of the 4 named deliverables (dual-Mac prep, bidirectional AI.13 runner + readiness-record publication, defect-resolution routing, dual-host teardown) are met; deliverable 3 (defect capture) partially present but not verifiably scoped to a physical run. This is execution work blocked on Role-B (second physical Mac host, currently TLS-reset/unreachable via SSH) -- not a code defect." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "artifacts/phase-ai/ai14/ only; no cross-worktree code pattern to sweep" ;
+  triage:category "evidence-gap" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-4> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16> ;
+  triage:blockedOnInfrastructure true ;
+  triage:infrastructureBlocker "Role-B (second physical Mac host, currently TLS-reset/unreachable via SSH)" ;
+  triage:affectedDeliverables "1: dual-Mac prep | 2: bidirectional AI.13 runner + readiness-record publication | 3: defect-resolution (partial: documented but not from physical run) | 4: dual-host teardown" ;
+  triage:nonClosureClauseRef "sprint-ai-14-mac-peer-smoke.md:44-47" ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "All evidence in artifacts/phase-ai/ai14/ is loopback/single-host only. Local test shows preflight HTTP protocol mismatch (local-preflight-failure.json). No physical peer-to-peer run attempted. This is not a code defect but an infrastructure blocker waiting for Role-B host access." .
+
+<urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-1>
+  a triage:Occurrence ;
+  triage:deliverable "1: Prepare both Macs from the same committed source" ;
+  triage:status "missing" ;
+  triage:evidence "No artifacts showing Role-B (second Mac) prepared or accessible" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-2>
+  a triage:Occurrence ;
+  triage:deliverable "2: Execute AI.13 runner in both directions; publish readiness record" ;
+  triage:status "missing" ;
+  triage:evidence "local-receiver-read.json shows loopback only; doctor-after-local-http.json is single-host; local-preflight-failure.json documents a pre-flight protocol mismatch, not a two-Mac run result" ;
+  triage:closed false .
+
+<urn:atm:triage:occurrence/AI14-QA1-EVIDENCE-GAP/deliverable-4>
+  a triage:Occurrence ;
+  triage:deliverable "4: Run AI.13 teardown on both Macs; capture cleanup result" ;
+  triage:status "missing" ;
+  triage:evidence "No teardown artifacts; Role-B (second Mac) not accessible to run teardown sequence" ;
+  triage:closed false .
+
+<urn:atm:triage:worktree/pAI-s14>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 ;
+  triage:affectedByInfrastructureBlocker true .
+
+<urn:atm:triage:worktree/pAI-s15>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 ;
+  triage:affectedByInfrastructureBlocker true .
+
+<urn:atm:triage:worktree/pAI-s16>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 ;
+  triage:affectedByInfrastructureBlocker true .

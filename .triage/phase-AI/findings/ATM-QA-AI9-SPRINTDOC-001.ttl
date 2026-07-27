@@ -1,0 +1,67 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI9-SPRINTDOC-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI9-SPRINTDOC-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T04:09:39Z"^^xsd:dateTime ;
+  triage:title "AI.9 sprint doc frontmatter still status:proposed" ;
+  triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports docs/plans/phase-ai/sprint-ai-9.md frontmatter is still `status: proposed`, not flipped to `complete`, despite the sprint being an executed/closing sprint. This is a recurring acceptance-gate blocker pattern seen on AI.6/AI.7/AI.8 as well. The pattern appears on both AI.9 and AI.10 worktrees, indicating the frontmatter must be updated when marking sprints as complete after their work is done." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-SPRINTDOC-001/pAI-9/1>, <urn:atm:triage:occurrence/ATM-QA-AI9-SPRINTDOC-001/pAI-10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-10/d461c936> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-10/d461c936> ;
+  triage:highestOpenBranch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:resolution "FIXED: docs/plans/phase-ai/sprint-ai-9.md frontmatter flipped `status: proposed` -> `status: complete` on plan/phase-ai-planning @ 749bf621 (team-lead direct doc fix, no code dependency). Will propagate to AI.9/AI.10 worktrees via merge-forward from the planning branch." ;
+  triage:triagedAt "2026-07-21T04:09:39Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-SPRINTDOC-001/pAI-9/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 3 ;
+  triage:snippet "status: proposed (frontmatter, line 3 of docs/plans/phase-ai/sprint-ai-9.md) -- should be `status: complete` for a closed/executed sprint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-9/7cf40edd> .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-SPRINTDOC-001/pAI-10/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-9.md" ;
+  triage:line 3 ;
+  triage:snippet "status: proposed (frontmatter, line 3 of docs/plans/phase-ai/sprint-ai-9.md) -- should be `status: complete` for a closed/executed sprint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-10/d461c936> .
+
+<urn:atm:triage:worktree/pAI-9/7cf40edd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-10/d461c936>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/3687ce58>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "3687ce58" ;
+  triage:orderIndex 0 .

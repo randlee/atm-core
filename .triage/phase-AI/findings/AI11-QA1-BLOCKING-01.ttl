@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA1-BLOCKING-01>
+  a triage:Finding ;
+  triage:findingId "AI11-QA1-BLOCKING-01" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Drain/force-cancel-deadline not ported to Windows loopback-TCP listener" ;
+  triage:description "crates/atm-daemon/src/local_tcp_transport.rs:249-251 (serve_with_runtime_hooks, #[cfg(windows)]): graceful_drain_deadline and force_cancel_deadline are received and discarded; connections spawned via bare thread::spawn (line 268) never joined/tracked for shutdown drain. The UDS path's real drain logic (local_ipc_connection.rs:drain_active_connections_for_shutdown) properly uses these deadlines and is #[cfg(not(windows))] and never runs on Windows. local_tcp_transport.rs has only 3 tests, none exercising drain/cancel. Functional regression: in-flight connections aren't drained on Windows shutdown." ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src/local_tcp_transport.rs and any other #[cfg(windows)] transport/listener code introduced by AI.11" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — crates/atm-daemon/src/local_tcp_transport.rs serve_with_runtime_hooks now uses an ActiveConnectionRegistry/TrackedDispatchHandle (lines 251,276,290-294) to track every spawned connection thread, and calls drain_active_connections_for_shutdown(..., hooks.graceful_drain_deadline, hooks.force_cancel_deadline, ...) on shutdown (lines 256-263) -- the deadlines are now honored, not discarded. Test tcp_listener_drain_honors_the_force_cancel_deadline (line 672) exercises this directly. Confirmed via direct code read, not self-report." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/s11/568723c5> ;
+  triage:openOn <urn:atm:triage:worktree/s12/568723c5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s12/568723c5> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 249 ;
+  triage:snippet "let _ = hooks.graceful_drain_deadline; let _ = hooks.force_cancel_deadline;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/568723c5> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-01/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 249 ;
+  triage:snippet "let _ = hooks.graceful_drain_deadline; let _ = hooks.force_cancel_deadline;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/568723c5> .
+
+<urn:atm:triage:worktree/s11/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 0 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s12/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s13/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/s14/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 3 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/s15/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 4 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/s16/b64e8358>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b64e8358" ;
+  triage:orderIndex 5 ;
+  triage:status "absent" .

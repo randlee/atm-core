@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI28-3>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI28-3" ;
+  triage:title "Background retry scheduling doesn't compose cleanly with router terminal/unconfirmed classification" ;
+  triage:description "The bounded peer recovery coordinator schedules backoff-based retries independently, but the router's terminal (permanent failure) vs. unconfirmed (transient, recoverable) classification is not always synchronized with the coordinator's retry schedule. Specifically, the dispatch() method independently re-derives retryable-vs-terminal peer error classification via `error.is_daemon_unavailable() || error.code() == atm_core::error_codes::AtmErrorCode::RemoteDeliveryUnconfirmed` instead of calling the coordinator's existing `is_retryable_peer_error(&AtmError) -> bool` function (peer_drain_coordinator.rs:65-70, currently private/unused elsewhere). A comment at peer_delivery_router.rs:77-80 asserts single ownership of this decision but the code does not implement it -- two independent implementations of the same classification exist." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:closedAt "2026-07-26T22:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head bd529df7 (not accepted from arch-ctm's self-report). is_retryable_peer_error is now pub(crate) (peer_drain_coordinator.rs:66), and peer_delivery_router.rs imports it (line 9) and calls it directly at dispatch() line 94, replacing the previously-duplicated error.is_daemon_unavailable() || error.code() == RemoteDeliveryUnconfirmed inline check. Single call-site ownership confirmed via grep." ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/b7d8488/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/b7d8488/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/b7d8488/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 65 ;
+  triage:snippet "fn is_retryable_peer_error(error: &AtmError) -> bool - private, unused" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "bd529df7" ;
+  triage:note "Now pub(crate), used by router. Verified on current head bd529df7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-3/pAI-s28/b7d8488/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 85 ;
+  triage:snippet "error.is_daemon_unavailable() || error.code() == AtmErrorCode::RemoteDeliveryUnconfirmed - duplicate logic" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "bd529df7" ;
+  triage:note "Duplicate inline logic removed; now calls is_retryable_peer_error(&error). Verified on current head bd529df7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:worktree/pAI-s28/b7d8488>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:orderIndex 28 .

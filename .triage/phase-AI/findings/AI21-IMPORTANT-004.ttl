@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-IMPORTANT-004>
+  a triage:Finding ;
+  triage:findingId "AI21-IMPORTANT-004" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:title "Required-validation smoke tests not wired into just test/lint" ;
+  triage:description "scripts/smoke/test_run_inbound_peer_smoke.py and Justfile — the new required-validation Python tests are not wired into just test/just lint. Confirmed directly: zero references to this file in Justfile or .just/run_pytests.py. Runs and passes standalone, but \"just test passed\" gives no evidence these are exercised in CI. Reported by req-qa (QA1-IMPORTANT-01)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-004/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9faa3c52c06b99784487e64152e6c658941> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-004/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_inbound_peer_smoke.py" ;
+  triage:line 1 ;
+  triage:snippet "file exists but not wired into Justfile or .just/run_pytests.py" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9faa3c52c06b99784487e64152e6c658941> .
+
+<urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/5678337ce236a386d613790363f48a461238016c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337ce236a386d613790363f48a461238016c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9faa3c52c06b99784487e64152e6c658941>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
+  triage:orderIndex 1 .

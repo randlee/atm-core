@@ -107,6 +107,52 @@
       "args": [
         {
           "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "api",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "format",
+              "long": "format",
+              "num_args": {
+                "max": 1,
+                "min": 1
+              },
+              "required": false,
+              "short": null
+            },
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "spec",
+          "subcommands": []
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": true,
           "id": "dry_run",
           "long": "dry-run",
           "num_args": {
@@ -933,11 +979,456 @@
       "args": [
         {
           "has_default": true,
+          "id": "stderr_logs",
+          "long": "stderr-logs",
+          "num_args": {
+            "max": 0,
+            "min": 0
+          },
+          "required": false,
+          "short": null
+        }
+      ],
+      "name": "peer",
+      "subcommands": [
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "certificate",
+          "subcommands": [
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "fingerprint",
+                  "long": "fingerprint",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": false,
+                  "id": "private_key_ref",
+                  "long": "private-key-ref",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "yes",
+                  "long": "yes",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "init",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": true,
+                  "id": "json",
+                  "long": "json",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "show",
+              "subcommands": []
+            }
+          ]
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "interface",
+          "subcommands": [
+            {
+              "args": [
+                {
+                  "has_default": true,
+                  "id": "json",
+                  "long": "json",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "list",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "bind",
+                  "long": "bind",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "remove",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "advertise_host",
+                  "long": "advertise-host",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": false,
+                  "id": "bind",
+                  "long": "bind",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "enabled",
+                  "long": "enabled",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "set",
+              "subcommands": []
+            }
+          ]
+        },
+        {
+          "args": [
+            {
+              "has_default": true,
+              "id": "stderr_logs",
+              "long": "stderr-logs",
+              "num_args": {
+                "max": 0,
+                "min": 0
+              },
+              "required": false,
+              "short": null
+            }
+          ],
+          "name": "trust",
+          "subcommands": [
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "fingerprint",
+                  "long": "fingerprint",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": false,
+                  "id": "host",
+                  "long": "host",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "yes",
+                  "long": "yes",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "add",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": true,
+                  "id": "json",
+                  "long": "json",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "list",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "fingerprint",
+                  "long": "fingerprint",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": false,
+                  "id": "host",
+                  "long": "host",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "yes",
+                  "long": "yes",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "replace",
+              "subcommands": []
+            },
+            {
+              "args": [
+                {
+                  "has_default": false,
+                  "id": "host",
+                  "long": "host",
+                  "num_args": {
+                    "max": 1,
+                    "min": 1
+                  },
+                  "required": true,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "stderr_logs",
+                  "long": "stderr-logs",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                },
+                {
+                  "has_default": true,
+                  "id": "yes",
+                  "long": "yes",
+                  "num_args": {
+                    "max": 0,
+                    "min": 0
+                  },
+                  "required": false,
+                  "short": null
+                }
+              ],
+              "name": "revoke",
+              "subcommands": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": true,
           "id": "all",
           "long": "all",
           "num_args": {
             "max": 0,
             "min": 0
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
           },
           "required": false,
           "short": null
@@ -1124,6 +1615,28 @@
     },
     {
       "args": [
+        {
+          "has_default": false,
+          "id": "actor",
+          "long": "as",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
+        {
+          "has_default": false,
+          "id": "chat_id",
+          "long": "chat-id",
+          "num_args": {
+            "max": 1,
+            "min": 1
+          },
+          "required": false,
+          "short": null
+        },
         {
           "has_default": true,
           "id": "dry_run",

@@ -1,0 +1,95 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI18-QA1-ATM-QA-001-MISSING-LIFECYCLE-TEST>
+  a triage:Finding ;
+  triage:findingId "AI18-QA1-ATM-QA-001-MISSING-LIFECYCLE-TEST" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "No test exercises the activate_receiver/snapshot/close lifecycle" ;
+  triage:description "req-qa found that AI.18's rescoped deliverable set (full graft receiver lifecycle exposed to Python: activate_receiver, snapshot, close, HostNudgeInjector callback) at commit b8f46a1a on feature/pAI-s18-graft-python-bindings has no test coverage exercising the activate_receiver -> snapshot -> close lifecycle end-to-end." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-001-MISSING-LIFECYCLE-TEST/s18/1> ;
+  triage:openOn <urn:atm:triage:worktree/s18/b8f46a1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s18/b8f46a1a> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-001-MISSING-LIFECYCLE-TEST/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 347 ;
+  triage:snippet "No test exercises activate_receiver (line 347) -> snapshot (line 372) -> close (line 385) lifecycle end-to-end" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/b8f46a1a> .
+
+<urn:atm:triage:worktree/s11/12056956>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "12056956" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/aecade2a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/35e30fd6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/56c08886>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c08886" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/5a35a6cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "5a35a6cd" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/85a6fcf6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "85a6fcf6" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/b8f46a1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "b8f46a1a" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/2e22b6b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "2e22b6b4" ;
+  triage:orderIndex 19 .

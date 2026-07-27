@@ -25,6 +25,7 @@ def analyze_log_text(
     expected_events: list[str],
     *,
     allowed_error_codes: list[str] | None = None,
+    require_peer_confirmation: bool = False,
 ) -> LogAnalysisResult:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     missing = [event for event in expected_events if event not in text]
@@ -32,6 +33,12 @@ def analyze_log_text(
     errors: list[str] = []
     allowed_code_limits = {code: 1 for code in allowed_error_codes or []}
     allowed_code_counts: Counter[str] = Counter()
+    if require_peer_confirmation and "peer_delivery_confirmed" not in text:
+        missing.append("peer_delivery_confirmed")
+    if require_peer_confirmation and "write_persisted" in text and "peer_delivery_confirmed" not in text:
+        errors.append(
+            "write_persisted proves only local storage; it is not receiver acceptance"
+        )
     for line in lines:
         try:
             payload = json.loads(line)
@@ -72,6 +79,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("log_file", type=Path)
     parser.add_argument("--expect", action="append", default=[])
     parser.add_argument("--allow-error-code", action="append", default=[])
+    parser.add_argument(
+        "--require-peer-confirmation",
+        action="store_true",
+        help="reject a smoke claim when logs show only local write_persisted evidence",
+    )
     return parser.parse_args()
 
 
@@ -82,6 +94,7 @@ def main() -> int:
         text,
         args.expect,
         allowed_error_codes=args.allow_error_code,
+        require_peer_confirmation=args.require_peer_confirmation,
     )
     print(
         json.dumps(

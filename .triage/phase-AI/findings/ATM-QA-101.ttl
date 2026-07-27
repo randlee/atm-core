@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-101>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-101" ;
+  triage:title "readiness.md remains a stale-but-still-governing blocked gate" ;
+  triage:description "docs/plans/phase-ai/readiness.md frontmatter status: blocked; body still frames readiness around AI.1-AI.10 only; AI10-TWOMAC-001/AI10-WINDOWS-001 rows say live two-host execution has not yet been run. This document's own closure rule governs -- not closeable until physical evidence lands. Same underlying gap as PR-AI-001; deferred to the scheduled 2026-07-28 full smoke-test session, not this fix batch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-101/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-101/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/readiness.md" ;
+  triage:line 1 ;
+  triage:snippet "status: blocked -- AI10-TWOMAC-001/AI10-WINDOWS-001 unrun" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .

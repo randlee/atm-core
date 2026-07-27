@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-033 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
 | Relates to | ADR-003, ADR-032, ADR-035, Phase AI |
 
@@ -22,19 +22,26 @@ The initial stable application surface is resource-oriented REST under
 
 | Resource | Initial operations |
 | --- | --- |
-| `/messages` | `GET` list/query, `POST` create/send |
-| `/message/{message-id}` | `GET` non-mutating inspection, `DELETE` clear where authorized |
-| `/message/{message-id}/read` | `POST` owner-only read-state mutation |
-| `/message/{message-id}/ack` | `POST` acknowledgement |
+| `/messages` | `GET` list/query, `POST` canonical send/ack write |
+| `/messages/inspect` | `POST` non-mutating inspection/query |
+| `/messages` | `DELETE` clear selected messages where authorized |
+| `/messages/read` | `POST` owner-only read-state mutation |
 | `/doctor` | `GET` doctor report |
+| `/peers/{peer}/sync` | `POST` one explicit bounded replay of immutable stored writes for a registered peer |
+| `/runtime/reload` | `POST` reload the authenticated runtime view after local trust/configuration changes |
+| `/compatibility` | `POST` compatibility preflight |
+| `/heartbeat` | `POST` runtime heartbeat |
 
 The checked-in OpenAPI 3.1 document defines typed route-specific JSON bodies,
 status codes, pagination, and conditional mutation semantics before
 implementation. The HTTP wire body is never a generic
 `RequestEnvelope`/`ResponseEnvelope`; failures use ADR-032's `{code,message}`
-body with the route's HTTP status. An acknowledgement endpoint builds the same
-internal canonical write whose `acknowledges_message_id: Option<MessageId>` is
-populated. It is not a separate envelope, transport, or persistence path.
+body with the route's HTTP status. `POST /messages` builds the same internal
+canonical write for send and acknowledgement; an acknowledgement only has
+`acknowledges_message_id: Option<MessageId>` populated. It is not a separate
+resource, envelope, transport, or persistence path.
+`/message/{message-id}` is a `Location` identifier only; v1 does not register a
+separate message-by-id route.
 
 The HTTP API has an independent strict SemVer identity. Its major equals the
 `/v{major}` path segment. Same-major minor additions are compatible and patch
@@ -85,6 +92,11 @@ separately typed untrusted smoke provenance, which cannot authorize a
 recipient or claim peer authentication. Socket family and address never
 classify an ingress. The adapter cannot perform recipient routing, storage
 mutation, acknowledgement mutation, or nudging.
+
+`local-http.json` includes the serving singleton instance ID. A loopback TCP
+client verifies that ID against the owner record before connecting; it rejects
+missing, stale, revoked, or mismatched metadata. Orderly shutdown records
+revocation and syncs it before removing the endpoint publication.
 
 Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and
 loopback-TCP HTTP. Windows has no alternate local transport or address-derived

@@ -1,0 +1,145 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD>
+  a triage:Finding ;
+  triage:findingId "AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T18:57:00Z"^^xsd:dateTime ;
+  triage:title "Non-transitive taint propagation / silent-permissive-on-unrecognized-initializer in function_binding_provenance" ;
+  triage:description "function_binding_provenance in the post-write router's AST boundary check resolves use-alias fixed points but historically failed to (a) mirror that fixed-point loop onto local let-binding chains beyond one hop, and (b) fail closed on unrecognized initializer expression shapes (e.g. Expr::Call like Box::new(fn)), silently treating them as Safe instead of flagging them. Fixed on feature/pAI-s12-post-write-router via commits: round-3 fix (use-alias fixed-point, single-hop local, ARCH-003 twin removal), then commit c56ae0be (round-5: fail-closed provenance tracking for two-hop local bindings and Box::new-delivery bindings, with regression fixtures). arch-ctm has manually merge-forwarded this fix: AI.12->AI.13 via commit 62b67831, and AI.13->AI.14 via commit e148ea7a. He stopped there." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T18:57:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/s15> ;
+  triage:openOn <urn:atm:triage:worktree/s16> ;
+  triage:openOn <urn:atm:triage:worktree/s17> ;
+  triage:openOn <urn:atm:triage:worktree/s18> ;
+  triage:openOn <urn:atm:triage:worktree/s19> ;
+  triage:fixedOn <urn:atm:triage:worktree/s12> ;
+  triage:fixedOn <urn:atm:triage:worktree/s13> ;
+  triage:fixedOn <urn:atm:triage:worktree/s14> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19> ;
+  triage:correctionNote "quality-mgr (2026-07-26): independent re-verification per team-lead directive on task #1177, not trusting the existing occurrence closureNotes. Confirmed directly against crates/atm-architecture/tests/boundary_enforcement.rs at integrate/phase-AI head: fn function_binding_provenance (L862-929) is fail-closed for unrecognized shapes -- Expr::Call (L895) and Expr::MethodCall (L906) both default to FunctionBinding::Unresolved, never Safe, when neither the callee nor any argument resolves to Delivery; only Expr::Lit (L926) and the fallthrough for an empty Expr::Block (L892) default to Safe, which is semantically correct (a literal or empty block cannot be a delivery function). Local-binding propagation is handled by visit_local (L672-695): since syn::visit walks statements in source order and each `let` inserts into the same function's function_bindings map before subsequent statements are visited, chains of arbitrary hop count are covered by ordinary sequential lookup, not just two hops -- no explicit fixed-point loop is needed or missing. Box::new(fn) is covered via the Expr::Call branch checking call.args for a Delivery-resolving argument. Both claimed regression fixtures are present and passing as of this head: 'transitive local delivery function binding' (L454-455: let first = emit_local_post_write; let second = first; second();) and 'boxed delivery function binding' (L458-459: let emit = Box::new(emit_local_post_write); emit();), both asserted non-empty-violations in canonical_write_router_rejects_all_mandated_negative_fixtures (L423). Existing closureNotes' disposition (fixed, merged forward through s19) is CONFIRMED correct on current code. No edits needed beyond this confirmation." .
+
+<urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance now properly handles two-hop transitive local bindings (line 304: 'let first = emit; let second = first') and Box::new wrapping (line 308). Comprehensive negative fixtures in canonical_write_router_rejects_all_mandated_negative_fixtures cover both cases. Defect resolved. Stale occurrence from superseded branch feature/pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s15> .
+
+<urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s16> .
+
+<urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s17> .
+
+<urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s18-graft-python-bindings; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s18> .
+
+<urn:atm:triage:occurrence/AI19-ARCH-002-TAINT-PROPAGATION-NOT-MERGED-FORWARD/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "Missing function_binding_provenance implementation; pre-fix test lacks two-hop local binding and Box::new fixtures" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- function_binding_provenance properly implemented with two-hop and Box::new support. Stale occurrence from superseded branch feature/pAI-s19-hermes-graft-integration; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s19> .
+
+<urn:atm:triage:worktree/s12>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "c56ae0be" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 19 .

@@ -1,6 +1,7 @@
 pub use atm_storage::AckRequirementState;
 pub use atm_storage::types::{
-    AgentId, AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName,
+    AgentId, AgentIdentity, AgentName, ChatId, HostName, IsoTimestamp, ModelName, PaneId, TaskId,
+    TeamName,
 };
 
 use serde::{Deserialize, Serialize};

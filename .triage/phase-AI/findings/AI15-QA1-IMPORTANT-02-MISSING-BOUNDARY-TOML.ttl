@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI15-QA1-IMPORTANT-02-MISSING-BOUNDARY-TOML>
+  a triage:Finding ;
+  triage:findingId "AI15-QA1-IMPORTANT-02-MISSING-BOUNDARY-TOML" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Missing explicit boundary TOML for atm-graft post-send transport" ;
+  triage:description "boundaries/atm-daemon/socket-server-transport.toml marks interprocess::local_socket::Listener as retired/forbidden outside its owner crate with comprehensive lint and review gates. No equivalent boundaries/atm-graft/*.toml exists for graft's post-send notification channel, so the same leak (unconditional interprocess::local_socket usage in atm-graft/src/runtime.rs) is invisible to CI boundary enforcement. The existing shared-client-consumer.toml forbids atm-graft -> interprocess edge but does not provide the detailed forbidden_references and enforcement gates needed to catch unconditional imports/uses within atm-graft itself. (RBQA-F002 in original report)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI15" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-02-MISSING-BOUNDARY-TOML/15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/56c08886> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s15/56c08886> .
+
+<urn:atm:triage:occurrence/AI15-QA1-IMPORTANT-02-MISSING-BOUNDARY-TOML/15/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/" ;
+  triage:line 0 ;
+  triage:snippet "Missing: graft-post-send-transport.toml or equivalent socket-server-transport boundary TOML" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c088866cb42adecc2270035e273df660f8c3db" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/56c08886> .
+
+<urn:atm:triage:worktree/pAI-s15/56c08886>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c088866cb42adecc2270035e273df660f8c3db" ;
+  triage:orderIndex 15 .

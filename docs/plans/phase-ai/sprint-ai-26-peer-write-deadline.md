@@ -1,6 +1,6 @@
 ---
 title: AI.26 end-to-end peer write deadline
-status: proposed
+status: complete
 branch: feature/pAI-s26-peer-write-deadline
 target: integrate/phase-AI
 depends_on: AI.21-pre, AI.23, AI.11–AI.16

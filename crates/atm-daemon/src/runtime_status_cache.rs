@@ -321,10 +321,7 @@ pub(crate) fn build_runtime_status_cache_state(
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
             "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
-        ))
-        .with_recovery(
-            "Reduce the number of persisted ATM teams or raise the documented reload cap before retrying SIGHUP.",
-        ));
+        )));
     }
     for team in teams {
         hydrate_runtime_status_cache_team(&mut next_state, current_state, roster_store, team)?;
@@ -353,10 +350,7 @@ fn hydrate_runtime_status_cache_team(
             return Err(AtmError::config(format!(
                 "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",
                 team
-            ))
-            .with_recovery(
-                "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
-            ));
+            )));
         }
         let member_name = member.agent_name;
         let key = RuntimeMemberKey {

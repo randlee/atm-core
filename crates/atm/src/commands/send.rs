@@ -5,7 +5,10 @@ use atm_core::send::{SendMessageSource, SendRequest, input};
 use atm_core::types::TaskId;
 use clap::Args;
 
-use crate::commands::caller_context::{CallerTeamOverride, resolve_cli_mutation_caller_context};
+use crate::commands::caller_context::{
+    CallerChatIdOverride, CallerContextOverrides, CallerIdentityOverride, CallerTeamOverride,
+    resolve_cli_mutation_caller_context, resolve_cli_mutation_caller_context_with_overrides,
+};
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
 };
@@ -26,6 +29,12 @@ pub struct SendCommand {
 
     #[arg(long)]
     team: Option<String>,
+
+    #[arg(long = "chat-id", conflicts_with = "actor")]
+    chat_id: Option<String>,
+
+    #[arg(long = "as")]
+    actor: Option<String>,
 
     #[arg(long)]
     file: Option<PathBuf>,
@@ -54,9 +63,7 @@ impl SendCommand {
         message: impl Into<String>,
         recovery: impl Into<String>,
     ) -> anyhow::Error {
-        atm_core::error::AtmError::validation(message.into())
-            .with_recovery(recovery.into())
-            .into()
+        atm_core::error::AtmError::validation_with_recovery(message, recovery).into()
     }
 
     /// Execute the `atm send` command.
@@ -76,8 +83,15 @@ impl SendCommand {
     }
 
     fn build_request(self, home_dir: PathBuf, current_dir: PathBuf) -> Result<SendRequest> {
-        let caller_context =
-            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?;
+        let caller_context = if self.actor.is_some() || self.chat_id.is_some() {
+            resolve_cli_mutation_caller_context_with_overrides(CallerContextOverrides {
+                identity_override: self.actor.as_deref().map(CallerIdentityOverride),
+                chat_id_override: self.chat_id.as_deref().map(CallerChatIdOverride),
+                team_override: self.team.as_deref().map(CallerTeamOverride),
+            })?
+        } else {
+            resolve_cli_mutation_caller_context(self.team.as_deref().map(CallerTeamOverride))?
+        };
         let message_source = self.build_message_source()?;
         SendRequest::new(
             home_dir,
@@ -91,6 +105,7 @@ impl SendCommand {
             self.task_id,
             self.dry_run,
         )
+        .map(|request| request.with_caller_chat_id(caller_context.caller_chat_id))
         .map_err(Into::into)
     }
 
@@ -138,7 +153,7 @@ mod tests {
     use super::SendCommand;
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::send::SendMessageSource;
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_SENDER};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -152,6 +167,8 @@ mod tests {
             to: "../evil".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: false,
             summary: None,
@@ -169,11 +186,37 @@ mod tests {
     }
 
     #[test]
+    fn validation_errors_retain_their_actionable_recovery() {
+        let command = SendCommand {
+            to: "recipient@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            chat_id: None,
+            actor: None,
+            file: Some(PathBuf::from("message.txt")),
+            stdin: true,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+        let error = command.build_message_source().expect_err("invalid sources");
+        assert!(
+            error
+                .to_string()
+                .contains("Choose exactly one message source")
+        );
+    }
+
+    #[test]
     fn build_message_source_rejects_conflicting_input_flags() {
         let stdin_and_file = SendCommand {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            chat_id: None,
+            actor: None,
             file: Some(PathBuf::from("message.md")),
             stdin: true,
             summary: None,
@@ -186,6 +229,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: true,
             summary: None,
@@ -202,8 +247,12 @@ mod tests {
             .build_message_source()
             .expect_err("stdin/message conflict");
 
-        assert!(file_error.to_string().contains("mutually exclusive"));
-        assert!(message_error.to_string().contains("mutually exclusive"));
+        assert!(file_error.to_string().contains(
+            "Choose exactly one message source: either pass `--stdin` or `--file <path>`"
+        ));
+        assert!(message_error.to_string().contains(
+            "Choose exactly one message source: either pass `--stdin` or provide positional message text"
+        ));
     }
 
     #[test]
@@ -212,6 +261,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: None,
             team: None,
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: false,
             summary: None,
@@ -223,7 +274,9 @@ mod tests {
 
         let error = command.build_message_source().expect_err("missing message");
 
-        assert!(error.to_string().contains("provide message text"));
+        assert!(error.to_string().contains(
+            "Pass positional message text, `--file <path>`, or `--stdin` before retrying `atm send`."
+        ));
     }
 
     #[test]
@@ -237,6 +290,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello from send".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: false,
             summary: Some("summary".to_string()),
@@ -260,7 +315,10 @@ mod tests {
             Some("TASK-42")
         );
         assert!(request.dry_run);
-        assert_eq!(request.to.to_string(), "recipient-a@test-team");
+        assert_eq!(
+            request.to.expect("destination").to_string(),
+            "recipient-a@test-team"
+        );
         match request.message_source {
             SendMessageSource::Inline(message) => assert_eq!(message, "hello from send"),
             other => panic!("expected inline message source, got {other:?}"),
@@ -278,6 +336,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: None,
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: false,
             summary: None,
@@ -297,6 +357,86 @@ mod tests {
 
     #[test]
     #[serial(env)]
+    fn chat_id_and_equivalent_as_construct_the_same_caller() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let base = SendCommand {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            chat_id: Some("1234".to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+        let explicit = SendCommand {
+            chat_id: None,
+            actor: Some(format!("{TEST_SENDER}:1234")),
+            ..base
+        };
+
+        let shorthand = SendCommand {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            chat_id: Some("1234".to_string()),
+            actor: None,
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        }
+        .build_request(".".into(), ".".into())
+        .expect("shorthand request");
+        let explicit = explicit
+            .build_request(".".into(), ".".into())
+            .expect("explicit request");
+
+        assert_eq!(shorthand.caller_identity, explicit.caller_identity);
+        assert_eq!(shorthand.caller_chat_id, explicit.caller_chat_id);
+        assert_eq!(shorthand.caller_chat_id.unwrap().as_str(), "1234");
+    }
+
+    #[test]
+    #[serial(env)]
+    fn build_request_rejects_as_for_a_different_base_agent() {
+        let _env = EnvGuard::set_many([
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+        ]);
+        let command = SendCommand {
+            to: "recipient-a@test-team".to_string(),
+            message: Some("hello".to_string()),
+            team: None,
+            chat_id: None,
+            actor: Some(format!("{TEST_SENDER}-other:1234")),
+            file: None,
+            stdin: false,
+            summary: None,
+            requires_ack: false,
+            task_id: None,
+            dry_run: false,
+            json: false,
+        };
+
+        let error = command
+            .build_request(".".into(), ".".into())
+            .expect_err("different agent must be rejected");
+        assert!(error.to_string().contains("same base agent"));
+    }
+
+    #[test]
+    #[serial(env)]
     fn build_request_uses_environment_identity_even_with_team_override() {
         let _env = EnvGuard::set_many([
             ("ATM_IDENTITY", Some("env-sender")),
@@ -306,6 +446,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("hello".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            chat_id: None,
+            actor: None,
             file: None,
             stdin: false,
             summary: None,
@@ -331,6 +473,8 @@ mod tests {
             to: "recipient-a@test-team".to_string(),
             message: Some("note".to_string()),
             team: Some(TEST_TEAM.to_string()),
+            chat_id: None,
+            actor: None,
             file: Some(PathBuf::from("incident.md")),
             stdin: false,
             summary: None,

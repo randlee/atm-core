@@ -1,0 +1,48 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DELIVERY-POLICY-TERM-OVERLAP>
+  a triage:Finding ;
+  triage:findingId "DELIVERY-POLICY-TERM-OVERLAP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T18:40:00Z"^^xsd:dateTime ;
+  triage:title "docs/atm-daemon/boundaries.md:18-24 ambiguous 'delivery-policy coordinator' terminology overlap" ;
+  triage:description "AI1-QA-1 (2026-07-20) on PR #592 found docs/atm-daemon/boundaries.md:18-24 uses the term 'delivery-policy coordinator' (introduced by the retained Phase Y.4 seam above the post-durability runtime refresh owner) in a way that overlaps in name with the atm-core-side delivery-policy coordinator seam referenced in docs/atm-core/boundaries.md's ProjectionExport section (crates/atm-core/src/delivery_policy.rs). Two different subsystems, same term, no disambiguating note." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DELIVERY-POLICY-TERM-OVERLAP/pAI-1/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-1/da3f978e> ;
+  triage:highestOpenBranch "feature/pAI-1-daemon-preag-reset" ;
+  triage:triagedAt "2026-07-20T18:40:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/DELIVERY-POLICY-TERM-OVERLAP/pAI-1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 18 ;
+  triage:snippet "'Phase Y.4 adds the retained delivery-policy coordinator/state-machine seam' — same term used for a distinct atm-core-side seam in docs/atm-core/boundaries.md, no disambiguating note" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-1/da3f978e> .
+
+<urn:atm:triage:worktree/pAI-1/da3f978e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-1-daemon-preag-reset" ;
+  triage:path "feature/pAI-1-daemon-preag-reset" ;
+  triage:headSha "da3f978e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/bcfe0788>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "bcfe0788" ;
+  triage:orderIndex 0 .

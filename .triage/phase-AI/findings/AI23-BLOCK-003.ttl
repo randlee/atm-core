@@ -1,0 +1,128 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-003>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-003" ;
+  triage:title "AI22-BLOCK-005 closure did not satisfy the sprint doc's 'independent quality review' acceptance gate" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md lines 160-163 require 'An independent quality review runs the release-built branch daemon through the real CLI and advertised-IP TCP listener... a mock router or direct-dispatch test cannot close this sprint.' AI22-BLOCK-005 was closed (see .triage/phase-AI/findings/AI22-BLOCK-005.ttl, triage:closureNote) on the basis of: (a) a same-commit, same-author (arch-ctm) evidence artifact at artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md, and (b) quality-mgr (the same party performing the closure) reading that artifact and independently re-running cargo fmt/test/clippy -- which is not equivalent to a second, independent party actually executing the release-built daemon through the real CLI/advertised-IP TCP listener themselves. This is a compliance gap by construction: the acceptance criterion requires an independent execution of the live proof, not a same-party review of someone else's self-reported log plus a unit-test rerun. Confirmed by an independent req-qa review pass (2026-07-26) reading the actual artifact and sprint doc side by side. FIX: Remediation is process/artifact only — get a real independent reviewer (not quality-mgr, not the original author) to execute the release daemon through the actual CLI/advertised-IP TCP listener and produce a compliant independent review artifact. No code changes needed on any branch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "process-compliance" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T04:03:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T04:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Closed via genuinely independent execution: a fresh general-purpose subagent (dispatched by quality-mgr, no prior involvement in commit 95dbb094 or the original artifact -- not arch-ctm, not a quality-mgr self-review) actually ran the release-built daemon (PID 36925, 1.3.2-beta.22, confirmed byte-identical for crates/ between 95dbb094 and integrate/phase-AI@24d14beb via empty git diff) and performed a real advertised-IP TCP/TLS self-send (verified via lsof LISTEN on 192.168.128.82:43101 and a TLS-alert response to a plaintext probe, ruling out mock/in-process transport). Message ID 01KYEA7C6DQZ59ZPEPSN6EFVB2 round-tripped via atm send/atm read; peer_delivery log showed write_persisted then peer_delivery_confirmed for that ID, corroborated by the doctor peer-link projection flipping to healthy at the matching timestamp. Router/dispatcher/persistence/PostWriteRouter named by file:line (ApiRouter::route runtime_health.rs:906-949; DaemonRequestDispatcher::dispatch_with_deadline/route_write runtime_health.rs:512-543; MessageWriter::write/persist_local_write/prepare_write_with_runtime runtime_health.rs:588-598 + send/mod.rs:466; PostWriteRouter::dispatch peer_delivery_router.rs:14-78) with proof-by-construction via the single-call-path source structure, since no #[instrument]/named trace spans exist to quote directly (tracked as a separate follow-up, not blocking -- see AI23-IMPORTANT-005 deferral note). Evidence committed at artifacts/phase-ai/ai22/advertised-ip-tls-self-send-independent-review.md, cross-referenced from the original artifact. QA verdict: PASS on all three sprint-doc gates (real transport, component naming, independence)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-003/S22-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-003/S22-2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-AI/24d14beb> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-AI/24d14beb> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-003/S22-1>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send.md" ;
+  triage:line 16 ;
+  triage:snippet "This is an ordinary host-qualified peer send: no mock transport, direct dispatcher call, or loopback-only route was used." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:occursIn <urn:atm:triage:worktree/S22/95dbb094> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-003/S22-2>
+  a triage:Occurrence ;
+  triage:file "artifacts/phase-ai/ai22/advertised-ip-tls-self-send-independent-review.md" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:snippet "Independent quality review artifact: real advertised-IP TCP/TLS self-send executed by a fresh subagent, message ID 01KYEA7C6DQZ59ZPEPSN6EFVB2" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-AI/24d14beb> .
+
+<urn:atm:triage:worktree/S21pre/7cf131fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "7cf131fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S23/acaa2a43>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "acaa2a43" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S24/912ffe89>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "912ffe89" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S25/9dfc8de1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "9dfc8de1" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/S26/28190ce1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "28190ce1" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/S27/bed01b4d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bed01b4d" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/S28/8e6c533a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "8e6c533a" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/S29/415a2db1>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "415a2db1" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/S30/9fd44444>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9fd44444" ;
+  triage:orderIndex 10 .
+
+<urn:atm:triage:worktree/integrate-phase-AI/24d14beb>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "24d14beb" ;
+  triage:orderIndex 0 .

@@ -18,7 +18,7 @@ io_owns = ["outbound_protocol_requests", "request_deadlines", "response_decoding
 io_forbidden = ["sqlite", "inbox_jsonl", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-daemon-client", "atm-graft"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 
@@ -40,10 +40,8 @@ lint_rules = ["LINT-BOUNDARY-CLIENT-TRANSPORT-REFERENCES"]
 review_gates = ["no_cli_to_daemon_internal_edge"]
 
 [status]
-state = "stub_landed"
+state = "retired"
 notes = [
-  "stub trait plus request/response shells landed in atm_core::boundary",
-  "designed for thin callers such as atm-graft",
-  "daemon-to-daemon remote delivery also depends on this outbound client boundary",
-  "same-host daemon launch/bootstrap helpers shared by atm and atm-graft now live below this boundary in atm-daemon-client",
+  "Historical custom-frame client boundary retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing.",
+  "same-host daemon launch/bootstrap helpers shared by atm and atm-graft now live below the atm-daemon-client adapter, not this atm-core boundary.",
 ]

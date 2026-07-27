@@ -104,7 +104,7 @@ fn singleton_guard_is_host_wide_across_distinct_atm_home_roots() {
     let error = HostOwnershipAdapter::acquire_at(host_owner_lock)
         .expect_err("second singleton across a distinct ATM_HOME");
 
-    assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
+    assert_eq!(error.code(), AtmErrorCode::DaemonServingStateRejected);
     drop(first);
 }
 
@@ -130,7 +130,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
     write_stale_owner_record(&lock_path, &mut file, "deadbeef");
 
     let error = HostOwnershipAdapter::acquire_at(lock_path).expect_err("stale");
-    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
+    assert_eq!(error.code(), AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
 
     let error = join_with_timeout(join, Duration::from_secs(15), "stale owner recovery join")
         .expect_err("token mismatch");
-    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
+    assert_eq!(error.code(), AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 
 #[test]

@@ -4,15 +4,19 @@ from pathlib import Path
 import sys
 import tempfile
 import textwrap
+import tomllib
 import unittest
 
 
 JUST_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = JUST_DIR.parent
 if str(JUST_DIR) not in sys.path:
     sys.path.insert(0, str(JUST_DIR))
 
 from lint_boundaries import collect_boundary_violations
+from lint_boundaries import collect_io_forbidden_source_violations
 from lint_boundaries import boundary_doc_section_lines
+from lint_boundaries import IO_FORBIDDEN_SOURCE_PATTERNS
 from lint_boundaries import parse_boundary_records
 from lint_boundaries import parse_simple_yaml_document
 
@@ -194,6 +198,21 @@ notes = []
 
 
 class LintBoundariesTests(unittest.TestCase):
+    def test_graft_shared_client_has_no_direct_interprocess_dependency(self) -> None:
+        manifest = tomllib.loads(
+            (REPO_ROOT / "crates/atm-graft/Cargo.toml").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("interprocess", manifest["dependencies"])
+        rendered = [
+            violation.render()
+            for violation in collect_boundary_violations(REPO_ROOT)
+        ]
+        self.assertNotIn(
+            "crates/atm-graft/Cargo.toml [dependencies]: "
+            "BOUNDARY-GraftSharedClientConsumer forbids edge atm-graft -> interprocess",
+            rendered,
+        )
+
     def write_repo(self, repo_root: Path) -> None:
         (repo_root / "Cargo.toml").write_text(ROOT_MANIFEST, encoding="utf-8")
         (repo_root / ".just").mkdir()
@@ -381,7 +400,7 @@ sunset_sprint = "Z.8"
             """\
 use crate::config;
 
-fn load_team_config(team_dir: &std::path::Path) {
+fn load_workspace_config(team_dir: &std::path::Path) {
     let _ = config::load_team_config(team_dir);
 }
 
@@ -520,8 +539,8 @@ fn hydrate_roster_from_team_config_once_at_startup_if_empty(team_dir: &std::path
             self.write_scb_workspace_support(repo_root)
             self.write_scb_singleton_support(repo_root)
             self.write_scb_observability_support(repo_root)
-            (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
-                "fn load_team_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
+            (repo_root / "crates/atm-core/src/direct_boundaries.rs").write_text(
+                "fn load_workspace_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
                 encoding="utf-8",
             )
             send_dir = repo_root / "crates/atm-core/src/send"
@@ -753,6 +772,42 @@ pub use crate::service_runtime_store::install_default_runtime_factory;
                 rendered,
             )
 
+    def test_parse_boundary_records_requires_declared_io_forbidden_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            broken_doc = BASE_BOUNDARY_DOC.replace(
+                "ownership:\n  io_owns:\n    - sqlite\n  io_forbidden:\n    - socket_io\n",
+                "ownership:\n  io_owns:\n    - sqlite\n",
+            )
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
+
+            _records, violations = parse_boundary_records(repo_root)
+            rendered = [violation.render() for violation in violations]
+            self.assertTrue(
+                any("missing required field: ownership.io_forbidden" in item for item in rendered),
+                rendered,
+            )
+
+    def test_parse_boundary_records_rejects_non_list_io_forbidden_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            broken_doc = BASE_BOUNDARY_DOC.replace(
+                "  io_forbidden:\n    - socket_io\n",
+                "  io_forbidden: socket_io\n",
+            )
+            self.write_doc(repo_root, "atm-storage-rusqlite", broken_doc)
+
+            _records, violations = parse_boundary_records(repo_root)
+            rendered = [violation.render() for violation in violations]
+            self.assertTrue(
+                any("ownership.io_forbidden must be a list of strings" in item for item in rendered),
+                rendered,
+            )
+
     def test_parse_boundary_records_flags_invalid_edge_syntax(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -941,6 +996,28 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any("forbids external reference 'SqliteMailStore::open'" in item for item in rendered), rendered)
 
+    def test_collect_boundary_violations_flags_forbidden_reference_inside_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace(
+                    "scope = \"outside_owner_crate\"", "scope = \"inside_owner_crate\""
+                ),
+            )
+            (repo_root / "crates/atm-storage-rusqlite/src/lib.rs").write_text(
+                "pub fn demo() { let _ = SqliteMailStore::open(); }\n", encoding="utf-8"
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(
+                any("forbids owner-crate reference 'SqliteMailStore::open'" in item for item in rendered),
+                rendered,
+            )
+
     def test_collect_boundary_violations_allows_composition_root_reference(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             repo_root = Path(tempdir)
@@ -982,6 +1059,48 @@ atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.1.2" }
             self.assertTrue(any("requires private implementation.type" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public re-export" in item for item in rendered), rendered)
             self.assertTrue(any("forbids public constructor/helper methods" in item for item in rendered), rendered)
+
+    def test_every_declared_io_forbidden_tag_has_source_pattern_mapping(self) -> None:
+        declared: set[str] = set()
+        for path in Path(__file__).resolve().parents[2].glob("boundaries/*/*.toml"):
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            declared.update(data.get("ownership", {}).get("io_forbidden", []))
+
+        self.assertTrue(declared)
+        self.assertEqual(declared - set(IO_FORBIDDEN_SOURCE_PATTERNS), set())
+        self.assertTrue(all(patterns for patterns in IO_FORBIDDEN_SOURCE_PATTERNS.values()))
+
+    def test_io_forbidden_mapping_catches_temporary_source_violation(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_toml_record(
+                repo_root,
+                "atm-storage-rusqlite",
+                text=BASE_BOUNDARY_TOML.replace('state = "planned"', 'state = "active"'),
+            )
+            source_path = repo_root / "crates/atm-storage-rusqlite/src/mail_store.rs"
+            source_path.write_text(
+                "pub fn temporary_violation() {\n"
+                "    let _ = std::net::TcpStream::connect(\"127.0.0.1:1\");\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            records, parse_violations = parse_boundary_records(repo_root)
+            self.assertEqual(parse_violations, [])
+            rendered = [
+                violation.render()
+                for violation in collect_io_forbidden_source_violations(repo_root, records)
+            ]
+            self.assertTrue(
+                any(
+                    "BOUNDARY-MailStore-Sqlite forbids io 'socket_io'" in item
+                    for item in rendered
+                ),
+                rendered,
+            )
 
 
 if __name__ == "__main__":

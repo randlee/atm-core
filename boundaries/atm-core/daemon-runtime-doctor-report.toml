@@ -1,0 +1,47 @@
+boundary_id = "BOUNDARY-DaemonRuntimeDoctorReport"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "DaemonRuntimeDoctorReport"
+
+[public]
+facade = "DaemonRuntimeDoctorReport"
+notes = "secret-free daemon diagnostic response contract"
+
+[implementation]
+type = "DaemonRuntimeDoctorReport"
+module = "atm_core::doctor::report"
+visibility = "public"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = []
+io_forbidden = ["socket_io", "process_spawn", "database_io"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = []
+response_types = ["DaemonRuntimeDoctorReport", "PeerLinkStatus"]
+error_types = []
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["private_key_material", "resolved_ip_address"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-DAEMONRUNTIMEDOCTORREPORT-REFERENCES"]
+review_gates = ["secret_free_peer_delivery_projection"]
+
+[status]
+state = "concrete_landed"
+notes = ["peer_links is a bounded in-memory diagnostic projection", "the contract excludes messages, receipts, cursors, resolved addresses, certificate pins, and private-key references"]

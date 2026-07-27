@@ -1,0 +1,109 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AI25-RSH-002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "Unbounded O(N) DNS fan-out across all enabled trusted peers when resolving a literal-IP target" ;
+  triage:description "When resolving a literal IP target, the resolver fans out an unbounded O(N) DNS lookup across ALL enabled trusted peers (rather than a scoped lookup), compounding the unbounded-DNS-call risk described in AI25-RSH-001. Each iteration calls resolve_peer_addresses(peer).is_ok_and(...) which invokes to_socket_addrs() for every enabled peer." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-002/s25/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T17:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion 2 .
+
+<urn:atm:triage:occurrence/AI25-RSH-002/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 82 ;
+  triage:snippet "filter(|peer| resolve_peer_addresses(peer).is_ok_and(|addresses| addresses.contains(&ip)))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/5f794c42d449687b6badca46193592f11bc25529> ;
+  triage:fixedAt "2026-07-26T17:00:00Z"^^xsd:dateTime ;
+  triage:fixedBy "quality-mgr" ;
+  triage:fixedVia "MAX_LITERAL_IP_AUTHORITY_CANDIDATES=32 cap at lines 39,111-118 gates O(N) DNS fan-out (lines 119-126); backed by test literal_ip_authority_resolution_has_a_bounded_candidate_set (lines 976-987)" .
+
+<urn:atm:triage:worktree/s25/5f794c42d449687b6badca46193592f11bc25529>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42d449687b6badca46193592f11bc25529" ;
+  triage:orderIndex 5 .
+
+# WorktreeSnapshots for branches 1-4 and 6-10 (branch absent state - no occurrence)
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

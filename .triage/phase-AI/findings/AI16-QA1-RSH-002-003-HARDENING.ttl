@@ -1,0 +1,290 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI16-QA1-RSH-002-003-HARDENING>
+  a triage:Finding ;
+  triage:findingId "AI16-QA1-RSH-002-003-HARDENING" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Service hardening gaps in runtime_health.rs and peer.rs" ;
+  triage:description "Service hardening gaps in crates/atm-daemon/src/runtime_health.rs and crates/atm/src/commands/peer.rs related to peer sync policy and certificate management (e.g. missing retry/backoff policy validation, missing structured error handling around cert rotation/expiry checks for peer sync). Sweep both files for the peer-sync/reconciliation and certificate-handling code paths to confirm current occurrences and locations on each branch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/9> ;
+  triage:openOn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> ;
+  triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> ;
+  triage:highestOpenBranch "feature/pAI-s16-offline-reconciliation" ;
+  triage:highestFixedBranch "" ;
+  triage:correctionNote "2026-07-22: promote_to_branch and highestOpenBranch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and forbids daemon/canonical-router/storage changes. All occurrences (peer.rs peer_sync_policy/save_peer_sync_policy, runtime_health.rs peer_sync_cooldown/reconcile_after_success) are AI.16 deliverables (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md). Original mis-target was applied via unverified highest-open-branch heuristic." .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 152 ;
+  triage:snippet "print_output(&store.peer_sync_policy(&peer)?, false)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 169 ;
+  triage:snippet "store.save_peer_sync_policy(&peer, policy)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 153 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex<HashMap<...>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 429 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex::new(HashMap::new())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 602 ;
+  triage:snippet "self.reconcile_after_success(host, &peer, transport.as_ref())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 607 ;
+  triage:snippet "fn reconcile_after_success(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 613 ;
+  triage:snippet "let policy = self.peer_config_store.peer_sync_policy(peer_host)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 621 ;
+  triage:snippet ".peer_sync_cooldown.lock()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s16/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1015 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex::new(HashMap::new())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 152 ;
+  triage:snippet "print_output(&store.peer_sync_policy(&peer)?, false)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/peer.rs" ;
+  triage:line 169 ;
+  triage:snippet "store.save_peer_sync_policy(&peer, policy)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 153 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex<HashMap<...>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 429 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex::new(HashMap::new())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 602 ;
+  triage:snippet "self.reconcile_after_success(host, &peer, transport.as_ref())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 607 ;
+  triage:snippet "fn reconcile_after_success(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 613 ;
+  triage:snippet "let policy = self.peer_config_store.peer_sync_policy(peer_host)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 621 ;
+  triage:snippet ".peer_sync_cooldown.lock()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:occurrence/AI16-QA1-RSH-002-003-HARDENING/s17/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1015 ;
+  triage:snippet "peer_sync_cooldown: std::sync::Mutex::new(HashMap::new())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:worktree/s11/bb20fd9a9290895c55ae9981a718f33e11e0a751>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/b6466aa17d9564b104d292485e26dd7614b65cb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/aecade2a23b264bb26afc3c941974aea2627e4ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/672ffc349b1faabc769e8f1e81cafede34479fb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/2ffc7880212dd54e307e0f0f5b0b382b18a41e59>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "2ffc7880212dd54e307e0f0f5b0b382b18a41e59" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:orderIndex 7 .

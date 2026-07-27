@@ -8,7 +8,7 @@ trait = "ProjectionExport"
 
 [implementation]
 type = "DaemonInboxExport"
-module = "atm_daemon"
+module = "atm_daemon::boundary_adapters"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
@@ -27,7 +27,6 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 [references]
 scope = "outside_owner_crate"
 forbidden = ["DaemonInboxExport"]
-named_callers = ["atm_daemon::boundary_adapters::DaemonInboxExport::export_record", "atm_daemon::boundary_adapters::DaemonInboxExport::reexport_message"]
 
 [contracts]
 request_types = ["export write requests"]
@@ -44,5 +43,5 @@ lint_rules = ["LINT-BOUNDARY-INBOX-EXPORT-DAEMON-EDGES", "LINT-BOUNDARY-INBOX-EX
 review_gates = ["no_public_impl", "no_public_constructor", "no_direct_mailbox_helper_calls", "repair_rebuild_only_reexport"]
 
 [status]
-state = "concrete_landed"
-notes = ["daemon-local historical Claude compatibility helpers own the retired inbox export contract until reconcile/watch deletion lands", "send and receive compatibility writes must stay behind this adapter rather than reaching mailbox helpers directly", "watcher/reconcile handling for ATM-authored compatibility projection updates must remain idempotent under this adapter boundary", "Yb Y.10 leaves this adapter available only for explicit repair/rebuild export and removes normal-runtime append fallback into this seam"]
+state = "retired"
+notes = ["retired with the deleted daemon boundary_adapters module; inbox export is not a daemon runtime surface"]

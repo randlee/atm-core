@@ -5,7 +5,7 @@ use std::path::Path;
 #[cfg(test)]
 use serde_json::Value;
 
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 #[cfg(test)]
 use crate::persistence;
 use crate::schema::InboxMessage;
@@ -60,7 +60,7 @@ where
     persistence::atomic_write_bytes(
         path,
         &bytes,
-        AtmErrorKind::MailboxWrite,
+        AtmErrorCode::MailboxWriteFailed,
         "mailbox file",
         "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
     )
@@ -92,32 +92,29 @@ pub fn append_jsonl_record<T: serde::Serialize>(path: &Path, record: &T) -> Resu
         .open(path)
         .map_err(|error| {
             AtmError::new(
-                AtmErrorKind::MailboxWrite,
-                format!("failed to open mailbox file {} for append: {error}", path.display()),
+                AtmErrorCode::MailboxWriteFailed,
+                format!(
+                    "failed to open mailbox file {} for append: {error}",
+                    path.display()
+                ),
             )
-            .with_recovery(
-                "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
-            )
-            .with_source(error)
         })?;
     file.write_all(&bytes).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxWrite,
-            format!("failed to append mailbox record {}: {error}", path.display()),
+            AtmErrorCode::MailboxWriteFailed,
+            format!(
+                "failed to append mailbox record {}: {error}",
+                path.display()
+            ),
         )
-        .with_recovery(
-            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
-        )
-        .with_source(error)
     })?;
     file.sync_data().map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxWrite,
-            format!("failed to sync appended mailbox record {}: {error}", path.display()),
+            AtmErrorCode::MailboxWriteFailed,
+            format!(
+                "failed to sync appended mailbox record {}: {error}",
+                path.display()
+            ),
         )
-        .with_recovery(
-            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
-        )
-        .with_source(error)
     })
 }

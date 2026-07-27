@@ -1,27 +1,23 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::fmt;
+use std::num::NonZeroU16;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::time::Duration;
 
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, InboxMessage, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 
 #[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
 }
 
-fn require_non_blank(
-    value: String,
-    subject: &str,
-    recovery: &'static str,
-) -> Result<String, AtmError> {
+fn require_non_blank(value: String, subject: &str) -> Result<String, AtmError> {
     if value.trim().is_empty() {
-        return Err(
-            AtmError::validation(format!("{subject} must not be blank")).with_recovery(recovery)
-        );
+        return Err(AtmError::validation(format!("{subject} must not be blank")));
     }
     Ok(value)
 }
@@ -32,12 +28,7 @@ pub struct MessageKey(String);
 
 impl MessageKey {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "message key",
-            "Populate a stable ATM message key before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "message key").map(Self)
     }
 
     pub fn into_inner(self) -> String {
@@ -94,12 +85,7 @@ pub struct TaskState(String);
 
 impl TaskState {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "task state",
-            "Populate a non-empty task state before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "task state").map(Self)
     }
 }
 
@@ -143,12 +129,7 @@ pub struct AckTransition(String);
 
 impl AckTransition {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        require_non_blank(
-            value.into(),
-            "ack transition",
-            "Populate a non-empty ack transition before calling the storage contract.",
-        )
-        .map(Self)
+        require_non_blank(value.into(), "ack transition").map(Self)
     }
 }
 
@@ -223,10 +204,7 @@ impl FromStr for BuiltInNudgeTemplateKind {
             "acknowledge_task" => Ok(Self::AcknowledgeTask),
             other => Err(AtmError::validation(format!(
                 "unsupported built-in nudge template kind `{other}`"
-            ))
-            .with_recovery(
-                "Use one of delivery, delivery_ack, delivery_task, delivery_task_ack, acknowledge, or acknowledge_task.",
-            )),
+            ))),
         }
     }
 }
@@ -477,20 +455,242 @@ pub struct RosterChangedEvent {
     pub timestamp: IsoTimestamp,
 }
 
-pub trait MessageStore {
+pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
 }
 
-pub trait RosterStore {
+pub trait RosterStore: sealed::Sealed + Send + Sync {
     fn load_roster(&self, team: &TeamName) -> Result<RosterSnapshot, AtmError>;
     fn save_roster(&self, roster: &RosterSnapshot) -> Result<(), AtmError>;
     fn list_teams(&self) -> Result<Vec<TeamName>, AtmError>;
 }
 
-pub trait StorageNotifier {
+/// A non-empty, opaque certificate fingerprint. It cannot be confused with a
+/// private-key reference at storage and transport boundaries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct CertificateFingerprint(String);
+
+impl CertificateFingerprint {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CertificateFingerprint {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for CertificateFingerprint {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate fingerprint").map(Self)
+    }
+}
+
+impl TryFrom<String> for CertificateFingerprint {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<CertificateFingerprint> for String {
+    fn from(value: CertificateFingerprint) -> Self {
+        value.0
+    }
+}
+
+/// A non-empty opaque reference to locally held private-key material.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[serde(try_from = "String", into = "String")]
+pub struct PrivateKeyRef(String);
+
+impl PrivateKeyRef {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PrivateKeyRef {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PrivateKeyRef {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        require_non_blank(value.to_owned(), "certificate key reference").map(Self)
+    }
+}
+
+impl TryFrom<String> for PrivateKeyRef {
+    type Error = AtmError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.parse()
+    }
+}
+
+impl From<PrivateKeyRef> for String {
+    fn from(value: PrivateKeyRef) -> Self {
+        value.0
+    }
+}
+
+/// One durable HTTPS listener configuration. This is control-plane state only;
+/// it contains no delivery, retry, or mailbox data.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HttpsInterface {
+    pub bind_addr: std::net::SocketAddr,
+    pub advertise_host: HostName,
+    pub enabled: bool,
+}
+
+/// Public identity of the local TLS certificate. The private key is referenced
+/// indirectly so doctor and callers cannot read secret material from storage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalCertificate {
+    pub fingerprint: CertificateFingerprint,
+    pub private_key_ref: PrivateKeyRef,
+}
+
+/// One exact, pinned peer allowed to use the cross-host HTTPS listener.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedPeer {
+    pub host: HostName,
+    pub fingerprint: CertificateFingerprint,
+    pub enabled: bool,
+    pub https_port: NonZeroU16,
+}
+
+/// Per-peer, operator-controlled bound for one reconciliation scan.
+///
+/// A zero age disables reconciliation.  This is configuration only: it does
+/// not represent a cursor, retry budget, receipt, or delivery state.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PeerSyncPolicy {
+    #[serde(with = "duration_seconds")]
+    pub max_message_age: Duration,
+    pub max_batch_messages: NonZeroU16,
+}
+
+/// Reconciliation is deliberately bounded; a policy may never widen one pass
+/// beyond this value.
+pub const MAX_PEER_SYNC_BATCH_MESSAGES: u16 = 100;
+/// Recovery selects recent immutable writes only; wider windows risk timestamp
+/// arithmetic outside the representable range.
+pub const MAX_PEER_SYNC_MESSAGE_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
+impl PeerSyncPolicy {
+    pub fn validate(self) -> Result<Self, AtmError> {
+        if self.max_batch_messages.get() > MAX_PEER_SYNC_BATCH_MESSAGES {
+            return Err(AtmError::peer_config_validation(
+                "peer sync max_batch_messages exceeds the hard limit of 100",
+            ));
+        }
+        if self.max_message_age > MAX_PEER_SYNC_MESSAGE_AGE {
+            return Err(AtmError::peer_config_validation(
+                "peer sync max_message_age exceeds the hard limit of 30 days",
+            ));
+        }
+        Ok(self)
+    }
+}
+
+impl Default for PeerSyncPolicy {
+    fn default() -> Self {
+        Self {
+            max_message_age: Duration::ZERO,
+            max_batch_messages: NonZeroU16::new(MAX_PEER_SYNC_BATCH_MESSAGES)
+                .expect("hard limit is non-zero"),
+        }
+    }
+}
+
+/// Backend-neutral durable cross-host configuration.
+///
+/// This boundary deliberately excludes transport state, retries, receipts,
+/// and mailbox state. HTTPS adapters consume this contract but never SQLite
+/// implementation types.
+pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
+    fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
+    fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
+    fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
+    fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError>;
+    fn save_local_certificate(&self, certificate: &LocalCertificate) -> Result<(), AtmError>;
+    fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError>;
+    fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError>;
+    fn save_trusted_peer(&self, peer: &TrustedPeer) -> Result<(), AtmError>;
+    fn remove_trusted_peer(&self, host: &HostName) -> Result<bool, AtmError>;
+    fn peer_sync_policy(&self, _host: &HostName) -> Result<PeerSyncPolicy, AtmError> {
+        Ok(PeerSyncPolicy::default())
+    }
+    fn save_peer_sync_policy(
+        &self,
+        _host: &HostName,
+        _policy: PeerSyncPolicy,
+    ) -> Result<(), AtmError> {
+        Err(AtmError::validation(
+            "selected storage backend does not support durable peer sync policy",
+        ))
+    }
+}
+
+/// Immutable canonical peer write selected for a bounded reconciliation pass.
+/// The JSON is the origin writer's serialized request, retained with the
+/// canonical message rather than in an outbox or delivery-state table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StoredPeerWrite {
+    /// Ordering key retained with the immutable canonical write. This is a
+    /// transient scan cursor only; it is never delivery state.
+    pub created_at: IsoTimestamp,
+    pub message_id: AtmMessageId,
+    pub request_json: String,
+}
+
+/// Read-only selection of local, immutable peer-directed messages.
+pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
+    fn page_for_peer(
+        &self,
+        peer: &HostName,
+        not_before: IsoTimestamp,
+        after: Option<(IsoTimestamp, AtmMessageId)>,
+        limit: NonZeroU16,
+        budget: std::time::Duration,
+    ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+}
+
+mod duration_seconds {
+    use std::time::Duration;
+
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(value: &Duration, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u64(value.as_secs())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Duration::from_secs(u64::deserialize(deserializer)?))
+    }
+}
+
+pub trait StorageNotifier: sealed::Sealed + Send + Sync {
     fn message_received(&self, event: &MessageReceivedEvent) -> Result<(), AtmError>;
     fn roster_changed(&self, event: &RosterChangedEvent) -> Result<(), AtmError>;
 }
@@ -525,10 +725,11 @@ pub trait NudgeTemplateOverrideStore: sealed::Sealed + Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::{
-        AckRequirementState, BuiltInNudgeTemplateKind, Message, MessageKey, MessageQuery,
-        MessageReceivedEvent, MessageStore, NudgeTemplateOverrideStore, RosterChangedEvent,
-        RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot, RosterStore,
-        StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
+        AckRequirementState, BuiltInNudgeTemplateKind, CertificateFingerprint,
+        MAX_PEER_SYNC_MESSAGE_AGE, Message, MessageKey, MessageQuery, MessageReceivedEvent,
+        MessageStore, NudgeTemplateOverrideStore, PeerSyncPolicy, PrivateKeyRef,
+        RosterChangedEvent, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
+        RosterStore, StorageNotifier, TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow,
         derive_ack_requirement, sealed,
     };
     use crate::ROLE_WORKER;
@@ -537,12 +738,16 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ModelName, TeamName};
     use chrono::Utc;
     use serde_json::Map;
+    use std::num::NonZeroU16;
+    use std::time::Duration;
 
     #[derive(Default)]
     struct DummyStore;
 
     #[derive(Default)]
     struct DummyNudgeTemplateOverrideStore;
+
+    impl sealed::Sealed for DummyStore {}
 
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
@@ -657,10 +862,12 @@ mod tests {
             message_key: key.clone(),
             envelope: MessageEnvelope {
                 from: agent.clone(),
+                source_chat_id: None,
                 text: "hello".to_string(),
                 timestamp: IsoTimestamp::from_datetime(Utc::now()),
                 read: false,
                 source_team: Some(team.clone()),
+                destination_chat_id: None,
                 summary: None,
                 message_id: None,
                 requires_ack: false,
@@ -745,10 +952,12 @@ mod tests {
     fn derive_ack_requirement_ignores_task_id_and_uses_only_requires_ack_and_acknowledged_at() {
         let base = MessageEnvelope {
             from: "sender".parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::from_datetime(Utc::now()),
             read: false,
             source_team: Some("test-team".parse().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: None,
             requires_ack: false,
@@ -779,5 +988,20 @@ mod tests {
             derive_ack_requirement(&pending),
             AckRequirementState::RequiredAcknowledged
         );
+    }
+
+    #[test]
+    fn security_reference_newtypes_reject_blank_deserialization() {
+        assert!(serde_json::from_str::<CertificateFingerprint>("\" \"").is_err());
+        assert!(serde_json::from_str::<PrivateKeyRef>("\" \"").is_err());
+    }
+
+    #[test]
+    fn peer_sync_policy_rejects_windows_beyond_the_bounded_recovery_limit() {
+        let policy = PeerSyncPolicy {
+            max_message_age: MAX_PEER_SYNC_MESSAGE_AGE + Duration::from_secs(1),
+            max_batch_messages: NonZeroU16::new(1).expect("non-zero"),
+        };
+        assert!(policy.validate().is_err());
     }
 }

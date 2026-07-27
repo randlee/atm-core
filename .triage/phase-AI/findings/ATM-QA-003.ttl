@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "No explicit named structural test proves localhost/own-IP never matched before peer-adapter routing branch" ;
+  triage:description "Req-qa round 2 deliverable-missing finding on feature/pAI-s23-crosshost-shared-write-path @ 985a6d46. Sprint doc sub-task 4 (docs/plans/phase-ai/sprint-ai-23-crosshost-shared-write-path.md:181-182) requires: 'Structural test(s): prove that the host-routing-decision precedence ensures localhost / own-IP never match the dedicated peer adapter routing branch before the adapter tries to match it -- explicit named test, not indirect generic coverage'. Current state: only indirectly covered by pre-existing generic AI.12 host-routing-decision invariant in crates/atm-architecture/tests/boundary_enforcement.rs:167-227. No explicit named AI.23-specific structural test / AST assertion exists that directly proves localhost/own-IP are rejected before peer-adapter routing. Correction: add an explicit named structural test (e.g., test_peer_adapter_never_matches_localhost_or_own_ip in a new or existing test module) with AST assertions covering the precedence chain: WriteTarget::peer_route validation -> host check -> deduplicate peer identity -> then attempt adapter match." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). ai23_peer_adapter_never_matches_localhost_or_own_ip (boundary_enforcement.rs:271-312) is an explicit named AST-based structural test matching the sprint-doc's actual ask (AST assertions, same pattern as the existing AI.12 invariant test) -- not a runtime-behavioral test, which the sprint doc did not require. Confirmed structurally distinct from ai23_ingress_adapters_cannot_own_write_side_effects (:318), which asserts a different invariant (write side-effect ownership, not host-routing precedence). cargo test -p atm-architecture --test boundary_enforcement ai23_peer_adapter_never_matches_localhost_or_own_ip: 1/1 pass. ruthless-boundary-qa independently confirmed the test follows the same AST-visitor conventions as its neighbors, not a new/inconsistent approach. CI green (8/8)." ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s23-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/integrate-8750587b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/preai27-a5659742> ;
+  triage:triageRecordVersion "1" .
+
+# Deliverable-missing occurrence on s23: no explicit named test for host-routing precedence
+<urn:atm:triage:occurrence/ATM-QA-003/s23-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 167 ;
+  triage:snippet "AI.12 generic host-routing-decision invariant test (lines 167-227) covers routing precedence but does NOT include explicit named AI.23-specific structural test proving localhost/own-IP never match peer-adapter branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Sprint doc sub-task 4 (lines 181-182) requires explicit named structural test proving host-routing-decision precedence ensures localhost/own-IP never match dedicated peer-adapter routing branch before adapter tries to match it. Currently only indirect generic coverage via AI.12 invariant. Missing: explicit test_peer_adapter_never_matches_localhost_or_own_ip or equivalent with AST assertions." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/985a6d46> .
+
+<urn:atm:triage:worktree/s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/ATM-QA-003/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 167 ;
+  triage:snippet "canonical_write_router_has_one_host_routing_decision() (167-227) covers routing precedence but is not an explicit AI.23-named localhost/own-IP-vs-peer-adapter test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: a NEW test ai23_ingress_adapters_cannot_own_write_side_effects() now exists (boundary_enforcement.rs:318), but it asserts ingress adapters don't own write side effects -- a related but DIFFERENT invariant from this finding's ask (an explicit test proving localhost/own-IP never match the peer-adapter routing branch). This finding's specific gap is not yet closed by that test; still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .
+
+<urn:atm:triage:occurrence/ATM-QA-003/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 271 ;
+  triage:snippet "fn ai23_peer_adapter_never_matches_localhost_or_own_ip() { ... syn AST assertions on post_write_router.rs precedence and forbidden loopback fragments ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656; cargo test 1/1 pass; ruthless-boundary-qa PASS." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .

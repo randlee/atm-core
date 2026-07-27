@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-004" ;
+  triage:title "RULE-002 function-length violation in crates/atm-daemon/src/runtime_health/post_write_router.rs dispatch()" ;
+  triage:description "dispatch() in crates/atm-daemon/src/runtime_health/post_write_router.rs spans lines 14-103 (90 lines), exceeding the project's 80-line RULE-002 function-length threshold. This function was newly introduced by this sprint's PostWriteRouter extraction (commit 1daef214031fffa82d422862025086ae697b3251, closing AI24-IMPORTANT-001/002). Confirmed by CI: gh pr checks 630 shows Just lint failing on macos, ubuntu, and windows at this exact head. post_write_router.rs is a brand-new file containing only two functions (dispatch at lines 14-103, record_unconfirmed_delivery at lines 107-125); only dispatch() exceeds the threshold, so the pattern does not recur elsewhere in the new file or module. Correlation across ordered worktrees found this file present, byte-identical, and still violating on feature/pAI-s25-peer-authority-resolution (head b435fa6e), which has merged s24 forward unchanged. The file does not yet exist on feature/pAI-s26-peer-write-deadline, s27, s28, s29, or s30 (git show HEAD:<path> fails there), confirming those branches have not merged s24's PostWriteRouter refactor forward yet and therefore have no occurrence to record. NOTE FOR TEAM-LEAD: a near-duplicate record AI24-BLOCK-101.ttl already exists in this findings directory for the same violation (same file, same function, same commit), but with only a single s24 occurrence, orderIndex 24, and dispatch_ready=false; this record supersedes it with full s24/s25 correlation and dispatch_ready=true. Recommend reconciling/closing AI24-BLOCK-101 as a duplicate of AI24-BLOCK-004 once aggregated." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "architecture/function-size" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T02:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T02:19:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T14:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-004/4_s24_host_qualified_ack_receipt> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-004/5_s25_peer_authority_resolution> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-004/4_s24_host_qualified_ack_receipt>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/post_write_router.rs" ;
+  triage:line 14 ;
+  triage:snippet "fn dispatch() now ~78 lines (was 90), under 80-line RULE-002 threshold; extract of local_post_write_emitter() and record_unconfirmed_delivery() helpers confirmed by arch-qa and rust-qa-agent" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283747d3186667fab7ad2f752b1c4c1a968" ;
+  triage:occursIn <urn:atm:triage:worktree/4_s24_host_qualified_ack_receipt> .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-004/5_s25_peer_authority_resolution>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/post_write_router.rs" ;
+  triage:line 14 ;
+  triage:snippet "fn dispatch() now ~78 lines (was 90), under 80-line RULE-002 threshold; inherited fixed version via merge-forward from s24" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b435fa6e17677df110d83bba7533811591f01a2a" ;
+  triage:occursIn <urn:atm:triage:worktree/5_s25_peer_authority_resolution> .
+
+<urn:atm:triage:worktree/4_s24_host_qualified_ack_receipt>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/5_s25_peer_authority_resolution>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b435fa6e17677df110d83bba7533811591f01a2a" ;
+  triage:orderIndex 5 .

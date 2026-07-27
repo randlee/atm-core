@@ -163,10 +163,6 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("{}", render_ack_result_line(outcome));
-        if outcome.reply_disposition.is_suppressed_self_ack() {
-            println!("Suppressed reply text:");
-            println!("{}", outcome.reply_text);
-        }
     }
 
     for warning in &outcome.warnings {
@@ -178,10 +174,6 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
 
 fn render_ack_result_line(outcome: &AckOutcome) -> String {
     match &outcome.reply_disposition {
-        atm_core::ack::AckReplyDisposition::SuppressedSelfAck => format!(
-            "Acknowledged {} for {}@{} and suppressed the self-ack reply",
-            outcome.message_id, outcome.agent, outcome.team
-        ),
         atm_core::ack::AckReplyDisposition::Sent {
             reply_message_id,
             reply_target,
@@ -276,12 +268,53 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
+    print_doctor_peer_config(report);
     print_doctor_environment(report);
     print_doctor_findings(report);
     print_doctor_roster(report);
     print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_peer_config(report: &DoctorReport) {
+    let Some(peer_config) = report
+        .daemon_runtime
+        .as_ref()
+        .and_then(|runtime| runtime.peer_config.as_ref())
+    else {
+        return;
+    };
+    println!("{}", render_doctor_peer_config(peer_config));
+}
+
+fn render_doctor_peer_config(peer_config: &atm_core::doctor::PeerConfigDoctorReport) -> String {
+    let mut rendered = format!(
+        "Peer HTTPS: interfaces={}/{} trusted_peers={}/{} certificate={}",
+        peer_config.enabled_interface_count,
+        peer_config.configured_interface_count,
+        peer_config.enabled_trusted_peer_count,
+        peer_config.trusted_peer_count,
+        peer_config
+            .certificate_fingerprint
+            .as_deref()
+            .unwrap_or("<not configured>")
+    );
+    if let Some(failure) = &peer_config.validation_failure {
+        rendered.push_str(&format!(
+            "\n  peer configuration failure: [{}] {}",
+            failure.code, failure.message
+        ));
+    }
+    for peer in &peer_config.trusted_peers {
+        rendered.push_str(&format!(
+            "\n  peer {}:{} ({})",
+            peer.host,
+            peer.https_port,
+            if peer.enabled { "enabled" } else { "disabled" }
+        ));
+    }
+    rendered
 }
 
 fn print_doctor_post_send(report: &DoctorReport) {
@@ -805,11 +838,11 @@ mod tests {
     use atm_core::ack::AckOutcome;
     use atm_core::doctor::{
         BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-        BootstrapTraceReport,
+        BootstrapTraceReport, PeerConfigDoctorReport,
     };
     use serde_json::json;
 
-    use super::{render_ack_result_line, render_bootstrap_trace_section};
+    use super::{render_bootstrap_trace_section, render_doctor_peer_config};
 
     #[test]
     fn bootstrap_trace_section_renders_doctor_output_block() {
@@ -828,27 +861,6 @@ mod tests {
         assert!(rendered.contains("Auto-start: auto_started"));
         assert!(rendered.contains("Connect detail: connect detail"));
         assert!(rendered.contains("Auto-start detail: auto-start detail"));
-    }
-
-    #[test]
-    fn ack_output_renders_suppressed_self_ack_human_line() {
-        let outcome: AckOutcome = serde_json::from_value(json!({
-            "action": "ack",
-            "team": "test-team",
-            "agent": "sender-a",
-            "message_id": "01KX5TEST00000000000000001",
-            "task_id": null,
-            "reply_disposition": {
-                "kind": "suppressed_self_ack"
-            },
-            "reply_text": "already on it",
-            "warnings": []
-        }))
-        .expect("ack outcome");
-
-        let rendered = render_ack_result_line(&outcome);
-        assert!(rendered.contains("suppressed the self-ack reply"));
-        assert!(rendered.contains("01KX5TEST00000000000000001"));
     }
 
     #[test]
@@ -879,5 +891,27 @@ mod tests {
             rendered["reply_disposition"]["reply_message_id"],
             "01KX5TEST00000000000000003"
         );
+    }
+
+    #[test]
+    fn doctor_peer_text_redacts_private_key_material() {
+        let rendered = render_doctor_peer_config(&PeerConfigDoctorReport {
+            configured_interface_count: 2,
+            enabled_interface_count: 1,
+            certificate_fingerprint: Some("sha256:public-fingerprint".to_string()),
+            trusted_peer_count: 3,
+            enabled_trusted_peer_count: 2,
+            trusted_peers: vec![atm_core::doctor::PeerAuthorityDoctorReport {
+                host: "peer.example.test".to_string(),
+                https_port: 43101,
+                enabled: true,
+            }],
+            validation_failure: None,
+        });
+
+        assert!(rendered.contains("sha256:public-fingerprint"));
+        assert!(rendered.contains("peer.example.test:43101 (enabled)"));
+        assert!(!rendered.contains("private_key_ref"));
+        assert!(!rendered.contains("keychain:secret"));
     }
 }

@@ -1,0 +1,156 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI27-CIWIN-001>
+  a triage:Finding ;
+  triage:findingId "AI27-CIWIN-001" ;
+  triage:title "Windows CI fails on hardcoded Unix path in smoke test (s27-s30 forward-merge chain)" ;
+  triage:description "PR #642 (feature/pAI-s27-peer-delivery-observability) and forward-merged branches (s28-s30) fail on Windows CI with FileNotFoundError. Root cause: scripts/smoke/test_run_peer_pair.py lines 55 and 118 patch shutil.which with hardcoded /bin/echo (Unix path). On Windows, the path expands to D:\\bin\\echo which does not exist, triggering FileNotFoundError before the test assertions can run. This masks the real RuntimeError that test_validation_rejects_constant_message_assertion expects to catch. Ubuntu-latest and macOS-latest both pass all CI legs (Test and Just-lint); windows-latest is RED on both legs at commit 5e23fbde across all four branches (s27-s30)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T19:35:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S7-QA-FIX-2 (PR #642 gate). Independently re-verified, not accepted from arch-ctm's dbe489db self-report at face value: both cited sites (test_run_peer_pair.py:55 and :118) now use return_value=str(Path(__file__).resolve()) instead of the hardcoded /bin/echo on the current s27 head (4315ad0a). gh pr checks 642: 8/8 green including windows-latest Test and Just-lint at 4315ad0a -- the actual FileNotFoundError root cause is resolved, not just a test-shape change. Independently fetched s28/s29/s30 current heads directly from origin (not from any self-report) and confirmed the identical fix is present verbatim on all three (feature/pAI-s28-bounded-peer-recovery ab9e409f, feature/pAI-s29-crosshost-smoke-rerun 5f87cca2, feature/pAI-s30-semver-http-compatibility 9a4eda4e), so all four occurrences close. IMPORTANT CAVEAT: gh pr checks on PR #634 (s28) and PR #623 (s30) currently show windows-latest Just-lint FAILING for an UNRELATED reason discovered during this verification -- clippy error E0063 (PeerDeliveryEvent missing fields candidate_count/next_attempt_at) plus an atm-error Cargo.toml version-pin mismatch (1.3.2-beta.28 / -30). This is a distinct, not-yet-triaged blocking CI regression on s28/s30, separate from this finding's scope; PR #638 (s29) was still running at review time. Flagged to team-lead in the AICH-S7-QA-FIX-2 verdict for separate triage -- do not treat s28/s30 as merge-ready on the strength of this closure alone." ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-26T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIWIN-001/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIWIN-001/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIWIN-001/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIWIN-001/s30/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/5e23fbde> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/1db85ef0> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s29/e0294748> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/e03d9c58> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/e03d9c58> ;
+  triage:highestOpenBranch "feature/pAI-s30-semver-http-compatibility" .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s27/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at dbe489db, verified on current head 4315ad0a. gh pr checks 642: 8/8 green incl. windows-latest." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e23fbde> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s27/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 118 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at dbe489db, verified on current head 4315ad0a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e23fbde> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s28/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "ab9e409f" ;
+  triage:note "Independently fetched from origin (PR #634): fix present verbatim at current head ab9e409f. NOTE: PR #634 windows-latest Just-lint is currently RED for an unrelated reason (clippy E0063 PeerDeliveryEvent field mismatch + atm-error version-pin drift) -- see finding-level closureNote; branch is not merge-ready despite this occurrence closing." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/1db85ef0> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s28/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 118 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "ab9e409f" ;
+  triage:note "Independently fetched from origin (PR #634): fix present verbatim at current head ab9e409f." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/1db85ef0> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s29/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5f87cca2" ;
+  triage:note "Independently fetched from origin (PR #638): fix present verbatim at current head 5f87cca2. PR #638 windows-latest checks were still running (pending) at review time -- not yet confirmed green." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s29/e0294748> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s29/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 118 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "5f87cca2" ;
+  triage:note "Independently fetched from origin (PR #638): fix present verbatim at current head 5f87cca2." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s29/e0294748> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s30/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9a4eda4e" ;
+  triage:note "Independently fetched from origin (PR #623): fix present verbatim at current head 9a4eda4e. NOTE: PR #623 windows-latest Just-lint is currently RED for an unrelated reason (identical clippy E0063 PeerDeliveryEvent field mismatch + atm-error version-pin drift as s28) -- see finding-level closureNote; branch is not merge-ready despite this occurrence closing." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/e03d9c58> .
+
+<urn:atm:triage:occurrence/AI27-CIWIN-001/s30/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 118 ;
+  triage:snippet "with patch.object(RUNNER.shutil, \"which\", return_value=\"/bin/echo\"):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9a4eda4e" ;
+  triage:note "Independently fetched from origin (PR #623): fix present verbatim at current head 9a4eda4e." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/e03d9c58> .
+
+<urn:atm:triage:worktree/pAI-s27/5e23fbde>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "5e23fbde" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/pAI-s28/1db85ef0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "1db85ef0" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAI-s29/e0294748>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "e0294748" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/pAI-s30/e03d9c58>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "e03d9c58" ;
+  triage:orderIndex 30 .

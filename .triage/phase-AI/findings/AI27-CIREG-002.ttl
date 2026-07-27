@@ -1,0 +1,121 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI27-CIREG-002>
+  a triage:Finding ;
+  triage:findingId "AI27-CIREG-002" ;
+  triage:title "windows-latest Just-lint red on s28/s30: PeerDeliveryEvent field-shape drift (clippy E0063) + atm-error version-pin mismatch" ;
+  triage:description "Discovered incidentally during AICH-S7-QA-FIX-2 (AI27-CIWIN-001 verification), not self-reported by arch-ctm. gh pr checks on PR #634 (feature/pAI-s28-bounded-peer-recovery @ ab9e409f) and PR #623 (feature/pAI-s30-semver-http-compatibility @ 9a4eda4e) both show windows-latest 'Just lint' FAILING with two independent causes in the same run: (1) clippy error[E0063]: missing fields `candidate_count` and `next_attempt_at` in initializer of `peer_delivery_observability::PeerDeliveryEvent` (lib test build) -- a test/construction site on this branch was not updated when PeerDeliveryEvent gained these fields upstream (on s27/integrate), i.e. merge-forward field-shape drift, not a Windows-specific issue (would fail on any OS, but only windows-latest was captured red at review time -- ubuntu/macos legs for these two PRs were not independently checked in this pass). (2) `just lint version`/`manifests` checks fail: crates/atm-storage/Cargo.toml's atm-error path dependency version does not match the target crate version (1.3.2-beta.28 on s28, 1.3.2-beta-30 on s30) -- a stale Cargo.toml version pin, also a forward-merge drift symptom, distinct from AI27-CIWIN-001 which this branch's occurrence already closes. PR #638 (s29) windows-latest checks were still pending/running at review time and were not evaluated for this same pattern." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CIREG" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:closureNote "PARTIAL: arch-ctm self-reported fix at 003d7e04 + 737ac7ea. Independently re-verified against feature/pAI-s28-bounded-peer-recovery current head c0445b1a: PeerDeliveryEvent's candidate_count/next_attempt_at fields are now initialized at every construction site (peer_delivery_observability.rs, incl. the previously-missing test-construction site). crates/atm-storage/Cargo.toml's atm-error path-dependency pin (1.3.2-beta.28) now matches the workspace version (Cargo.toml line 24) and Cargo.lock. gh pr checks 634: 8/8 green including windows-latest Clippy and Just-lint at c0445b1a, confirming the CI regression is genuinely resolved on s28, not just locally patched. Finding remains OPEN overall: s30 (PR #623) was not re-checked in this pass -- occurrences s30-1/s30-2 remain open pending independent verification on that branch, and this Finding's highestOpenBranch is s30." ;
+  triage:triagedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-26T21:25:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-002/s28-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-002/s28-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-002/s30-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-002/s30-2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/ab9e409f> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s30/9a4eda4e> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s30/9a4eda4e> ;
+  triage:highestOpenBranch "feature/pAI-s30-semver-http-compatibility" .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s28-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_delivery_observability.rs" ;
+  triage:line 0 ;
+  triage:snippet "clippy error[E0063]: missing fields `candidate_count` and `next_attempt_at` in initializer of `peer_delivery_observability::PeerDeliveryEvent` (lib test build)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at 003d7e04/737ac7ea: all PeerDeliveryEvent construction sites now initialize candidate_count/next_attempt_at. gh pr checks 634: Clippy pass. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/ab9e409f> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s28-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/Cargo.toml" ;
+  triage:line 0 ;
+  triage:snippet "internal path dependency version must match target crate version \"1.3.2-beta.28\" (atm-error)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Fixed at 003d7e04/737ac7ea: atm-error path-dependency pin now 1.3.2-beta.28, matching root Cargo.toml (line 24) and Cargo.lock. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/ab9e409f> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_delivery_observability.rs" ;
+  triage:line 0 ;
+  triage:snippet "clippy error[E0063]: missing fields `candidate_count` and `next_attempt_at` in initializer of `peer_delivery_observability::PeerDeliveryEvent` (lib test build)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9a4eda4e" ;
+  triage:note "PR #623, gh api job 89843157264 log: identical clippy failure to s28, same PeerDeliveryEvent field-shape drift." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/9a4eda4e> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/Cargo.toml" ;
+  triage:line 0 ;
+  triage:snippet "internal path dependency version must match target crate version \"1.3.2-beta-30\" (atm-error)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9a4eda4e" ;
+  triage:note "PR #623, gh api job 89843157264 log: same stale atm-error path-dependency version-pin pattern as s28." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/9a4eda4e> .
+
+<urn:atm:triage:worktree/pAI-s28/ab9e409f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "ab9e409f" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/pAI-s30/9a4eda4e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "9a4eda4e" ;
+  triage:orderIndex 30 .
+
+# Append-only reconciliation closure. The original finding and open s30
+# occurrences above remain the historical record; these later blocks are the
+# authoritative last-block-wins state after independent current-tip and CI
+# verification.
+<urn:atm:triage:finding/AI27-CIREG-002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Verified on integrate/phase-AI@b0510a3e: commits 003d7e04 and 737ac7ea initialize candidate_count and next_attempt_at at every PeerDeliveryEvent construction site; b422978b retains the matching atm-error 1.3.2-beta-30 path-dependency pin. PR #623 was merged and its 8/8 checks, including windows-latest Just lint, passed. Local just lint passes 22/22. No production-code change is required by this reconciliation." ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-1>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:note "Closed by independent current-tip inspection: PR #623 merge a6342ba9 plus 003d7e04/737ac7ea populate candidate_count and next_attempt_at at all construction sites; PR #623 windows-latest Just lint passed." .
+
+<urn:atm:triage:occurrence/AI27-CIREG-002/s30-2>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:note "Closed by independent current-tip inspection: PR #623 merge a6342ba9 and b422978b retain atm-error 1.3.2-beta-30 in crates/atm-storage/Cargo.toml, matching the workspace; PR #623 windows-latest Just lint passed." .

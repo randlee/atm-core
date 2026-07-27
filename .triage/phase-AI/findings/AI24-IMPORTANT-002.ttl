@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI24-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:title "PeerSync cooldown does not distinguish rate-limited outcome from legitimate zero-message sync; global lock serializes cross-peer reconciliation" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs: per-peer cooldown state exists (peer_sync_progress: Mutex<HashMap<HostName, PeerSyncProgress>>, lines ~155/720) and self-clears after 60s. However when the cooldown is active, sync_peer returns Ok(PeerSyncOutcome{delivered:0}) (runtime_health.rs:722-727) which is identical in shape to a legitimate zero-message sync or a disabled-policy no-op -- callers cannot distinguish 'rate-limited' from 'nothing to deliver'. An existing test (peer_reconciliation.rs:218-229) asserts on this ambiguous shape for both cases. Additionally, sync_peer holds the single peer_sync_progress MutexGuard across the ENTIRE reconcile_peer call, which performs blocking network I/O (up to 5s per peer) -- despite cooldown state being per-peer, the lock scope is global, so an explicit sync for peer B can stall behind peer A's in-flight reconciliation. Verified as NOT adequately fixed at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt by arch-qa (FAIL), rust-service-hardening-agent (important), and req-qa (flags same fact) -- 3-reviewer convergence. Prior state: this finding was dispatched in AICH-S4-FIX-3 as one of 3 targeted findings; the per-peer keying/cooldown-self-clear was implemented but the ambiguous-outcome-signal and lock-scope requirements were not met." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "service-hardening" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:promoteToBranch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/1daef214> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/1daef214> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 704 ;
+  triage:snippet "if policy.max_message_age.is_zero() { return Ok(PeerSyncOutcome { delivered: 0 })" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-002/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 716 ;
+  triage:snippet "let mut progress = self.peer_sync_progress.lock()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
+
+<urn:atm:triage:worktree/s24/1daef214>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214" ;
+  triage:orderIndex 4 .

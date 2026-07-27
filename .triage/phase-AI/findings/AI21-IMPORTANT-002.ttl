@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI21-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:title "peer_wire_security is a raw Option<String> hand-matched at disconnected call sites" ;
+  triage:description "crates/atm-core/src/doctor/report.rs:104-109 — peer_wire_security is a raw Option<String> hand-matched at two disconnected call sites (runtime_health.rs:858-865, atm/src/commands/doctor.rs:110), risking literal-spelling drift between the CLI flag, doctor report, and any consumer keying off the exact string." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "stringly-typed-enum-substitute" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "this-branch-only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> ;
+  triage:triagedAt "2026-07-24T08:30:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 109 ;
+  triage:snippet "pub peer_wire_security: Option<PeerWireSecurityStatus>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 859 ;
+  triage:snippet "match self.peer_wire_security { PeerWireSecurity::MutualTls => PeerWireSecurityStatus::MutualTls, PeerWireSecurity::PlaintextTest => PeerWireSecurityStatus::PlaintextTest }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-IMPORTANT-002/feature-pAI-s21pre/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/doctor.rs" ;
+  triage:line 110 ;
+  triage:snippet "peer_wire_security: None" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-QA1-BLOCKING-02>
+  a triage:Finding ;
+  triage:findingId "AI11-QA1-BLOCKING-02" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "No Windows ACL restriction on local-http.json capability file" ;
+  triage:description "publish_record (crates/atm-daemon/src/local_tcp_transport.rs:383-388) gates owner-only permission restriction #[cfg(unix)] (0o600) only. No ACL-restriction code exists anywhere in the diff for Windows (grep for ACL/SetNamedSecurityInfo/windows-sys in local_tcp_transport.rs/local_http.rs -- zero hits). The bearer capability secret is left at default inherited ACLs on Windows, contradicting the sprint doc's 'owner-only filesystem/Windows ACL permissions' requirement and the boundary contract's 'local-http.json is owner-readable only.'" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "AI" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — crates/atm-daemon/src/local_tcp_transport.rs now has a #[cfg(windows)] ACL-restriction path (lines 417-456) using DACL_SECURITY_INFORMATION/PROTECTED_DACL_SECURITY_INFORMATION to build an owner-only protected DACL from the current file owner's SID, applied to the capability record alongside the existing #[cfg(unix)] 0o600 restriction (line 406). No longer default-inherited ACLs. Confirmed via direct code read, not self-report." ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/568723c5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s12/568723c5> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 383 ;
+  triage:snippet "#[cfg(unix)]\n    fs::set_permissions(record_path, fs::Permissions::from_mode(0o600))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/568723c5> .
+
+<urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 383 ;
+  triage:snippet "#[cfg(unix)]\n    fs::set_permissions(record_path, fs::Permissions::from_mode(0o600))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "568723c5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/568723c5> .
+
+<urn:atm:triage:worktree/pAI-s11/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pAI-s12/568723c5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "568723c5" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-103>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-103" ;
+  triage:title "AI27-CIREG-002 finding-level status still open despite occurrence-level fixes" ;
+  triage:description "AI27-CIREG-002 (Windows just-lint red: PeerDeliveryEvent field-shape drift + atm-error version-pin mismatch) has finding-level triage:status open despite several occurrences marked fixed. Re-verified: last-block-wins status and first block both read open -- genuinely still open, not a stale-doc artifact. Needs investigation of whether the Windows just-lint issue actually reproduces on current integrate/phase-AI tip, then either a real fix or a corrected finding-level status." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-103/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-103/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-AI/findings/AI27-CIREG-002.ttl" ;
+  triage:line 18 ;
+  triage:snippet "finding-level status open at line 18 and 74, contradicting occurrence-level fixed markers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+# Append-only reconciliation closure. The preceding open blocks preserve the
+# audit trail; this later block is the authoritative last-block-wins state.
+<urn:atm:triage:finding/ATM-QA-103>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Resolved by the append-only AI27-CIREG-002 reconciliation: current-tip source inspection, local just lint, and PR #623's green Windows Just lint establish that the finding-level status and all recorded occurrences are fixed. No code change is required." .
+
+<urn:atm:triage:occurrence/ATM-QA-103/1>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureNote "Closed by the append-only AI27-CIREG-002 reconciliation after current-tip source inspection, local just lint, and PR #623's green Windows Just lint." .

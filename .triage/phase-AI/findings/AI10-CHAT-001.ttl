@@ -1,0 +1,32 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI10-CHAT-001>
+  a triage:Finding ;
+  triage:findingId "AI10-CHAT-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:title "ack canonical_ack_write_request retained authenticated peer host" ;
+  triage:description "Cross-host ack messages retained the authenticated source host in the ReplyTarget during message write. Previously, canonical_ack_write_request hard-coded ReplyTarget.to.host = None instead of reading the authenticated_source_host from the request context. This prevented acks from being routed back to the correct peer in cross-host scenarios. Fixed by: (1) Adding host field to ReplyTarget struct, (2) Wiring validate_reply_target to read authenticated_source_host and set target.host, (3) canonical_ack_write_request now uses target.host.clone() instead of hardcoded None. New test remote_ack_is_the_canonical_host_qualified_write confirms the fix." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "important" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:reviewedBy "qa-triage" ;
+  triage:triagedAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:resolvedAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:resolutionNotes "Fixed at commit 4f9e576a on feature/pAI-s10-crosshost-proof-closeout, merged to integrate/phase-AI @ b2a76894. Evidence: (1) crates/atm-core/src/ack/mod.rs — ReplyTarget struct now carries host: Option<HostName>, (2) validate_reply_target (line 404+) reads authenticated_source_host and sets target.host, (3) canonical_ack_write_request (line 279+) uses target.host.clone() for write routing, (4) test remote_ack_is_the_canonical_host_qualified_write (line 467+) confirms host is retained through ack write cycle. Independently QA-verified." ;
+  triage:verificationCommit "4f9e576ac2476049a6f9909d0470a70ced1c9d0c" ;
+  triage:verificationBranch "integrate/phase-AI" ;
+  triage:verificationHeadSha "b2a76894" .
+
+<urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "b2a76894" ;
+  triage:orderIndex 0 .

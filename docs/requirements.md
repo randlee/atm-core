@@ -3629,7 +3629,9 @@ mail correctness.
   test adapter.
 
   Required behavior:
-  - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
+  - Unix same-host clients use HTTP over UDS through the shared
+    `atm-daemon-client` facade and may use HTTP over loopback TCP; consumers
+    such as `atm-graft` must not take a direct `interprocess` dependency.
     Windows same-host clients use HTTP over loopback TCP only
   - normal remote peers use HTTPS over TCP; the explicit daemon-only
     `plaintext-test` smoke profile is governed by
@@ -3653,6 +3655,9 @@ mail correctness.
     adapters must not infer local/peer status from socket family or address
   - Unix/Windows parity requires equivalent local HTTP request/response tests:
     UDS plus loopback TCP on Unix and loopback TCP on Windows
+  - Unix clients select UDS by default. `ATM_LOCAL_TRANSPORT=tcp` is the
+    explicit, observable loopback-TCP parity/diagnostic mode; an unavailable
+    UDS endpoint must fail rather than silently falling back to TCP
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
   router and injectable typed application handlers.
@@ -3725,8 +3730,10 @@ mail correctness.
     message record before post-write routing, but it must not create a local
     recipient-inbox row for a remote recipient or any remote-delivery queue
   - when a host-qualified same-host peer receipt encounters that daemon's own
-    identical retained origin ULID, storage logs the duplicate attempt and
-    skips the second database write without altering origin destination-host
+    identical retained origin ULID, storage logs
+    `peer_duplicate_write_skipped` with the ULID, both hosts,
+    `same_store_peer_receipt=true`, `database_write=skipped`, and
+    `delivery=continued`; it skips the second database write without altering origin destination-host
     metadata; ordinary inbound recipient delivery continues to its post-write
     local nudge and must not re-enter peer delivery. A later ACK to that
     retained record derives its host-qualified reply target from the preserved

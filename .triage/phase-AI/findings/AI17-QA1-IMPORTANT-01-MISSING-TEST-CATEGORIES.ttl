@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES>
+  a triage:Finding ;
+  triage:findingId "AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T13:35:00Z"^^xsd:dateTime ;
+  triage:title "Sprint doc's required focused-test categories incomplete" ;
+  triage:description "Two of the sprint doc's five required focused-test categories are incomplete: (1) fully-absent-inputs case — all three overrides absent, no environment variables, should fail with identity_unavailable; (2) --chat-id+ATM_IDENTITY vs --as equivalence case — verifies that using --chat-id flag with ambient ATM_IDENTITY produces same caller_chat_id as qualified --as" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T13:35:00Z"^^xsd:dateTime ;
+  triage:triageClosureTime "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/2> .
+
+<urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing test: fully_absent_inputs case" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- test inspection_context_with_all_identity_inputs_absent_is_unavailable at line 301-312 covers the fully-absent-inputs case where all three overrides are absent and no environment variables are set. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-01-MISSING-TEST-CATEGORIES/s17/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/caller_context.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing test: --chat-id+ATM_IDENTITY vs --as equivalence case" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- test chat_id_flag_with_ambient_identity_matches_qualified_as at line 485-508 verifies that using --chat-id flag with ambient ATM_IDENTITY produces same caller_chat_id as qualified --as. Stale occurrence from superseded branch feature/pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/5560bf8d> .
+
+<urn:atm:triage:worktree/pAI-s17/5560bf8d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "5560bf8d" ;
+  triage:orderIndex 17 .

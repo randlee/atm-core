@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-BLOCK-102>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-102" ;
+  triage:title "runtime_health.rs exceeds RULE-003 1000-non-test-line file-length threshold (1065 lines) even after this sprint's post_write_router.rs extraction" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs contains 1065 lines of non-test production code (before #[cfg(test)] at line 1066). Exceeds RULE-003 1000-line decomposition threshold. Needs further decomposition per arch-qa finding-recheck pass." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch-qa" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T09:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T16:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:reassignReason "Duplicate of pre-existing repeatable finding AI23-BLOCK-004 (same file/rule); AI23-BLOCK-004 was updated via qa-triage followup pass with s24/s25/s26 occurrences added and is the canonical repeatable-pattern record for this file-size violation." ;
+  triage:closureNote "Raw quality-mgr finding superseded by canonical AI23-BLOCK-004 at team-lead aggregation, whose s24 occurrence (5_s24_host_qualified_ack) is fixed/closed at 826 non-test lines via peer_sync.rs extraction, verified by quality-mgr's authoritative check_line_counts.py. Prior 'superseded' status left this occurrence open, causing a stale live-blocker double-count on AICH-S4; reconciling occurrence to fixed/closed to match the canonical record. No code change performed; record-accuracy/dedup correction only." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-102/AI24-BLOCK-102-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-102/AI24-BLOCK-102-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "runtime_health.rs - 1065 non-test lines (exceeds 1000-line RULE-003 limit); fixed under canonical duplicate AI23-BLOCK-004 (now 826 non-test lines via peer_sync.rs extraction)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
+  triage:occursIn <urn:atm:triage:worktree/S24/1daef214031fffa82d422862025086ae697b3251> .
+
+<urn:atm:triage:worktree/S24/1daef214031fffa82d422862025086ae697b3251>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pAI-s24" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214031fffa82d422862025086ae697b3251" ;
+  triage:orderIndex 24 .

@@ -1,0 +1,215 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI25-ATMQA-004>
+  a triage:Finding ;
+  triage:findingId "AI25-ATMQA-004" ;
+  triage:title "PeerConfigDoctorReport exposes only aggregate counts + fingerprint, never hostname/port" ;
+  triage:description "crates/atm-core/src/doctor/report.rs: PeerConfigDoctorReport struct (lines ~111-120) exposes only aggregate counts + fingerprint, never the peer hostname or configured port that the AI.25 Implementation map requires. Negative constraints (no private-key/resolved-IP leakage) ARE satisfied. Reported by req-qa (ATM-QA-004) during AICH-S5 QA-1 against feature/pAI-s25-peer-authority-resolution." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATMQA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T02:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-004/s30/1> ;
+  triage:closedAt "2026-07-26T00:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 124 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 124 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 124 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 124 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 111 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 111 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 111 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 111 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 111 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-004/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/doctor/report.rs" ;
+  triage:line 115 ;
+  triage:snippet "pub struct PeerConfigDoctorReport { ... }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

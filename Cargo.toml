@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/atm-architecture",
+    "crates/atm-error",
     "crates/atm-storage",
     "crates/atm-storage-sqlserver-proof",
     "crates/atm-core",
@@ -10,6 +11,7 @@ members = [
     "crates/atm-daemon-bootstrap",
     "crates/atm-daemon-client",
     "crates/atm-graft",
+    "crates/atm-graft-python",
     "crates/sc-lint-attributes",
     "crates/sc-lint-boundary",
     "crates/sc-lint-directives",
@@ -19,7 +21,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.3.1"
+version = "1.4.0-beta-ai"
 edition = "2024"
 rust-version = "1.94.1"
 authors = ["atm-core contributors"]
@@ -37,4 +39,10 @@ cargo_metadata = "0.23"
 sc-observability = "1.2.0"
 sc-observability-types = "1.2.0"
 arc-swap = "1.7"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+sha2 = "0.10"
 ulid = { version = "1.2.1", features = ["serde"] }
+base64 = "0.22"
+getrandom = "0.3"
+syn = { version = "2", features = ["full", "visit"] }
+semver = { version = "1", features = ["serde"] }

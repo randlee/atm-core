@@ -144,9 +144,6 @@ fn roster_record_agent_id(record: &RosterEntry) -> Result<AgentId, AtmError> {
             "roster member {}@{} has invalid persisted agentId '{}': {error}",
             record.agent_name, record.team_name, raw_agent_id
         ))
-        .with_recovery(
-            "Repair the malformed ATM roster row or rerun `atm teams update-member` so ATM rewrites the member metadata with a valid agentId.",
-        )
     })
 }
 

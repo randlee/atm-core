@@ -1,0 +1,16 @@
+---
+required_variables:
+  - title
+  - generated_at
+  - pane_html
+defaults: {}
+metadata:
+  purpose: Combined XHTML review page for per-host ATM peer smoke panes
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{{ title }}</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="smoke-generated-at" content="{{ generated_at }}" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;margin:2rem;color:#1b1b1b}.pane{border:1px solid #c9c9c9;margin:1rem 0;padding:1rem}.pass{color:#176b25}.fail{color:#a40000}.not-run{color:#555}</style>
+</head><body><h1>{{ title }}</h1><p>Combined {{ generated_at }}</p>{{ pane_html }}</body></html>

@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI12-QA1-BLOCKING-01>
+  a triage:Finding ;
+  triage:findingId "AI12-QA1-BLOCKING-01" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T16:00:00Z"^^xsd:dateTime ;
+  triage:title "A second destination.host inspection exists outside PostWriteRouter::dispatch" ;
+  triage:description "Global host inspection in resolve_write_recipient_snapshot (delivery_policy.rs:358) that gates remote vs. local delivery. This decision should be exclusive to PostWriteRouter::dispatch per AI.12 sprint requirements. Currently: if address.host.is_some() && !authenticated_source_host { return remote delivery } else { resolve local }." ;
+  triage:category "QA" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s20/1> ;
+  triage:openOn <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/34392e5c> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:highestFixedBranch "none" ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- still OPEN, not eligible for close/waive. crates/atm-core/src/delivery_policy.rs:349 resolve_write_recipient_snapshot now calls provenance.is_remote_origin() (crates/atm-core/src/provenance.rs:58, = target_host_qualified && !authenticated_peer) instead of the raw host check, but this is still an independent host-derived routing decision made outside PostWriteRouter::dispatch. crates/atm-daemon/src/runtime_health/peer_delivery_router.rs PostWriteRouter::dispatch (lines 15-52) separately inspects message.address.host() (lines 31-35) to make its own routing decision. Two host-based decision points remain, exactly matching this finding's original complaint; the delivery_policy.rs side was refactored/renamed, not removed. Confirmed via direct code read, not self-report." .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 358 ;
+  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/34392e5c> .
+
+<urn:atm:triage:worktree/s20/34392e5c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "34392e5c" ;
+  triage:orderIndex 20 .

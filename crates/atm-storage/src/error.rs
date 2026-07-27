@@ -1,705 +1,473 @@
-use std::backtrace::{Backtrace, BacktraceStatus};
-use std::error::Error as StdError;
 use std::fmt;
+
+use serde::{Deserialize, Serialize};
 
 pub use crate::error_codes::AtmErrorCode;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AtmErrorKind {
-    Config,
-    MissingDocument,
-    Address,
-    Identity,
-    DaemonUnavailable,
-    TeamNotFound,
-    AgentNotFound,
-    MailboxLock,
-    MailboxRead,
-    MailboxWrite,
-    FilePolicy,
-    Internal,
-    Validation,
-    Serialization,
-    Timeout,
-    ObservabilityEmit,
-    ObservabilityBootstrap,
-    ObservabilityQuery,
-    ObservabilityFollow,
-    ObservabilityHealth,
-}
-
-#[derive(Debug)]
+/// ATM's sole serializable error contract.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AtmError {
-    pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
-    pub message: String,
-    pub recovery: Vec<String>,
-    pub source: Option<Box<dyn StdError + Send + Sync>>,
-    pub backtrace: Backtrace,
+    code: AtmErrorCode,
+    message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cause: Option<String>,
 }
 
 impl AtmError {
-    pub fn new(kind: AtmErrorKind, message: impl Into<String>) -> Self {
-        Self::new_with_code(kind.default_code(), kind, message)
-    }
-
-    pub fn new_with_code(
-        code: AtmErrorCode,
-        kind: AtmErrorKind,
-        message: impl Into<String>,
-    ) -> Self {
+    /// Constructs the canonical error shape through the centralized catalog.
+    pub fn new(code: AtmErrorCode, detail: impl Into<String>) -> Self {
         Self {
             code,
-            kind,
-            message: message.into(),
-            recovery: Vec::new(),
-            source: None,
-            backtrace: Backtrace::capture(),
+            message: crate::error_catalog::render(code, detail),
+            cause: None,
         }
     }
 
-    pub fn is_config(&self) -> bool {
-        self.kind == AtmErrorKind::Config
+    /// Constructs the canonical error using the catalog's code-owned text.
+    pub fn for_code(code: AtmErrorCode) -> Self {
+        Self {
+            code,
+            message: crate::error_catalog::render_code(code),
+            cause: None,
+        }
     }
-    pub fn is_address(&self) -> bool {
-        self.kind == AtmErrorKind::Address
+
+    #[must_use]
+    pub const fn code(&self) -> AtmErrorCode {
+        self.code
     }
-    pub fn is_missing_document(&self) -> bool {
-        self.kind == AtmErrorKind::MissingDocument
+
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
     }
-    pub fn is_identity(&self) -> bool {
-        self.kind == AtmErrorKind::Identity
+
+    /// Returns the machine-preserved lower-level cause, when an adapter has one.
+    #[must_use]
+    pub fn cause(&self) -> Option<&str> {
+        self.cause.as_deref()
     }
-    pub fn is_team_not_found(&self) -> bool {
-        self.kind == AtmErrorKind::TeamNotFound
+
+    /// Attaches a lower-level adapter cause without changing the stable code or message.
+    #[must_use]
+    pub fn with_cause(mut self, cause: impl fmt::Display) -> Self {
+        self.cause = Some(cause.to_string());
+        self
     }
-    pub fn is_daemon_unavailable(&self) -> bool {
-        self.kind == AtmErrorKind::DaemonUnavailable
+
+    /// Returns the detail portion for a higher-level constructor. This avoids
+    /// embedding catalog-rendered recovery guidance into another catalog error.
+    #[must_use]
+    pub fn detail(&self) -> &str {
+        self.message
+            .split_once("\n  Recovery: ")
+            .map_or(self.message(), |(detail, _)| detail)
     }
-    pub fn is_agent_not_found(&self) -> bool {
-        self.kind == AtmErrorKind::AgentNotFound
+
+    #[must_use]
+    pub fn into_message(self) -> String {
+        self.message
     }
-    pub fn is_mailbox_read(&self) -> bool {
-        self.kind == AtmErrorKind::MailboxRead
-    }
-    pub fn is_mailbox_lock(&self) -> bool {
-        self.kind == AtmErrorKind::MailboxLock
-    }
-    pub fn is_mailbox_write(&self) -> bool {
-        self.kind == AtmErrorKind::MailboxWrite
-    }
-    pub fn is_file_policy(&self) -> bool {
-        self.kind == AtmErrorKind::FilePolicy
-    }
-    pub fn is_internal(&self) -> bool {
-        self.kind == AtmErrorKind::Internal
-    }
+
+    #[must_use]
     pub fn is_validation(&self) -> bool {
-        self.kind == AtmErrorKind::Validation
+        self.code == AtmErrorCode::MessageValidationFailed
     }
-    pub fn is_serialization(&self) -> bool {
-        self.kind == AtmErrorKind::Serialization
+
+    #[must_use]
+    pub fn is_daemon_unavailable(&self) -> bool {
+        self.code == AtmErrorCode::DaemonUnavailable
     }
-    pub fn is_timeout(&self) -> bool {
-        self.kind == AtmErrorKind::Timeout
+
+    #[must_use]
+    pub fn is_config(&self) -> bool {
+        matches!(
+            self.code,
+            AtmErrorCode::ConfigHomeUnavailable
+                | AtmErrorCode::ConfigParseFailed
+                | AtmErrorCode::ConfigRetiredHookMembersKey
+                | AtmErrorCode::ConfigRetiredLegacyHookKeys
+                | AtmErrorCode::ConfigTeamParseFailed
+                | AtmErrorCode::ConfigTeamMissing
+        )
     }
-    pub fn is_observability_emit(&self) -> bool {
-        self.kind == AtmErrorKind::ObservabilityEmit
-    }
+
+    #[must_use]
     pub fn is_observability_bootstrap(&self) -> bool {
-        self.kind == AtmErrorKind::ObservabilityBootstrap
-    }
-    pub fn is_observability_query(&self) -> bool {
-        self.kind == AtmErrorKind::ObservabilityQuery
-    }
-    pub fn is_observability_follow(&self) -> bool {
-        self.kind == AtmErrorKind::ObservabilityFollow
-    }
-    pub fn is_observability_health(&self) -> bool {
-        self.kind == AtmErrorKind::ObservabilityHealth
-    }
-
-    pub fn with_recovery(mut self, recovery: impl Into<String>) -> Self {
-        self.recovery.push(recovery.into());
-        self
-    }
-
-    pub fn primary_recovery(&self) -> Option<&str> {
-        self.recovery.first().map(String::as_str)
-    }
-
-    pub fn with_source<E>(mut self, source: E) -> Self
-    where
-        E: StdError + Send + Sync + 'static,
-    {
-        self.source = Some(Box::new(source));
-        self
-    }
-
-    pub fn backtrace(&self) -> Option<&Backtrace> {
-        (self.backtrace.status() == BacktraceStatus::Captured).then_some(&self.backtrace)
+        self.code == AtmErrorCode::ObservabilityBootstrapFailed
     }
 
     pub fn home_directory_unavailable() -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::ConfigHomeUnavailable,
-            AtmErrorKind::Config,
             "home directory is unavailable",
         )
-        .with_recovery("Set ATM_HOME or ensure the OS home directory can be resolved.")
     }
 
     pub fn atm_home_unresolved(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::AtmHomeUnresolved,
-            AtmErrorKind::Config,
-            message,
-        )
-        .with_recovery(
-            "Set ATM_HOME or ensure the OS home directory can be resolved before retrying the ATM command.",
-        )
+        Self::new(AtmErrorCode::AtmHomeUnresolved, message)
     }
 
     pub fn config(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::Config, message).with_recovery(
-            "Check the active ATM configuration, runtime wiring, and local path settings before retrying.",
-        )
+        Self::new(AtmErrorCode::ConfigParseFailed, message)
     }
 
     pub fn address_parse(message: impl Into<String>) -> Self {
         Self::new(
-            AtmErrorKind::Address,
+            AtmErrorCode::AddressParseFailed,
             format!("address parse failed: {}", message.into()),
-        )
-        .with_recovery(
-            "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target.",
         )
     }
 
     pub fn identity_unavailable() -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::IdentityUnavailable,
-            AtmErrorKind::Identity,
             "identity is not configured",
         )
-        .with_recovery("Set ATM_IDENTITY or provide an explicit command identity override when the command supports one.")
     }
 
     pub fn identity_invalid(message: impl Into<String>) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::IdentityInvalid,
-            AtmErrorKind::Identity,
             format!("caller identity is invalid: {}", message.into()),
-        )
-        .with_recovery(
-            "Set ATM_IDENTITY or provide an explicit command identity override using a valid ATM agent name.",
         )
     }
 
     pub fn identity_conflict(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::IdentityConflict,
-            AtmErrorKind::Identity,
-            message,
-        )
-        .with_recovery("Stop and report to the user immediately. Resolve the live pid conflict before retrying ATM activity.")
+        Self::new(AtmErrorCode::IdentityConflict, message)
     }
 
     pub fn member_already_exists(member: &str, team: &str) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::MemberAlreadyExists,
-            AtmErrorKind::Validation,
             format!("member '{member}' already exists in team '{team}'"),
-        )
-        .with_recovery(
-            "Use `atm teams update-member` to repair metadata for an existing member instead of retrying `atm teams add-member`.",
         )
     }
 
     pub fn member_not_found(member: &str, team: &str) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::MemberNotFound,
-            AtmErrorKind::AgentNotFound,
             format!("member '{member}' was not found in team '{team}'"),
-        )
-        .with_recovery(
-            "Confirm the target team/member pair, create the member with `atm teams add-member` if it is genuinely missing, or retry `atm teams update-member` against an existing member row.",
         )
     }
 
     pub fn daemon_unavailable(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonUnavailable,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Ensure the atm-daemon binary is installed, the daemon socket path is reachable, and ATM_DAEMON_BIN/ATM_HOME are set correctly before retrying.",
-        )
+        Self::new(AtmErrorCode::DaemonUnavailable, message)
+    }
+
+    /// Local persistence completed, but the peer did not accept the immutable
+    /// write before the caller's shared deadline. Retrying uses the same ULID.
+    pub fn remote_delivery_unconfirmed(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::RemoteDeliveryUnconfirmed, message)
+    }
+
+    pub fn peer_config_validation(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::PeerConfigValidationFailed, message)
+    }
+
+    pub fn certificate_operation(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::CertificateOperationFailed, message)
+    }
+
+    pub fn bind_preflight(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::BindPreflightFailed, message)
+    }
+
+    /// Builds an unavailable-daemon error while preserving its adapter-level cause.
+    pub fn daemon_unavailable_with_cause(
+        message: impl Into<String>,
+        cause: impl fmt::Display,
+    ) -> Self {
+        Self::daemon_unavailable(message).with_cause(cause)
     }
 
     pub fn runtime_root_invalid(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::RuntimeRootInvalid,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Repair ATM_HOME, the derived daemon/socket/database root, or the active working directory before retrying the ATM command.",
-        )
+        Self::new(AtmErrorCode::RuntimeRootInvalid, message)
     }
 
     pub fn runtime_bootstrap_refused(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::RuntimeBootstrapRefused,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Clear the conflicting daemon runtime override or repair the canonical ATM runtime root before retrying the ATM command.",
-        )
+        Self::new(AtmErrorCode::RuntimeBootstrapRefused, message)
     }
 
     pub fn socket_override_forbidden(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::SocketOverrideForbidden,
-            AtmErrorKind::Config,
-            message,
-        )
-        .with_recovery(
-            "Remove ATM_DAEMON_SOCKET; ATM always connects through the OS-user daemon endpoint.",
-        )
+        Self::new(AtmErrorCode::SocketOverrideForbidden, message)
     }
 
     pub fn daemon_may_have_executed(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonMayHaveExecuted,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Check the destination mailbox or other service-side effects before retrying this same-host ATM command.",
-        )
+        Self::new(AtmErrorCode::DaemonMayHaveExecuted, message)
     }
 
     pub fn daemon_lifecycle_wedge(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonLifecycleWedge,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Restart the daemon after the local IPC listener and lifecycle-control state fully stop, then inspect daemon logs for the wedged shutdown path.",
-        )
+        Self::new(AtmErrorCode::DaemonLifecycleWedge, message)
     }
 
     pub fn daemon_advisory_session_already_registered(message: impl Into<String>) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered,
-            AtmErrorKind::DaemonUnavailable,
             message,
-        )
-        .with_recovery(
-            "Unregister the existing advisory session or choose a fresh session id before retrying embedded advisory activation.",
         )
     }
 
     pub fn daemon_advisory_session_not_registered(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonAdvisorySessionNotRegistered,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Register the advisory session before fetching or draining daemon-owned advisory state.",
-        )
+        Self::new(AtmErrorCode::DaemonAdvisorySessionNotRegistered, message)
     }
 
     pub fn daemon_advisory_session_cleanup_failed(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonAdvisorySessionCleanupFailed,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Inspect advisory-session lifecycle logs, clean up any orphaned graft session, and retry only after the daemon unregister path is healthy.",
-        )
+        Self::new(AtmErrorCode::DaemonAdvisorySessionCleanupFailed, message)
     }
 
     pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonLaunchGateRejected,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Connect to the existing daemon if it is healthy, or resolve stale ownership before retrying another daemon launch.",
-        )
+        Self::new(AtmErrorCode::DaemonLaunchGateRejected, message)
     }
 
     pub fn daemon_serving_state_rejected(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonServingStateRejected,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Stop launching duplicate daemons and inspect the existing runtime owner before retrying startup.",
-        )
+        Self::new(AtmErrorCode::DaemonServingStateRejected, message)
     }
 
     pub fn daemon_stale_owner_recovery_failed(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonStaleOwnerRecoveryFailed,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Inspect the recorded owner, confirm no live daemon remains, repair ownership metadata, then retry startup.",
-        )
+        Self::new(AtmErrorCode::DaemonStaleOwnerRecoveryFailed, message)
     }
 
     pub fn daemon_auto_start_failed(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonAutoStartFailed,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Inspect daemon stderr/logs, fix the startup fault, and retry only after the daemon can reach serving state.",
-        )
-    }
-
-    pub fn remote_delivery_outcome_unknown(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::RemoteDeliveryOutcomeUnknown,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
-        )
+        Self::new(AtmErrorCode::DaemonAutoStartFailed, message)
     }
 
     pub fn help_topic_not_found(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::HelpTopicNotFound,
-            AtmErrorKind::Validation,
-            message,
-        )
-        .with_recovery("Use `atm help --list` to inspect available help topics and subcommands.")
+        Self::new(AtmErrorCode::HelpTopicNotFound, message)
     }
 
     pub fn test_fake_transport_injection_failed(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::TestFakeTransportInjectionFailed,
-            AtmErrorKind::Validation,
-            message,
-        )
-        .with_recovery(
-            "Fix the test seam configuration so it uses a valid FakeClientTransport or LoopbackClientTransport instance.",
-        )
+        Self::new(AtmErrorCode::TestFakeTransportInjectionFailed, message)
     }
 
     pub fn team_unavailable() -> Self {
-        Self::new_with_code(
-            AtmErrorCode::TeamUnavailable,
-            AtmErrorKind::TeamNotFound,
-            "team is not configured",
-        )
-        .with_recovery("Pass an explicit team in the address or configure a default team.")
+        Self::new(AtmErrorCode::TeamUnavailable, "team is not configured")
     }
 
     pub fn team_invalid(message: impl Into<String>) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::TeamInvalid,
-            AtmErrorKind::Validation,
             format!("caller team is invalid: {}", message.into()),
-        )
-        .with_recovery(
-            "Set ATM_TEAM or provide an explicit --team override using a valid ATM team name.",
         )
     }
 
     pub fn team_not_found(team: &str) -> Self {
         Self::new(
-            AtmErrorKind::TeamNotFound,
+            AtmErrorCode::TeamNotFound,
             format!("team '{team}' was not found"),
         )
-        .with_recovery("Create the team config or target a different team.")
     }
 
     pub fn agent_not_found(agent: &str, team: &str) -> Self {
         Self::new(
-            AtmErrorKind::AgentNotFound,
+            AtmErrorCode::AgentNotFound,
             format!("agent '{agent}' was not found in team '{team}'"),
         )
-        .with_recovery("Update the team membership or target a different recipient.")
     }
 
     pub fn validation(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::Validation, message).with_recovery(
-            "Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.",
+        Self::new(AtmErrorCode::MessageValidationFailed, message)
+    }
+
+    /// Builds a validation error whose recovery is specific to the rejected CLI input.
+    pub fn validation_with_recovery(
+        message: impl Into<String>,
+        recovery: impl Into<String>,
+    ) -> Self {
+        Self {
+            code: AtmErrorCode::MessageValidationFailed,
+            message: format!("{}\n  Recovery: {}", message.into(), recovery.into()),
+            cause: None,
+        }
+    }
+
+    pub fn local_http_capability_invalid(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpCapabilityInvalid, message)
+    }
+
+    pub fn local_http_endpoint_schema_unsupported(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointSchemaUnsupported, message)
+    }
+
+    pub fn local_http_endpoint_missing(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointMissing, message)
+    }
+
+    pub fn local_http_endpoint_non_loopback(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpEndpointNonLoopback, message)
+    }
+
+    pub fn local_http_runtime_directory_missing(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::LocalHttpRuntimeDirectoryMissing, message)
+    }
+
+    pub fn local_http_capability_revoked() -> Self {
+        Self::new(
+            AtmErrorCode::LocalHttpCapabilityRevoked,
+            "local HTTP endpoint record is revoked",
         )
+    }
+
+    pub fn message_id_conflict(message: impl Into<String>) -> Self {
+        Self::new(AtmErrorCode::MessageIdConflict, message)
     }
 
     pub fn self_addressed_send_invalid(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::SelfAddressedSendInvalid,
-            AtmErrorKind::Validation,
-            message,
-        )
-        .with_recovery(
-            "Target a different recipient or use a non-mutating mailbox inspection command instead of sending a message to yourself.",
-        )
+        Self::new(AtmErrorCode::SelfAddressedSendInvalid, message)
     }
 
     pub fn empty_nudge_template_body() -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::EmptyNudgeTemplateBody,
-            AtmErrorKind::Validation,
             "built-in nudge template body must be non-empty",
-        )
-        .with_recovery(
-            "Provide a non-empty template body, or use the explicit disable or clear nudge-template command instead of an empty string.",
         )
     }
 
     pub fn caller_context_request_invalid(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::CallerContextRequestInvalid,
-            AtmErrorKind::Validation,
-            message,
-        )
-        .with_recovery(
-            "Repair the CLI request-builder path so ATM daemon requests always include validated caller_identity and caller_team fields.",
-        )
+        Self::new(AtmErrorCode::CallerContextRequestInvalid, message)
     }
 
     pub fn missing_document(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MissingDocument, message).with_recovery(
-            "Restore the missing ATM document or recreate it through the documented team-management workflow before retrying.",
-        )
+        Self::new(AtmErrorCode::ConfigTeamMissing, message)
     }
 
     pub fn file_policy(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::FilePolicy, message).with_recovery(
-            "Update the referenced file, path, or policy inputs so they satisfy ATM file-policy rules before retrying the command.",
-        )
+        Self::new(AtmErrorCode::FilePolicyRejected, message)
     }
 
     pub fn mailbox_read(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxRead, message).with_recovery(
-            "Check ATM_HOME, mailbox file permissions, and mailbox JSON syntax before retrying the ATM command.",
-        )
+        Self::new(AtmErrorCode::MailboxReadFailed, message)
     }
 
     pub fn mailbox_lock(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxLock, message).with_recovery(
-            "Retry after other ATM mailbox activity completes, or wait for the competing process to release its mailbox lock.",
-        )
+        Self::new(AtmErrorCode::MailboxLockFailed, message)
     }
 
     pub fn mailbox_lock_read_only_filesystem(
         operation: impl fmt::Display,
         path: &std::path::Path,
     ) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::MailboxLockReadOnlyFilesystem,
-            AtmErrorKind::MailboxLock,
             format!(
                 "mailbox lock {operation} failed for {}: filesystem is read-only",
                 path.display()
             ),
         )
-        .with_recovery(
-            "Remount the filesystem read-write or point ATM at a writable home with ATM_HOME or --home, then retry the ATM command.",
-        )
     }
 
     pub fn mailbox_lock_timeout(path: &std::path::Path) -> Self {
-        Self::new_with_code(
+        Self::new(
             AtmErrorCode::MailboxLockTimeout,
-            AtmErrorKind::MailboxLock,
             format!("timed out waiting for mailbox lock on {}", path.display()),
-        )
-        .with_recovery(
-            "Retry after the competing ATM process finishes, or investigate whether another process is holding the mailbox lock unexpectedly.",
         )
     }
 
     pub fn mailbox_write(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::MailboxWrite, message).with_recovery(
-            "Check that the mailbox/workflow path is writable, has free space, and was not modified concurrently before retrying the ATM command.",
-        )
+        Self::new(AtmErrorCode::MailboxWriteFailed, message)
     }
 
     pub fn observability_emit(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityEmit, message).with_recovery(
-            "Verify the observability sink is writable or temporarily disable retained logging while investigating.",
-        )
+        Self::new(AtmErrorCode::ObservabilityEmitFailed, message)
     }
 
     pub fn observability_bootstrap(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityBootstrap, message).with_recovery(
-            "Check the configured observability backend, log directory permissions, and any local path overrides before retrying ATM commands.",
-        )
+        Self::new(AtmErrorCode::ObservabilityBootstrapFailed, message)
     }
 
     pub fn observability_query(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityQuery, message).with_recovery(
-            "Confirm retained logs exist and the observability backend supports queries for the selected sink and time range.",
-        )
+        Self::new(AtmErrorCode::ObservabilityQueryFailed, message)
     }
 
     pub fn observability_follow(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityFollow, message).with_recovery(
-            "Check that follow/tail is enabled for the active sink and retry with a narrower query if the stream is unavailable.",
-        )
+        Self::new(AtmErrorCode::ObservabilityFollowFailed, message)
     }
 
     pub fn observability_health(message: impl Into<String>) -> Self {
-        Self::new(AtmErrorKind::ObservabilityHealth, message).with_recovery(
-            "Inspect the observability backend health, file sink path, and query backend status, then rerun `atm doctor`.",
-        )
+        Self::new(AtmErrorCode::ObservabilityHealthFailed, message)
     }
 }
 
 impl fmt::Display for AtmError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)?;
-        for recovery in &self.recovery {
-            write!(f, "\n  Recovery: {recovery}")?;
-        }
-        if let Some(source) = self.source() {
-            write!(f, "\n  Source: {source}")?;
-            let mut current = source.source();
-            while let Some(next) = current {
-                write!(f, "\n  Caused by: {next}")?;
-                current = next.source();
-            }
-        }
-        match self.backtrace() {
-            Some(backtrace) => write!(f, "\n  Backtrace:\n{backtrace}")?,
-            None => write!(f, "\n  Backtrace: {:?}", self.backtrace.status())?,
-        }
-        Ok(())
+        f.write_str(&self.message)
     }
 }
 
-impl StdError for AtmError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn StdError + 'static))
-    }
-}
+impl std::error::Error for AtmError {}
 
 impl From<serde_json::Error> for AtmError {
     fn from(source: serde_json::Error) -> Self {
-        Self::new(AtmErrorKind::Serialization, format!("json error: {source}"))
-            .with_recovery(
-                "Inspect the JSON payload for structural errors and verify the schema matches the expected format.",
-            )
-            .with_source(source)
+        Self::new(
+            AtmErrorCode::SerializationFailed,
+            format!("json error: {source}"),
+        )
     }
 }
 
 impl From<toml::de::Error> for AtmError {
     fn from(source: toml::de::Error) -> Self {
-        Self::new(AtmErrorKind::Config, format!("toml error: {source}"))
-            .with_recovery(
-                "Inspect the TOML file for syntax errors and verify all required fields are present.",
-            )
-            .with_source(source)
-    }
-}
-
-impl AtmErrorKind {
-    const fn default_code(self) -> AtmErrorCode {
-        match self {
-            Self::Config => AtmErrorCode::ConfigParseFailed,
-            Self::MissingDocument => AtmErrorCode::ConfigTeamMissing,
-            Self::Address => AtmErrorCode::AddressParseFailed,
-            Self::Identity => AtmErrorCode::IdentityUnavailable,
-            Self::DaemonUnavailable => AtmErrorCode::DaemonUnavailable,
-            Self::TeamNotFound => AtmErrorCode::TeamNotFound,
-            Self::AgentNotFound => AtmErrorCode::AgentNotFound,
-            Self::MailboxLock => AtmErrorCode::MailboxLockFailed,
-            Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
-            Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
-            Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
-            Self::Internal => AtmErrorCode::InternalError,
-            Self::Validation => AtmErrorCode::MessageValidationFailed,
-            Self::Serialization => AtmErrorCode::SerializationFailed,
-            Self::Timeout => AtmErrorCode::WaitTimeout,
-            Self::ObservabilityEmit => AtmErrorCode::ObservabilityEmitFailed,
-            Self::ObservabilityBootstrap => AtmErrorCode::ObservabilityBootstrapFailed,
-            Self::ObservabilityQuery => AtmErrorCode::ObservabilityQueryFailed,
-            Self::ObservabilityFollow => AtmErrorCode::ObservabilityFollowFailed,
-            Self::ObservabilityHealth => AtmErrorCode::ObservabilityHealthFailed,
-        }
+        Self::new(
+            AtmErrorCode::ConfigParseFailed,
+            format!("toml error: {source}"),
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AtmError, AtmErrorCode, AtmErrorKind};
-    use std::error::Error;
-    use std::fmt;
+    use super::{AtmError, AtmErrorCode};
 
-    #[derive(Debug)]
-    struct LeafError(&'static str);
+    #[test]
+    fn serializes_only_the_error_contract() {
+        let error = AtmError::new(AtmErrorCode::MemberNotFound, "member missing");
 
-    impl fmt::Display for LeafError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str(self.0)
-        }
-    }
-
-    impl Error for LeafError {}
-
-    #[derive(Debug)]
-    struct ParentError {
-        message: &'static str,
-        source: LeafError,
-    }
-
-    impl fmt::Display for ParentError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str(self.message)
-        }
-    }
-
-    impl Error for ParentError {
-        fn source(&self) -> Option<&(dyn Error + 'static)> {
-            Some(&self.source)
-        }
+        assert_eq!(
+            serde_json::to_string(&error).expect("serialize error"),
+            r#"{"code":"ATM_MEMBER_NOT_FOUND","message":"member missing\n  Recovery: Confirm the target team and member before retrying."}"#
+        );
     }
 
     #[test]
-    fn display_includes_recovery_source_chain_and_backtrace_label() {
-        let error = AtmError::new(AtmErrorKind::Validation, "storage contract failed")
-            .with_recovery("Repair the contract fixture.")
-            .with_source(ParentError {
-                message: "parent source",
-                source: LeafError("leaf source"),
-            });
-
-        let rendered = error.to_string();
-
-        assert!(rendered.contains("storage contract failed"));
-        assert!(rendered.contains("Recovery: Repair the contract fixture."));
-        assert!(rendered.contains("Source: parent source"));
-        assert!(rendered.contains("Caused by: leaf source"));
-        assert!(rendered.contains("Backtrace:"));
-    }
-
-    #[test]
-    fn member_not_found_uses_agent_not_found_kind() {
+    fn member_not_found_preserves_its_stable_code() {
         let error = AtmError::member_not_found("test-agent", "test-team");
 
-        assert_eq!(error.code, AtmErrorCode::MemberNotFound);
-        assert!(error.is_agent_not_found());
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+    }
+
+    #[test]
+    fn remote_delivery_unconfirmed_has_its_stable_wire_code() {
+        let error = AtmError::remote_delivery_unconfirmed("peer response deadline elapsed");
+
+        assert_eq!(error.code().as_str(), "REMOTE_DELIVERY_UNCONFIRMED");
+        assert!(matches!(
+            "REMOTE_DELIVERY_UNCONFIRMED".parse::<AtmErrorCode>(),
+            Ok(AtmErrorCode::RemoteDeliveryUnconfirmed)
+        ));
+    }
+
+    #[test]
+    fn detail_prevents_nested_recovery_guidance() {
+        let inner = AtmError::validation("invalid caller identity");
+        let outer = AtmError::identity_invalid(inner.detail());
+
+        assert_eq!(outer.message().matches("Recovery:").count(), 1);
+        assert!(outer.message().contains("invalid caller identity"));
+    }
+
+    #[test]
+    fn adapter_cause_is_preserved_without_changing_the_error_code() {
+        let error = AtmError::daemon_unavailable_with_cause(
+            "daemon connection failed",
+            std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "connection refused"),
+        );
+
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.cause(), Some("connection refused"));
+        assert!(
+            serde_json::to_string(&error)
+                .expect("serialize error")
+                .contains(r#""cause":"connection refused""#)
+        );
     }
 }

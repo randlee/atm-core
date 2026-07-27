@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RBP-002>
+  a triage:Finding ;
+  triage:findingId "AI29-RBP-002" ;
+  triage:title "Client timeout race loses stable remote_delivery_unconfirmed code" ;
+  triage:description "When client timeout (OS-level read timeout or mpsc::recv_timeout fallback in read_http_response_with_helper, lib.rs:508-517) fires before daemon's typed response arrives within 250ms grace, caller gets generic daemon_unavailable instead of stable remote_delivery_unconfirmed code. Automation cannot reliably distinguish 'delivery outcome unknown' from unrelated failures." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RBP" ;
+  triage:severity "Important" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBP-002_8b4bea66> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:occurrence_AI29-RBP-002_8b4bea66>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:snippet "Client timeout race loses stable remote_delivery_unconfirmed code" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_8b4bea66>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "8b4bea66" ;
+  triage:orderIndex 29 .

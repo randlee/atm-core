@@ -1,0 +1,259 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-001" ;
+  triage:title "Round-2 fix does not satisfy sprint's runtime-evidence acceptance bar for advertised-IP peer-TCP write proof" ;
+  triage:description "arch-ctm's round-2 fix commit c528137cd07c8c329572cdb8e852faffb3fc9c94 on feature/pAI-s23-crosshost-shared-write-path added test advertised_ip_peer_send_and_ack_reach_the_shared_router (lines 1035-1132 in crates/atm-daemon/src/https_transport.rs) to close this finding. The test correctly proves a narrower claim: TLS-verified peer identity overwrites/never-trusts a spoofed source host (authenticated_source_host == Some(peer.host), ingress == AuthenticatedIngress::Peer). This narrower claim was independently validated and closed prior findings RBQA-F001 and RSH-002. However, the test uses RecordingRouter (a unit-only test double that records requests and returns hardcoded AtmError::validation response, never invoking the real DaemonRequestDispatcher, never persisting, providing no ULID readback, no nudge proof). The sprint doc acceptance criteria explicitly state: 'not satisfied by localhost, raw TCP connect, sender-side persistence, or a fake transport' and 'Unit-only router spies cannot close the runtime-evidence acceptance item'. UPDATED 2026-07-26: Subsequent commits e9c44882 and a856fd4a on the same feature/pAI-s23-crosshost-shared-write-path branch deliver the required runtime-evidence acceptance bar via test advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges (new test in crates/atm-daemon/src/https_transport.rs). This test uses real HttpsListenerSet::bind_enabled HTTPS peer listener, real TcpStream::connect + TLS handshake (ClientConnection/StreamOwned), real DaemonRequestDispatcher::new_for_test, asserts recipient can read persisted peer write via RequestEnvelope::Receive/ReadQuery filtered by origin ID, and captures post-persistence graft nudge via real threaded GraftReceiverListener and mpsc::sync_channel. This satisfies the sprint doc's acceptance bar: 'not satisfied by localhost, raw TCP connect, sender-side persistence, or a fake transport' because it exercises real dispatcher/listener/persistence/nudge path end-to-end. Quality-mgr independently verified via local test run (passed) and full green CI (Test macos/ubuntu/windows all pass, Clippy pass, Format check pass, Just lint all pass)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:highestFixedBranch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:fixedOn <urn:atm:triage:worktree/s23/985a6d46> ;
+  triage:promoteToBranch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s23-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s23-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s23-reconfirmed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s24-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s25-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s26-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s27-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s28-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s30-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-001/s29-1> ;
+  triage:triageRecordVersion "4" .
+
+# Status note (v2): Re-verified on feature/pAI-s23-crosshost-shared-write-path @ b0781316.
+# Test advertised_ip_peer_send_and_ack_reach_the_shared_router still uses RecordingRouter (unit spy).
+# Does NOT satisfy sprint doc runtime-evidence acceptance bar.
+# Real integration test against daemon-pair with advertised virtual-Ethernet IP needed.
+# This is currently the sole remaining architectural blocking gap preventing QA PASS on AICH-S3.
+#
+# Status update (v3): FIXED on feature/pAI-s23-crosshost-shared-write-path @ a856fd4a.
+# Commits e9c44882 and a856fd4a deliver runtime-evidence acceptance bar via test
+# advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges.
+# Uses real HttpsListenerSet, real TcpStream + TLS, real DaemonRequestDispatcher,
+# receiver-side ULID readback via RequestEnvelope::Receive/ReadQuery, real nudge proof
+# via threaded GraftReceiverListener and mpsc::sync_channel.
+# Quality-mgr independently verified: local test passed, full CI green (macos/ubuntu/windows).
+# Finding-level status remains open pending quality-mgr determination (not auto-promoting).
+#
+# Status update (v4): Req-qa round 3 reconfirmation (2026-07-26) on PR #629 @ 985a6d46.
+# Req-qa explicitly reconfirmed 0 Blocking findings remain and verified original ATM-QA-002/AI23-BLOCK-001
+# defect (unit-only RecordingRouter, no real dispatcher/persistence/nudge proof) as resolved by
+# e9c44882's real daemon-pair test. Quality-mgr independently verified via local test run and full CI green
+# (Test macos/ubuntu/windows-latest all pass, Clippy pass, Format check pass, Just lint all pass).
+# Top-level status flipped to "fixed" for s23 branch @ 985a6d46 confirmed-green PR tip.
+# S24-S30 branch occurrences remain open: not rechecked yet, require separate recheck when those branches PR.
+
+# Fixed occurrence on s23: real dispatcher + real persistence + real nudge proof
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s23-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 949 ;
+  triage:snippet "fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() { ... uses real HttpsListenerSet::bind_enabled, TcpStream::connect + ClientConnection TLS, real DaemonRequestDispatcher, RequestEnvelope::Receive readback, GraftReceiverListener nudge capture }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "a856fd4a" ;
+  triage:note "Round-3 fix verified 2026-07-26: commits e9c44882 (test(ai23): prove real peer ingress persistence) and a856fd4a (test(ai23): make expired deadline proof portable). Real daemon-pair integration test now satisfies sprint doc acceptance bar. Uses real HttpsListenerSet::bind_enabled HTTPS peer listener, real TcpStream::connect + TLS handshake (ClientConnection/StreamOwned), real DaemonRequestDispatcher::new_for_test, receiver-side ULID readback via RequestEnvelope::Receive/ReadQuery filtered by origin ID, and post-persistence graft nudge capture via real threaded GraftReceiverListener and mpsc::sync_channel. Quality-mgr independently verified via local test run and full CI green (Test macos/ubuntu/windows pass, Clippy pass, Format check pass, Just lint pass). PR #629 HEAD a856fd4a fully green." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/a856fd4a> .
+
+# Req-qa reconfirmation on s23: confirmed 0 Blocking findings, defect resolved by real daemon-pair test
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s23-reconfirmed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1089 ;
+  triage:snippet "fn advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges() { ... uses real HttpsListenerSet::bind_enabled, TcpStream::connect + ClientConnection TLS, real DaemonRequestDispatcher, RequestEnvelope::Receive readback, GraftReceiverListener nudge capture }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Req-qa round 3 reconfirmation (2026-07-26): PR #629 @ 985a6d46 confirmed 0 Blocking findings and explicitly verified ATM-QA-002/AI23-BLOCK-001 defect (unit-only RecordingRouter, no real dispatcher/persistence/nudge proof) as resolved. Commits e9c44882 and a856fd4a deliver real daemon-pair integration test advertised_ip_peer_write_uses_real_dispatcher_persists_and_nudges satisfying sprint doc acceptance bar. Quality-mgr independently verified via local test run. CI fully green on all 8 required checks (Test macos/ubuntu/windows-latest, Clippy, Format check, Just lint macos/ubuntu/windows-latest). Top-level status flipped to 'fixed' for s23." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/985a6d46> .
+
+# Original s23 occurrence: RecordingRouter unit spy still present, blocking runtime-evidence acceptance
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s23-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 949 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { RecordingRouter constructed at lines 853, 952, 999, 1060, 1091, 1139, 1229, 1249 — unit spy only, no real daemon-pair integration test }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:note "Round-2 fix added test_advertised_ip_peer_send_and_ack_reach_the_shared_router but still uses RecordingRouter (unit spy that records requests, returns hardcoded AtmError::validation, never invokes DaemonRequestDispatcher, never persists, provides no ULID readback, no nudge proof). Sprint doc acceptance criteria explicitly require runtime-evidence from daemon-pair integration test with advertised/bound virtual-Ethernet IP. This test does not satisfy that bar." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/b0781316> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s24-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1060 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7f85b1e6> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s25-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1236 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "66775a09" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/66775a09> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s26-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1244 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/2dc8d98b> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s27-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1244 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/ce0a8a40> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s28-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1306 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/657d56db> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s30-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1306 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "253052ab" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/253052ab> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-001/s29-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1306 ;
+  triage:snippet "fn advertised_ip_peer_send_and_ack_reach_the_shared_router() { ... uses RecordingRouter (unit spy), not runtime integration }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/7dcf6953> .
+
+<urn:atm:triage:worktree/s21pre/7cf131fa>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "7cf131fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/95dbb094>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "95dbb094" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/b0781316>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b0781316" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s23/a856fd4a>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "a856fd4a" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/7f85b1e6>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7f85b1e6" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/66775a09>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "66775a09" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/2dc8d98b>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/ce0a8a40>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "ce0a8a40" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/657d56db>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s30/253052ab>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "253052ab" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s29/7dcf6953>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:orderIndex 10 .

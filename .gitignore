@@ -29,6 +29,10 @@ scripts/__pycache__/
 artifacts/view/
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.md
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.json
+reports/smoke/index.html
+reports/smoke/*/*.json
+reports/smoke/*/*.xhtml
+reports/smoke/*/*.html
 reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.md
 reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.json
 reports/coverage/[0-9][0-9][0-9][0-9]-*-win.md

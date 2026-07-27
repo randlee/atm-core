@@ -19,11 +19,12 @@ from check_env_var_boundary import load_restricted_crate_roots
 
 LINT_CONFIG = """\
 [env_var_boundary]
-forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY"]
+forbidden_env_vars = ["ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID"]
 restricted_crate_roots = ["crates/atm-core/src", "crates/atm-daemon/src"]
 boundary_reader_functions = [
   "read_cli_identity_from_env",
   "read_cli_team_from_env",
+  "read_cli_chat_id_from_env",
 ]
 """
 
@@ -72,14 +73,21 @@ name = "{lib_name}"
             repo_root = Path(tempdir)
             self.write_repo(repo_root)
 
-            self.assertEqual(load_forbidden_env_vars(repo_root), ("ATM_TEAM", "ATM_IDENTITY"))
+            self.assertEqual(
+                load_forbidden_env_vars(repo_root),
+                ("ATM_TEAM", "ATM_IDENTITY", "ATM_CHAT_ID"),
+            )
             self.assertEqual(
                 load_restricted_crate_roots(repo_root),
                 (Path("crates/atm-core/src"), Path("crates/atm-daemon/src")),
             )
             self.assertEqual(
                 load_boundary_reader_functions(repo_root),
-                ("read_cli_identity_from_env", "read_cli_team_from_env"),
+                (
+                    "read_cli_identity_from_env",
+                    "read_cli_team_from_env",
+                    "read_cli_chat_id_from_env",
+                ),
             )
 
     def test_flags_direct_env_var_literal_in_atm_core(self) -> None:

@@ -1,0 +1,380 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION>
+  a triage:Finding ;
+  triage:findingId "AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "No per-case semantic verification beyond exit-code/substring" ;
+  triage:description "In scripts/smoke/run_peer_pair.py, duplicate_ulid and failed_remote_ack cases never assert the actual invariants the sprint doc claims (single-record retention, no ack mutation) — only external command exit codes/substrings are checked. Shallow verification also present in run_thorough_shared_host.py and run_graft_same_host.py" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/3> ;
+  triage:openOn <urn:atm:triage:worktree/s13/34ffe677> ;
+  triage:openOn <urn:atm:triage:worktree/s14/6be71984> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a6bac5b> ;
+  triage:openOn <urn:atm:triage:worktree/s16/b3749b90> ;
+  triage:openOn <urn:atm:triage:worktree/s17/f3af571e> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/fb781b27> ;
+  triage:openOn <urn:atm:triage:worktree/s20/51897df0> ;
+  triage:promoteTo <urn:atm:triage:worktree/s20/51897df0> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- PARTIALLY fixed, still OPEN overall, not eligible for full close/waive. scripts/smoke/run_peer_pair.py now has genuine semantic verification: REQUIRED_ASSERTIONS (lines 38-50) requires duplicate_ulid to declare single_record_retained/no_ack_mutation and failed_remote_ack to declare ack_source_unchanged/no_remote_ack_state -- exactly the invariants this finding said were missing -- and verify_semantics() (lines 266-300) actually executes each assertion's real ATM CLI command via run_command(), parses real JSON stdout, and compares the extracted json_path value against the expected value (or absence); this is genuine runtime-state verification, not config-shape validation only. However, the finding's occurrences also name scripts/smoke/run_thorough_shared_host.py and scripts/smoke/run_graft_same_host.py as having 'shallow verification also present'; both still gate solely on exit_code == 0 with no equivalent semantic-assertion mechanism. The core run_peer_pair.py complaint is resolved; the sibling-script complaint is not. Confirmed via direct code read, not self-report." .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 213 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/34ffe677> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/34ffe677> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s13/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/34ffe677> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 213 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/6be71984> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/6be71984> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s14/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/6be71984> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 213 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s15/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a6bac5b> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 227 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s16/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 227 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s17/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 227 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s18/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 227 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s19/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 227 ;
+  triage:snippet "passed = result[\"exit_code\"] == 0" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/51897df0> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_thorough_shared_host.py" ;
+  triage:line 235 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/51897df0> .
+
+<urn:atm:triage:occurrence/AI13-QA1-BLOCKING-02-NO-SEMANTIC-CASE-VERIFICATION/s20/3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_graft_same_host.py" ;
+  triage:line 174 ;
+  triage:snippet "if completed[\"exit_code\"] == 0:" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/51897df0> .
+
+<urn:atm:triage:worktree/s12/2cb82716>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "2cb82716" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/s13/34ffe677>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "34ffe677" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/s14/6be71984>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "6be71984" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/s15/5a6bac5b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a6bac5b" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/51897df0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "51897df0" ;
+  triage:orderIndex 20 .

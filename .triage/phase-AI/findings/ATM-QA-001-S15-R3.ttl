@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001-S15-R3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001-S15-R3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T20:35:00Z"^^xsd:dateTime ;
+  triage:title "failed_remote_ack check is a static attribute check, not a mutation detector" ;
+  triage:description "In scripts/smoke/run_peer_pair.py's new semantic-verification mechanism (added on feature/pAI-s15-windows-peer-smoke, commit 12f4b96e), the failed_remote_ack check inspects a static requires_ack attribute rather than detecting an actual ack-state mutation. It cannot detect whether an ack mutation genuinely occurred or failed to occur." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA-001" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo-wide" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S19/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/S15/12f4b96e> ;
+  triage:fixedOn <urn:atm:triage:worktree/S16/34e055b9> ;
+  triage:fixedOn <urn:atm:triage:worktree/S17/2825b1c0> ;
+  triage:fixedOn <urn:atm:triage:worktree/S18/a3cfdaa6> ;
+  triage:fixedOn <urn:atm:triage:worktree/S19/e88825a7> ;
+  triage:fixedOn <urn:atm:triage:worktree/S20/bed07594> ;
+  triage:notes "All occurrences verified fixed in integrate/phase-AI HEAD. All required assertions now properly defined per case, including mutation detectors for failed_remote_ack." .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 37-49 define REQUIRED_ASSERTIONS with proper mutation detectors: failed_remote_ack requires ack_source_unchanged and no_remote_ack_state assertions). Stale occurrence from superseded branch pAI-s15-windows-peer-smoke; closing to match reality. (2026-07-26)" ;
+  triage:branch "pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:occursIn <urn:atm:triage:worktree/S15/12f4b96e> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 37-49 define REQUIRED_ASSERTIONS with proper mutation detectors: failed_remote_ack requires ack_source_unchanged and no_remote_ack_state assertions). Stale occurrence from superseded branch pAI-s16-offline-reconciliation; closing to match reality. (2026-07-26)" ;
+  triage:branch "pAI-s16-offline-reconciliation" ;
+  triage:headSha "34e055b9" ;
+  triage:occursIn <urn:atm:triage:worktree/S16/34e055b9> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 37-49 define REQUIRED_ASSERTIONS with proper mutation detectors: failed_remote_ack requires ack_source_unchanged and no_remote_ack_state assertions). Stale occurrence from superseded branch pAI-s17-hermes-chat-identity; closing to match reality. (2026-07-26)" ;
+  triage:branch "pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2825b1c0" ;
+  triage:occursIn <urn:atm:triage:worktree/S17/2825b1c0> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 37-49 define REQUIRED_ASSERTIONS with proper mutation detectors: failed_remote_ack requires ack_source_unchanged and no_remote_ack_state assertions). Stale occurrence from superseded branch pAI-s18-graft-python-bindings; closing to match reality. (2026-07-26)" ;
+  triage:branch "pAI-s18-graft-python-bindings" ;
+  triage:headSha "a3cfdaa6" ;
+  triage:occursIn <urn:atm:triage:worktree/S18/a3cfdaa6> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (lines 37-49 define REQUIRED_ASSERTIONS with proper mutation detectors: failed_remote_ack requires ack_source_unchanged and no_remote_ack_state assertions). Stale occurrence from superseded branch pAI-s19-hermes-graft-integration; closing to match reality. (2026-07-26)" ;
+  triage:branch "pAI-s19-hermes-graft-integration" ;
+  triage:headSha "e88825a7" ;
+  triage:occursIn <urn:atm:triage:worktree/S19/e88825a7> .
+
+<urn:atm:triage:occurrence/ATM-QA-001-S15-R3/S20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 316 ;
+  triage:snippet "semantic = verify_semantics(case, timeout, daemon_log_before, daemon.get(\"log_file\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:occursIn <urn:atm:triage:worktree/S20/bed07594> .
+
+<urn:atm:triage:worktree/S13/62b67831>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "62b67831" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/S14/cd640a84>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "cd640a84" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/S15/12f4b96e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/S16/34e055b9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "34e055b9" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/S17/2825b1c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2825b1c0" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/S18/a3cfdaa6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "a3cfdaa6" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/S19/e88825a7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "e88825a7" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/S20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

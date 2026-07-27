@@ -1,21 +1,28 @@
-use crate::boundary_adapters::DaemonConfigIngress;
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
+use crate::https_transport::{
+    HttpsListenerSet, HttpsMessageTransport, HttpsTransport, PeerWireSecurity, SharedHttpsTransport,
+};
+#[cfg(not(windows))]
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+#[cfg(windows)]
+use crate::local_tcp_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 #[cfg(test)]
 use crate::worker_support::retain_join_helper;
-use crate::{
-    AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    peer_transport::PeerTransportConfig,
-};
-use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher};
+use crate::{AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter};
+use atm_core::ApiRouter;
 use atm_core::error::AtmError;
-use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
+use atm_daemon_bootstrap::assemble_host_runtime;
+use atm_runtime::{
+    RuntimeAssembly, validate_enabled_peer_configuration,
+    validate_enabled_peer_configuration_for_reload,
+};
+use atm_storage::PeerConfigStore;
 use std::fs::OpenOptions;
+#[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -66,12 +73,7 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
         let current = *state;
         if !matches!(
             (current, next),
@@ -94,8 +96,7 @@ impl RuntimeLifecycle {
         ) {
             return Err(AtmError::validation(format!(
                 "illegal daemon runtime lifecycle transition: {current:?} -> {next:?}"
-            ))
-            .with_recovery("Enter daemon exclusively through RuntimeComposition::start()."));
+            )));
         }
         *state = next;
         Ok(next)
@@ -112,19 +113,13 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
-                    .with_recovery(
-                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
-                    )
-            })?;
+            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
         *state = RuntimeLifecycleState::Stopped;
         Ok(())
     }
 }
 
 /// Internal root for Phase R daemon runtime wiring.
-#[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
     // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
@@ -135,18 +130,35 @@ pub(crate) struct RuntimeComposition {
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
+    peer_config_store: Arc<dyn PeerConfigStore + Send + Sync>,
+    peer_wire_security: PeerWireSecurity,
+    // This is deliberately a transport-only capability. The canonical writer
+    // chooses when to call it; this composition root never passes storage or
+    // post-write state into the HTTPS adapter.
+    https_transport: SharedHttpsTransport,
+    https_listeners: Arc<Mutex<Option<HttpsListenerSet>>>,
     composition_observability: SubsystemObservability,
     _production_runtime: atm_core::LocalServiceRuntime,
     _status_source: DaemonStatusSource,
-    _config_ingress: DaemonConfigIngress,
-    peer_transport_runtime: PeerTransportRuntime,
+}
+
+impl std::fmt::Debug for RuntimeComposition {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RuntimeComposition")
+            .field("lifecycle", &self.lifecycle)
+            .field("server_transport", &self.server_transport)
+            .field("request_dispatcher", &self.request_dispatcher)
+            .field("peer_config_store", &"dyn PeerConfigStore")
+            .finish_non_exhaustive()
+    }
 }
 
 impl RuntimeComposition {
     #[cfg(test)]
     #[cfg_attr(windows, allow(dead_code))]
-    fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
-        Self::new_with_replay_store_path(
+    pub(crate) fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
+        Self::new_with_runtime_db_path(
             AtmHomeDir::from_path_for_test(home_dir.clone()),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
             Arc::new(crate::test_observability::TestDaemonObservability::new(
@@ -156,45 +168,31 @@ impl RuntimeComposition {
     }
 
     #[cfg(test)]
-    fn new_with_replay_store_path(
+    pub(crate) fn new_with_runtime_db_path(
         home_dir: AtmHomeDir,
-        replay_store_path: PathBuf,
+        runtime_db_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let sqlite_observer =
-            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-        let config_current_dir =
-            std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
-        let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-            sqlite_db_path: replay_store_path,
-            config_current_dir: config_current_dir.clone(),
-            sqlite_observer,
-            non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-        })
-        .map_err(|error| {
-            replay_store_assembly_failed(
-                error,
-                &SubsystemObservability::new(
-                    DaemonSubsystem::Composition,
-                    Arc::clone(&observability),
-                ),
-            )
-        })?;
+        let composition_observability =
+            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        let runtime_assembly =
+            crate::test_support::sqlite_runtime_assembly_for_test(&runtime_db_path)
+                .map_err(|error| runtime_assembly_failed(error, &composition_observability))?;
         Self::new_with_runtime_assembly(
             home_dir,
             observability,
-            config_current_dir,
             runtime_assembly,
+            PeerWireSecurity::MutualTls,
         )
     }
 
     fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        current_dir: PathBuf,
         runtime_assembly: RuntimeAssembly,
+        peer_wire_security: PeerWireSecurity,
     ) -> Result<Self, AtmError> {
-        let config_ingress = DaemonConfigIngress::new();
+        let runtime_assembly = runtime_assembly.for_daemon();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         // Runtime status snapshots are read on the hot doctor/status path, so
@@ -203,47 +201,58 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let peer_transport_config =
-            load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
             runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
+        let peer_config_store = runtime_assembly.peer_config_store();
         let request_dispatcher = build_request_dispatcher(
             home_dir,
             &status_cache,
             &observability,
             runtime_assembly.clone(),
         );
+        let https_listeners: Arc<Mutex<Option<HttpsListenerSet>>> = Arc::new(Mutex::new(None));
+        let reload_peer_store = Arc::clone(&peer_config_store);
+        let reload_listener_slot = Arc::clone(&https_listeners);
+        request_dispatcher.install_runtime_reload_hook(Arc::new(move || {
+            validate_enabled_peer_configuration_for_reload(reload_peer_store.as_ref())?;
+            let peers = reload_peer_store.list_trusted_peers()?;
+            if let Some(listeners) = reload_listener_slot
+                .lock()
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+                })?
+                .as_ref()
+            {
+                listeners.refresh_trusted_peers(peers)?;
+            }
+            Ok(())
+        }))?;
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
-        let peer_transport_runtime = build_peer_transport_runtime(
-            runtime_assembly.remote_replay_store.clone(),
-            peer_transport_config,
-            observability,
-        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: host_ownership_adapter,
             endpoint_guard: Mutex::new(None),
             server_transport,
             request_dispatcher,
+            peer_config_store,
+            peer_wire_security,
+            https_transport: Arc::new(Mutex::new(None)),
+            https_listeners,
             composition_observability,
             _production_runtime: runtime_assembly.service_runtime,
             _status_source: DaemonStatusSource::new(status_cache),
-            _config_ingress: config_ingress,
-            peer_transport_runtime,
         })
     }
 
-    fn request_dispatcher(&self) -> Arc<dyn RequestDispatcher + Send + Sync> {
+    fn request_dispatcher(&self) -> Arc<dyn ApiRouter + Send + Sync> {
         self.request_dispatcher.clone()
     }
 
     fn replace_endpoint_guard(&self, guard: Option<SocketEndpointGuard>) -> Result<(), AtmError> {
         let mut slot = self.endpoint_guard.lock().map_err(|_| {
-            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
-                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
-            )
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned")
         })?;
         *slot = guard;
         Ok(())
@@ -251,15 +260,12 @@ impl RuntimeComposition {
 
     fn take_endpoint_guard(&self) -> Result<SocketEndpointGuard, AtmError> {
         let mut slot = self.endpoint_guard.lock().map_err(|_| {
-            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned").with_recovery(
-                "Restart the daemon; same-host endpoint cleanup ownership can no longer be tracked safely.",
-            )
+            AtmError::daemon_unavailable("runtime endpoint guard slot lock poisoned")
         })?;
         slot.take().ok_or_else(|| {
-            AtmError::daemon_unavailable("runtime endpoint guard was missing during daemon serve startup")
-                .with_recovery(
-                    "Restart the daemon; same-host endpoint cleanup ownership was lost before the listener entered serving state.",
-                )
+            AtmError::daemon_unavailable(
+                "runtime endpoint guard was missing during daemon serve startup",
+            )
         })
     }
 
@@ -270,15 +276,81 @@ impl RuntimeComposition {
             "daemon shutdown requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
-        // Attempt every lane shutdown even if one lane fails so the runtime
-        // still reaches checkpoint/flush finalization with the fullest cleanup
-        // state possible.
-        self.shutdown_background_lanes()?;
         Ok(())
     }
 
-    fn finalize_shutdown(&self) {
-        self.request_dispatcher.finalize_storage_shutdown();
+    fn start_https_listeners(&self) -> Result<(), AtmError> {
+        let interfaces = self.peer_config_store.list_interfaces()?;
+        if !interfaces.iter().any(|interface| interface.enabled) {
+            return Ok(());
+        }
+        let (https_transport, listeners): (Arc<dyn HttpsMessageTransport>, HttpsListenerSet) =
+            match self.peer_wire_security {
+                PeerWireSecurity::MutualTls => {
+                    let certificate =
+                        self.peer_config_store.local_certificate()?.ok_or_else(|| {
+                            AtmError::validation(
+                                "enabled HTTPS interfaces require a configured local certificate",
+                            )
+                        })?;
+                    (
+                        Arc::new(HttpsTransport::from_local_certificate(&certificate)?),
+                        HttpsListenerSet::bind_enabled(
+                            &interfaces,
+                            &certificate,
+                            self.peer_config_store.list_trusted_peers()?,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+                PeerWireSecurity::PlaintextTest => {
+                    let source_host = interfaces
+                        .iter()
+                        .find(|interface| interface.enabled)
+                        .map(|interface| interface.advertise_host.clone())
+                        .ok_or_else(|| {
+                            AtmError::validation("no enabled peer interface is configured")
+                        })?;
+                    (
+                        Arc::new(HttpsTransport::plaintext_test(source_host)),
+                        HttpsListenerSet::bind_plaintext_test(
+                            &interfaces,
+                            self.request_dispatcher(),
+                        )?,
+                    )
+                }
+            };
+        let mut slot = self.https_listeners.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+        })?;
+        *slot = Some(listeners);
+        let mut transport_slot = self.https_transport.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
+        })?;
+        self.request_dispatcher
+            .install_https_transport(Arc::clone(&https_transport))?;
+        *transport_slot = Some(https_transport);
+        self.request_dispatcher.start_peer_drain_coordinator()?;
+        Ok(())
+    }
+
+    fn stop_https_listeners(&self) -> Result<(), AtmError> {
+        self.request_dispatcher.stop_peer_drain_coordinator()?;
+        let listener_set = self
+            .https_listeners
+            .lock()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("HTTPS listener lifecycle slot lock poisoned")
+            })?
+            .take();
+        if let Some(listeners) = listener_set {
+            listeners.shutdown()?;
+        }
+        let mut transport_slot = self.https_transport.lock().map_err(|_| {
+            AtmError::daemon_unavailable("HTTPS transport lifecycle slot lock poisoned")
+        })?;
+        *transport_slot = None;
+        self.request_dispatcher.clear_https_transport()
     }
 
     fn begin_startup(&self) -> Result<(), AtmError> {
@@ -288,25 +360,6 @@ impl RuntimeComposition {
             "daemon start requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        self.resume_startup_replay()?;
-        self.start_background_lanes()
-    }
-
-    fn resume_startup_replay(&self) -> Result<(), AtmError> {
-        // Startup replay must finish before the daemon binds its socket so
-        // crash-recovered work cannot race newly accepted requests.
-        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
-        if replay_summary.delivered > 0
-            || replay_summary.retained > 0
-            || replay_summary.purged_expired > 0
-        {
-            tracing::info!(
-                replay_delivered = replay_summary.delivered,
-                replay_retained = replay_summary.retained,
-                replay_purged_expired = replay_summary.purged_expired,
-                "daemon startup replay sweep completed"
-            );
-        }
         Ok(())
     }
 
@@ -320,25 +373,11 @@ impl RuntimeComposition {
         Err(error)
     }
 
-    fn prepare_runtime_with<F>(
-        &self,
-        rollback_message: &'static str,
-        prepare_runtime: F,
-    ) -> Result<PreparedRuntimeServer, AtmError>
+    fn prepare_runtime_with<F>(&self, prepare_runtime: F) -> Result<PreparedRuntimeServer, AtmError>
     where
         F: FnOnce(&LocalIpcServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
     {
-        prepare_runtime(&self.server_transport).inspect_err(|_| {
-            if let Err(shutdown_error) = self.shutdown_background_lanes() {
-                tracing::warn!(
-                    subsystem = "composition",
-                    action = "rollback_startup",
-                    outcome = "lane_shutdown_failed",
-                    %shutdown_error,
-                    "{rollback_message}"
-                );
-            }
-        })
+        prepare_runtime(&self.server_transport)
     }
 
     fn activate_runtime(
@@ -363,7 +402,6 @@ impl RuntimeComposition {
     where
         P: Fn() -> Result<(), AtmError>,
     {
-        let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -372,8 +410,7 @@ impl RuntimeComposition {
                 graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
                 force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
                 begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
-                finalize_shutdown: || self.finalize_shutdown(),
+                reload_runtime_view: || self.request_dispatcher.reload_runtime_view(),
                 publish_ready,
             },
         );
@@ -384,10 +421,9 @@ impl RuntimeComposition {
         self.begin_startup()
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
-            .prepare_runtime_with(
-                "daemon background lane shutdown failed during runtime preparation rollback",
-                |server_transport| server_transport.prepare_runtime(),
-            )
+            .prepare_runtime_with(|server_transport| server_transport.prepare_runtime())
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.start_https_listeners()
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, || Ok(()))
     }
@@ -402,15 +438,12 @@ impl RuntimeComposition {
         self.begin_startup()
             .or_else(|error| self.rollback_failed_startup(error))?;
         let runtime = self
-            .prepare_runtime_with(
-                "daemon background lane shutdown failed during test runtime preparation rollback",
-                |server_transport| {
-                    server_transport.prepare_runtime_at_socket_path_for_home(
-                        socket_path,
-                        self.request_dispatcher.home_dir_for_test(),
-                    )
-                },
-            )
+            .prepare_runtime_with(|server_transport| {
+                server_transport.prepare_runtime_at_socket_path_for_home(
+                    socket_path,
+                    self.request_dispatcher.home_dir_for_test(),
+                )
+            })
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
             self.request_dispatcher.preflush_observability_shutdown();
@@ -418,9 +451,6 @@ impl RuntimeComposition {
                 signal.send(()).map_err(|_| {
                     AtmError::daemon_unavailable(
                         "test runtime failed to publish the daemon ready signal",
-                    )
-                    .with_recovery(
-                        "Restore the bounded ready-signal handshake before retrying the same-host daemon runtime test.",
                     )
                 })?;
             }
@@ -476,16 +506,13 @@ impl RuntimeComposition {
                 );
             }
         }
+        let peer_shutdown = self.stop_https_listeners();
         self.request_dispatcher.finalize_observability_shutdown();
-        result
-    }
-
-    fn start_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
-    }
-
-    fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        Ok(())
+        match (result, peer_shutdown) {
+            (Err(error), _) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+            (Ok(()), Err(error)) => Err(error),
+        }
     }
 }
 
@@ -496,18 +523,6 @@ fn build_host_ownership_adapter(
         DaemonSubsystem::HostOwnership,
         Arc::clone(observability),
     ))
-}
-
-fn build_peer_transport_runtime(
-    replay_store: Arc<dyn RemoteReplayStore>,
-    peer_transport_config: PeerTransportConfig,
-    observability: Arc<dyn DaemonRuntimeObservability>,
-) -> PeerTransportRuntime {
-    PeerTransportRuntime::new_with_observability(
-        Some(replay_store),
-        peer_transport_config,
-        SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-    )
 }
 
 #[cfg(test)]
@@ -523,53 +538,22 @@ pub(crate) fn build_production_runtime(
     )
 }
 
-fn replay_store_assembly_failed(
-    error: AtmError,
-    observability: &SubsystemObservability,
-) -> AtmError {
+fn runtime_assembly_failed(error: AtmError, observability: &SubsystemObservability) -> AtmError {
     tracing::error!(
         subsystem = "composition",
-        action = "replay_store_assembly",
+        action = "runtime_assembly",
         outcome = "failed",
         %error,
-        "remote replay store assembly failed; daemon startup is fail-closed"
+        "daemon runtime assembly failed"
     );
     observability.emit_or_warn(
-        "sqlite_replay_store_assembly",
+        "runtime_assembly",
         "failed",
-        "remote replay store assembly failed; daemon startup is fail-closed",
+        "daemon runtime assembly failed",
     );
     AtmError::daemon_unavailable(
-        "remote replay store is unavailable; atm-daemon startup is blocked",
+        "daemon runtime assembly is unavailable; atm-daemon startup is blocked",
     )
-    .with_recovery(
-        "Restore the host-scoped ATM SQLite replay store before starting atm-daemon so the required bounded replay-resume sweep can run.",
-    )
-    .with_source(error)
-}
-
-fn load_peer_transport_config(
-    current_dir: PathBuf,
-    config_ingress: &DaemonConfigIngress,
-    observability: &SubsystemObservability,
-) -> Result<PeerTransportConfig, AtmError> {
-    let config = config_ingress
-        .load_config(ConfigLoadRequest { current_dir })
-        .inspect_err(|_| {
-            observability.emit_or_warn(
-                "peer_transport_config_load",
-                "failed",
-                "daemon startup could not load peer transport config through ConfigIngress",
-            );
-        })?
-        .config;
-    PeerTransportConfig::from_config(config.as_ref()).inspect_err(|_| {
-        observability.emit_or_warn(
-            "peer_transport_config_validation",
-            "failed",
-            "daemon startup rejected invalid peer transport configuration",
-        );
-    })
 }
 
 fn build_request_dispatcher(
@@ -616,14 +600,10 @@ where
         .spawn(move || {
             let _ = result_tx.send(shutdown(lane));
         })
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to spawn daemon {lane_name} shutdown deadline helper"
             ))
-            .with_recovery(
-                "Restart atm-daemon; the bounded background-lane shutdown helper could not be created.",
-            )
-            .with_source(source)
         })?;
     let shutdown_thread_id = shutdown_handle.thread().id();
     match result_rx.recv_timeout(deadline) {
@@ -632,9 +612,6 @@ where
                 AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
                 ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
-                )
             })?;
             result
         }
@@ -651,42 +628,29 @@ where
             );
             Err(AtmError::daemon_unavailable(format!(
                 "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"
-            ))
-            .with_recovery(
-                "Restart atm-daemon after the stalled background lane stops holding runtime shutdown open; the timed-out join helper was retained for later reap.",
-            ))
+            )))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
-                ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
-                ))
+                )))
             },
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker disconnected unexpectedly"
-                ))
-                .with_recovery(
-                    "Restart atm-daemon; one shutdown lane stopped reporting progress during runtime teardown.",
-                ))
+                )))
             },
         ),
     }
 }
 
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
-    std::fs::create_dir_all(home_dir).map_err(|source| {
+    std::fs::create_dir_all(home_dir).map_err(|_source| {
         AtmError::daemon_unavailable(format!(
             "failed to create atm-daemon home directory at {}",
             home_dir.display()
         ))
-        .with_recovery(
-            "Grant write access to ATM_HOME or choose a writable daemon home directory before starting atm-daemon.",
-        )
-        .with_source(source)
     })?;
     let probe_path = home_dir.join(format!(".atm-daemon-home-probe-{}", std::process::id()));
     OpenOptions::new()
@@ -694,15 +658,11 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
         .write(true)
         .truncate(true)
         .open(&probe_path)
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "atm-daemon home directory is not writable at {}",
                 home_dir.display()
             ))
-            .with_recovery(
-                "Grant write access to ATM_HOME or point ATM_HOME at a writable directory before retrying.",
-            )
-            .with_source(source)
         })?;
     if let Err(error) = std::fs::remove_file(&probe_path) {
         tracing::warn!(
@@ -719,52 +679,58 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 
 pub(crate) fn compose_runtime(
     observability: Arc<dyn DaemonRuntimeObservability>,
+    peer_wire_security: PeerWireSecurity,
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
     // The daemon snapshots the startup cwd once for config discovery and does
     // not refresh it on SIGHUP; restart atm-daemon to adopt a different
     // workspace root after changing the launch directory.
-    let current_dir = std::env::current_dir().map_err(|source| {
+    let current_dir = std::env::current_dir().map_err(|_source| {
         AtmError::daemon_unavailable(
             "failed to resolve the current working directory for daemon runtime assembly",
         )
-        .with_recovery(
-            "Start atm-daemon from a readable ATM workspace so runtime assembly and config inspection share one validated config root.",
-        )
-        .with_source(source)
     })?;
-    let replay_store_path = atm_core::home::host_mail_db_path()?;
-    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
-    let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
-        sqlite_db_path: replay_store_path,
-        config_current_dir: current_dir.clone(),
-        sqlite_observer,
-        non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
-    })
+    let runtime_assembly = assemble_host_runtime(
+        current_dir.clone(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+    )
     .map_err(|error| {
-        replay_store_assembly_failed(
+        runtime_assembly_failed(
             error,
             &SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability)),
         )
     })?;
+    if peer_wire_security == PeerWireSecurity::MutualTls {
+        validate_enabled_peer_configuration(runtime_assembly.peer_config_store().as_ref())
+            .map_err(|error| {
+                runtime_assembly_failed(
+                    error,
+                    &SubsystemObservability::new(
+                        DaemonSubsystem::Composition,
+                        Arc::clone(&observability),
+                    ),
+                )
+            })?;
+    }
     RuntimeComposition::new_with_runtime_assembly(
         home_dir,
         observability,
-        current_dir,
         runtime_assembly,
+        peer_wire_security,
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use atm_core::boundary::ServerTransport;
     use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
+    #[cfg(not(windows))]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    #[cfg(not(windows))]
     use crate::test_support::LifecycleFlagResetGuard;
 
     use super::RuntimeComposition;
@@ -867,6 +833,7 @@ mod tests {
         assert_eq!(lifecycle.state(), RuntimeLifecycleState::Stopped);
     }
 
+    #[cfg(not(windows))]
     #[test]
     #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {
@@ -901,33 +868,12 @@ mod tests {
 
     #[test]
     #[serial_test::serial(env)]
-    fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
-
-        let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
-
-        let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
-            .expect_err("direct transport bootstrap should be rejected");
-
-        assert!(error.is_daemon_unavailable());
-        assert!(
-            error
-                .to_string()
-                .contains("cannot bootstrap the daemon directly")
-        );
-        assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn runtime_composition_fails_closed_when_replay_store_cannot_open() {
+    fn runtime_composition_fails_closed_when_runtime_storage_cannot_open() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().join("atm-home");
         std::fs::create_dir_all(&home_dir).expect("atm home");
-        let replay_parent_file = tempdir.path().join("not-a-dir");
-        std::fs::write(&replay_parent_file, "x").expect("parent file");
+        let storage_parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&storage_parent_file, "x").expect("parent file");
         let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
         let observability = std::sync::Arc::new(
@@ -937,53 +883,21 @@ mod tests {
             .expect("test observability"),
         );
 
-        let error = RuntimeComposition::new_with_replay_store_path(
+        let error = RuntimeComposition::new_with_runtime_db_path(
             crate::AtmHomeDir::from_path_for_test(home_dir),
-            replay_parent_file.join("mail.db"),
+            storage_parent_file.join("mail.db"),
             observability,
         )
-        .expect_err("replay-store assembly should fail closed");
+        .expect_err("runtime storage assembly should fail closed");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
         );
         assert!(
             error
                 .to_string()
-                .contains("remote replay store is unavailable"),
-            "{error}"
-        );
-    }
-
-    #[test]
-    #[serial_test::serial(env)]
-    fn runtime_composition_fails_closed_when_peer_transport_config_is_invalid() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let workspace_dir = tempdir.path().join("workspace");
-        let home_dir = tempdir.path().join("atm-home");
-        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-        std::fs::create_dir_all(&home_dir).expect("atm home");
-        std::fs::write(
-            workspace_dir.join(".atm.toml"),
-            "[daemon]\nremote_retry_budget = \"100ms\"\n",
-        )
-        .expect("invalid config");
-        let _cwd_guard = CwdGuard::install();
-        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
-
-        let result = RuntimeComposition::new(home_dir.clone());
-
-        let error = result.expect_err("invalid peer transport config should fail closed");
-        assert_eq!(
-            error.code,
-            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
-        );
-        assert!(
-            error
-                .primary_recovery()
-                .expect("recovery guidance")
-                .contains("valid target or argument"),
+                .contains("daemon runtime assembly is unavailable"),
             "{error}"
         );
     }

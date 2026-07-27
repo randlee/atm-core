@@ -19,7 +19,7 @@ io_owns = ["outbound_notification_delivery"]
 io_forbidden = ["sqlite", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-runtime"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 

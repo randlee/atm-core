@@ -1,0 +1,148 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "AI25-RBP-F002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "Fail-closed DNS-authority errors lack recovery guidance" ;
+  triage:description "Fail-closed DNS-authority error messages (from resolve_peer_authority / resolve_peer_address paths in crates/atm-daemon/src/https_transport.rs) lack operator-facing recovery guidance -- they state the failure but do not suggest a remediation step." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T02:27:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBP-F002/s30/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> ;
+  triage:openOn <urn:atm:triage:worktree/s26/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s27/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s28/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s29/b5eec1bf> ;
+  triage:openOn <urn:atm:triage:worktree/s30/77252eca> ;
+  triage:promoteTo <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 498 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:30:00Z"^^xsd:dateTime ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s26/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 450 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 450 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 450 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s29/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 450 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-RBP-F002/s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 450 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(format!(\"failed to resolve HTTPS peer {host}\")))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- resolve_peer_addresses error at lines 630-633 uses daemon_unavailable_with_cause with operator recovery guidance. resolve_peer_address error at lines 660-663 uses validation_with_recovery with recovery text. Stale occurrence from superseded branch; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

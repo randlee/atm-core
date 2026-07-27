@@ -1,0 +1,200 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY>
+  a triage:Finding ;
+  triage:findingId "AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T12:00:00Z"^^xsd:dateTime ;
+  triage:title "No completion inventory artifact exists anywhere for AI.18" ;
+  triage:description "req-qa found that AI.18 (feature/pAI-s18-graft-python-bindings @ b8f46a1a) has no completion-inventory artifact documenting which deliverables from docs/plans/phase-ai/sprint-ai-18-graft-python-bindings.md are done, matching the standing closure-criteria gate used by other AI.* sprints." ;
+  triage:category "QA" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s11/12056956> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s12/b6466aa1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s13/aecade2a> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s14/35e30fd6> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/56c08886> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/5a35a6cd> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/85a6fcf6> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s18/b8f46a1a> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s19/2e22b6b4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s19/2e22b6b4> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-11-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "12056956" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s11/12056956> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-12-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s12/b6466aa1> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s13/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-13-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s13/aecade2a> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s14/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-14-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s14/35e30fd6> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-15-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c08886" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/56c08886> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s16/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-16-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "5a35a6cd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16/5a35a6cd> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s17/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-17-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "85a6fcf6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/85a6fcf6> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s18/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-18-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "b8f46a1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s18/b8f46a1a> .
+
+<urn:atm:triage:occurrence/AI18-QA1-ATM-QA-002-NO-COMPLETION-INVENTORY/pAI-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/ai-19-completion-inventory.md" ;
+  triage:line 0 ;
+  triage:snippet "Completion inventory artifact missing" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "2e22b6b4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s19/2e22b6b4> .
+
+<urn:atm:triage:worktree/pAI-s11/12056956>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "12056956" ;
+  triage:orderIndex 11 .
+
+<urn:atm:triage:worktree/pAI-s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa1" ;
+  triage:orderIndex 12 .
+
+<urn:atm:triage:worktree/pAI-s13/aecade2a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a" ;
+  triage:orderIndex 13 .
+
+<urn:atm:triage:worktree/pAI-s14/35e30fd6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "35e30fd6" ;
+  triage:orderIndex 14 .
+
+<urn:atm:triage:worktree/pAI-s15/56c08886>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "56c08886" ;
+  triage:orderIndex 15 .
+
+<urn:atm:triage:worktree/pAI-s16/5a35a6cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "5a35a6cd" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/pAI-s17/85a6fcf6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "85a6fcf6" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/pAI-s18/b8f46a1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "b8f46a1a" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/pAI-s19/2e22b6b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "2e22b6b4" ;
+  triage:orderIndex 19 .

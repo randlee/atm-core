@@ -109,7 +109,6 @@ Recommended live daemon subsystem enum members:
 - `Bootstrap`
 - `Composition`
 - `LocalIpcTransport`
-- `PeerTransport`
 - `RuntimeHealth`
 - `HostOwnership`
 - `LifecycleControl`
@@ -200,7 +199,6 @@ It must not own:
 `V.2` must migrate event ownership into these daemon subsystems:
 - `crates/atm-daemon/src/local_ipc_transport.rs`
 - `crates/atm-daemon/src/notification_runtime.rs`
-- `crates/atm-daemon/src/peer_transport.rs`
 - `crates/atm-daemon/src/watch_runtime.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/runtime_health.rs`

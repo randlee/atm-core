@@ -1,6 +1,6 @@
 ---
 title: AI.3 unified error contract foundation
-status: proposed
+status: complete
 branch: feature/pAI-s3-error-contract-foundation
 worktree: ../atm-core-worktrees/feature/pAI-s3-error-contract-foundation
 target: integrate/phase-AI

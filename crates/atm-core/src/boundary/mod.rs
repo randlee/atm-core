@@ -1,10 +1,10 @@
 //! Phase R boundary skeleton contracts.
 
+use crate::address::AgentAddress;
 use crate::error::AtmError;
-use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{NotificationEvent, RuntimeStatusSnapshot};
 use crate::schema::AtmMessageId;
-use crate::types::{AgentName, PaneId, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, PaneId, TaskId, TeamName};
 pub use atm_storage::contract::{AckTransition, Message, MessageKey, TaskState};
 pub use atm_storage::{
     BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, TeamNudgeTemplateOverrideMode,
@@ -23,86 +23,13 @@ pub mod sealed {
 }
 
 mod mail;
-mod runtime;
 mod store;
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use mail::*;
-pub use runtime::*;
 pub use store::*;
-
-/// BOUNDARY-AtmProtocol — see docs/atm-core/boundaries.md.
-pub trait AtmProtocol: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a protocol request envelope cannot be converted
-    /// into a frame payload.
-    fn request_to_frame(
-        &self,
-        request_id: RequestId,
-        request: RequestEnvelope,
-    ) -> Result<FramePayload, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a frame payload cannot be decoded into a
-    /// protocol request envelope.
-    fn request_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, RequestEnvelope), AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a protocol response envelope cannot be
-    /// converted into a frame payload.
-    fn response_to_frame(
-        &self,
-        request_id: RequestId,
-        response: ResponseEnvelope,
-    ) -> Result<FramePayload, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when a frame payload cannot be decoded into a
-    /// protocol response envelope.
-    fn response_from_frame(
-        &self,
-        frame: FramePayload,
-    ) -> Result<(RequestId, ResponseEnvelope), AtmError>;
-}
-
-/// BOUNDARY-ClientTransport — see docs/atm-core/boundaries.md.
-pub trait ClientTransport: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when the framed request cannot be delivered or when
-    /// the peer returns an unrecoverable protocol response.
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
-
-/// BOUNDARY-ServerTransport — see docs/atm-core/boundaries.md.
-pub trait ServerTransport: sealed::Sealed {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when framing, transport serving, or dispatch handoff
-    /// cannot proceed reliably.
-    fn serve(
-        &self,
-        dispatcher: std::sync::Arc<dyn RequestDispatcher + Send + Sync>,
-    ) -> Result<(), AtmError>;
-}
-
-/// BOUNDARY-RequestDispatcher — see docs/atm-core/boundaries.md.
-pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
-    /// # Errors
-    ///
-    /// Returns `AtmError` when protocol request routing or handler dispatch
-    /// cannot produce a valid response.
-    fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
-}
 
 /// BOUNDARY-StatusSource — see docs/atm-core/boundaries.md.
 pub trait StatusSource: sealed::Sealed {
@@ -115,6 +42,8 @@ pub trait StatusSource: sealed::Sealed {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct PostSendHookEvent {
     pub sender: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_chat_id: Option<ChatId>,
     pub sender_team: TeamName,
     pub recipient: AgentName,
     pub recipient_team: TeamName,
@@ -124,6 +53,19 @@ pub struct PostSendHookEvent {
     pub is_ack: bool,
     pub task_id: Option<TaskId>,
     pub recipient_pane_id: Option<PaneId>,
+}
+
+impl PostSendHookEvent {
+    /// The canonical source address carried by every post-write nudge.
+    pub fn source_address(&self) -> AgentAddress {
+        AgentAddress::new(
+            self.sender.clone(),
+            self.sender_chat_id.clone(),
+            Some(self.sender_team.clone()),
+            None,
+        )
+        .expect("post-send event sender always has a team")
+    }
 }
 
 pub fn built_in_nudge_template_kind_from_post_send_event(
@@ -207,10 +149,7 @@ impl HookExecutionSummary {
         if succeeded_rules + failed_rules > matched_rules {
             return Err(AtmError::validation(format!(
                 "invalid post-send hook execution summary: succeeded ({succeeded_rules}) + failed ({failed_rules}) exceeds matched ({matched_rules})"
-            ))
-            .with_recovery(
-                "Count each matching post-send hook rule exactly once before constructing hook execution summary state.",
-            ));
+            )));
         }
         Ok(Self {
             matched_rules,

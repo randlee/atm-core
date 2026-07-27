@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-ARCH-004>
+  a triage:Finding ;
+  triage:findingId "AI28-ARCH-004" ;
+  triage:title "Misleading 'worker_clone' variable name obscures intent" ;
+  triage:description "A variable named 'worker_clone' is used in the peer recovery initialization logic, but its name is misleading about what it actually represents. The variable does not hold a clone of a worker thread but rather holds a handle, reference, or partial state related to worker coordination. The misleading name makes the code harder to understand on first read and invites questions during review about whether it's a full clone or something else. Fix recommended: rename to a clearer name that accurately describes the value's purpose and content (e.g., 'worker_handle', 'worker_state', 'worker_coordinator', or similar, depending on its actual role). This improves readability and reduces future confusion." ;
+  triage:category "Architecture" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. worker_clone identifier is gone; renamed to worker_coordinator() (fn definition line 404, used at line 554)." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-004/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-004/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "let worker_clone = ...; // misleading name — does not represent an actual thread clone" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Renamed to worker_coordinator(). Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

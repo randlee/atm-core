@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "AI28-ARCH-001" ;
+  triage:title "runtime_health.rs RULE-003 threshold still exceeded (line count reduced but not resolved)" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs line count is now 1271 lines, improved from the previous 1356 lines recorded in AI27-ARCH-001, but still exceeds the RULE-003 hard limit of 1250 lines. This finding carries forward the unresolved RULE-003 violation from the prior sprint. The component adds new health-check logic for peer recovery coordinator coordination, which contributes to the continued line-count pressure. While the absolute line count improved, the file remains out of compliance. Fix required: refactor runtime_health.rs to extract distinct responsibilities (e.g., peer recovery health checks, overall host health aggregation, external reporting) into separate modules to bring line count under 1250." ;
+  triage:category "Architecture" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T23:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on fix/ai28-phase-general-cleanup at commit 025bc6c7 (not accepted from arch-ctm's self-report). crates/atm-daemon/src/runtime_health.rs is now 1183 lines (under the 1250 RULE-003 limit); doctor-report finalization/observability-finding logic extracted into crates/atm-daemon/src/runtime_health/doctor_reporting.rs (92 lines), a genuine responsibility split with pub(super) visibility, not a mechanical relocation -- module is wired via mod doctor_reporting; and use doctor_reporting::{daemon_observability_finding, finalize_doctor_report}; at runtime_health.rs lines 34/45. ruthless-boundary-qa (scoped to this PR's touched files) returned PASS: narrowest-visibility pub(super) surface, no circular dependency back into runtime_health.rs internals, no duplicate implementation elsewhere in the workspace." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:carriesForward "AI27-ARCH-001" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-ARCH-001/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-ARCH-001/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1 ;
+  triage:snippet "Total line count: 1271 (RULE-003 limit: 1250)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/ai28-phase-general-cleanup" ;
+  triage:headSha "025bc6c7" ;
+  triage:note "Line count reduced to 1183 via doctor_reporting.rs extraction. Verified on current head 025bc6c7." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

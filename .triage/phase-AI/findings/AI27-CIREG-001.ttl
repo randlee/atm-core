@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI27-CIREG-001>
+  a triage:Finding ;
+  triage:findingId "AI27-CIREG-001" ;
+  triage:title "Python 3.10+ syntax in test_run_peer_pair.py breaks pytest collection on Python 3.9" ;
+  triage:description "Commit bb34e71a introduces parenthesized context manager syntax (PEP 617, Python 3.10+) in scripts/smoke/test_run_peer_pair.py at lines 55 and 120, breaking pytest collection on Python 3.9 environments across all OS legs (ubuntu/macos/windows). The syntax 'with (patch.object(...), patch.object(...)):' requires Python 3.10+. On Python 3.9 and earlier, pytest collection fails immediately with SyntaxError, causing the entire lint job to fail on all CI runners." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CIREG" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T20:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNotes "Independently verified: no parenthesized (PEP 617) with-statement remains in scripts/smoke/test_run_peer_pair.py on any of s27 (f93dd3c8), s28 (1db85ef0), s29 (e0294748), or s30 (e03d9c58) HEADs. Test uses nested with statements throughout. Record was stale -- fix landed via arch-ctm's earlier CI-red remediation on s27 and was already present on s28/s29/s30 before this record was even created; only the TTL was never closed." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T19:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-26T19:15:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-001/s27_bb34e71a> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-001/s28_e1b754b5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-001/s29_7e73866a> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-CIREG-001/s30_b4b304d0> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI27-CIREG-001/s27_bb34e71a>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with (patch.object(...), patch.object(...)):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bb34e71a" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/bb34e71a> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-001/s28_e1b754b5>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with (patch.object(...), patch.object(...)):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "e1b754b5" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/e1b754b5> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-001/s29_7e73866a>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with (patch.object(...), patch.object(...)):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7e73866a" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/7e73866a> .
+
+<urn:atm:triage:occurrence/AI27-CIREG-001/s30_b4b304d0>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 55 ;
+  triage:snippet "with (patch.object(...), patch.object(...)):" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b4b304d0" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/b4b304d0> .
+
+<urn:atm:triage:worktree/s27/bb34e71a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s27" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "bb34e71a" ;
+  triage:orderIndex 27 .
+
+<urn:atm:triage:worktree/s28/e1b754b5>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s28" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "e1b754b5" ;
+  triage:orderIndex 28 .
+
+<urn:atm:triage:worktree/s29/7e73866a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s29" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7e73866a" ;
+  triage:orderIndex 29 .
+
+<urn:atm:triage:worktree/s30/b4b304d0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s30" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b4b304d0" ;
+  triage:orderIndex 30 .

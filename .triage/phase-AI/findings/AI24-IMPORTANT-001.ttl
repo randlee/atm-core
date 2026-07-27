@@ -1,0 +1,107 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-IMPORTANT-001>
+  a triage:Finding ;
+  triage:findingId "AI24-IMPORTANT-001" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:title "HTTP_ROUTE_SURFACE const array not mechanically derived from live dispatcher, route drift possible without CI failure" ;
+  triage:description "New test openapi_routes_match_live_router_surface (added for AI23-IMPORTANT-008 fix) cross-checks openapi.yaml against a HTTP_ROUTE_SURFACE const array, a real improvement over the prior snapshot-only diff. However, HTTP_ROUTE_SURFACE is still hand-authored, not mechanically derived from the live decode_route_request match arms in crates/atm-core/src/api.rs. A future new route added to the real dispatcher without a matching HTTP_ROUTE_SURFACE entry would still ship undocumented with no CI failure." ;
+  triage:category "maintainability" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-IMPORTANT-001/s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/c528137c> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/1daef214> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/1daef214> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-001/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 0 ;
+  triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s21pre; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-001/s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 0 ;
+  triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s22; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-001/s23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 0 ;
+  triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- hand-authored HTTP_ROUTE_SURFACE constant replaced with http_route_surface() function (line 139-141) that dynamically derives routes from HTTP_ROUTE_SPECS. Test openapi_routes_match_live_router_surface now validates OpenAPI against live route function. Stale occurrence from superseded branch s23; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI24-IMPORTANT-001/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 0 ;
+  triage:snippet "const HTTP_ROUTE_SURFACE: &[HttpRoute] = &[ ... ]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/1daef214> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/1daef214>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "1daef214" ;
+  triage:orderIndex 4 .

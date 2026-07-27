@@ -19,7 +19,7 @@ io_owns = ["message_received_notifications", "roster_changed_notifications"]
 io_forbidden = ["task_changed_notifications", "socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm-core", "atm-daemon", "atm-daemon-client", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
+allowed_dependents = ["atm", "atm-core", "atm-daemon", "atm-daemon-bootstrap", "atm-daemon-client", "atm-storage-rusqlite", "atm-storage-sqlserver-proof"]
 allowed_dependencies = []
 forbidden_edges = ["atm-storage -> atm-core"]
 

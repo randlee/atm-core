@@ -1,6 +1,6 @@
 ---
 title: AI.9 HTTPS peer transport
-status: proposed
+status: complete
 branch: feature/pAI-s9-https-peer-transport
 worktree: ../atm-core-worktrees/feature/pAI-s9-https-peer-transport
 target: integrate/phase-AI
@@ -49,7 +49,8 @@ pub struct PeerRequestDeadline {
 ```
 
 `PeerHttpTransport` owns mTLS HTTP I/O only. Inbound HTTPS calls `ApiRouter`;
-outbound delivery is selected only by `PostWriteRouter`. Neither owns storage,
+outbound delivery is selected by `DaemonRequestDispatcher::dispatch` through
+`route_write` in `crates/atm-daemon/src/runtime_health.rs`. Neither owns storage,
 ack state, nudge state, receipt synthesis, or retry state.
 The HTTPS adapter creates `AuthenticatedPeer` only after the exact configured
 host and fingerprint checks succeed, then passes it as the peer form of

@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI26-RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "AI26-RBQA-F002" ;
+  triage:title "RemoteDeliveryUnconfirmed deepens pre-existing AtmErrorCode crate-layering inversion" ;
+  triage:description "ruthless-boundary-qa found during AICH-S6-QA-INTEGRITY-2 (PR #641 @ 584c4c176b7dab82945fb2463f59d06857e58ba2) that crates/atm-storage/src/error_codes.rs:44 -- the RemoteDeliveryUnconfirmed variant added to the storage-owned AtmErrorCode enum as part of AI.26 -- deepens a pre-existing crate-layering inversion (storage crate owning an error code concept that arguably belongs at a higher layer). This predates AI.26; AI.26 correctly followed the established (if architecturally debt-laden) convention rather than introducing a new pattern. This is standing architecture debt, not a regression." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-CRATELAYER: verified fixed on fix/close-out-round2-hard (f809be26, PR #654). AtmErrorCode/UnknownAtmErrorCode extracted into a new dependency-light atm-error crate; atm-storage and atm-core now depend on and re-export it as pure facades (no duplication, confirmed by workspace-wide grep). No dependency cycle introduced -- independently confirmed via Cargo.toml reads and cargo tree -p atm-core -i atm-error / atm-storage equivalent showing the inverse-dependency tree rooted at atm-error. Import paths preserved via facade re-exports. New architecture guard test (atm_error_code_registry_is_shared_below_storage_and_core) asserts both correct ownership and absence of duplication -- non-vacuous. ruthless-boundary-qa and rust-best-practices-agent both PASS (0 blocking findings). CI fully green (8/8 legs). QA report posted to PR #654." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T14:35:36Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:foundAt "2026-07-25T15:42:36Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-RBQA-F002/s26-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-RBQA-F002/fix-close-out-round2-hard/1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/AI26-RBQA-F002/fix-close-out-round2-hard/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-error/src/error_codes.rs" ;
+  triage:line 1 ;
+  triage:snippet "AtmErrorCode/UnknownAtmErrorCode moved to new atm-error crate; atm-storage/atm-core re-export via facades, no cycle" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-hard" ;
+  triage:headSha "f809be26" ;
+  triage:notes "AICH-S11-QA-CRATELAYER: crate-layering inversion resolved by giving atm-error sole ownership of the enum; independently confirmed no cycle and import-path preservation." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-hard/f809be26> .
+
+<urn:atm:triage:worktree/fix-close-out-round2-hard/f809be26>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/close-out-round2-hard" ;
+  triage:branch "fix/close-out-round2-hard" ;
+  triage:headSha "f809be26" ;
+  triage:orderIndex 101 .
+
+<urn:atm:triage:occurrence/AI26-RBQA-F002/s26-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/error_codes.rs" ;
+  triage:line 44 ;
+  triage:snippet "RemoteDeliveryUnconfirmed," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "584c4c176b7dab82945fb2463f59d06857e58ba2" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/584c4c17> .
+
+<urn:atm:triage:worktree/s26/584c4c17>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s26" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "584c4c176b7dab82945fb2463f59d06857e58ba2" ;
+  triage:orderIndex 26 .

@@ -1,16 +1,22 @@
 use std::path::Path;
 
 use serde_json::Map;
+use tracing::{error, info};
 
 use crate::boundary;
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, clear_transport_delivery_metadata,
+    peer_outbound_host,
+};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
-use super::{DeliveryPersistenceResult, WarningEntry, prepare_threaded_message};
+use super::{
+    DeliveryPersistenceResult, DuplicateWriteDisposition, WarningEntry, prepare_threaded_message,
+};
 
 pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
@@ -19,6 +25,7 @@ pub(crate) fn persist_message(
     inbox_path: &Path,
     envelope: &InboxMessage,
     require_existing_inbox: bool,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
         return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
@@ -29,9 +36,24 @@ pub(crate) fn persist_message(
         load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
-    match mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared) {
-        Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
-        Err(error) if error.is_mailbox_write() => {
+    match mirror_message_to_store(
+        runtime,
+        home_dir,
+        &recipient.team,
+        &recipient.agent,
+        &prepared,
+        same_store_peer_receipt,
+    ) {
+        Ok(DuplicateWriteDisposition::NotDuplicate) => {
+            Ok(DeliveryPersistenceResult::persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote) => {
+            Ok(DeliveryPersistenceResult::already_persisted(prepared))
+        }
+        Ok(DuplicateWriteDisposition::SameStorePeerReceipt) => {
+            Ok(DeliveryPersistenceResult::same_store_peer_receipt(prepared))
+        }
+        Err(error) if error.code() == crate::error_codes::AtmErrorCode::MailboxWriteFailed => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
         Err(error) => Err(error),
@@ -52,7 +74,7 @@ fn recover_after_sqlite_failure(
         sqlite_error,
     );
     let warning = WarningEntry::with_code(
-        sqlite_error.code,
+        sqlite_error.code(),
         format!(
             "error: SQLite persistence failed for delivery to {}@{}: {}.",
             recipient.agent, recipient.team, sqlite_error
@@ -81,6 +103,7 @@ fn build_sqlite_failure_companion_message(
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated("atm-system"),
+        source_chat_id: None,
         text: format!(
             "ATM error: SQLite persistence failed while delivering message {} to {}@{}: {}. The original message was emitted through the degraded outward path only and the retained SQLite state must be repaired immediately.",
             original_message_id, agent, team, sqlite_error
@@ -88,6 +111,7 @@ fn build_sqlite_failure_companion_message(
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(team.clone()),
+        destination_chat_id: None,
         summary: Some(format!(
             "ATM error: SQLite persistence failed for {}@{}",
             agent, team
@@ -135,14 +159,52 @@ fn load_store_backed_mailbox_projection(
 
 fn mirror_message_to_store(
     runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
     envelope: &InboxMessage,
-) -> Result<(), AtmError> {
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
     let Some(message_id) = envelope.message_id else {
-        return Ok(());
+        return Ok(DuplicateWriteDisposition::NotDuplicate);
     };
     let message_key = boundary::MessageKey::from(message_id);
+    if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
+        if immutable_envelopes_match(&existing.envelope, envelope) {
+            if let Some((source_host, destination_host)) = same_store_peer_receipt
+                && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
+            {
+                info!(
+                    event = "peer_duplicate_write_skipped",
+                    message_id = %message_id,
+                    source_host = %source_host,
+                    destination_host = %destination_host,
+                    same_store_peer_receipt = true,
+                    database_write = "skipped",
+                    delivery = "continued",
+                    "peer_duplicate_write_skipped"
+                );
+                return Ok(DuplicateWriteDisposition::SameStorePeerReceipt);
+            }
+            info!(
+                message_id = %message_id,
+                team = %team,
+                agent = %agent,
+                "duplicate message ULID write matched immutable data; retaining existing record"
+            );
+            return Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote);
+        }
+        error!(
+            code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
+            message_id = %message_id,
+            team = %team,
+            agent = %agent,
+            "duplicate message ULID carried different immutable data; retaining original record"
+        );
+        return Err(AtmError::message_id_conflict(format!(
+            "message {message_id} already exists for {agent}@{team} with different immutable data"
+        )));
+    }
     runtime.persist_message_record(boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
@@ -160,5 +222,20 @@ fn mirror_message_to_store(
         expires_at: envelope.expires_at,
         deleted_at: None,
         updated_at: Some(IsoTimestamp::now()),
-    })
+    })?;
+    Ok(DuplicateWriteDisposition::NotDuplicate)
+}
+
+fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {
+    let mut left = left.clone();
+    let mut right = right.clone();
+    left.read = false;
+    left.pending_ack_at = None;
+    left.acknowledged_at = None;
+    right.read = false;
+    right.pending_ack_at = None;
+    right.acknowledged_at = None;
+    clear_transport_delivery_metadata(&mut left);
+    clear_transport_delivery_metadata(&mut right);
+    left == right
 }

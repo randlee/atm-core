@@ -1,0 +1,131 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI22-IMPORTANT-002>
+  a triage:Finding ;
+  triage:findingId "AI22-IMPORTANT-002" ;
+  triage:foundAt "2026-07-25T06:42:14Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S2 ;
+  triage:title "No unified provenance validator -- ingress/host-authentication checks are duplicated and can drift across call sites" ;
+  triage:description "Provenance/authentication checks for authenticated_source_host, origin_message_id, and target.host are each re-implemented ad hoc at multiple call sites (validate_non_self_recipient in send/mod.rs, the AuthenticatedIngress match arms in runtime_health.rs DaemonRequestDispatcher::route, resolve_write_recipient_snapshot in delivery_policy.rs, resolve_acknowledgement_write in ack/mod.rs) rather than going through one shared validator, making it easy for one call site (e.g. the Local ingress arm, see AI22-BLOCK-003) to silently diverge from the others. Found by ruthless-boundary-qa (RBQA-F004, Important)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:category "structure" ;
+  triage:severity "important" ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T21:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Crimson-2f4c fixed on fix/close-out-pre-ai27-findings @ a5659742 (PR #656). New crates/atm-core/src/provenance.rs::validate_write_provenance is the single shared validator, independently confirmed as consumed at all 4 originally-cited sites: send/mod.rs (validate_non_self_recipient), ack/mod.rs (resolve_acknowledgement_write), delivery_policy.rs (consumes the validated ValidatedWriteProvenance result), runtime_health.rs (AuthenticatedIngress arms, ApiRouter::route). Grepped all 4 files for the old ad hoc inline checks (authenticated_source_host.is_some(), origin_message_id/origin_timestamp pairing) -- none remain. ruthless-boundary-qa independently confirmed this is a correct single-owner consolidation with no new cross-crate coupling. CI green (8/8)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/preai27-a5659742> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/send-mod-759> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/ack-mod-422> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/runtime-health-957> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/delivery-policy-354> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-AI/e52fffb6> ;
+  triage:openOn <urn:atm:triage:worktree/s21pre/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/s22/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/s23/b88ca016> ;
+  triage:openOn <urn:atm:triage:worktree/s24/fc9832b3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/send-mod-759>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 759 ;
+  triage:snippet "request.authenticated_source_host.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/ack-mod-422>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 422 ;
+  triage:snippet "let host = authenticated_source_host(&source.envelope)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/runtime-health-957>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 957 ;
+  triage:snippet "if write.authenticated_source_host.is_none() || write.origin_message_id.is_none()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/s24/delivery-policy-354>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 354 ;
+  triage:snippet "if address.host.is_some() && !authenticated_source_host {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/fc9832b3> .
+
+<urn:atm:triage:occurrence/AI22-IMPORTANT-002/preai27-a5659742>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/provenance.rs" ;
+  triage:line 64 ;
+  triage:snippet "pub fn validate_write_provenance(ingress: WriteIngress, provenance: WriteProvenance<'_>) -> Result<ValidatedWriteProvenance, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:note "Independently re-verified against PR #656: single shared validator now consumed at all 4 originally-cited sites; ruthless-boundary-qa PASS 0 findings." ;
+  triage:occursIn <urn:atm:triage:worktree/preai27/a5659742> .
+
+<urn:atm:triage:worktree/preai27/a5659742>
+  a triage:WorktreeSnapshot ;
+  triage:branch "fix/close-out-pre-ai27-findings" ;
+  triage:path "fix/close-out-pre-ai27-findings" ;
+  triage:headSha "a5659742" ;
+  triage:orderIndex 101 .
+
+<urn:atm:triage:worktree/integrate-AI/e52fffb6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "e52fffb6" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 21 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 22 .
+
+<urn:atm:triage:worktree/s23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .
+
+<urn:atm:triage:worktree/s24/fc9832b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "fc9832b3" ;
+  triage:orderIndex 24 .

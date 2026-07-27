@@ -40,6 +40,7 @@ impl MembersCommand {
         let current_dir = home::command_invocation_dir()?;
         let caller_context = resolve_cli_caller_context(CallerContextOverrides {
             identity_override: None,
+            chat_id_override: None,
             team_override: self.team.as_deref().map(CallerTeamOverride),
         })?;
         Ok(MembersQuery {
@@ -55,7 +56,7 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    use atm_core::boundary::{ReplaySource, RosterEntry, RosterHarness, RosterMemberKind};
+    use atm_core::boundary::{RosterEntry, RosterHarness, RosterMemberKind};
     use atm_core::home;
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
@@ -150,11 +151,7 @@ mod tests {
             ];
             assembly
                 .roster_store_arc()
-                .replace_roster(
-                    &team,
-                    &members,
-                    Some(&ReplaySource::new("members-test").expect("source")),
-                )
+                .replace_roster(&team, &members)
                 .expect("seed roster");
             Self {
                 _tempdir: tempdir,

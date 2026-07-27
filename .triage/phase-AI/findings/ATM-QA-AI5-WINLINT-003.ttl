@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI5-WINLINT-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI5-WINLINT-003" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Windows-only large_enum_variant clippy failure: SendRequestEnvelope::Compose(SendRequest) grew past threshold on windows-latest -- fails just lint on windows-latest" ;
+  triage:description "Reported by quality-mgr in AI5-QA-1 verdict (PR #600, run 29787382349): Just lint (windows-latest) failing on a NEW clippy diagnostic (`large_enum_variant`, 'large size difference between variants') distinct from the already-fixed ATM-QA-AI4-WINLINT-001. quality-mgr could not pinpoint file:line locally -- cross-compiling to windows-msvc target for repro is blocked in this environment by a macOS/sqlite3-sys C-toolchain gap (missing Windows CRT headers via Xcode clang), independently reconfirmed by team-lead via two separate cross-compile attempts (workspace-wide and package-scoped), both failing identically on libsqlite3-sys@0.31.0's build script. CI's raw log for the windows-latest lint job also does not retain file:line (only the condensed run_lint.py summary line is present; no log artifact was uploaded -- gh api .../artifacts confirms zero artifacts). Root cause located via source-reading background-agent investigation (compilation-free): crates/atm-core/src/protocol.rs:30, enum `SendRequestEnvelope { Compose(SendRequest), Acknowledge(AckRequest) }`. `SendRequest` (crates/atm-core/src/send/mod.rs:60) embeds a `to: AgentAddress` field; AI.5's chat-address-identity sprint (commit 17bfb4c0, 'add canonical chat identity parsing') grew `AgentAddress` (crates/atm-core/src/address.rs) from 2 fields (agent, team) to 4 (agent, chat_id, team, host). Measured on macOS (size_of, debug profile): SendRequest = 336 bytes, AckRequest = 144 bytes -> gap = 192 bytes, just under clippy's default 200-byte large_enum_variant threshold, which is why it is silent on macOS/ubuntu. Windows-latest's rustc struct-layout/padding for the String/PathBuf/Option<T> chain in the now-larger struct evidently pushes the gap >=200 bytes, tripping the lint only there. No other enum in crates/atm-core/src/** is nearly this close to the threshold (RequestEnvelope's top-two variants differ by only 16 bytes; everything else is far below). This matches the established repo fix pattern for this exact lint class: task AG14-CI-FIX-WIN-1 (commit ef9aeb31) boxed PersistedAckReply::Sent(SentAckReply) -> Sent(Box<SentAckReply>) for an identical platform-size-dependent large_enum_variant regression." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI5-WINLINT-003/pAI-6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-6/545578b0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-6/545578b0> ;
+  triage:highestOpenBranch "feature/pAI-s6-http-uds-router" ;
+  triage:highestFixedBranch "feature/pAI-s5-chat-address-identity" ;
+  triage:resolution "FIXED: SendRequestEnvelope::Compose boxed at crates/atm-core/src/protocol.rs:30 -> Compose(Box<SendRequest>), following precedent commit ef9aeb31 (AG14-CI-FIX-WIN-1). Fixed on feature/pAI-s5-chat-address-identity @ ad8a6021, merge-forwarded through AI10 @ 8775de8d. quality-mgr grepped all ~15 construction/match sites workspace-wide (atm-daemon-client/rpc.rs, atm-core/protocol.rs, atm-core/transport/testing.rs, atm-daemon/runtime_health.rs, atm-daemon/tests*, atm/composition.rs, atm-graft/lib.rs) -- all consistently use Box::new(...) or bind the boxed value, no leftover unboxed usage. Independently re-verified (AI-fixround-2-QA-recheck, message 01KY1F2ZSX9CNYGMMNXFKVKNWX): PASS." ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI5-WINLINT-003/pAI-6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 30 ;
+  triage:snippet "pub enum SendRequestEnvelope { Compose(SendRequest), Acknowledge(AckRequest) } -- Compose variant (336 bytes, includes AgentAddress grown to 4 fields in AI.5) vs Acknowledge (144 bytes) trips large_enum_variant on windows-latest only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- rg -n 'SendRequestEnvelope' crates/atm-core/src/ returned no matches. SendRequestEnvelope has been completely refactored/removed from the codebase. The large_enum_variant lint concern no longer applies. Stale occurrence from superseded branch feature/pAI-s6-http-uds-router; closing to match current reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:headSha "545578b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-6/545578b0> .

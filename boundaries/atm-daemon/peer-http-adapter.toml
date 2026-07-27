@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-PeerHttpAdapter-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "PeerHttpAdapter"
+
+[public]
+trait = "HttpsMessageTransport"
+
+[implementation]
+type = "HttpsTransport"
+module = "atm_daemon::https_transport"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon::composition::compose_runtime"]
+
+[ownership]
+io_owns = ["peer_http_https_socket_tls_adaptation", "peer_http_translation", "peer_ingress_authentication"]
+io_forbidden = ["sqlite", "message_persistence", "delivery_queue", "retry_state", "recipient_routing", "nudge_emission"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["HttpsTransport", "HttpsListenerSet", "HttpsMessageTransport"]
+
+[contracts]
+request_types = ["HTTP WriteRequest"]
+response_types = ["typed HTTP response"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["peer_transport", "PeerClientTransport"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-PEER-HTTP-ADAPTER-EDGES", "LINT-BOUNDARY-PEER-HTTP-ADAPTER-REFERENCES"]
+review_gates = ["no_public_impl", "no_public_constructor", "no_storage_or_post_write_capability", "no_retired_frame_transport"]
+
+[status]
+state = "concrete_landed"
+notes = ["The live HTTP(S)/TLS adapter is distinct from the retired PeerClientTransport and peer_transport module."]

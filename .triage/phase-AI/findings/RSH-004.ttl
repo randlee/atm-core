@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-004>
+  a triage:Finding ;
+  triage:findingId "RSH-004" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:title "delivered_request_json set has no size cap and lacks scenario-level partial-failure-then-retry test coverage" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:649-693 -- delivered_request_json: BTreeSet<String> was added to fix RSH-002 (partial-success retry re-transmission). Confirmed correct at the core-defect level (skip-if-already-delivered, retain-on-partial-failure, clear-only-on-full-success) by arch-qa, rust-service-hardening-agent, and req-qa at commit c326cbe7 on feature/pAI-s24-host-qualified-ack-receipt. Two residual, non-blocking gaps remain: (1) unbounded growth -- the set has no independent size cap and is only cleared by a fully successful pass; a chronically-unreachable peer across many explicit attempts could grow it beyond one batch's cap over the daemon's lifetime (arch-qa: Important; rust-service-hardening-agent: Minor). (2) no test evidence for the actual partial-failure-then-retry path (req-qa) -- the only batch test uses max_batch_messages: NonZeroU16::new(1), which can never exercise mid-batch skip/accumulate logic; the logic is code-correct by inspection but currently untested at the scenario level. Recommend a fix that adds an independent size/age cap on delivered_request_json plus a scenario-level test with max_batch_messages > 1 that induces a partial failure mid-batch and asserts correct retry behavior." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:category "service-hardening" ;
+  triage:severity "Important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pAI-s24/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24/c326cbe7> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s24/c326cbe7> ;
+  triage:correctionNote "quality-mgr (2026-07-26): independent re-verification per team-lead directive on task #1177, not trusting the prior occurrence closureNote's citation. That closureNote cites 'peer_sync.rs line 114' -- this file does not exist anywhere in the integrate/phase-AI worktree (find crates -iname '*peer_sync*' returns nothing), and the field name it discusses, delivered_request_json, also has zero matches workspace-wide (grep -rn 'delivered_request_json' crates/). The citation is stale/wrong. However, independently tracing the real current call path (runtime_health.rs -> PeerDeliveryCoordinator::sync_peer -> crates/atm-daemon/src/peer_drain_coordinator.rs PeerDrainCoordinator::sync_peer L562 -> drain() L259) confirms peer delivery was redesigned to cursor-based pagination: drain() tracks only a single loop-local `after: Option<(IsoTimestamp, AtmMessageId)>` cursor across page_for_peer() calls, with no BTreeSet<String> or any other growing delivered-set structure anywhere in the function. So gap (1) (unbounded growth of a delivered-set) is genuinely moot -- not because the set was 'scoped down' as claimed, but because the set no longer exists; the redesign structurally cannot exhibit that growth pattern. Gap (2) (no scenario-level partial-failure-then-retry test with a realistic multi-message batch) remains OPEN and unaddressed: every existing peer-recovery test in crates/atm-daemon/src/peer_drain_coordinator.rs (#[cfg(test)] mod tests) and crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs (response_write_failure_keeps_source_pending_until_the_shared_write_retries, explicit_peer_sync_resends_one_bounded_immutable_write, peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery) hardcodes max_batch_messages: NonZeroU16::new(1) -- none exercise drain()'s multi-page loop (page.len() < max_batch_messages check at L324) or a mid-page/mid-drain transport failure with more than one message in flight. Disposition: leave finding status open; the occurrence's 'fixed' status for gap (1) is retained as directionally correct (by different mechanism than stated) but its closureNote citation should be treated as unreliable. Do not close this finding -- gap (2) is a genuine, still-unaddressed test-coverage hole." .
+
+<urn:atm:triage:occurrence/RSH-004/pAI-s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 163 ;
+  triage:snippet "delivered_request_json: BTreeSet<String>," ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — delivered_request_json is now locally scoped to individual sync_peer calls (peer_sync.rs line 114), not a global/long-lived field. Unbounded growth issue resolved by scope reduction. (2026-07-26)" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s24/c326cbe7> .
+
+<urn:atm:triage:worktree/pAI-s21/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:finding/RSH-004>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #666 (fix/phase-ai-peer-drain-partial-retry @ 3e16092d) closes residual gap (2). New deterministic test crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:494-647 (reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_rows) with fixture PartialPageFailureThenReceiver (:66-129) configures PeerSyncPolicy.max_batch_messages=NonZeroU16::new(8) with 2 canonical writes queued, injects a transport failure after the first page item is delivered to the real receiver dispatcher but before the response is confirmed, and asserts the retry redelivers without duplicating the already-persisted receiver row (recipient_message_count 1 -> 2, delivered.len()==3 with delivered[0].origin_message_id==delivered[1].origin_message_id, no loss/no dup). Independently re-verified by req-qa, rust-service-hardening-agent (disposition-only re-check), rust-qa-agent (10x + 25x repeated execution, no flakiness), rust-best-practices-agent (pass), and arch-qa (pass) in this round; production code (peer_drain_coordinator.rs, runtime_health/peer_authority.rs, runtime_health/peer_delivery_router.rs) confirmed unchanged via git diff (single file, +225/-0). Both gap (1) (moot, already noted) and gap (2) (now closed) are resolved; finding closed." .

@@ -18,7 +18,7 @@ io_owns = ["filesystem_watch_events", "watch_event_delivery"]
 io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon"]
+allowed_dependents = []
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-storage-rusqlite"]
 

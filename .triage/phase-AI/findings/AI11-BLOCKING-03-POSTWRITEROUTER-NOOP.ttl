@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-BLOCKING-03-POSTWRITEROUTER-NOOP>
+  a triage:Finding ;
+  triage:findingId "AI11-BLOCKING-03-POSTWRITEROUTER-NOOP" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "PostWriteRouter is a no-op; host-check remains in route_write before MessageWriter; contradicts contract" ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). SUPERSEDES prior finding AI7-BLOCKING-02-POSTWRITEROUTER-ROUTING. Sprint-ai-7.md contract lines 40-41 state 'PostWriteRouter is the only host-routing decision point... every present host uses HTTPS.' Deliverable 4 explicitly prohibits 'any host check outside PostWriteRouter.' Current implementation at crates/atm-daemon/src/runtime_health.rs violates this: (1) route_write (lines 577-588) makes the host-branch decision itself at line 578-581 (request.to...host.is_some()) BEFORE calling MessageWriter::write. (2) dispatch_remote_write (lines 640-658) skips MessageWriter and PostWriteRouter entirely, calling https_transport.deliver directly. (3) PostWriteRouter::dispatch impl (lines 668-679) is a genuine no-op: debug_assert! (compiled out in release) + let _ = message; Ok(()). The host-routing logic is duplicated in route_write, contradicting the single-decision-point contract. CRITICAL SCOPE DECISION REQUIRED: either move host check into PostWriteRouter per written contract, OR correct sprint-ai-7.md contract text + boundary_enforcement.rs failure-message language to match current reality. This is the most consequential post-merge finding; requires explicit team-lead/arch-ctm scope decision before fix dispatch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "contract-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/1>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/2>, <urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/3> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. The historical route_write host-check, dispatch_remote_write path, and no-op router were superseded by the current write-then-delegate implementation. Citation-only closure verified against integrate/phase-AI: runtime_health.rs:558-566 delegates and runtime_health/peer_delivery_router.rs:14-53 is the sole host-routing/delivery point. No remediation dispatch is required for this record." .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 578 ;
+  triage:snippet "fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { if request.to.as_ref().is_some_and(|address| address.host.is_some()) { return self.dispatch_remote_write(request); }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health.rs:558-566 writes and delegates; the sole host-routing/delivery point is runtime_health/peer_delivery_router.rs:14-53. (2026-07-27)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 640 ;
+  triage:snippet "fn dispatch_remote_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> { ... transport.deliver(request, &peer, HttpsRequestDeadline::default()) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health.rs:558-566 performs the write/delegation and runtime_health/peer_delivery_router.rs:14-53 is the sole host-routing/delivery point; no separate dispatch_remote_write path remains. (2026-07-27)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-03/pAI-11/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 669 ;
+  triage:snippet "impl PostWriteRouter for DaemonRequestDispatcher { fn dispatch(&self, request: &WriteRequest, message: &MessageRecord) -> Result<(), AtmError> { debug_assert!(...); let _ = message; Ok(()) } }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- runtime_health/peer_delivery_router.rs:14-53 performs the host-routing/delivery work and observability recording after runtime_health.rs:558-566 delegates. (2026-07-27)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

@@ -63,6 +63,10 @@ Mutating surfaces:
 - use `ATM_TEAM` when you normally operate in one ATM team
 - use `ATM_IDENTITY` when your caller identity should be resolved from the
   environment
+- use `ATM_CHAT_ID` to select the optional ambient chat identity. Chat
+  precedence is `--as agent:chat`, `--chat-id`, `ATM_CHAT_ID`, qualified
+  `ATM_IDENTITY`, then no chat ID. An unqualified `--as agent` explicitly
+  selects no chat ID.
 - use `--team <team>` when the command supports an explicit team override
 - use `--as <agent>` only on inspection-only commands
 

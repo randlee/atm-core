@@ -1,0 +1,216 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI23-BLOCK-004>
+  a triage:Finding ;
+  triage:findingId "AI23-BLOCK-004" ;
+  triage:title "RULE-003 file-size violation in crates/atm-daemon/src/runtime_health.rs" ;
+  triage:description "Global file size exceeds 1000-line non-test-code decomposition limit. crates/atm-daemon/src/runtime_health.rs non-test code spans lines 1-1022 (the #[cfg(test)] module begins at line 1023), exceeding the 1000-line limit. This violates RULE-003 zero-tolerance architecture file-size constraint. Suggested remediation: split runtime_health.rs into submodules under crates/atm-daemon/src/runtime_health/ (e.g. extract doctor-finding construction, dispatcher status/snapshot logic, or the ApiRouter::route match arms). Followup pass (2026-07-26): quality-mgr QA recheck of PR #630 (AI.24, branch feature/pAI-s24-host-qualified-ack-receipt, head 1daef214) independently confirmed via arch-qa that the file is still 1065 non-test lines on that branch, i.e. this pre-existing finding also recurs on the s24 branch (previously recorded occurrences existed only on integrate/phase-AI, s27, s28, s29, s30). The AI.24->AI.25 forward merge already landed, so s25 carries an identical violation. A sweep of s26 (not yet mentioned by quality-mgr) also found the file still over the limit." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "architecture/file-size" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T15:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
+  triage:foundAt "2026-07-25T16:45:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/2_s28_bounded_peer> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/3_s29_crosshost_smoke> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/4_s30_semver_http> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/5_s24_host_qualified_ack> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/6_s25_peer_authority> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/7_s26_peer_write_deadline> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-BLOCK-004/8_s30_b7ad9f6c> ;
+  triage:triageRecordVersion "2" .
+
+# 2026-07-26 (quality-mgr, AICH-S9-QA-FWDMERGE-1, PR #623): re-verified against
+# feature/pAI-s30-semver-http-compatibility CURRENT HEAD b7ad9f6c (post
+# forward-merge sweep AI25->AI26->AI27->AI28->AI29->AI30; the 4_s30_semver_http
+# occurrence below is stale, headSha 008e58e2 predates the sweep). Ran the
+# authoritative python3 .just/check_line_counts.py: RULE-003 check now PASSES
+# for runtime_health.rs (898 prod lines, limit 1000). This is a genuine fix,
+# not a gate-gaming artifact -- the merge-forward chain carried in the real
+# extractions of runtime_health/peer_authority.rs (156 lines) and
+# runtime_health/peer_delivery_router.rs (128 lines), both containing live
+# logic (not re-export stubs), independently confirmed by ruthless-boundary-qa.
+# Status remains "fixed_partial" at top level because s26/s28/s29 have not been
+# reverified against their own current heads this round (out of this task's
+# scope); recommend a follow-up sweep of s26-s29 at current heads, since a
+# linear s23->s30 branch lineage suggests they may already carry the same fix.
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/0_integrate-phase-AI>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1083 ;
+  triage:snippet "non-test code: 1083 lines (file 1295 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "b8f9276b" ;
+  triage:occursIn <urn:atm:triage:worktree/0_integrate-phase-AI> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/1_s27_peer_delivery>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 857 ;
+  triage:snippet "AICH-S7-QA-1 recheck (2026-07-26, commit 282fad38): non-test code now 857 lines, under the 1000-line RULE-003 limit -- dispatch logic split into runtime_health/post_write_router.rs (134) and runtime_health/peer_sync.rs (120), same fix that closed AI27-BLOCK-005." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:occursIn <urn:atm:triage:worktree/1_s27_peer_delivery> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/2_s28_bounded_peer>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1077 ;
+  triage:snippet "non-test code: 1077 lines (file 1289 total); STALE -- superseded, now 888 prod lines at current head 2d7ca600" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr (AICH-S10-QA-FWDMERGE-2): confirmed 888 prod lines at current head 2d7ca600, under the 1000-line RULE-003 limit via peer_authority.rs/peer_delivery_router.rs extraction. Occurrence headSha 657d56db was stale." ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:occursIn <urn:atm:triage:worktree/2_s28_bounded_peer> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/3_s29_crosshost_smoke>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1077 ;
+  triage:snippet "non-test code: 1077 lines (file 1289 total); STALE -- superseded, now 888 prod lines at current head ab442ac3" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr (AICH-S10-QA-FWDMERGE-2): confirmed 888 prod lines at current head ab442ac3, under the 1000-line RULE-003 limit, inherited from s28's extraction. Occurrence headSha 7dcf6953 was stale." ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:occursIn <urn:atm:triage:worktree/3_s29_crosshost_smoke> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/4_s30_semver_http>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1091 ;
+  triage:snippet "non-test code: 1091 lines (file 1303 total)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:occursIn <urn:atm:triage:worktree/4_s30_semver_http> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/5_s24_host_qualified_ack>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 826 ;
+  triage:snippet "non-test code: 826 lines (file 1094 total) - FIXED via extraction of peer_sync.rs submodule; verified by quality-mgr authoritative tooling (python3 .just/check_line_counts.py)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T15:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/5_s24_host_qualified_ack> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/6_s25_peer_authority>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1065 ;
+  triage:snippet "non-test code: 1065 lines (file 1292 total); STALE -- superseded, PR #640 merged s25 into integrate/phase-AI at 06f21c70, current integrate head runtime_health.rs is 826 prod lines (RULE-003 passes)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: PR #640 (feature/pAI-s25-peer-authority-resolution) merged into integrate/phase-AI at 06f21c70; independently re-ran python3 .just/check_line_counts.py against integrate/phase-AI current head 2972e542 -- RULE-003 check passes for runtime_health.rs. Occurrence headSha b435fa6e was a pre-merge snapshot never reconciled after the PR merged; closing to match reality." ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b435fa6e" ;
+  triage:occursIn <urn:atm:triage:worktree/6_s25_peer_authority> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/7_s26_peer_write_deadline>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1146 ;
+  triage:snippet "non-test code: 1146 lines (file 1413 total); STALE -- superseded, PR #641 merged s26 into integrate/phase-AI at 2972e542, current integrate head runtime_health.rs is 826 prod lines (RULE-003 passes)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: PR #641 (feature/pAI-s26-peer-write-deadline) merged into integrate/phase-AI at 2972e542; independently re-ran python3 .just/check_line_counts.py against integrate/phase-AI current head 2972e542 -- RULE-003 check passes for runtime_health.rs. Occurrence headSha 2dc8d98b was a pre-merge snapshot never reconciled after the PR merged; closing to match reality." ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:occursIn <urn:atm:triage:worktree/7_s26_peer_write_deadline> .
+
+<urn:atm:triage:occurrence/AI23-BLOCK-004/8_s30_b7ad9f6c>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 898 ;
+  triage:snippet "non-test (prod) code: 898 lines, confirmed via python3 .just/check_line_counts.py -- RULE-003 check passed (limit 1000)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b7ad9f6c" ;
+  triage:note "AICH-S9-QA-FWDMERGE-1 (PR #623): independently re-verified by quality-mgr and ruthless-boundary-qa. Supersedes the stale 4_s30_semver_http occurrence recorded at headSha 008e58e2. Extraction of peer_authority.rs and peer_delivery_router.rs (carried forward via the merge chain) brought the file under the 1000-prod-line limit." ;
+  triage:occursIn <urn:atm:triage:worktree/8_s30_b7ad9f6c> .
+
+<urn:atm:triage:worktree/8_s30_b7ad9f6c>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "b7ad9f6c" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/0_integrate-phase-AI>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "b8f9276b" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/1_s27_peer_delivery>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s27-peer-delivery-observability" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "282fad38" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/2_s28_bounded_peer>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "657d56db" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/3_s29_crosshost_smoke>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "7dcf6953" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/4_s30_semver_http>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s30-semver-http-compatibility" ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "008e58e2" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/5_s24_host_qualified_ack>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/6_s25_peer_authority>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s25-peer-authority-resolution" ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b435fa6e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/7_s26_peer_write_deadline>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s26-peer-write-deadline" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "2dc8d98b" ;
+  triage:orderIndex 6 .

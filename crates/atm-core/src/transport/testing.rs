@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::ack;
-use crate::boundary::{self, ClientTransport};
+use crate::api::{ApiRequest, ApiResponse, DaemonApiClient};
+use crate::boundary;
 use crate::clear;
 use crate::doctor;
 use crate::error::AtmError;
@@ -10,9 +10,7 @@ use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use crate::protocol::{
-    RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
-};
+use crate::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use crate::read;
 use crate::send;
 
@@ -41,9 +39,9 @@ impl FakeClientTransport {
 
 impl boundary::sealed::Sealed for FakeClientTransport {}
 
-impl ClientTransport for FakeClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        (self.handler)(request)
+impl DaemonApiClient for FakeClientTransport {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        (self.handler)(request.into_inner()).map(ApiResponse::new)
     }
 }
 
@@ -66,16 +64,18 @@ impl LoopbackClientTransport {
 
 impl boundary::sealed::Sealed for LoopbackClientTransport {}
 
-impl ClientTransport for LoopbackClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        match request {
-            RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                send::send_mail(request, self.observability.as_ref())
-                    .map(|outcome| ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
-            }
-            RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
-                ack::ack_mail(request, self.observability.as_ref()).map(|outcome| {
-                    ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+impl DaemonApiClient for LoopbackClientTransport {
+    fn execute(&self, request: ApiRequest) -> Result<ApiResponse, AtmError> {
+        let response = match request.into_inner() {
+            RequestEnvelope::Write(request) => {
+                send::write_mail(*request, self.observability.as_ref()).map(|outcome| match outcome
+                {
+                    send::WriteOutcome::Sent(outcome) => {
+                        ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))
+                    }
+                    send::WriteOutcome::Acknowledged(outcome) => {
+                        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome))
+                    }
                 })
             }
             RequestEnvelope::CompatibilityPreflight(_) => Err(AtmError::daemon_unavailable(
@@ -98,7 +98,14 @@ impl ClientTransport for LoopbackClientTransport {
                 doctor::run_doctor(query, self.observability.as_ref())
                     .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
-        }
+            RequestEnvelope::PeerSync(_) => Err(AtmError::daemon_unavailable(
+                "peer sync requires the daemon HTTPS transport",
+            )),
+            RequestEnvelope::ReloadRuntimeView => Err(AtmError::daemon_unavailable(
+                "runtime reload requires the running daemon control plane",
+            )),
+        };
+        response.map(ApiResponse::new)
     }
 }
 

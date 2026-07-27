@@ -16,7 +16,5 @@ name = "atm_runtime"
 test-utils = []
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.3.1" }
-atm-storage = { path = "../atm-storage", version = "1.3.1" }
-atm-storage-rusqlite = { path = "../atm-storage-rusqlite", version = "1.3.1" }
-serde_json.workspace = true
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai" }
+atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai" }

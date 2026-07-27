@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-BLOCKING-01-WINDOWS-NAMED-PIPE>
+  a triage:Finding ;
+  triage:findingId "AI11-BLOCKING-01-WINDOWS-NAMED-PIPE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Windows named-pipe IPC endpoint mapping contradicts AI phase mandate (delete, not retain)" ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Sprint-ai-6.md Deliverable 4 explicitly required 'Delete Windows named-pipe mapping/fallback... retain none'. Phase-AI plan mandates 'no named pipes, AF_UNIX only'. Live production code at crates/atm-core/src/protocol.rs:185-222 contains platform_local_ipc_endpoint_path (cfg(windows) block at 197-222) which builds named pipe paths (\\\\\\\\.\\\\pipe\\\\atm-{leaf}-{hash} pattern). This is called from daemon_local_ipc_name_from_path (line 186) with 13+ call sites across atm-daemon, atm-daemon-client, atm-graft, and atm CLI. Docs/atm-daemon/architecture.md:200-205 has a stale self-contradictory passage permitting it, 3 lines below its own 'Phase AI supersession notice.' The deliverable was not met." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "deliverable-violation" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-BLOCKING-01/pAI-11/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:highestOpenBranch "none" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. Scope: atm-core/protocol.rs + all call sites (13+ references across daemon/client/graft/cli). Deliverable evidence: docs/phase-ai/sprint-ai-6.md line 4, docs/project-plan.md phase-AI mandate. Architecture doc needs update: docs/atm-daemon/architecture.md:200-205 must remove stale named-pipe permission or add Phase-AI supersession clarification. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607); re-verified against current integrate/phase-AI and confirmed the cfg(windows) named-pipe path still exists unchanged at crates/atm-core/src/protocol.rs:184-222, so this finding remains genuinely open and was redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment." .
+
+<urn:atm:triage:occurrence/AI11-BLOCKING-01/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 197 ;
+  triage:snippet "platform_local_ipc_endpoint_path builds named pipe format on Windows platform" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- rg -n 'pipe|named.*endpoint|platform_local_ipc_endpoint_path' returned no matches; Windows named-pipe IPC code has been completely removed from protocol.rs. Stale occurrence from superseded branch feature/pAI-s11-post-merge-remediation; closing to match current reality. (2026-07-26)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

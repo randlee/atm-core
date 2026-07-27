@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 use std::fmt;
 use ulid::Ulid;
 
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone)]
 pub struct AtmMessageIdParseError(String);
@@ -137,11 +137,27 @@ impl<'de> Deserialize<'de> for AlertKind {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct MessageEnvelope {
     pub from: AgentName,
+    /// Optional source context, persisted independently of `from` so agent
+    /// names never encode chat identity.
+    #[serde(
+        rename = "sourceChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_chat_id: Option<ChatId>,
     pub text: String,
     pub timestamp: IsoTimestamp,
     pub read: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<TeamName>,
+    /// Optional destination context, retained with the immutable message
+    /// envelope for exact reply and acknowledgement targeting.
+    #[serde(
+        rename = "destinationChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub destination_chat_id: Option<ChatId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -176,11 +192,23 @@ pub struct MessageEnvelope {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 struct RawMessageEnvelope {
     from: AgentName,
+    #[serde(
+        rename = "sourceChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    source_chat_id: Option<ChatId>,
     text: String,
     timestamp: IsoTimestamp,
     read: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     source_team: Option<TeamName>,
+    #[serde(
+        rename = "destinationChatId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    destination_chat_id: Option<ChatId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -217,10 +245,12 @@ impl From<MessageEnvelope> for RawMessageEnvelope {
     fn from(value: MessageEnvelope) -> Self {
         Self {
             from: value.from,
+            source_chat_id: value.source_chat_id,
             text: value.text,
             timestamp: value.timestamp,
             read: value.read,
             source_team: value.source_team,
+            destination_chat_id: value.destination_chat_id,
             summary: value.summary,
             message_id: value.message_id,
             requires_ack: Some(value.requires_ack),
@@ -243,10 +273,12 @@ impl From<RawMessageEnvelope> for MessageEnvelope {
             .unwrap_or(value.pending_ack_at.is_some() && value.acknowledges_message_id.is_none());
         Self {
             from: value.from,
+            source_chat_id: value.source_chat_id,
             text: value.text,
             timestamp: value.timestamp,
             read: value.read,
             source_team: value.source_team,
+            destination_chat_id: value.destination_chat_id,
             summary: value.summary,
             message_id: value.message_id,
             requires_ack,

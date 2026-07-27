@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI24-BLOCK-002>
+  a triage:Finding ;
+  triage:findingId "AI24-BLOCK-002" ;
+  triage:foundAt "2026-07-25T08:09:06Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:title "AICH-S4-FIX-1 batch breaks AI.23 single-write-resource-ingress invariant" ;
+  triage:description "Test ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects passes at c528137c (s23) but fails at 7bb63e01 (s24). The test performs a literal string match for RequestEnvelope::Write(_) => (\"POST\", \"/v1/atm/messages\".to_string()). In s24, this was refactored to use a MESSAGES_PATH constant, breaking the assertion. The new PeerSync route was added in the same batch, suggesting routing infrastructure changes triggered the refactor." ;
+  triage:category "architecture" ;
+  triage:phaseId "phase-AI" ;
+  triage:severity "Blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:reassignReason "Fixed on the same branch (s24) by commit 6d8ee8c3 ('fix: align AI24 boundary guards with canonical routing'), confirmed by direct diff inspection -- the test assertion now checks for the MESSAGES_PATH constant instead of the removed literal string. Matches qa-evidence-master's AICH-S4-FIX2 result (blockers=0, result_time_utc 2026-07-25T08:22:21Z, just after the fix commit). TTL was never updated to closed after the fix landed; no re-fix needed." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-002/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-BLOCK-002/s24/2> ;
+  triage:openOn <urn:atm:triage:worktree/s24/7bb63e01> ;
+  triage:fixedOn <urn:atm:triage:worktree/s24/6d8ee8c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/s24/6d8ee8c3> .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-002/s24/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 106 ;
+  triage:snippet "RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- test ai23_write_ingress_has_one_http_resource_and_no_adapter_side_effects passes; routing correctly uses MESSAGES_PATH constant (line 77). Stale occurrence from superseded branch s24; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/7bb63e01> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:occurrence/AI24-BLOCK-002/s24/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api.rs" ;
+  triage:line 106 ;
+  triage:snippet "RequestEnvelope::Write(_) => (\"POST\", MESSAGES_PATH.to_string())" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/6d8ee8c3> .
+
+<urn:atm:triage:worktree/s24/7bb63e01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "7bb63e01" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s24/6d8ee8c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "6d8ee8c3" ;
+  triage:orderIndex 4 ;
+  triage:status "contains-fix-verified" .

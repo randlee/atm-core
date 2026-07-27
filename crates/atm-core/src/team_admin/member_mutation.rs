@@ -165,13 +165,7 @@ pub fn update_member_with_roster_store(
         .ok_or_else(|| AtmError::member_not_found(member_name.as_str(), request.team.as_str()))?;
 
     apply_member_metadata_update(member, &request);
-    roster_store
-        .replace_roster(&request.team, &existing_roster, None)
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams update-member`.",
-            )
-        })?;
+    roster_store.replace_roster(&request.team, &existing_roster)?;
 
     Ok(UpdateMemberOutcome {
         action: "update-member",
@@ -216,10 +210,7 @@ fn validate_update_member_caller(
         return Err(AtmError::validation(format!(
             "caller team '{}' does not match update-member target team '{}'",
             request.caller_team, request.team
-        ))
-        .with_recovery(
-            "Run `atm teams update-member` from the target team's ATM shell, or set ATM_TEAM to the same team named in the positional target argument.",
-        ));
+        )));
     }
 
     let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
@@ -227,9 +218,6 @@ fn validate_update_member_caller(
         return Err(AtmError::member_not_found(
             request.caller_identity.as_str(),
             request.team.as_str(),
-        )
-        .with_recovery(
-            "Repair the caller roster entry first or rerun `atm teams update-member` as an existing member of the target team.",
         ));
     }
 
@@ -273,13 +261,7 @@ fn replace_roster_for_member_add(
     team: &TeamName,
     existing_roster: &[RosterEntry],
 ) -> Result<(), AtmError> {
-    roster_store
-        .replace_roster(team, existing_roster, None)
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams add-member`.",
-            )
-        })
+    roster_store.replace_roster(team, existing_roster)
 }
 
 fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMemberRequest) {
@@ -350,8 +332,5 @@ fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmEr
 
     Err(AtmError::validation(format!(
         "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
-    ))
-    .with_recovery(
-        "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
-    ))
+    )))
 }

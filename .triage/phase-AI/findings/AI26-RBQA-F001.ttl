@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI26-RBQA-F001>
+  a triage:Finding ;
+  triage:findingId "AI26-RBQA-F001" ;
+  triage:title "reconcile_peer constructs an independent RequestDeadline instead of consuming caller-admitted deadline" ;
+  triage:description "ruthless-boundary-qa found during AICH-S6-QA-INTEGRITY-2 (PR #641 @ 584c4c176b7dab82945fb2463f59d06857e58ba2) that crates/atm-daemon/src/runtime_health/peer_sync.rs:41, function reconcile_peer, constructs its own independent RequestDeadline::after(Duration::from_secs(5)) rather than consuming/propagating the caller-admitted deadline passed through the request path. Additionally, dispatch_non_write discards the inbound deadline entirely for PeerSync requests. This is pre-existing on this branch (the file was not touched by AI.26's own diff) -- not new drift introduced by the ancestry replay -- but it is a real, currently-unfixed defect on the branch. FIXED at commit 6cff9e5adab489d50e6a7857bcd7cab218f1e174 (AICH-S6-QA-FIX-1): reconcile_peer and sync_peer now accept deadline: RequestDeadline as a parameter and thread it through dispatch_non_write -> sync_peer -> reconcile_peer -> transport.deliver(), replacing the hardcoded 5s default. Verified independently by quality-mgr plus req-qa, arch-qa, and ruthless-boundary-qa; new regression test added at crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs asserting delivery consumes the caller-admitted (1s) budget rather than a fresh one." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-RBQA-F001/S26-1> ;
+  triage:closedAt "2026-07-26T12:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI26-RBQA-F001/S26-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_sync.rs" ;
+  triage:line 41 ;
+  triage:snippet "reconcile_peer(deadline: RequestDeadline) parameter consumed by transport.deliver()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "6cff9e5a" ;
+  triage:occursIn <urn:atm:triage:worktree/S26/6cff9e5a> .
+
+<urn:atm:triage:worktree/S26/6cff9e5a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S26" ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "6cff9e5a" ;
+  triage:orderIndex 26 .

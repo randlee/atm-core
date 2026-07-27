@@ -1,6 +1,6 @@
 ---
 title: AI.4 error consumer migration and enforcement
-status: proposed
+status: complete
 branch: feature/pAI-s4-error-consumer-migration
 worktree: ../atm-core-worktrees/feature/pAI-s4-error-consumer-migration
 target: integrate/phase-AI

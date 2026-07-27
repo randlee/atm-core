@@ -1,0 +1,17 @@
+---
+required_variables:
+  - title
+  - generated_at
+  - host
+  - body_html
+defaults: {}
+metadata:
+  purpose: Standalone per-host XHTML pane for inbound ATM peer smoke evidence
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>{{ title }}</title>
+<meta http-equiv="Content-Type" content="application/xhtml+xml; charset=UTF-8" />
+<meta name="smoke-host" content="{{ host }}" /><meta name="smoke-generated-at" content="{{ generated_at }}" />
+<style type="text/css">body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1b1b1b;margin:2rem;max-width:70rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #c9c9c9;padding:.45rem;text-align:left;white-space:pre-line}.pass,.fail{white-space:pre-line}.pass{background:#e8f5e9}.fail{background:#ffebee}.not-run{background:#f5f5f5;color:#555}.assessment{border-left:4px solid #607d8b;padding:.7rem;background:#f7f9fa}code{white-space:pre-wrap}</style>
+</head><body>{{ body_html }}</body></html>

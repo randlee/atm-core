@@ -159,10 +159,6 @@ fn parse_updated_at(raw: String) -> Result<IsoTimestamp, AtmError> {
         AtmError::validation(format!(
             "failed to parse team_nudge_template_overrides.updated_at `{raw}`: {error}"
         ))
-        .with_recovery(
-            "Repair the malformed team_nudge_template_overrides.updated_at row before retrying the override lookup.",
-        )
-        .with_source(error)
     })
 }
 
@@ -197,10 +193,7 @@ fn normalize_loaded_override_mode(
         "disabled" => Ok(TeamNudgeTemplateOverrideMode::Disabled),
         _ => Err(AtmError::validation(format!(
             "failed to parse team_nudge_template_overrides.mode `{mode}`"
-        ))
-        .with_recovery(
-            "Repair the malformed team_nudge_template_overrides.mode value before retrying the override lookup.",
-        )),
+        ))),
     }
 }
 
@@ -307,7 +300,7 @@ mod tests {
             .expect_err("empty override");
 
         assert_eq!(
-            error.code,
+            error.code(),
             atm_storage::error_codes::AtmErrorCode::EmptyNudgeTemplateBody
         );
     }

@@ -8,6 +8,7 @@ runtime or business-logic layer.
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-graft/shared-client-consumer.toml](../../boundaries/atm-graft/shared-client-consumer.toml)
+- [../../boundaries/atm-graft/post-send-notification-transport.toml](../../boundaries/atm-graft/post-send-notification-transport.toml)
 
 ## Shared Client Transport Consumer
 
@@ -52,3 +53,21 @@ Rules:
 - the host executable owns the final insertion point
 - `atm-graft` must drive that path automatically once nudges arrive
 - external terminal automation is not an accepted production delivery path
+- a language binding may translate the existing `HostNudgeInjector` callback
+  into its host language, but may not add another receiver, transport, retry,
+  or routing path
+
+## Post-Send Notification Transport
+
+Purpose:
+- receive a receiver-private, capability-authenticated loopback nudge and hand
+  it to the embedding host
+
+Rules:
+- it is not a second daemon request path; graft `send`, `read`, and `ack` use
+  the shared daemon HTTP client
+- `interprocess::local_socket` and Windows named-pipe references are forbidden
+  inside `atm-graft`; a direct Cargo edge to `interprocess` is forbidden as
+  well. Unix UDS support is permitted only transitively through the approved
+  `atm-daemon-client` facade.
+- it must not dispatch daemon requests or access SQLite/storage directly

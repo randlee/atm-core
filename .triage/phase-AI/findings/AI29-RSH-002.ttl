@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AI29-RSH-002" ;
+  triage:title "TOCTOU race between accept-loop admission check and worker thread register" ;
+  triage:description "registry.active_connections() check (local_tcp_transport.rs:112, :296) reads AtomicUsize incremented only after spawned worker starts, not at spawn time. Burst of simultaneous accepts can spawn more than 64 threads before registration, understating true concurrency and making AI29-RSH-001 more likely." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RSH" ;
+  triage:severity "Important" ;
+  triage:status "fixed" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-25T19:48:57Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Fixed by the same try_register CAS change as AI29-RSH-001. Reservation is now atomic and synchronous in the accept-loop thread before worker spawn (crates/atm-daemon/src/local_tcp_transport.rs:112-115 Unix, :300-303 Windows), eliminating the TOCTOU window." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RSH-002_d36709b1> ;
+  triage:fixedOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:occurrence_AI29-RSH-002_d36709b1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:snippet "TOCTOU race between accept-loop admission check and worker thread register" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_d36709b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "d36709b1" ;
+  triage:orderIndex 29 .

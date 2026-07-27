@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ARCH-AI-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-AI-003" ;
+  triage:title "daemon_observability.rs exceeds RULE-003 1000-line non-test ceiling" ;
+  triage:description "crates/atm-daemon/bin_support/daemon_observability.rs non-test body is 1302 lines (test mod starts at 1049; re-verified total is 1302, larger than originally cited 1203) -- RULE-003 violation, needs module split." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-AI-003/1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ARCH-AI-003/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1 ;
+  triage:snippet "1302 non-test lines, exceeds 1000-line RULE-003 ceiling" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_1ea59d89>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "1ea59d89" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/ARCH-AI-003>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #667 (fix/phase-ai-arch-line-ceilings @ 46d2af22). This finding is closed as a metric-definition correction, not a code fix -- crates/atm-daemon/bin_support/daemon_observability.rs is byte-identical to the pre-PR baseline (1302 total lines, confirmed unchanged by arch-qa, req-qa, and quality-mgr independently). Root cause of the original citation: quality-mgr's own phase-end review cited the TOTAL line count (1302), not the PROD (non-test) metric that RULE-003 actually enforces ('active limits: prod<=1000' per .just/check_line_counts.py's own summary). quality-mgr independently ran the repo's actual canonical classifier (lint_common.classify_rust_test_scope + is_code_line -- the literal per-file code path check_line_counts.py executes) directly against this file: prod=852, test=327 -- UNDER the 1000-line ceiling. Two reviewers (arch-qa, req-qa) approximated the non-test count via a naive 'everything before the trailing #[cfg(test)] mod tests block' method and got ~1047, over the ceiling; this approximation is wrong because several #[cfg(test)]-gated helper blocks are scattered through the file (lines 18/48/131/142/649) in addition to the trailing test module, which the naive method misses but the real classifier correctly excludes. arch-ctm's cited figure (852) is confirmed correct. Separately confirmed and flagged as a real but non-blocking tooling gap: .just/check_line_counts.py's collect_file_counts() only globs <crate_root>/src/**/*.rs; bin_support/ is a sibling of src/ and is never scanned, so the script's workspace-wide PASS never actually covered this file (req-qa traced this to the scanner source; crates/atm-daemon/src/daemon_observability.rs is a 1-line include!() shim pulling in the real bin_support/ file). This blind spot did not produce a wrong RULE-003 verdict this round only because the true count happens to be compliant -- recommend a follow-up to extend the scanner to scan bin_support/ or relocate the file under src/, tracked separately, not blocking this closure." .

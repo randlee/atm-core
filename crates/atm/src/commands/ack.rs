@@ -56,6 +56,7 @@ impl AckCommand {
             home_dir,
             current_dir,
             caller_identity: caller_context.caller_identity,
+            caller_chat_id: caller_context.caller_chat_id,
             caller_team: caller_context.caller_team,
             message_id,
             reply_body: self.reply,

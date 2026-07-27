@@ -1,4 +1,3 @@
-use std::io::Write as _;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -7,19 +6,23 @@ use anyhow::Result;
 use atm_core::boundary::{
     BuiltInNudgeSinkTarget, InternalNudgeEnvelope, PostSendHookEvent, ResolvedBuiltInNudgeTemplate,
 };
-use atm_core::error::{AtmError, AtmErrorKind};
-use atm_core::error_codes::AtmErrorCode;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
-    GraftPostSendRequest, GraftPostSendResponse, graft_receiver_socket_path_from_home,
-    read_graft_post_send_message, write_graft_post_send_message,
+    GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
+    graft_receiver_record_path_from_home,
 };
 use atm_core::home;
-use atm_core::send::nudge_template;
+#[cfg(test)]
+use atm_core::send::qualified_nudge_sender_identity;
+use atm_core::send::render_resolved_built_in_nudge;
 use clap::Args;
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
+
+/// Loopback connect budget for delivering a post-send nudge to a graft receiver.
+const GRAFT_POST_SEND_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+/// Bounded request/response budget once connected to a graft receiver.
+const GRAFT_POST_SEND_IO_DEADLINE: Duration = Duration::from_secs(3);
 
 #[cfg(test)]
 use std::collections::BTreeMap;
@@ -37,9 +40,7 @@ pub struct InternalNudgeCommand;
 impl InternalNudgeCommand {
     pub fn run(self, _observability: &CliObservability) -> Result<()> {
         let input = InternalNudgeInput::from_env()?;
-        let Some(template) =
-            nudge_template::render_resolved_built_in_nudge(&input.event, &input.template)?
-        else {
+        let Some(template) = render_resolved_built_in_nudge(&input.event, &input.template)? else {
             return Ok(());
         };
         match input.sink_target {
@@ -61,19 +62,12 @@ impl InternalNudgeInput {
     fn from_env() -> Result<Self> {
         let raw_payload = std::env::var(INTERNAL_NUDGE_ENV).map_err(|_| {
             AtmError::validation("missing ATM_INTERNAL_NUDGE payload for built-in post-send nudge")
-                .with_recovery(
-                    "Populate ATM_INTERNAL_NUDGE with a resolved envelope before invoking `atm internal-nudge`.",
-                )
         })?;
         let payload: InternalNudgeEnvelope =
-            serde_json::from_str(&raw_payload).map_err(|source| {
+            serde_json::from_str(&raw_payload).map_err(|_source| {
                 AtmError::validation(
                     "failed to decode ATM_INTERNAL_NUDGE payload for built-in nudge",
                 )
-                    .with_recovery(
-                        "Repair the ATM_INTERNAL_NUDGE JSON payload before retrying the built-in post-send path.",
-                    )
-                    .with_source(source)
             })?;
         Ok(Self {
             event: payload.event,
@@ -85,10 +79,7 @@ impl InternalNudgeInput {
     #[cfg(test)]
     fn render_values(&self) -> BTreeMap<&'static str, String> {
         BTreeMap::from([
-            (
-                "from",
-                nudge_template::qualified_sender_identity(&self.event),
-            ),
+            ("from", qualified_nudge_sender_identity(&self.event)),
             ("team", self.event.recipient_team.to_string()),
             ("message_id", self.event.message_id.to_string()),
             ("description", self.event.description.clone()),
@@ -110,9 +101,6 @@ fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> R
         return Err(AtmError::validation(
             "built-in nudge templates do not support Jinja or conditional blocks",
         )
-        .with_recovery(
-            "Use only the documented placeholder tokens in the stored template body before retrying built-in nudge rendering.",
-        )
         .into());
     }
     let mut output = String::with_capacity(template.len());
@@ -121,20 +109,13 @@ fn render_template(template: &str, values: &BTreeMap<&'static str, String>) -> R
         output.push_str(&rest[..start]);
         let after_start = &rest[start + 2..];
         let Some(end) = after_start.find("}}") else {
-            return Err(AtmError::validation("unterminated built-in nudge placeholder")
-                .with_recovery(
-                    "Close every built-in nudge placeholder with `}}` before retrying template rendering.",
-                )
-                .into());
+            return Err(AtmError::validation("unterminated built-in nudge placeholder").into());
         };
         let key = after_start[..end].trim();
         let Some(value) = values.get(key) else {
             return Err(AtmError::validation(format!(
                 "unsupported built-in nudge placeholder `{{{{{key}}}}}`"
             ))
-            .with_recovery(
-                "Use only {{from}}, {{team}}, {{message_id}}, {{description}}, and {{task_id}} in built-in nudge templates.",
-            )
             .into());
         };
         output.push_str(value);
@@ -148,20 +129,10 @@ struct TmuxNudgeSink;
 
 impl TmuxNudgeSink {
     fn deliver(&self, event: &PostSendHookEvent, rendered: &str) -> Result<()> {
-        let pane_id = event.recipient_pane_id.as_ref().ok_or_else(|| {
-            AtmError::new_with_code(
-                AtmErrorCode::PostSendPaneMissing,
-                AtmErrorKind::Validation,
-                format!(
-                    "recipient {}@{} has tmux-backed post-send capability but no pane id",
-                    event.recipient, event.recipient_team
-                ),
-            )
-            .with_recovery(format!(
-                "Repair the roster row with `atm teams update-member --team {} --member {} --pane-id <pane>`.",
-                event.recipient_team, event.recipient
-            ))
-        })?;
+        let pane_id = event
+            .recipient_pane_id
+            .as_ref()
+            .ok_or_else(|| AtmError::for_code(AtmErrorCode::PostSendPaneMissing))?;
         run_tmux_command(
             {
                 let mut command = tmux_command();
@@ -196,54 +167,30 @@ struct GraftNudgeSink;
 impl GraftNudgeSink {
     fn deliver(&self, event: &PostSendHookEvent) -> Result<()> {
         let home_dir = home::atm_home()?;
-        let endpoint_path = graft_receiver_socket_path_from_home(
+        let record_path = graft_receiver_record_path_from_home(
             &home_dir,
             &event.recipient_team,
             &event.recipient,
         );
-        let endpoint_name = atm_core::protocol::daemon_local_ipc_name_from_path(&endpoint_path)?;
-        let mut stream = LocalSocketStream::connect(endpoint_name).map_err(|source| {
-            AtmError::new_with_code(
-                AtmErrorCode::PostSendGraftUnavailable,
-                AtmErrorKind::DaemonUnavailable,
-                format!(
-                    "failed to connect to graft nudge receiver for {}@{}",
-                    event.recipient, event.recipient_team
-                ),
-            )
-            .with_recovery(
-                "Start or repair the graft-backed receiver before retrying post-send delivery.",
-            )
-            .with_source(source)
-        })?;
         let request = GraftPostSendRequest {
             event: event.clone(),
         };
-        write_graft_post_send_message(
-            &mut stream,
+        let response = deliver_graft_post_send(
+            &record_path,
             &request,
-            "failed to write graft post-send request",
-            "graft post-send request exceeded the bounded payload cap",
-        )?;
-        let response: GraftPostSendResponse = read_graft_post_send_message(
-            &mut stream,
-            "failed to read graft post-send response",
-            "graft post-send response exceeded the bounded payload cap",
-        )?;
-        stream.flush().map_err(|source| {
-            AtmError::new_with_code(
-                AtmErrorCode::PostSendGraftUnavailable,
-                AtmErrorKind::DaemonUnavailable,
-                "failed to flush graft post-send request",
-            )
-            .with_recovery(
-                "Repair the graft-backed receiver socket before retrying post-send delivery.",
-            )
-            .with_source(source)
+            GRAFT_POST_SEND_CONNECT_DEADLINE,
+            GRAFT_POST_SEND_IO_DEADLINE,
+        )
+        .map_err(|error| {
+            if error.code() == AtmErrorCode::PostSendGraftUnavailable {
+                error
+            } else {
+                AtmError::for_code(AtmErrorCode::PostSendGraftUnavailable)
+            }
         })?;
         match response {
             GraftPostSendResponse::Delivered => Ok(()),
-            GraftPostSendResponse::Error(error) => Err(error.into_atm_error().into()),
+            GraftPostSendResponse::Error(error) => Err(error.into()),
         }
     }
 }
@@ -258,35 +205,20 @@ fn tmux_command() -> Command {
 
 fn run_tmux_command(mut command: Command, action: &'static str) -> Result<()> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let child = command.spawn().map_err(|source| {
-        AtmError::new_with_code(
-            AtmErrorCode::PostSendTmuxSendFailed,
-            AtmErrorKind::DaemonUnavailable,
-            format!("failed to start tmux while trying to {action}: {source}"),
-        )
-        .with_recovery("Repair the local tmux installation before retrying post-send delivery.")
-        .with_source(source)
-    })?;
+    let child = command
+        .spawn()
+        .map_err(|_source| AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))?;
     let output = wait_for_tmux_output(child, action)?;
     ensure_tmux_success(output, action).map_err(Into::into)
 }
 
-fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output> {
+fn wait_for_tmux_output(mut child: Child, _action: &'static str) -> Result<Output> {
     let started_at = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(_)) => {
-                return child.wait_with_output().map_err(|source| {
-                    AtmError::new_with_code(
-                        AtmErrorCode::PostSendTmuxSendFailed,
-                        AtmErrorKind::DaemonUnavailable,
-                        format!("failed to collect tmux output while trying to {action}: {source}"),
-                    )
-                    .with_recovery(
-                        "Repair the local tmux installation before retrying post-send delivery.",
-                    )
-                    .with_source(source)
-                    .into()
+                return child.wait_with_output().map_err(|_source| {
+                    AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into()
                 });
             }
             Ok(None) if started_at.elapsed() < TMUX_SEND_TIMEOUT => {
@@ -295,32 +227,12 @@ fn wait_for_tmux_output(mut child: Child, action: &'static str) -> Result<Output
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AtmError::new_with_code(
-                    AtmErrorCode::PostSendTmuxSendFailed,
-                    AtmErrorKind::Timeout,
-                    format!(
-                        "tmux {action} timed out after {}s",
-                        TMUX_SEND_TIMEOUT.as_secs()
-                    ),
-                )
-                .with_recovery(
-                    "Repair the local tmux installation or pane state before retrying post-send delivery.",
-                )
-                .into());
+                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into());
             }
-            Err(source) => {
+            Err(_source) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(AtmError::new_with_code(
-                    AtmErrorCode::PostSendTmuxSendFailed,
-                    AtmErrorKind::DaemonUnavailable,
-                    format!("failed while waiting for tmux {action}: {source}"),
-                )
-                .with_recovery(
-                    "Repair the local tmux installation before retrying post-send delivery.",
-                )
-                .with_source(source)
-                .into());
+                return Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed).into());
             }
         }
     }
@@ -331,17 +243,12 @@ fn ensure_tmux_success(output: Output, action: &'static str) -> Result<(), AtmEr
         return Ok(());
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let detail = if stderr.is_empty() {
+    let _detail = if stderr.is_empty() {
         format!("tmux exited unsuccessfully while trying to {action}")
     } else {
         format!("tmux exited unsuccessfully while trying to {action}: {stderr}")
     };
-    Err(AtmError::new_with_code(
-        AtmErrorCode::PostSendTmuxSendFailed,
-        AtmErrorKind::DaemonUnavailable,
-        detail,
-    )
-    .with_recovery("Repair the local tmux installation before retrying post-send delivery."))
+    Err(AtmError::for_code(AtmErrorCode::PostSendTmuxSendFailed))
 }
 
 #[cfg(test)]
@@ -353,7 +260,7 @@ mod tests {
         BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, InternalNudgeEnvelope, PostSendHookEvent,
         ResolvedBuiltInNudgeTemplate, built_in_nudge_template_kind_from_post_send_event,
     };
-    use atm_core::send::nudge_template::default_template;
+    use atm_core::send::default_template;
     use atm_core::test_support::{EnvGuard, TEST_ARCH_CTM, TEST_LEAD, TEST_TEAM};
     use serial_test::serial;
     use tempfile::tempdir;
@@ -366,6 +273,7 @@ mod tests {
     fn base_event() -> PostSendHookEvent {
         PostSendHookEvent {
             sender: TEST_LEAD.parse().expect("sender"),
+            sender_chat_id: None,
             sender_team: TEST_TEAM.parse().expect("team"),
             recipient: TEST_ARCH_CTM.parse().expect("recipient"),
             recipient_team: TEST_TEAM.parse().expect("team"),

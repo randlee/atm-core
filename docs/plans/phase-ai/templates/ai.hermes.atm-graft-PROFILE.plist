@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.hermes.atm-graft-@PROFILE@</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@BRIDGE_GATE_COMMAND@</string>
+    <string>@HERMES_GATEWAY_READINESS_COMMAND@</string>
+    <string>@BRIDGE_COMMAND@</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ATM_TEAM</key>
+    <string>@ATM_TEAM@</string>
+    <key>ATM_IDENTITY</key>
+    <string>@ATM_IDENTITY@</string>
+    <key>ATM_CHAT_ID</key>
+    <string>@ATM_CHAT_ID@</string>
+    <key>ATM_GRAFT_HERMES_BRIDGE_MODULE</key>
+    <string>atm_graft_hermes_bridge</string>
+    <key>ATM_GRAFT_HERMES_BRIDGE_CONFIG</key>
+    <string>@BRIDGE_CONFIG@</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@LOG_PATH@</string>
+  <key>StandardErrorPath</key>
+  <string>@LOG_PATH@</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+</dict>
+</plist>

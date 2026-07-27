@@ -25,7 +25,8 @@ errors must still map them onto an ATM-owned code from this registry.
 
 The corresponding source registry must live in one place:
 
-- `crates/atm-core/src/error_codes.rs`
+- `crates/atm-error/src/error_codes.rs` (`atm-storage` and `atm-core`
+  re-export this registry)
 
 Required rules:
 
@@ -304,7 +305,7 @@ Error codes should describe the failure class, not a specific prose message.
 ### 5.10 Runtime Families
 
 The following families are part of the current runtime line. Store codes are
-already materialized in `crates/atm-core/src/error_codes.rs`; the remaining
+already materialized in `crates/atm-error/src/error_codes.rs`; the remaining
 families stay documented here as the shared contract for the later runtime
 surface.
 

@@ -1,0 +1,108 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI27-ATMQA-003>
+  a triage:Finding ;
+  triage:findingId "AI27-ATMQA-003" ;
+  triage:title "No dedicated secret-exclusion test for PeerLinkStatus serde round-trip" ;
+  triage:description "No dedicated test proves PeerLinkStatus's serde round-trip is free of fingerprint/IP fields, unlike the sibling PeerConfigDoctorReport secret-exclusion test. Expected location: crates/atm-daemon/src/tests/runtime_root/peer_observability.rs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T21:35:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. AICH-S7-QA-FIX-2: independently re-verified arch-ctm's ad441f16 self-report against the real diff -- new test peer_link_status_json_round_trip_exposes_no_authority_secrets (crates/atm-daemon/src/tests/runtime_root/peer_observability.rs, +26 lines) asserts no 'fingerprint'/'ip_address' substrings appear in the serialized PeerLinkStatus JSON and confirms a correct round-trip, matching this finding's actual ask (not the mismatched 'doctor --json runtime evidence' framing in the AICH-S7-QA-FIX-2 task text, which does not apply to this finding). Confirmed present on feature/pAI-s27-peer-delivery-observability current head 4315ad0a." ;
+  triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-ATMQA-003/pAI-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" .
+
+<urn:atm:triage:occurrence/AI27-ATMQA-003/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root/peer_observability.rs" ;
+  triage:line 0 ;
+  triage:snippet "Missing test: PeerLinkStatus serde round-trip proving absence of fingerprint/IP fields (cf. sibling PeerConfigDoctorReport secret-exclusion test)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "4315ad0a" ;
+  triage:note "Fixed at ad441f16: new peer_link_status_json_round_trip_exposes_no_authority_secrets test added. Verified on current head 4315ad0a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/5e91a889>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "5e91a889" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

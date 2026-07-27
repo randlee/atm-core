@@ -11,7 +11,7 @@ use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::home;
 use crate::schema::InboxMessage;
 use crate::types::{AgentName, SourceIndex, TeamName};
@@ -52,13 +52,11 @@ pub(crate) fn resolve_target(
     };
 
     let team = target_address
-        .team
-        .as_deref()
-        .and_then(|team| team.parse().ok())
-        .or_else(|| Some(caller_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
+        .team()
+        .cloned()
+        .unwrap_or_else(|| caller_team.clone());
     Ok(ResolvedTarget {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
+        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
         team,
         explicit: true,
     })
@@ -80,16 +78,12 @@ pub(crate) fn discover_origin_inboxes(
 
     let entries = fs::read_dir(inboxes_dir).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::MailboxRead,
+            AtmErrorCode::MailboxReadFailed,
             format!(
                 "failed to read inbox directory {}: {error}",
                 inboxes_dir.display()
             ),
         )
-        .with_recovery(
-            "Check inbox directory permissions and ensure the source inbox directory still exists before retrying the ATM command.",
-        )
-        .with_source(error)
     })?;
 
     let mut paths = Vec::new();
@@ -154,9 +148,6 @@ pub(crate) fn rediscover_and_validate_source_paths(
     if rediscovered != locked_paths {
         return Err(AtmError::mailbox_lock(
             "source path set changed between discovery and lock acquisition",
-        )
-        .with_recovery(
-            "Retry after the competing ATM operation completes so ATM can rediscover the stable inbox set.",
         ));
     }
     Ok(rediscovered)
@@ -164,16 +155,12 @@ pub(crate) fn rediscover_and_validate_source_paths(
 
 fn origin_inbox_enumeration_error(inboxes_dir: &Path, agent: &str, error: io::Error) -> AtmError {
     AtmError::new(
-        AtmErrorKind::MailboxRead,
+        AtmErrorCode::MailboxReadFailed,
         format!(
             "failed to enumerate origin inbox entries for agent '{agent}' in {}: {error}",
             inboxes_dir.display()
         ),
     )
-    .with_recovery(
-        "Check inbox directory permissions and ensure the source inbox directory can be enumerated completely before retrying the ATM command.",
-    )
-    .with_source(error)
 }
 
 fn forced_source_discovery_fault() -> Option<io::Error> {
@@ -188,10 +175,7 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
             return Err(AtmError::mailbox_read(format!(
                 "mailbox file disappeared before locked read completed: {}",
                 path.display()
-            ))
-            .with_recovery(
-                "Retry after the competing ATM operation completes, or verify the team inbox files still exist.",
-            ));
+            )));
         }
 
         let messages = super::load_compat_mailbox_messages(path)?;
@@ -256,10 +240,10 @@ mod tests {
             io::Error::other("synthetic"),
         );
 
-        assert!(error.is_mailbox_read());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
         assert!(
             error
-                .message
+                .message()
                 .contains("failed to enumerate origin inbox entries")
         );
     }
@@ -303,7 +287,7 @@ mod tests {
         )
         .expect_err("invalid alias target");
 
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
@@ -314,8 +298,8 @@ mod tests {
         std::fs::remove_file(&path).expect("remove");
 
         let error = load_source_files(&[path]).expect_err("missing mailbox");
-        assert!(error.is_mailbox_read());
-        assert!(error.message.contains("disappeared"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed);
+        assert!(error.message().contains("disappeared"));
     }
 
     #[test]
@@ -347,21 +331,21 @@ mod tests {
             &TEST_SENDER.parse().expect("sender"),
         )
         .expect_err("drift error");
-        assert!(error.is_mailbox_lock());
-        assert!(error.message.contains("source path set changed"));
+        assert!(error.code() == crate::error_codes::AtmErrorCode::MailboxLockFailed);
+        assert!(error.message().contains("source path set changed"));
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_team_segment() {
         let error = "../evil".parse::<TeamName>().expect_err("team");
 
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 
     #[test]
     fn discover_source_paths_rejects_invalid_agent_segment() {
         let error = "../evil".parse::<AgentName>().expect_err("agent");
 
-        assert!(error.is_address());
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
     }
 }

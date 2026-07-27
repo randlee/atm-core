@@ -1,0 +1,107 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI27-ATMQA-001>
+  a triage:Finding ;
+  triage:findingId "AI27-ATMQA-001" ;
+  triage:title "deliver_to_peer collapses distinct pre-dispatch vs post-dispatch failure classes into one RemoteDeliveryUnconfirmed outcome, discarding the original error code" ;
+  triage:description "Dedup of 3 QA-1 reviewers converging on the same root issue: ATM-QA-001 (req-qa), RBP-F001 (rust-best-practices), RBQA-F004 (ruthless-boundary-qa). crates/atm-daemon/src/runtime_health/peer_delivery_router.rs deliver_to_peer's `Err(error) if error.is_daemon_unavailable()` branch (~lines 91-96) routes both genuine pre-dispatch local failures (TLS/init errors surfaced from crates/atm-daemon/src/https_transport.rs lines ~100-299, before any bytes reach the peer) and true post-dispatch peer-acceptance uncertainty into a single peer_delivery_unconfirmed() call that reconstructs a new AtmError::remote_delivery_unconfirmed message and discards the original error code (peer_delivery_router.rs ~103-107). Classification of 'was this local or did it reach the peer' is split across the transport layer (https_transport.rs, which already correctly distinguishes RemoteDeliveryUnconfirmed vs DaemonUnavailable at the DNS/TCP/handshake legs per the AI26-ATMQA-001 fix) and the dispatcher layer (peer_delivery_router.rs, which re-collapses that distinction), instead of being owned once. Fix: propagate/preserve the original AtmErrorCode through peer_delivery_unconfirmed rather than discarding it, and consolidate classification ownership at the dispatcher so the transport's finer-grained signal is not thrown away." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closureNote "QA-1 gate was 0-Blocking-only; this Important finding was explicitly deferred to phase-end CLEANUP, not dispatched now. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622. quality-mgr AICH-S7-QA-FIX-1: verified fixed on commit 35cb19f8 (PR #642) -- original router file replaced by crates/atm-daemon/src/runtime_health/post_write_router.rs, which preserves the real error code end-to-end via record_peer_outcome(..., Some(error.code())) on both post-dispatch and transport-level failure branches; regression test local_https_delivery_failure_preserves_daemon_unavailable added. Confirmed by 3 independent reviewers (req-qa, arch-qa, ruthless-boundary-qa) and full-green CI (8/8 legs)." ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-25T16:26:33Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI27-ATMQA-001/pAI-s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
+  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" .
+
+<urn:atm:triage:occurrence/AI27-ATMQA-001/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 91 ;
+  triage:snippet "Err(error) if error.is_daemon_unavailable() => { self.peer_delivery_unconfirmed(peer.host, request_id, message_id, error) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/5e91a889>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "5e91a889" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

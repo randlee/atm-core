@@ -214,6 +214,15 @@ Initial crate requirement IDs:
   later ACK derives its reply host from that retained origin destination
   metadata and still uses the canonical write. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+- AI.23 shared-write convergence constraint: all local, same-host, and remote
+  HTTP writes must enter `ApiRouter::route` with the same `WriteRequest`, then
+  pass through `DaemonRequestDispatcher::route_write` and the canonical
+  `MessageWriter::write` persistence boundary. Persistence precedes exactly
+  one `PostWriteRouter::dispatch`; adapters may authenticate and label
+  provenance but may not implement a parallel write, acknowledgement, or
+  nudge path. This is the crate-level refinement of
+  `REQ-CORE-TRANSPORT-001`/`002` and the shared-write-resource contract in
+  [`../architecture.md`](../architecture.md).
 - `REQ-CORE-TRANSPORT-003` cross-host delivery owns no durable or in-memory
   per-message delivery state: no replay store, outbox, retry queue, receipt,
   remote ack state, or duplicate-delivery subsystem. The sole permitted
@@ -221,8 +230,9 @@ Initial crate requirement IDs:
   next-attempt time, and backoff for bounded canonical-record scans.
   Storage idempotency is by immutable message ULID. An identical
   already-delivered remote duplicate is a no-op; the narrow same-host peer
-  receipt of a retained origin record logs its skipped database write and
-  continues the ordinary inbound nudge without a second record or peer
+  receipt of a retained origin record logs `peer_duplicate_write_skipped`
+  with its ULID, source/destination host, `database_write=skipped`, and
+  `delivery=continued`; it continues the ordinary inbound nudge without a second record or peer
   re-delivery. Satisfies `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-004` remote acceptance is a normal result of the same
   canonical write. A failed remote attempt creates no remote recipient row or
@@ -345,8 +355,8 @@ Required `atm-core` crate rules:
 - canonical writes represent both send and acknowledgement. An ack differs
   only by a populated `acknowledges_message_id`, never by a second request or
   packet family.
-- `atm-core` owns the ingest replay/degradation contract and must not silently
-  drop parseable external rows
+- `atm-core` relies on durable message identity and idempotent writes; it owns
+  no ingest-replay or deferred-delivery persistence contract
 - `atm-core` must not let command/service code access SQLite, mailbox JSON,
   `config.json`, or sockets except through the owning boundary
 - `atm-core` boundary traits are sealed by default; any boundary that must

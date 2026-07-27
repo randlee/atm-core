@@ -65,7 +65,9 @@ pub(crate) fn resolve_sender_identity(
 pub(crate) fn resolve_runtime_sender_identity(
     _config: Option<&AtmConfig>,
 ) -> Result<AgentName, AtmError> {
-    read_cli_identity_from_env()?.ok_or_else(AtmError::identity_unavailable)
+    read_cli_identity_from_env()?
+        .map(|identity| identity.agent)
+        .ok_or_else(AtmError::identity_unavailable)
 }
 
 fn resolve_aliased_agent(value: &str, config: Option<&AtmConfig>) -> Result<AgentName, AtmError> {
@@ -133,7 +135,12 @@ mod tests {
         };
 
         let error = resolve_runtime_sender_identity(Some(&config)).expect_err("identity error");
-        assert!(error.is_identity());
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::IdentityUnavailable
+                | crate::error_codes::AtmErrorCode::IdentityInvalid
+                | crate::error_codes::AtmErrorCode::IdentityConflict
+        ));
 
         restore("ATM_IDENTITY", original_identity);
     }
@@ -171,7 +178,12 @@ mod tests {
         };
 
         let error = resolve_hook_identity(None, Some(&config)).expect_err("hook identity error");
-        assert!(error.is_identity());
+        assert!(matches!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::IdentityUnavailable
+                | crate::error_codes::AtmErrorCode::IdentityInvalid
+                | crate::error_codes::AtmErrorCode::IdentityConflict
+        ));
 
         restore("ATM_IDENTITY", original_identity);
         restore("ATM_TEAM", original_team);

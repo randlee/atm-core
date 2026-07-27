@@ -1,0 +1,77 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI16-QA1-ATM-QA-001-CLI-TRIGGER>
+  a triage:Finding ;
+  triage:findingId "AI16-QA1-ATM-QA-001-CLI-TRIGGER" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Missing atm peer sync <peer> CLI trigger" ;
+  triage:description "CLI command `atm peer sync <peer>` to manually trigger peer-reconciliation sync does not exist. The daemon contains reconcile_after_success() logic in runtime_health.rs but no corresponding CLI subcommand." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "missing-deliverable" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/s11/bb20fd9a> ;
+  triage:openOn <urn:atm:triage:worktree/s12/b6466aa1> ;
+  triage:openOn <urn:atm:triage:worktree/s13/aecade2a> ;
+  triage:openOn <urn:atm:triage:worktree/s14/672ffc34> ;
+  triage:openOn <urn:atm:triage:worktree/s15/b7d2f1c7> ;
+  triage:openOn <urn:atm:triage:worktree/s16/853abcfc> ;
+  triage:openOn <urn:atm:triage:worktree/s17/2a5a57c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/853abcfc> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and states it 'cannot change the Phase AI parser, HTTP API, canonical write path, or post-write router' and 'may run in parallel with AI.11-AI.16 because it does not modify atm-graft, daemon transport, HTTP, storage, or a shared Phase AI contract.' This finding's subject (atm peer sync CLI trigger for reconcile_after_success) is AI.16 deliverable #3 (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md). Original mis-target was applied via unverified highest-open-branch heuristic (same mistake pattern as the resolved AI13 scope-mismatch)." .
+
+<urn:atm:triage:worktree/s11/bb20fd9a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/b6466aa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/aecade2a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/672ffc34>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/853abcfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s17/2a5a57c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:orderIndex 7 .

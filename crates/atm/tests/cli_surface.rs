@@ -35,7 +35,7 @@ use std::process::Command;
 use serde_json::Value;
 
 const BASELINE_PATH_COMPONENTS: &str = "tests/cli_surface_baseline.json";
-const BLESS_ENV: &str = "UPDATE_ATM_CLI_SURFACE_BASELINE";
+const BLESS_ENV: &str = "ATM_CLI_SURFACE_BLESS";
 
 fn baseline_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BASELINE_PATH_COMPONENTS)
@@ -98,30 +98,44 @@ fn as_array<'a>(value: &'a Value, field: &str) -> &'a [Value] {
 /// Recursively diffs `baseline` against `live`, appending human-readable
 /// failure descriptions to `issues`. `path` tracks the current command path
 /// (e.g. `atm teams add-member`) for readable messages.
-fn diff_command(path: &str, baseline: &Value, live: &Value, issues: &mut Vec<String>) {
+fn diff_command(
+    path: &str,
+    baseline: &Value,
+    live: &Value,
+    breaking: &mut Vec<String>,
+    additions: &mut Vec<String>,
+) {
     diff_args(
         path,
         as_array(baseline, "args"),
         as_array(live, "args"),
-        issues,
+        breaking,
+        additions,
     );
     diff_subcommands(
         path,
         as_array(baseline, "subcommands"),
         as_array(live, "subcommands"),
-        issues,
+        breaking,
+        additions,
     );
 }
 
-fn diff_args(path: &str, baseline_args: &[Value], live_args: &[Value], issues: &mut Vec<String>) {
+fn diff_args(
+    path: &str,
+    baseline_args: &[Value],
+    live_args: &[Value],
+    breaking: &mut Vec<String>,
+    additions: &mut Vec<String>,
+) {
     for baseline_arg in baseline_args {
         let id = as_str(baseline_arg, "id");
         match live_args.iter().find(|arg| as_str(arg, "id") == id) {
-            None => issues.push(format!("{path}: argument {id:?} was removed or renamed")),
+            None => breaking.push(format!("{path}: argument {id:?} was removed or renamed")),
             Some(live_arg) => {
-                for field in ["long", "short", "required", "num_args"] {
+                for field in ["long", "short", "required", "num_args", "has_default"] {
                     if baseline_arg[field] != live_arg[field] {
-                        issues.push(format!(
+                        breaking.push(format!(
                             "{path}: argument {id:?} field {field:?} changed: {:?} -> {:?}",
                             baseline_arg[field], live_arg[field]
                         ));
@@ -134,7 +148,7 @@ fn diff_args(path: &str, baseline_args: &[Value], live_args: &[Value], issues: &
     for live_arg in live_args {
         let id = as_str(live_arg, "id");
         if !baseline_args.iter().any(|arg| as_str(arg, "id") == id) {
-            issues.push(format!(
+            additions.push(format!(
                 "{path}: argument {id:?} is new and not yet reflected in the baseline \
                  (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
             ));
@@ -146,7 +160,8 @@ fn diff_subcommands(
     path: &str,
     baseline_subcommands: &[Value],
     live_subcommands: &[Value],
-    issues: &mut Vec<String>,
+    breaking: &mut Vec<String>,
+    additions: &mut Vec<String>,
 ) {
     for baseline_sub in baseline_subcommands {
         let name = as_str(baseline_sub, "name");
@@ -155,10 +170,12 @@ fn diff_subcommands(
             .iter()
             .find(|sub| as_str(sub, "name") == name)
         {
-            None => issues.push(format!(
+            None => breaking.push(format!(
                 "{path}: subcommand {name:?} was removed or renamed"
             )),
-            Some(live_sub) => diff_command(&child_path, baseline_sub, live_sub, issues),
+            Some(live_sub) => {
+                diff_command(&child_path, baseline_sub, live_sub, breaking, additions)
+            }
         }
     }
 
@@ -168,7 +185,7 @@ fn diff_subcommands(
             .iter()
             .any(|sub| as_str(sub, "name") == name)
         {
-            issues.push(format!(
+            additions.push(format!(
                 "{path}: subcommand {name:?} is new and not yet reflected in the baseline \
                  (regenerate with `cargo run -p agent-team-mail --example gen_cli_docs`)"
             ));
@@ -179,17 +196,6 @@ fn diff_subcommands(
 #[test]
 fn cli_surface_matches_committed_baseline() {
     let live = live_surface_json();
-
-    if std::env::var_os(BLESS_ENV).is_some() {
-        let pretty = serde_json::to_string_pretty(&live).expect("serialize live CLI surface");
-        std::fs::write(baseline_path(), format!("{pretty}\n"))
-            .expect("write regenerated CLI-surface baseline");
-        eprintln!(
-            "{BLESS_ENV} set: wrote {} — re-run without {BLESS_ENV} to verify the diff gate",
-            baseline_path().display()
-        );
-        return;
-    }
 
     let baseline_raw = std::fs::read_to_string(baseline_path()).unwrap_or_else(|error| {
         panic!(
@@ -207,15 +213,32 @@ fn cli_surface_matches_committed_baseline() {
         "root command name changed"
     );
 
-    let mut issues = Vec::new();
-    diff_command("atm", &baseline, &live, &mut issues);
+    let mut breaking = Vec::new();
+    let mut additions = Vec::new();
+    diff_command("atm", &baseline, &live, &mut breaking, &mut additions);
+    assert!(
+        breaking.is_empty(),
+        "ATM CLI baseline update is additions-only; refusing removed, renamed, or changed entries:\n{}",
+        breaking.join("\n")
+    );
+
+    if std::env::var_os(BLESS_ENV).is_some() {
+        let pretty = serde_json::to_string_pretty(&live).expect("serialize live CLI surface");
+        std::fs::write(baseline_path(), format!("{pretty}\n"))
+            .expect("write regenerated CLI-surface baseline");
+        eprintln!(
+            "{BLESS_ENV} set: wrote {} — re-run without {BLESS_ENV} to verify the diff gate",
+            baseline_path().display()
+        );
+        return;
+    }
 
     assert!(
-        issues.is_empty(),
+        additions.is_empty(),
         "atm CLI surface diverged from crates/atm/tests/cli_surface_baseline.json:\n{}\n\n\
          If this is an intentional, reviewed addition, regenerate the baseline in the same \
          commit with `cargo run -p agent-team-mail --example gen_cli_docs` (or \
          `{BLESS_ENV}=1 cargo test -p agent-team-mail --test cli_surface`).",
-        issues.join("\n")
+        additions.join("\n")
     );
 }

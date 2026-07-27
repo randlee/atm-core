@@ -20,7 +20,7 @@ The current merged workspace contains:
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-runtime`: concrete runtime/store composition root
-- `atm-rusqlite`: first concrete SQLite store implementation
+- `atm-storage-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
 
@@ -110,14 +110,9 @@ Phase-S portability note:
 - feature parity across supported operating systems is mandatory; platform-
   specific implementation differences are allowed only behind documented ATM-
   owned portability boundaries
-- the canonical daemon wire contract is documented in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
-- exact wire-header constants, packet-kind assignments, payload DTO mapping,
-  and the current daemon packet-surface inventory are owned by that ICD
-- the current daemon packet family is intentionally smaller than the retained
-  CLI surface:
-  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
-  - non-packet retained surfaces: `log`, `teams`, `members`
+- the legacy frame protocol is deleted and has no fallback contract
+- Phase AI's target HTTP resources and schemas are owned by
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md)
 - S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
   implementation line that refines the queue-query packet mapping instead of
   preserving the old multi-message `read` response shape as the final
@@ -244,14 +239,14 @@ Crate-local boundary detail is owned by:
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 
-Current Phase R boundary direction:
+Historical Phase R boundary direction (retired by Phase AI):
 - shared protocol contract: `AtmProtocol` in `atm-core`
 - outbound transport boundary: `ClientTransport`
 - inbound transport boundary: `ServerTransport`
 - request routing boundary: `RequestDispatcher`
 - outbound post-send boundary: `PostSendHookEmitter`
 - inbound runtime status boundary: `StatusSource`
-- current production composition ownership:
+- historical production composition ownership:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
@@ -1802,21 +1797,18 @@ Logging architecture:
 
 ## 15. Error Model
 
-**Current implementation.** `AtmError` is defined in `atm-storage`. Its
-structured internal form remains distinct from the Phase AI target HTTP error
-body, which ADR-032 proposes as serializable `{ code, message }` and does not
-redefine the internal error type.
+**Current implementation.** `AtmError` is defined in `atm-storage` as ATM's
+sole serializable error contract. The Phase AI HTTP response body uses this
+same stable `{ code, message, cause? }` shape; it does not introduce a second
+public error model.
 
 Root public error:
 
 ```rust
 pub struct AtmError {
-    pub code: AtmErrorCode,
-    pub kind: AtmErrorKind,
-    pub message: String,
-    pub recovery: Vec<String>,
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    pub backtrace: Backtrace,
+    code: AtmErrorCode,
+    message: String,
+    cause: Option<String>,
 }
 ```
 

@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI28-RSH-004>
+  a triage:Finding ;
+  triage:findingId "AI28-RSH-004" ;
+  triage:title "Only transport call deadline-checked in drain(), not DB read" ;
+  triage:description "The drain() function in peer_drain_coordinator.rs enforces a deadline (or timeout) for the network transport call when delivering messages to a peer, but does not enforce the same deadline on the prior database read that fetches the messages to deliver. Specifically, drain() now checks deadline.expired() immediately before and after the outbound.page_for_peer(...) call (lines 262-273), but page_for_peer itself takes no deadline/timeout parameter -- the DB read is bracketed by expiry checks, not actually bounded/interruptible. A slow or blocked SQLite read is not cancelled by the request deadline; only late-arriving results are rejected after the fact. Additionally, the OutboundMessageQuery::page_for_peer trait signature (contract.rs:663) lacks a deadline/budget parameter. This creates an asymmetry in deadline enforcement and reduces the reliability of the paging/delivery loop under database contention." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "Service-Hardening" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e). Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): OutboundMessageQuery::page_for_peer (crates/atm-storage/src/contract.rs:663) now takes a budget/deadline parameter; the rusqlite impl (crates/atm-storage-rusqlite/src/lib.rs:57) threads it into shared_db.rs, which sets connection.busy_timeout(budget) and installs a connection.progress_handler(1_000, || Instant::now() >= expires_at) so a slow/blocked SQLite read is genuinely interruptible, not just bracketed by after-the-fact expiry checks. drain() in peer_drain_coordinator.rs:281 passes its deadline straight through to page_for_peer. Dedicated test page_for_peer_rejects_an_expired_budget_before_opening_a_reader (lib.rs:785) covers the pre-expired case." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 261 ;
+  triage:snippet "drain() function: deadline.expired() checked before/after page_for_peer() but no deadline passed to function" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). drain() now passes deadline through to page_for_peer, which enforces it via busy_timeout+progress_handler. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:occurrence/AI28-RSH-004/pAI-s28/b7d8488/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage/src/contract.rs" ;
+  triage:line 663 ;
+  triage:snippet "OutboundMessageQuery::page_for_peer trait signature lacks deadline/budget parameter" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). Trait signature now takes a budget parameter. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
+
+<urn:atm:triage:worktree/pAI-s28/b7d8488>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b7d8488" ;
+  triage:orderIndex 28 .

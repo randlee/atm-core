@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI30-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "AI30-BLOCK-001" ;
+  triage:foundAt "2026-07-25T04:52:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S9 ;
+  triage:title "Missing compatibility matrix tests for CompatibilityVerdict admission — CLOSED" ;
+  triage:description "Sprint doc's 'Required validation' section explicitly required compatibility matrix tests covering: release mismatch, schema mismatch, HTTP-major mismatch, same-major minor/patch interoperability. Fix commit 77252eca adds compatibility_admission_matrix_ignores_release_and_checks_schema_and_http_major at crates/atm-daemon/src/runtime_health.rs:1136-1189. Independently verified CLOSED by two reviewers: req-qa (direct source read) and rust-qa-agent (ran cargo test --workspace, confirmed the test executes and passes, quoted the full test body). The test calls the real DaemonRequestDispatcher::compatibility_verdict function (not a mock) and asserts all four required scenarios: release mismatch (9.9.9-beta.1, remains Compatible - confirms release is correctly ignored), same-major differing minor/patch HTTP version (1.99.7 vs HTTP_API_VERSION, remains Compatible), schema mismatch (CLI_SCHEMA_VERSION+1, returns Incompatible with schema_version fields differing), and HTTP-major mismatch (2.0.0, returns Incompatible with major() differing). cargo test confirmed this test passes (0 failed across test results workspace-wide)." ;
+  triage:category "AI30-BLOCK" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI30-BLOCK-001/pAI-s30/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s30/77252eca> .
+
+<urn:atm:triage:occurrence/AI30-BLOCK-001/pAI-s30/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 1137 ;
+  triage:snippet "fn compatibility_admission_matrix_ignores_release_and_checks_schema_and_http_major()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s30/77252eca> .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 9 .

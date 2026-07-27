@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI14-QA1-RBP-IOERROR>
+  a triage:Finding ;
+  triage:findingId "AI14-QA1-RBP-IOERROR" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "read_owner_record discards underlying io::Error context instead of interpolating it" ;
+  triage:description "rust-best-practices-agent (RBP): crates/atm-core/src/local_http.rs's read_owner_record discards the underlying io::Error context instead of interpolating it into the returned error, diverging from this crate's own established convention in persistence.rs (which interpolates io::Error detail). Important, non-blocking." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI14-QA1-RBP-IOERROR/s16/1> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI14-QA1-RBP-IOERROR/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/local_http.rs" ;
+  triage:line 185 ;
+  triage:snippet "Err(_source) => Err(AtmError::daemon_unavailable(\"failed to read daemon owner record for local HTTP metadata\"))" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- line 166 now uses daemon_unavailable_with_cause() with error source context interpolated. Test owner_record_read_preserves_io_cause verifies error.cause().is_some(). Defect resolved. Stale occurrence from superseded branch s16; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s14/c5665204>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "c5665204" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .

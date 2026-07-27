@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/DEADCODE-STORAGE-001>
+  a triage:Finding ;
+  triage:findingId "DEADCODE-STORAGE-001" ;
+  triage:title "dead_code warnings on SqliteWriterLockGuard/hold_sqlite_writer_lock in release build" ;
+  triage:description "cargo build --release --workspace emits two dead_code warnings for SqliteWriterLockGuard and hold_sqlite_writer_lock in crates/atm-storage-rusqlite/src/lib.rs (lines 41 and 130). Found during arch-ctm's production-readiness review of integrate/phase-AI at c052afe8." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-27T05:10:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASEEND ;
+  triage:foundAt "2026-07-27T05:03:10Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEADCODE-STORAGE-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DEADCODE-STORAGE-001/2> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/DEADCODE-STORAGE-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "struct SqliteWriterLockGuard (dead_code)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_c052afe8> .
+
+<urn:atm:triage:occurrence/DEADCODE-STORAGE-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-storage-rusqlite/src/lib.rs" ;
+  triage:line 130 ;
+  triage:snippet "fn hold_sqlite_writer_lock (dead_code)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_c052afe8> .
+
+<urn:atm:triage:worktree/integrate_phase_ai_c052afe8>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "c052afe8" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:finding/DEADCODE-STORAGE-001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #670 (fix/storage-test-support-cfg @ 453ed008). SqliteWriterLockGuard struct (lib.rs:40-44), its Drop impl (lib.rs:119-124), and hold_sqlite_writer_lock (lib.rs:132-145) now carry #[cfg(any(test, feature = \"test-support\"))], matching the sibling already-gated TestOnlySqliteWriterLockGuard/hold_sqlite_writer_lock_for_test. rust-qa-agent performed a clean rebuild (cargo clean on affected crates + cargo build --release --workspace) and confirmed 0 warnings (both former dead_code warnings at lib.rs:41/130 gone). cargo fmt/clippy -D warnings clean workspace-wide. cargo test --workspace 0 failures, including 19/19 passing in atm-core/tests/mailbox_locking.rs (consumer via atm-runtime-test-support). Workspace-wide duplicate sweep (ruthless-boundary-qa) confirmed no other unguarded writer-lock construct exists. arch-qa confirmed atm-daemon-bootstrap (the only non-dev consumer) does not enable test-support, so no test-only symbols leak into production. All 4 reviewers (req-qa, arch-qa, ruthless-boundary-qa, rust-qa-agent) independently PASS, 0 blocking findings. CI green 8/8 legs." .

@@ -1,68 +1,11 @@
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, IsoTimestamp, TaskId, TeamName};
 use atm_storage::contract::{Message, MessageKey};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 use super::sealed;
 pub use atm_storage::contract::{MailMessageState, MessageFingerprint};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(try_from = "String", into = "String")]
-pub struct ReplaySource(String);
-
-impl ReplaySource {
-    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(AtmError::validation(
-                "replay source must not be empty or whitespace-only",
-            ));
-        }
-        Ok(Self(value))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for ReplaySource {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl TryFrom<String> for ReplaySource {
-    type Error = AtmError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-
-impl From<ReplaySource> for String {
-    fn from(value: ReplaySource) -> Self {
-        value.0
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreIngestReplayState {
-    pub team: TeamName,
-    pub agent: AgentName,
-    /// Invariant: source must name one concrete ingest origin chosen by the
-    /// caller (for example a file path or inbox export id) and must never be
-    /// synthesized from an empty or whitespace-only string.
-    pub source: ReplaySource,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_fingerprint: Option<MessageFingerprint>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_ingested_at: Option<IsoTimestamp>,
-    #[serde(default)]
-    pub ingested_rows: u64,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailStoreHealthSnapshot {
@@ -85,6 +28,10 @@ pub struct MailStoreMailboxMetadataRow {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thread_mode: Option<ThreadMode>,
     pub from_agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_chat_id: Option<ChatId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub destination_chat_id: Option<ChatId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
@@ -197,27 +144,6 @@ pub trait MailStore: sealed::Sealed {
         &self,
         request: LoadMailMessageStateRequest,
     ) -> Result<LoadMailMessageStateResponse, AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when ingest-replay state persistence fails.
-    fn record_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &ReplaySource,
-        state: &MailStoreIngestReplayState,
-    ) -> Result<(), AtmError>;
-
-    /// # Errors
-    ///
-    /// Returns `AtmError` when ingest-replay state cannot be loaded.
-    fn load_ingest_replay_state(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        source: &ReplaySource,
-    ) -> Result<Option<MailStoreIngestReplayState>, AtmError>;
 
     /// # Errors
     ///

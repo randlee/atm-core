@@ -195,8 +195,9 @@ Required architectural rules:
   boundary bypass
 - typed error translation happens at the boundary layer, but must preserve
   discriminated error identity across store/ingress/export/service calls
-- `atm-core` owns ATM event and error models used by both CLI and daemon
-  `sc-observability` emitters
+- `atm-core` owns the service-facing error façade and ATM event models used by
+  both CLI and daemon `sc-observability` emitters; the dependency-light
+  `atm-error` crate owns the shared stable error-code vocabulary
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default
@@ -278,6 +279,25 @@ Phase AC supersession note:
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level
   method family
+
+## 2.2 AI.23 Shared-Write Convergence Point
+
+AI.23 establishes one convergence point for every authenticated HTTP write.
+Local CLI HTTP, same-host advertised-IP HTTP, and remote peer HTTPS all decode
+the same transport-neutral `WriteRequest` and enter `ApiRouter::route`. The
+transport adapter owns authentication and ingress provenance only; it must not
+create a second persistence, acknowledgement, or notification path.
+
+`ApiRouter::route` delegates write handling to the daemon's
+`DaemonRequestDispatcher::route_write`, which invokes the canonical
+`MessageWriter::write` persistence operation before
+`PostWriteRouter::dispatch` selects the local nudge or host-qualified peer
+delivery. This ordering is the crate-level shared-write-resource invariant:
+every ingress uses the same dispatcher, persistence boundary, and post-write
+router. See [`../atm-daemon/http-api.md`](../atm-daemon/http-api.md),
+[`../adr/ADR-033-http-endpoint-contract.md`](../adr/ADR-033-http-endpoint-contract.md),
+and [`boundaries.md`](./boundaries.md) for the corresponding transport and
+boundary contracts.
 - queue inspection must not remain one "read many full messages" surface once
   SQLite-backed mailbox history becomes the ordinary durable source of truth
 
@@ -675,11 +695,13 @@ The exact design is owned by:
 
 ## 6. Error-Code Registry Boundary
 
-`atm-core` owns the single source registry of ATM-owned error codes in source.
+`atm-error` owns the dependency-light source registry of ATM-owned error codes;
+`atm-storage` and `atm-core` re-export the same type for their respective
+consumers.
 
 Architectural rules:
 
-- the source registry must live in `crates/atm-core/src/error_codes.rs`
+- the source registry must live in `crates/atm-error/src/error_codes.rs`
 - `AtmError` must carry an `AtmErrorCode`
 - coarse `AtmErrorKind` classification must not replace the stable code
 - warning diagnostics emitted by `atm-core` must also select a registry code

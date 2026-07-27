@@ -1,7 +1,8 @@
-/// Acknowledgement workflows for ack-required mailbox messages.
 pub mod ack;
 /// Public agent-address parsing and normalization helpers.
 pub mod address;
+/// Acknowledgement workflows for ack-required mailbox messages.
+pub mod api;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
 /// Hidden daemon-private ingress/export helpers used by concrete boundary
@@ -20,9 +21,6 @@ pub(crate) mod delivery_execution;
 pub(crate) mod delivery_plan;
 /// Internal delivery-policy coordinator and event-family state machines.
 pub(crate) mod delivery_policy;
-/// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
-#[doc(hidden)]
-pub mod direct_boundaries;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.
@@ -37,6 +35,8 @@ pub mod home;
 pub(crate) mod identity;
 /// Bounded metadata queue query workflows and output models.
 pub mod list;
+/// Runtime-local endpoint metadata and capability validation for local HTTP.
+pub mod local_http;
 /// Log query and filtering types for the CLI log surface.
 pub mod log;
 /// Internal mailbox persistence and parsing helpers.
@@ -52,6 +52,8 @@ pub(crate) mod persistence;
 pub mod process;
 /// Shared protocol DTOs used by boundary transport and adapter contracts.
 pub mod protocol;
+/// Shared authenticated/immutable write provenance validation.
+pub mod provenance;
 /// Mailbox read/query workflows and output models.
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
@@ -86,22 +88,23 @@ pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
 
+pub use api::{
+    ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, DaemonApiClient,
+    MAX_HTTP_REQUEST_BODY_BYTES, RequestDeadline,
+};
 pub use atm_storage::derive_ack_requirement;
 #[allow(deprecated)]
 pub use boundary::{
-    AckTransition, AtmProtocol, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ClientTransport,
-    ConfigDoctor, ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse,
-    DoctorFinding, InternalNudgeEnvelope, LoadMailMessageStateRequest,
-    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreDoctor,
-    MailStoreDoctorReport, MailStoreHealthSnapshot, MailStoreIngestReplayState,
+    AckTransition, BuiltInNudgeSinkTarget, BuiltInNudgeTemplateKind, ConfigDoctor,
+    ConfigDoctorReport, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, DoctorFinding,
+    InternalNudgeEnvelope, LoadMailMessageStateRequest, LoadMailMessageStateResponse,
+    MailMessageState, MailStore, MailStoreDoctor, MailStoreDoctorReport, MailStoreHealthSnapshot,
     MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, Message, MessageFingerprint,
     MessageKey, NotificationEvent, NudgeTemplateOverrideStore, PostSendHookEmitter,
-    PostSendHookEvent, RemoteReplayStateRecord, RemoteReplayStore, RequestDispatcher,
-    ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind, RosterStore,
-    RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot, RuntimeStatusSnapshot,
-    RuntimeStorageFinalizer, ServerTransport, StatusSource, TaskState,
-    TeamNudgeTemplateOverrideMode, TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest,
-    UpsertMailMessageStateResponse,
+    PostSendHookEvent, ResolvedBuiltInNudgeTemplate, RosterEntry, RosterHarness, RosterMemberKind,
+    RosterStore, RosterStoreDoctor, RosterStoreDoctorReport, RosterStoreHealthSnapshot,
+    RuntimeStatusSnapshot, StatusSource, TaskState, TeamNudgeTemplateOverrideMode,
+    TeamNudgeTemplateOverrideRow, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
@@ -110,7 +113,7 @@ pub use config::types::GraftConfig;
 /// boundary. Shared advisory/session protocol DTOs are not part of the
 /// accepted `atm-core` surface.
 pub use graft::AtmGraftClient;
-pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use protocol::{RequestEnvelope, ResponseEnvelope};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalServiceRuntime, with_default_local_service_runtime,
 };

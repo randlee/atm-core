@@ -1,0 +1,166 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS>
+  a triage:Finding ;
+  triage:findingId "AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T16:45:00Z"^^xsd:dateTime ;
+  triage:title "wait_for_published_daemon's terminal timeout error discards the underlying connection-failure cause" ;
+  triage:description "The daemon-client's wait_for_published_daemon function extends the auto-start readiness polling timeout to 30s (via commit 34392e5c), but its timeout error path creates a generic error that discards underlying connection-failure diagnostic information. A caller now waits up to 30s with zero diagnostic info on why each connection attempt failed." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-22T16:45:00Z"^^xsd:dateTime ;
+  triage:closureNote "arch-ctm reported (message re: 89d8589d) that wait_for_published_daemon now retains the last local-IPC connection error and includes it in the terminal timeout error. Independently re-verified against feature/pAI-s27-peer-delivery-observability @ 89d8589d: crates/atm-daemon-client/src/lib.rs ~773-816 -- the retry loop now captures each connect attempt's Err into last_connect_error, and the timeout error message appends '; last local IPC failure: {error}' when one was recorded. New test publish_wait_retains_the_last_local_ipc_failure_in_its_timeout_error asserts the fixture connection-refused message text survives into the timeout error. Ran cargo test -p atm-daemon-client --lib publish_wait_retains -- 1 passed. This closes only the s27/1 primary occurrence (line ~800, the wait_for_published_daemon path); the s20/2 LaunchGateGuard::rejected_error occurrence at a distinct call site (line ~701) was NOT addressed by this commit and remains genuinely open -- top-level status stays open until that residual is fixed." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s27-fixed-89d8589d> ;
+  triage:openOn <urn:atm:triage:worktree/s20/a1d186a60f615336f2ddb82d468d74042e008ca4> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:highestOpenBranchCommit "35cb19f8" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 796 ;
+  triage:snippet "let error = AtmError::daemon_auto_start_failed(format!(\"failed to connect to daemon local IPC endpoint at {} after auto-start\", self.endpoint.display()));" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s17-hermes-chat-identity superseded by later sprints; finding still open on s27, consolidating to latest. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "324077541b47567f6ffe2f7521ebcab75890b7db" ;
+  triage:commit "pre-34392e5c" ;
+  triage:timeout "10s" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/324077541b47567f6ffe2f7521ebcab75890b7db> ;
+  triage:notes "Error created in wait_for_published_daemon timeout path; discards underlying connection-failure cause from loop iterations" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 796 ;
+  triage:snippet "let error = AtmError::daemon_auto_start_failed(format!(\"failed to connect to daemon local IPC endpoint at {} after auto-start\", self.endpoint.display()));" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s18-graft-python-bindings superseded by later sprints; finding still open on s27, consolidating to latest. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd" ;
+  triage:commit "pre-34392e5c" ;
+  triage:timeout "10s" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd> ;
+  triage:notes "Error created in wait_for_published_daemon timeout path; discards underlying connection-failure cause from loop iterations" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 796 ;
+  triage:snippet "let error = AtmError::daemon_auto_start_failed(format!(\"failed to connect to daemon local IPC endpoint at {} after auto-start\", self.endpoint.display()));" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s19-hermes-graft-integration superseded by later sprints; finding still open on s27, consolidating to latest. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "1bd8e54d3d78c51a89914127b402a94e2106e444" ;
+  triage:commit "pre-34392e5c" ;
+  triage:timeout "10s" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/1bd8e54d3d78c51a89914127b402a94e2106e444> ;
+  triage:notes "Error created in wait_for_published_daemon timeout path; discards underlying connection-failure cause from loop iterations" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 805 ;
+  triage:snippet "let error = AtmError::daemon_auto_start_failed(format!(\"failed to connect to daemon local IPC endpoint at {} after auto-start\", self.endpoint.display()));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a60f615336f2ddb82d468d74042e008ca4" ;
+  triage:commit "34392e5c" ;
+  triage:timeout "30s" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a1d186a60f615336f2ddb82d468d74042e008ca4> ;
+  triage:notes "Primary occurrence on s20; timeout extended from 10s to 30s by commit 34392e5c; error path still discards underlying connection-failure cause" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s20/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 701 ;
+  triage:snippet "let error = LaunchGateGuard::rejected_error(&self.endpoint);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a60f615336f2ddb82d468d74042e008ca4" ;
+  triage:commit "34392e5c" ;
+  triage:timeout "publish_timeout" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a1d186a60f615336f2ddb82d468d74042e008ca4> ;
+  triage:notes "Secondary occurrence in ensure_daemon_available_with_lock_path_impl at launch-gate timeout; repeatable-sweep finding within daemon-client error handling scope" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 800 ;
+  triage:snippet "let error = AtmError::daemon_auto_start_failed(format!(\"failed to connect to daemon local IPC endpoint at {} after auto-start\", self.endpoint.display()));" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by s27-fixed-89d8589d (later commit on same branch)." ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:timeout "30s" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:notes "Consolidated occurrence from s20 on feature/pAI-s27-peer-delivery-observability; error path still discards underlying connection-failure diagnostic details from loop iterations" .
+
+<urn:atm:triage:occurrence/AI20-QA1-IMPORTANT-02-TIMEOUT-DIAGNOSTIC-LOSS/s27-fixed-89d8589d>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 776 ;
+  triage:snippet "let mut last_connect_error = None; ... Err(error) => { ... last_connect_error = Some(error); } ... format!(\"...after auto-start{detail}\") where detail includes last_connect_error" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "89d8589d" ;
+  triage:note "Independently re-run: cargo test -p atm-daemon-client --lib publish_wait_retains -- 1 passed." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/89d8589d> .
+
+<urn:atm:triage:worktree/s17/324077541b47567f6ffe2f7521ebcab75890b7db>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "324077541b47567f6ffe2f7521ebcab75890b7db" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "02aff5caf2b2dfa4609073b1d97a7bff6f8a73fd" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/1bd8e54d3d78c51a89914127b402a94e2106e444>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "1bd8e54d3d78c51a89914127b402a94e2106e444" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/a1d186a60f615336f2ddb82d468d74042e008ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a1d186a60f615336f2ddb82d468d74042e008ca4" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

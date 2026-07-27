@@ -1,0 +1,157 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "RBQA-F002" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T20:00:00Z"^^xsd:dateTime ;
+  triage:title "Command allowlist enforcement checks basename only, not binary identity — bypassable" ;
+  triage:description "scripts/smoke/run_peer_pair.py defines `ALLOWED_CLIENT_BINARIES = {\"atm\", \"atm.exe\", \"atm-graft\", \"atm-graft.exe\"}` and `require_client_command()` checks membership via `Path(command[0]).name.lower()` — a basename-only check (confirmed at line 71-73). A PATH-shadowed or absolute-path attacker binary named \"atm\" (not the real atm binary) bypasses this allowlist entirely. This is exactly the attack shape BLOCKING-03's own original description named, so the fix is incomplete against its own stated threat model." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "arch-ctm reported (message re: dbe489db) that command identity is now anchored to ATM_SMOKE_INSTALL_ROOT/bin/<executable> when that env var is set, closing the basename-only bypass. Independently re-verified against feature/pAI-s27-peer-delivery-observability @ dbe489db: scripts/smoke/run_peer_pair.py::require_public_client_command (~lines 96-104) resolves the expected path from ATM_SMOKE_INSTALL_ROOT and rejects any command[0] that does not resolve to that exact path, falling back to shutil.which() only when the env var is unset. Ran python3 -m pytest scripts/smoke/test_run_peer_pair.py -q -- 5 passed, including the new test_validation_rejects_path_shadow_when_install_root_is_selected asserting a RuntimeError containing 'does not resolve' for a shadow binary. Full scripts/smoke/ suite (35 tests) also passed. Note: this closes the PATH-shadow/absolute-path bypass when ATM_SMOKE_INSTALL_ROOT is set (the harness's actual runtime mode); a caller that omits the env var still falls back to basename-only shutil.which() resolution, which is a narrower residual than the original finding but not a full elimination of basename trust in every code path." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s27-fixed-dbe489db> ;
+  triage:openOn <urn:atm:triage:worktree/s27> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 71 ;
+  triage:snippet "binary = Path(command[0]).name.lower()" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s16-offline-reconciliation superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b908e61374da0794cdb1f86ee148e4d9be0" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 71 ;
+  triage:snippet "binary = Path(command[0]).name.lower()" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s17-hermes-chat-identity superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571ee509a315ddd4450f95538581707096f8" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 71 ;
+  triage:snippet "binary = Path(command[0]).name.lower()" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s18-graft-python-bindings superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a139c305a9887e74be214b54136f9231af" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 71 ;
+  triage:snippet "binary = Path(command[0]).name.lower()" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s19-hermes-graft-integration superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27dc455723ec748bb3c4b488284ea97ac5" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 71 ;
+  triage:snippet "binary = Path(command[0]).name.lower()" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s20-hermes-bridge-deployment superseded by later sprints without reconciliation; consolidating still-open finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4a4a18f4136baf935c62e31fbf5f3e27c" ;
+  triage:occursIn <urn:atm:triage:worktree/s20/a8567ca4> .
+
+<urn:atm:triage:occurrence/RBQA-F002/s27/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 84 ;
+  triage:snippet "executable = Path(command[0]).name.lower()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:occursIn <urn:atm:triage:worktree/s27> ;
+  triage:notes "Consolidated/migrated occurrence: command allowlist enforcement still checks basename only (Path.name), bypassable via PATH shadowing or absolute-path attack binaries." .
+
+<urn:atm:triage:occurrence/RBQA-F002/s27-fixed-dbe489db>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 96 ;
+  triage:snippet "require_public_client_command anchors expected path to ATM_SMOKE_INSTALL_ROOT/bin/<executable>, rejecting any command[0] that does not resolve to it" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "dbe489db" ;
+  triage:note "Independently re-run: python3 -m pytest scripts/smoke/test_run_peer_pair.py -q (5 pass, incl. test_validation_rejects_path_shadow_when_install_root_is_selected) and full scripts/smoke/ suite (35 pass). Residual: basename-only shutil.which() fallback remains when ATM_SMOKE_INSTALL_ROOT is unset." ;
+  triage:occursIn <urn:atm:triage:worktree/s27/dbe489db> .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b908e61374da0794cdb1f86ee148e4d9be0" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571ee509a315ddd4450f95538581707096f8" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a139c305a9887e74be214b54136f9231af" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27dc455723ec748bb3c4b488284ea97ac5" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/a8567ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4a4a18f4136baf935c62e31fbf5f3e27c" ;
+  triage:orderIndex 20 .
+
+<urn:atm:triage:worktree/s27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

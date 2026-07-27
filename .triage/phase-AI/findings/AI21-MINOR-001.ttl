@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI21-MINOR-001>
+  a triage:Finding ;
+  triage:findingId "AI21-MINOR-001" ;
+  triage:foundAt "2026-07-25T04:58:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S1 ;
+  triage:title "New validation error messages lack concrete remediation guidance" ;
+  triage:description "composition.rs:299, https_transport.rs:488, runtime_health.rs:984 — new validation error messages lack concrete remediation (header name, config file, restart-without-flag guidance). Reported by rust-best-practices-agent (RBP-F003)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "Minor" ;
+  triage:severity "Minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T12:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 299 ;
+  triage:snippet "plaintext-test peer mode requires one enabled HTTP interface; configure a private test interface or restart without --peer-wire-security plaintext-test" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:headSha "5678337c" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 482 ;
+  triage:snippet "plaintext peer write requests require X-ATM-Peer-Source-Host; restart without --peer-wire-security plaintext-test to restore mTLS" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:headSha "5678337c" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:occurrence/AI21-MINOR-001/pAI-s21pre/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 980 ;
+  triage:snippet "plaintext smoke ingress must carry origin metadata but no authenticated peer identity" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:headSha "5678337c" ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s21pre/5678337c> .
+
+<urn:atm:triage:worktree/pAI-s21pre/5678337c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "5678337c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
+  triage:orderIndex 1 .

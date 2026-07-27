@@ -1,0 +1,35 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI29-RBQA-002>
+  a triage:Finding ;
+  triage:findingId "AI29-RBQA-002" ;
+  triage:title "daemon_must_not_read_caller_workspace_config gate has blind spots" ;
+  triage:description "Boundary gate (boundary_enforcement.rs:64-89) only scans crates/atm-daemon/src for config::load_config/ConfigIngress/load_workspace_config literals. Does not scan crates/atm-runtime/src (where AI29-RBQA-001 leak lives) or crates/atm-daemon-bootstrap/src, and does not match load_atm_config alias. Gate cannot see the actual leak." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "RBQA" ;
+  triage:severity "Minor" ;
+  triage:status "open" ;
+  triage:repeatable false ;
+  triage:foundIn triage:AICH-S10 ;
+  triage:foundAt "2026-07-25T19:04:04Z"^^xsd:dateTime ;
+  triage:severityDowngradeNote "Severity downgraded from Important to Minor on recheck. The boundary gate's literal-substring-matching approach is now understood as a foundational limitation, not a regression. Gateway remains functional despite blind spots; a generic AST/directory scan would require architectural redesign outside the current phase scope." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence_AI29-RBQA-002_40ed45e2> ;
+  triage:openOn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+
+<urn:atm:triage:occurrence_AI29-RBQA-002_40ed45e2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:snippet "daemon_must_not_read_caller_workspace_config gate has blind spots" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "40ed45e2" ;
+  triage:occursIn <urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2> .
+
+<urn:atm:triage:worktree_feature_pAI_s29_crosshost_smoke_rerun_40ed45e2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "40ed45e2" ;
+  triage:orderIndex 29 .

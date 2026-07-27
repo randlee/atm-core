@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006" ;
+  triage:title "docs/atm-core/architecture.md and docs/atm-core/requirements.md missing AI.23-specific convergence-point and shared-write-resource language" ;
+  triage:description "Req-qa round 2 deliverable-missing finding on feature/pAI-s23-crosshost-shared-write-path @ 985a6d46. Sprint doc lines 154-168 and 246-247 (docs/plans/phase-ai/sprint-ai-23-crosshost-shared-write-path.md) require: 'Tier-1 docs/architecture.md and docs/requirements.md must be updated with AI.23-specific content: convergence-point definition, shared-write-resource semantic, and cross-host write path architecture'. Current state: Top-level docs/architecture.md (lines ~45-78) and docs/requirements.md (lines ~110-134) were updated with AI.23 content per sprint doc requirement. However, the corresponding crate-scoped docs (docs/atm-core/architecture.md and docs/atm-core/requirements.md) were NOT updated with equivalent AI.23-specific sections. These are tier-2 architecture references expected to detail crate-level semantics and patterns. Correction: add convergence-point and shared-write-resource sections to both docs/atm-core/architecture.md and docs/atm-core/requirements.md, mirroring the top-level doc changes and cross-referencing the unified transport/dispatcher integration points." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S11-QA-BATCH-2: verified fixed on fix/close-out-round2-easy (673a6fff, PR #652). docs/atm-core/architecture.md gains a new '## 2.2 AI.23 Shared-Write Convergence Point' section defining the convergence point (ApiRouter::route), the shared-write-resource invariant (DaemonRequestDispatcher::route_write -> MessageWriter::write -> PostWriteRouter::dispatch), and cross-references to http-api.md/ADR-033/boundaries.md. docs/atm-core/requirements.md gains a matching 'AI.23 shared-write convergence constraint' bullet citing REQ-CORE-TRANSPORT-001/002. Both mirror the top-level docs/architecture.md and docs/requirements.md content per the sprint doc requirement (lines 154-168, 246-247)." ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:55:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:foundAt "2026-07-26T00:50:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/fix-close-out-round2-easy/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-arch> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/s23-reqs> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/integrate-8750587b> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-006/fix-close-out-round2-easy/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 281 ;
+  triage:snippet "## 2.2 AI.23 Shared-Write Convergence Point -- convergence point (ApiRouter::route), shared-write-resource invariant, and matching requirements.md constraint added" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "fix/close-out-round2-easy" ;
+  triage:headSha "673a6fff" ;
+  triage:notes "AICH-S11-QA-BATCH-2: both docs/atm-core/architecture.md and docs/atm-core/requirements.md now carry AI.23-specific convergence-point/shared-write-resource sections mirroring the top-level docs." ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-round2-easy/673a6fff> .
+
+# Missing AI.23 content in docs/atm-core/architecture.md
+<urn:atm:triage:occurrence/ATM-QA-006/s23-arch>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/architecture.md missing AI.23-specific convergence-point and shared-write-resource sections (top-level docs/architecture.md was updated per sprint doc, crate-scoped doc was not)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Crate-scoped architecture doc is tier-2 reference for atm-core patterns and semantics. Sprint doc requires AI.23-specific content (lines 154-168): convergence-point definition and shared-write-resource semantic architecture. Top-level docs/architecture.md updated, but docs/atm-core/architecture.md was not." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/985a6d46> .
+
+# Missing AI.23 content in docs/atm-core/requirements.md
+<urn:atm:triage:occurrence/ATM-QA-006/s23-reqs>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/requirements.md missing AI.23-specific cross-host write path requirements (top-level docs/requirements.md was updated per sprint doc, crate-scoped doc was not)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:note "Crate-scoped requirements doc is tier-2 reference for atm-core API contracts and guarantees. Sprint doc requires AI.23-specific content (lines 246-247): cross-host write path requirements and shared-resource semantics. Top-level docs/requirements.md updated, but docs/atm-core/requirements.md was not." ;
+  triage:occursIn <urn:atm:triage:worktree/s23/985a6d46> .
+
+<urn:atm:triage:worktree/s23/985a6d46>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "985a6d46" ;
+  triage:orderIndex 3 .
+
+# Mirrored occurrence on integrate/phase-AI (AI.23 PR #629 merged forward, 8750587b):
+<urn:atm:triage:occurrence/ATM-QA-006/integrate-8750587b>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/architecture.md and docs/atm-core/requirements.md still missing AI.23-specific convergence-point and shared-write-resource language" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:note "AI.23 merged into integrate/phase-AI (PR #629, 8750587b). Independently re-verified: grepped both docs for 'AI.23', 'convergence point', and 'shared-write-resource' -- no matches. Unchanged, still reproduces." ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/8750587b> .
+
+<urn:atm:triage:worktree/integrate/8750587b>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-AI" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "8750587b" ;
+  triage:orderIndex 100 .

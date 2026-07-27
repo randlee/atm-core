@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use atm_core::error::AtmError;
 use fs2::FileExt;
+use ulid::Ulid;
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
@@ -61,6 +62,7 @@ pub(crate) struct HostOwnershipAdapter {
 pub(crate) struct HostOwnershipGuard {
     lock_file: File,
     lock_path: PathBuf,
+    instance_id: Ulid,
 }
 
 #[cfg_attr(windows, allow(dead_code))]
@@ -134,14 +136,10 @@ impl HostOwnershipAdapter {
                     return Err(AtmError::daemon_serving_state_rejected(format!(
                         "a live ATM daemon already owns {}",
                         lock_path.display()
-                    ))
-                    .with_source(source)
-                    .with_recovery(
-                        "Wait for the active daemon to exit or clear a stale owner after verifying the recorded pid is no longer live.",
-                    ));
+                    )));
                 }
             }
-            Err(source) => {
+            Err(_source) => {
                 self.observability.emit_or_warn(
                     "acquire_owner_lock",
                     "failed",
@@ -150,11 +148,10 @@ impl HostOwnershipAdapter {
                 return Err(AtmError::daemon_unavailable(format!(
                     "failed to acquire daemon ownership lock at {}",
                     lock_path.display()
-                ))
-                .with_source(source));
+                )));
             }
         }
-        write_owner_record(&mut lock_file, &lock_path)?;
+        let instance_id = write_owner_record(&mut lock_file, &lock_path)?;
         self.observability.emit_or_warn(
             "acquire_owner_lock",
             "ok",
@@ -163,6 +160,7 @@ impl HostOwnershipAdapter {
         Ok(HostOwnershipGuard {
             lock_file,
             lock_path,
+            instance_id,
         })
     }
 }
@@ -195,14 +193,20 @@ impl Drop for HostOwnershipGuard {
 }
 
 #[cfg_attr(windows, allow(dead_code))]
+impl HostOwnershipGuard {
+    pub(crate) fn instance_id(&self) -> Ulid {
+        self.instance_id
+    }
+}
+
+#[cfg_attr(windows, allow(dead_code))]
 fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
     if let Some(parent) = lock_path.parent() {
-        fs::create_dir_all(parent).map_err(|source| {
+        fs::create_dir_all(parent).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to create daemon lock directory at {}",
                 parent.display()
             ))
-            .with_source(source)
         })?;
     }
 
@@ -212,12 +216,11 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
         .write(true)
         .truncate(false)
         .open(lock_path)
-        .map_err(|source| {
+        .map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to open daemon ownership lock at {}",
                 lock_path.display()
             ))
-            .with_source(source)
         })
 }
 
@@ -256,12 +259,11 @@ fn recover_stale_owner_lock(
                 }
                 continue;
             }
-            Err(source) => {
+            Err(_source) => {
                 return Err(AtmError::daemon_unavailable(format!(
                     "failed to retry daemon ownership recovery at {}",
                     lock_path.display()
-                ))
-                .with_source(source));
+                )));
             }
         }
     }
@@ -288,10 +290,9 @@ fn recorded_owner_identity(
             let _ = error;
             Ok(read_owner_record_from_shadow_path(lock_path))
         }
-        Err(source) => Err(
-            AtmError::daemon_unavailable("failed to read daemon ownership record")
-                .with_source(source),
-        ),
+        Err(_source) => Err(AtmError::daemon_unavailable(
+            "failed to read daemon ownership record",
+        )),
     }
 }
 
@@ -312,7 +313,9 @@ fn parse_owner_record(record: &str) -> Option<(u32, OwnerToken)> {
     if trimmed.is_empty() {
         return None;
     }
-    let (pid, token) = trimmed.split_once(':').unwrap_or((trimmed, ""));
+    let mut fields = trimmed.splitn(3, ':');
+    let pid = fields.next().unwrap_or_default();
+    let token = fields.next().unwrap_or_default();
     let pid = pid.parse::<u32>().ok()?;
     Some((pid, OwnerToken::from_record(token)))
 }
@@ -340,12 +343,11 @@ fn read_owner_record_from_shadow_path(
     let record = match fs::read_to_string(&shadow_path) {
         Ok(record) => record,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(source) => {
+        Err(_source) => {
             return Err(AtmError::daemon_unavailable(format!(
                 "failed to read daemon ownership shadow record at {}",
                 shadow_path.display()
-            ))
-            .with_source(source));
+            )));
         }
     };
     Ok(parse_owner_record(&record))
@@ -371,64 +373,58 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
             std::process::id(),
         ));
         {
-            let mut file = File::create(&temp_path).map_err(|source| {
+            let mut file = File::create(&temp_path).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to create daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
-                .with_source(source)
             })?;
-            file.write_all(record.as_bytes()).map_err(|source| {
+            file.write_all(record.as_bytes()).map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to write daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
-                .with_source(source)
             })?;
-            file.sync_all().map_err(|source| {
+            file.sync_all().map_err(|_source| {
                 AtmError::daemon_unavailable(format!(
                     "failed to sync daemon ownership shadow temp record at {}",
                     temp_path.display()
                 ))
-                .with_source(source)
             })?;
         }
-        fs::rename(&temp_path, &shadow_path).map_err(|source| {
+        fs::rename(&temp_path, &shadow_path).map_err(|_source| {
             AtmError::daemon_unavailable(format!(
                 "failed to replace daemon ownership shadow record at {}",
                 shadow_path.display()
             ))
-            .with_source(source)
         })
     }
 }
 
 #[cfg_attr(windows, allow(dead_code))]
-fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmError> {
+fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<Ulid, AtmError> {
     let token = OwnerToken::from_record(format!(
         "{:x}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|source| {
+            .map_err(|_source| {
                 AtmError::daemon_unavailable("failed to derive daemon ownership token")
-                    .with_source(source)
             })?
             .as_nanos()
     ));
-    let record = format!("{}:{token}\n", std::process::id());
-    lock_file.set_len(0).map_err(|source| {
+    let instance_id = Ulid::new();
+    let record = format!("{}:{token}:{instance_id}\n", std::process::id());
+    lock_file.set_len(0).map_err(|_source| {
         AtmError::daemon_unavailable("failed to reset daemon ownership metadata")
-            .with_source(source)
     })?;
-    write!(lock_file, "{record}").map_err(|source| {
+    write!(lock_file, "{record}").map_err(|_source| {
         AtmError::daemon_unavailable("failed to write daemon ownership metadata")
-            .with_source(source)
     })?;
-    lock_file.sync_all().map_err(|source| {
-        AtmError::daemon_unavailable("failed to sync daemon ownership metadata").with_source(source)
+    lock_file.sync_all().map_err(|_source| {
+        AtmError::daemon_unavailable("failed to sync daemon ownership metadata")
     })?;
     sync_owner_record_shadow(lock_path, &record)?;
-    Ok(())
+    Ok(instance_id)
 }
 
 #[cfg_attr(windows, allow(dead_code))]
@@ -455,13 +451,11 @@ fn owner_token_mismatch_error(lock_path: &Path, stale_pid: u32) -> AtmError {
 
 #[cfg_attr(windows, allow(dead_code))]
 fn clear_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmError> {
-    lock_file.set_len(0).map_err(|source| {
+    lock_file.set_len(0).map_err(|_source| {
         AtmError::daemon_unavailable("failed to clear daemon ownership metadata")
-            .with_source(source)
     })?;
-    lock_file.sync_all().map_err(|source| {
+    lock_file.sync_all().map_err(|_source| {
         AtmError::daemon_unavailable("failed to sync cleared daemon ownership metadata")
-            .with_source(source)
     })?;
     sync_owner_record_shadow(lock_path, "")?;
     Ok(())

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBQA-AI28-4>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI28-4" ;
+  triage:title "Missing documentation cross-reference between retry scheduling and router classification" ;
+  triage:description "The relationship between the bounded peer recovery coordinator's retry scheduling logic and the router's terminal/unconfirmed delivery classification is not documented in code comments or in the sprint's design documentation. This gap makes it harder for future maintainers to understand the interaction model and risks introducing bugs when either system is refactored. Additionally, the retry scheduling behavior (backoff intervals, retry counts, termination conditions) should be documented alongside the router's delivery classification logic so readers of one system can find references to the other. Fix recommended: add cross-references and documentation explaining: (1) how the coordinator's retry schedule influences routing decisions, (2) which component owns the decision to mark a peer as unrecoverable, and (3) what the coordinator should do when the router marks a delivery as terminal. Consider adding comments in both peer_drain_coordinator.rs and the router module pointing to the complementary design." ;
+  triage:category "Documentation" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. Header ownership comments present at peer_drain_coordinator.rs lines 1-7, cross-reference comments present at lines 73-90 of the router file. NOTE: the router file is actually crates/atm-daemon/src/runtime_health/peer_delivery_router.rs, not crates/atm-daemon/src/post_write_router.rs as previously recorded on occurrence pAI-s28/2 -- corrected triage:file below." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing cross-reference to router's terminal/unconfirmed classification" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Header ownership comments added, lines 1-7. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/RBQA-AI28-4/pAI-s28/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
+  triage:line 1 ;
+  triage:snippet "Missing cross-reference to bounded recovery coordinator's retry logic" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Cross-reference comments added at lines 73-90. File path corrected from stale post_write_router.rs to actual runtime_health/peer_delivery_router.rs. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

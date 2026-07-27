@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI3-WINLINT-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI3-WINLINT-002" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T23:55:00Z"^^xsd:dateTime ;
+  triage:title "Windows-only unused `source` bindings in atm-graft runtime.rs helper spawn/flush closures -- fails just lint on windows-latest" ;
+  triage:description "Reported by omega-prime (ATM msg 01KY0YBX47GD8QNNFRZJDBXBJ0). Independently reverified by team-lead: `gh pr checks 598/599/600` show 'Just lint (windows-latest)' FAIL on all three PRs while macos-latest/ubuntu-latest pass; `gh run view <run> --job <job> --log` for #598 and #599 shows identical raw error text: `error: unused variable: 'source'` x3, `error: could not compile 'atm-graft' (lib) due to 3 previous errors`, `error: recipe 'lint' failed on line 146 with exit code 1`. Direct grep of crates/atm-graft/src/runtime.rs on feature/pAI-s3-error-contract-foundation (head 72b416f4) confirms 3 sites with unused `source` closure parameters, all inside #[cfg(windows)]-gated helper-thread spawn/flush error paths: runtime.rs:823 `.map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn graft request-read helper\") })`; runtime.rs:871 `stream.flush().map_err(|source| { let error = AtmError::daemon_unavailable(\"failed to flush graft post-send response\"); warn_runtime_error(...); error })`; runtime.rs:886 `.map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn graft response-write helper\") })`. This is a NEW finding distinct from the already-closed ATM-QA-AI4-WINLINT-001 (scoped only to crates/atm-daemon-client/src/lib.rs:455) -- these atm-graft/runtime.rs sites originate in AI.3's own error-contract-foundation work and were never covered by that earlier finding's single_site sweep scope. arch-ctm self-reported (ATM msg 01KY0Y1F4DWPJH8XY3MF821KQT) that 'AI.3 fixed at 72b416f4 (just lint/test pass)' -- this claim is false for windows-latest; team-lead confirms the discrepancy is explained by arch-ctm running on macOS, where #[cfg(windows)] code is never compiled/linted, so his local 'lint passes' self-report never covered these sites. Workspace-wide sweep on feature/pAI-s6-http-uds-router (head 545578b0, latest branch) for the same `.map_err(|source| {` pattern found other call sites in atm-daemon and atm/src/main.rs, but all of those reference `source` inside the closure body (e.g. `map_follow_error(\"start\", source)`, `AtmError::new(source.kind(), source.to_string())`) and are NOT unused -- confirmed sweep scope is exactly the 3 sites above, all in one file." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "single_file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/1>, <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/2>, <urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-3/72b416f4>, <urn:atm:triage:worktree/pAI-4/ddbb4495>, <urn:atm:triage:worktree/pAI-5/319d08b3>, <urn:atm:triage:worktree/pAI-6/545578b0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-6/545578b0> ;
+  triage:highestFixedBranch "feature/pAI-s6-http-uds-router" ;
+  triage:resolution "FIXED: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs no longer contains the referenced lines 823, 871, 886 or their `.map_err(|source|` patterns with unused source parameters. Functions and code structures have been refactored. (2026-07-26)" ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 823 ;
+  triage:snippet ".map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn graft request-read helper\") })  -- source unused, must be _source (Windows cfg-gated site)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs:823 and surrounding `.map_err(|source|` patterns no longer exist; code has been refactored. Stale occurrence from superseded branch feature/pAI-s3-error-contract-foundation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "72b416f4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/72b416f4> .
+
+<urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 871 ;
+  triage:snippet "stream.flush().map_err(|source| { let error = AtmError::daemon_unavailable(\"failed to flush graft post-send response\"); warn_runtime_error(...); error })  -- source unused, must be _source (Windows cfg-gated site)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs:871 and surrounding `.map_err(|source|` patterns no longer exist; code has been refactored. Stale occurrence from superseded branch feature/pAI-s3-error-contract-foundation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "72b416f4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/72b416f4> .
+
+<urn:atm:triage:occurrence/ATM-QA-AI3-WINLINT-002/pAI-3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 886 ;
+  triage:snippet ".map_err(|source| { AtmError::daemon_unavailable(\"failed to spawn graft response-write helper\") })  -- source unused, must be _source (Windows cfg-gated site)" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- grep confirms crates/atm-graft/src/runtime.rs:886 and surrounding `.map_err(|source|` patterns no longer exist; code has been refactored. Stale occurrence from superseded branch feature/pAI-s3-error-contract-foundation; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "72b416f4" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-3/72b416f4> .
+
+<urn:atm:triage:worktree/pAI-3/72b416f4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s3-error-contract-foundation" ;
+  triage:path "feature/pAI-s3-error-contract-foundation" ;
+  triage:headSha "72b416f4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-4/ddbb4495>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s4-error-consumer-migration" ;
+  triage:path "feature/pAI-s4-error-consumer-migration" ;
+  triage:headSha "ddbb4495" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-5/319d08b3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s5-chat-address-identity" ;
+  triage:path "feature/pAI-s5-chat-address-identity" ;
+  triage:headSha "319d08b3" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-6/545578b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s6-http-uds-router" ;
+  triage:path "feature/pAI-s6-http-uds-router" ;
+  triage:headSha "545578b0" ;
+  triage:orderIndex 6 .

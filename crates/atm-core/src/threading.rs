@@ -194,10 +194,12 @@ mod tests {
         let ack_intent = AckIntentFields::not_required();
         InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: "hello".to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: ack_intent.requires_ack,

@@ -1,0 +1,44 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI24-MINOR-109>
+  a triage:Finding ;
+  triage:findingId "AI24-MINOR-109" ;
+  triage:title "openapi_declares_every_typed_http_codec_route test is a weaker duplicate of openapi_routes_match_live_router_surface" ;
+  triage:description "crates/atm/src/commands/api.rs:75-91 test openapi_declares_every_typed_http_codec_route (subset check: every live route must be documented) duplicates and is strictly subsumed by crates/atm/tests/openapi_surface.rs:131-154's openapi_routes_match_live_router_surface (full set-equality check in both directions). Recommendation confirmed: deleted the weaker api.rs test since the equality test is the single stronger canonical owner of route/doc parity." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ruthless-boundary-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T10:11:53Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S4 ;
+  triage:foundAt "2026-07-26T09:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T10:11:53Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI24-MINOR-109/AI24-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI24-MINOR-109/AI24-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/api.rs" ;
+  triage:line 76 ;
+  triage:snippet "fn openapi_declares_every_typed_http_codec_route()" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:occursIn <urn:atm:triage:worktree/AI24/ac465283> .
+
+<urn:atm:triage:worktree/AI24/ac465283>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "ac465283" ;
+  triage:orderIndex 4 .

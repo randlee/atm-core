@@ -1,6 +1,6 @@
 ---
 title: AI.8 cross-host control plane
-status: proposed
+status: complete
 branch: feature/pAI-s8-crosshost-control-plane
 worktree: ../atm-core-worktrees/feature/pAI-s8-crosshost-control-plane
 target: integrate/phase-AI

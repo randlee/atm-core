@@ -1,0 +1,120 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE>
+  a triage:Finding ;
+  triage:findingId "AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "Zero test coverage for reconcile_after_success / cooldown / batch-cap / age-filter" ;
+  triage:description "Zero test coverage for reconcile_after_success and its cooldown (60s rate limiter, MAX_PEER_SYNC_COOLDOWN_ENTRIES=256), batch-cap (max_batch_messages), and age-filter (max_message_age) behavior in crates/atm-daemon/src/runtime_health.rs around line 608 (line numbers may have shifted). Introduced in sprint s16, present through s17. Sweep the runtime_health.rs implementation and any adjacent test module in the same crate to confirm whether dedicated unit/integration tests for these specific behaviors (cooldown expiry, MAX_PEER_SYNC_COOLDOWN_ENTRIES eviction, max_batch_messages capping, max_message_age filtering) exist on each branch." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing-test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s27/1> ;
+  triage:openOn <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:promoteTo <urn:atm:triage:worktree/s27/35cb19f8> ;
+  triage:correctionNote "2026-07-22: promote_to_branch corrected from feature/pAI-s17-hermes-chat-identity to feature/pAI-s16-offline-reconciliation. arch-ctm caught scope-boundary conflict: AI.17 (docs/plans/phase-ai/sprint-ai-17-hermes-chat-identity.md) is scoped strictly to the ambient chat-context resolver and forbids daemon/canonical-router/storage changes ('may run in parallel with AI.11-AI.16 because it does not modify atm-graft, daemon transport, HTTP, storage, or a shared Phase AI contract'). This finding is missing test coverage for reconcile_after_success/cooldown/batch-cap/age-filter, which is AI.16's reconciliation-coordinator deliverable (docs/plans/phase-ai/sprint-ai-16-offline-reconciliation.md, Required tests table). Original mis-target was applied via unverified highest-open-branch heuristic. 2026-07-27 (quality-mgr): a prior fix-dispatch (ATMQA002B-AI19QA1-FIX) claimed this finding was waived as architecturally invalid per ADR-038/ADR-034, but no closureNote/closedBy/closedAt was ever written and the claim does not hold -- ADR-038-bounded-peer-reconciliation.md is Status:Proposed (not Accepted, cannot be cited as settled architecture), and independently re-checked crates/atm-daemon/src/runtime_health/peer_sync.rs plus crates/atm-daemon/src/tests/: no dedicated unit/integration test exists for cooldown expiry, MAX_PEER_SYNC_COOLDOWN_ENTRIES eviction, max_batch_messages capping, or max_message_age filtering on the current reconcile_peer implementation. This is a real, current test-coverage gap unrelated to reconciliation-design idempotency guarantees; the waiver claim is retracted. Remains genuinely open for arch-ctm's normal fix triage. 2026-07-27 (quality-mgr): re-examined after arch-ctm's REQ-CORE-TRANSPORT-003/003A/003B pointer (see RSH-002 closureNote for the requirements.md read). Two corrections to my prior note: (1) crates/atm-daemon/src/runtime_health/peer_sync.rs no longer exists -- the reconciliation coordinator was fully rewritten as crates/atm-daemon/src/peer_drain_coordinator.rs; (2) my 'zero coverage for max_batch_messages capping' claim was wrong for CURRENT code -- crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs::explicit_peer_sync_resends_one_bounded_immutable_write (line 147) exercises a batch cap of 1 against 2 pending messages and asserts the coordinator drains both bounded pages, and unit test retry_backoff_starts_at_one_minute_caps_and_resets (peer_drain_coordinator.rs:694) covers the 60s/exponential/15min-cap backoff schedule as pure logic. Genuine remaining gaps, independently confirmed absent by reading both test files in full: (a) max_message_age as a nonzero FILTER -- the only age-related assertion is that a zero age disables sync entirely, not that a nonzero window excludes messages older than it; (b) MAX_PEER_DRAIN_SLOTS eviction under load -- coordinator_rejects_a_new_host_once_slot_capacity_is_reached (line 818) only proves a new host is rejected at capacity, not that an idle slot is evicted to make room; (c) per REQ-CORE-TRANSPORT-003's own idempotency requirement and arch-ctm's suggested reframing, no test asserts that a duplicate ULID/payload delivered via reconciliation produces no second row/nudge/ack-transition at the receiving daemon -- this is the correct shape of coverage per REQ-CORE-TRANSPORT-003 ('an identical already-delivered remote duplicate has no side effect'), not the fail-fast/no-partial-tracking framing RSH-002 used (RSH-002 is now closed invalid; that specific angle is off the table). Narrowing this finding's required-coverage scope to (a)+(b)+(c) above; remains genuinely open for arch-ctm's normal fix triage. 2026-07-26 (quality-mgr): QA-verified fix commit 585a314d (PR #663, 'test(ai16): cover reconciliation age cutoff handoff') against the (a)+(b)+(c) scope above -- independently read the full diff (test-module-only, +121/-1, zero production-code lines) and re-ran cargo test locally. (a) SATISFIED: new test recovery_passes_max_message_age_cutoff_to_storage (peer_drain_coordinator.rs) captures the real not_before cutoff passed to OutboundMessageQuery::page_for_peer and asserts it falls in [before-age, after-age] for a configured nonzero max_message_age -- a genuine proof of the nonzero-age-filter behavior, not just the zero-disables-sync case. (b) STILL NOT SATISFIED, and independently confirmed this is not just an untested-but-present feature: re-read PeerDrainCoordinator::acquire (peer_drain_coordinator.rs:140-168) in full -- at capacity it unconditionally rejects a new host (daemon_unavailable 'capacity exhausted'); there is no eviction code path anywhere (grep for '.remove(' on the slots map returns zero hits across the whole file) -- slot entries are permanent for the coordinator's lifetime once created. The eviction behavior this coverage item requires does not exist in the implementation, so no test for it can exist yet; this is a missing-feature gap, not merely a missing-test gap. (c) STILL NOT SATISFIED: no new test added for this in 585a314d; grepped the whole crate for idempot/duplicat -- found runtime_root.rs (~line 407, 'duplicate ULID is retained idempotently...') and send/tests.rs:554 (duplicate_ulid_with_same_immutable_payload_is_idempotent), but both independently confirmed to cover the SENDING/originating daemon's safe-retry-on-dispatch behavior, not a RECEIVING daemon processing a duplicate write delivered via the reconciliation/drain path with no second row/nudge/ack-transition -- the distinct scenario this item requires remains uncovered. CI: gh pr checks 663 all 8 legs pass. Local: just lint 22/22 pass; just test 121 passed/1 pre-existing-unrelated DNS failure (peer_resolution::tests::failed_dns_resolution_preserves_the_underlying_cause, reproduces identically on integrate/phase-AI tip and on PR #661/#662). No production-code changes in this commit, so no RSH-002/regression risk. QA report posted to PR #663; verdict FAIL (partial) sent to team-lead. Finding remains OPEN -- narrowing remaining required-coverage scope to (b)+(c) only; (a) is fixed and closed out of scope going forward. 2026-07-26 (quality-mgr): corrective ruthless-boundary-qa dispatch (required by this task's original <workflow> step, initially skipped -- self-caught, not user-caught) independently confirms the FAIL verdict above and sharpens it: fixtures ConfiguredPeerStore/CapturingOutbound/NeverCalledTransport are clean (test-only, implement pre-existing non-sealed traits, no widened pub surface), and the disposition is 'still open' because CapturingOutbound captures only not_before and silently discards the limit: NonZeroU16 argument it receives, so no test proves policy.max_batch_messages is actually forwarded to page_for_peer or that the multi-page continuation branch (peer_drain_coordinator.rs ~line 324) is exercised. This is consistent with my own (b)/(c) framing but names a third, more concrete open gap (batch-cap forwarding) that a fix-round-2 should also close alongside (b) MAX_PEER_DRAIN_SLOTS eviction and (c) receiving-side duplicate-write idempotency. No amendment needed to the already-posted FAIL verdict; recorded here for the fix-round-2 dispatch (task #1183). 2026-07-27 (quality-mgr): QA-2 verification of fix-round-2 commit 9b5a1381 (PR #663, task #1185) against the (b) MAX_PEER_DRAIN_SLOTS eviction, (c) receiving-side duplicate-write idempotency, and batch-cap-forwarding gaps above -- independently read the full diff (peer_drain_coordinator.rs, peer_resolution.rs, peer_reconciliation.rs) and re-ran cargo test/just lint locally, not by self-report. (b) SATISFIED: new fn reserve_slot (peer_drain_coordinator.rs ~L140) evicts only a slot with !slot.running && slot.next_attempt_at.is_none() (fully idle), never a running or scheduled-retry slot; verified via two real tests -- coordinator_evicts_an_idle_slot_when_capacity_is_reached (idle slot present -> evicted, new host admitted) and the renamed coordinator_rejects_a_new_host_when_every_slot_has_live_recovery_state (all slots carry next_attempt_at -> rejected). Both exercise the real acquire()/reserve_slot() code path against the real BTreeMap slots structure, not mocks. (c) SATISFIED: new integration test reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent (peer_reconciliation.rs) spins up two real DaemonRequestDispatcher instances (source + receiver) over real sqlite-backed stores, delivers one write directly, then triggers an explicit PeerSyncRequest that re-delivers the same immutable write through AuthenticatedIngress::Peer into the receiver a second time, and asserts the receiver's inbox row count stays at 1 while the transport's delivery counter shows 2 -- a genuine receiving-side duplicate-ULID idempotency proof, not a stub/unit-level check. Batch-cap-forwarding gap (from the ruthless-boundary-qa corrective note) also SATISFIED: new test recovery_passes_max_message_age_cutoff_to_storage now captures both the not_before cutoff and the limit: NonZeroU16 argument passed to OutboundMessageQuery::page_for_peer and asserts limit == policy.max_batch_messages, closing the CapturingOutbound gap ruthless-boundary-qa flagged. DNS test message assertion in peer_resolution.rs was independently checked and is a legitimate stabilization, not regression-masking: both real failure-path messages ('...verify peer forward DNS or retry' on timeout, '...verify forward DNS' on outright resolution failure) genuinely contain the substring 'forward DNS', so the relaxed assertion still requires an actionable DNS-recovery message on either bounded failure path -- it does not accept an unrelated or empty message. Item (a) (max_message_age nonzero filter) re-confirmed still passing, no regression. CI: gh pr checks 663 -- all 8 legs pass (Clippy, Format check, Just lint x3, Test x3). Local: just lint 22/22 pass; just test full workspace 0 failed (144+378+19+37+124+... all crates, re-run independently). No unrelated production-code changes in this commit beyond the coordinator/test files reviewed. PASS verdict sent to team-lead; QA report posted to PR #663. Closing this finding -- all three sub-gaps ((a) already closed prior round, (b)+(c)+batch-cap-forwarding closed this round) are now resolved." .
+
+<urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 607 ;
+  triage:snippet "fn reconcile_after_success(&self, peer_host: &atm_core::types::HostName, peer: &atm_storage::TrustedPeer, transport: &dyn HttpsMessageTransport)" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s16-offline-reconciliation superseded; consolidating test-coverage finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/853abcfccad834ae36e441a995c3851333eb7a8e> .
+
+<urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 607 ;
+  triage:snippet "fn reconcile_after_success(&self, peer_host: &atm_core::types::HostName, peer: &atm_storage::TrustedPeer, transport: &dyn HttpsMessageTransport)" ;
+  triage:status "superseded" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: branch feature/pAI-s17-hermes-chat-identity superseded; consolidating test-coverage finding onto feature/pAI-s27-peer-delivery-observability. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2> .
+
+<urn:atm:triage:worktree/s11/bb20fd9a9290895c55ae9981a718f33e11e0a751>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "bb20fd9a9290895c55ae9981a718f33e11e0a751" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/b6466aa17d9564b104d292485e26dd7614b65cb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "b6466aa17d9564b104d292485e26dd7614b65cb4" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/aecade2a23b264bb26afc3c941974aea2627e4ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "aecade2a23b264bb26afc3c941974aea2627e4ae" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/672ffc349b1faabc769e8f1e81cafede34479fb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "672ffc349b1faabc769e8f1e81cafede34479fb5" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "b7d2f1c7f487e9bb57e75b4b4f778c32b4bc7d9b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/853abcfccad834ae36e441a995c3851333eb7a8e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "853abcfccad834ae36e441a995c3851333eb7a8e" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:occurrence/AI16-QA1-ATM-QA-002-RECONCILE-COVERAGE/s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health/peer_sync.rs" ;
+  triage:line 14 ;
+  triage:snippet "fn reconcile_peer(&self, peer_host: &atm_core::types::HostName, peer: &TrustedPeer, transport: &dyn HttpsMessageTransport, policy: PeerSyncPolicy, deadline: RequestDeadline, delivered_request_json: &mut BTreeSet<String>) -> Result<u16, AtmError>" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fix-round-2 commit 9b5a1381 (PR #663, task #1185) closes the remaining (b)/(c)/batch-cap-forwarding coverage gaps against this occurrence's underlying implementation (now peer_drain_coordinator.rs, not runtime_health/peer_sync.rs -- see finding-level correctionNote for the file-rename history). (2026-07-27)" ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/35cb19f8> .
+
+<urn:atm:triage:worktree/s17/2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2a5a57c8f85a5ec7fa6c0c268be478e72f49e5b2" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s27/35cb19f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "35cb19f8" ;
+  triage:orderIndex 27 .

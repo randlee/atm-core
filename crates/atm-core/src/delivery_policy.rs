@@ -1,5 +1,6 @@
 use crate::boundary::{RosterEntry, RosterHarness};
 use crate::error::AtmError;
+use crate::provenance::ValidatedWriteProvenance;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
 use crate::types::{AgentName, PaneId, TeamName};
@@ -59,6 +60,18 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
+    pub(crate) fn remote(agent: AgentName, team: TeamName) -> Self {
+        Self {
+            agent,
+            team,
+            harness: DeliveryHarnessPath::NonClaude,
+            recipient_pane_id: None,
+            local_tmux_post_send: false,
+            graft_post_send: false,
+            roster_backed: false,
+        }
+    }
+
     fn from_roster(member: RosterEntry) -> Self {
         let local_tmux_post_send = member.recipient_pane_id.is_some()
             || member
@@ -322,12 +335,30 @@ impl DeliveryPolicyCoordinator {
         runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .ok_or_else(|| {
-                // Two steps joined as one string; callers must split on '\n' to present individually
-                AtmError::agent_not_found(agent, team).with_recovery(
-                    "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members.",
-                )
-            })
+            .ok_or_else(|| AtmError::agent_not_found(agent, team))
+    }
+
+    /// Resolves the persistence-admission snapshot for the canonical writer.
+    ///
+    /// This is not a delivery action: `PostWriteRouter` alone selects local
+    /// nudge versus peer HTTPS after persistence. A local destination must be
+    /// validated against this host's roster before it is written. A
+    /// host-qualified origin destination cannot be validated locally, so it
+    /// retains its immutable origin record and the receiving host validates
+    /// its own recipient roster after peer delivery.
+    pub(crate) fn resolve_write_recipient_snapshot<R: RetainedServiceRuntime + ?Sized>(
+        &self,
+        runtime: &R,
+        recipient: &crate::send::ResolvedRecipient,
+        provenance: ValidatedWriteProvenance,
+    ) -> Result<DeliveryRecipientSnapshot, AtmError> {
+        if provenance.is_remote_origin() {
+            return Ok(DeliveryRecipientSnapshot::remote(
+                recipient.agent.clone(),
+                recipient.team.clone(),
+            ));
+        }
+        self.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)
     }
 
     #[allow(
@@ -822,14 +853,12 @@ mod tests {
             )
             .expect_err("missing roster member must fail");
 
-        assert!(error.is_agent_not_found());
-        assert_eq!(
-            error.message,
-            "agent 'recipient' was not found in team 'test-team'"
+        assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
+        assert!(
+            error
+                .message()
+                .starts_with("agent 'recipient' was not found in team 'test-team'")
         );
-        assert_eq!(
-            error.primary_recovery(),
-            Some("Update the team membership or target a different recipient.")
-        );
+        assert!(error.message().contains("Recovery:"));
     }
 }

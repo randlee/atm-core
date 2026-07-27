@@ -1,73 +1,49 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+#[cfg(unix)]
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
 use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cli_caller_context};
-use atm_core::protocol;
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
+#[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
+#[cfg(unix)]
+use interprocess::local_socket::prelude::*;
+use std::net::TcpStream;
 use std::sync::Mutex;
 
+pub use atm_core::doctor::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport,
+};
 pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
 
 mod compatibility;
-mod rpc;
-mod wire;
+mod http_exchange;
+mod local_transport;
 
 pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
-#[doc(inline)]
-pub use rpc::{RpcEnvelope, RpcHeader};
-pub use wire::{FramePayload, MessageKind, RequestId};
+use http_exchange::{
+    apply_local_ipc_deadline, load_local_http_record, read_http_response_with_deadline,
+    set_stream_read_timeout, set_stream_write_timeout, write_local_http_request,
+};
+pub use local_transport::{LocalDaemonTransport, local_daemon_transport};
 
-pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for waiting on a daemon just spawned by the CLI to publish its
+/// local HTTP record and accept its first connection.
+pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(30);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
-#[cfg(windows)]
-const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapConnectOutcome {
-    Connected,
-    NotFound,
-    Timeout,
-    Failed,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapLaunchGateOutcome {
-    Launched,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum BootstrapAutoStartOutcome {
-    AutoStarted,
-    Failed,
-    Skipped,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub struct BootstrapTraceReport {
-    pub daemon_connect: BootstrapConnectOutcome,
-    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
-    pub daemon_auto_start: BootstrapAutoStartOutcome,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connect_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub launch_gate_detail: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auto_start_detail: Option<String>,
-}
+// The request deadline governs daemon work. Keep a narrow response-only grace
+// so a daemon that reaches that deadline can serialize its typed terminal
+// result instead of racing the client's identical socket-read timeout.
+const LOCAL_IPC_RESPONSE_GRACE: Duration = Duration::from_millis(250);
+const AUTO_START_MAX_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BootstrapCommandEvent {
@@ -80,7 +56,6 @@ pub struct BootstrapCommandEvent {
     pub error_message: Option<String>,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LocalIpcDeadlineSupport {
     Applied,
@@ -107,6 +82,20 @@ impl AsRef<Path> for DaemonLocalIpcEndpoint {
     }
 }
 
+impl DaemonLocalIpcEndpoint {
+    #[cfg(unix)]
+    fn unix_socket_path(&self) -> Result<PathBuf, AtmError> {
+        self.0.parent().map_or_else(
+            || {
+                Err(AtmError::daemon_unavailable(
+                    "daemon local endpoint record has no runtime directory",
+                ))
+            },
+            |runtime_dir| Ok(runtime_dir.join(atm_core::home::HOST_RUNTIME_SOCKET_FILE)),
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DaemonBinaryPath(PathBuf);
 
@@ -129,16 +118,21 @@ impl AsRef<Path> for DaemonBinaryPath {
 
 fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the same-host ATM daemon client.",
-        ));
+        return Err(AtmError::validation(format!("{label} must not be empty")));
     }
     if path.to_str().is_none() {
         return Err(AtmError::validation(format!(
             "{label} must be valid UTF-8 at the ATM boundary"
-        ))
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the same-host ATM daemon client.",
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn reject_socket_override() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_SOCKET").is_some_and(|value| !value.is_empty()) {
+        return Err(AtmError::socket_override_forbidden(
+            "ATM_DAEMON_SOCKET cannot override the host singleton endpoint",
         ));
     }
     Ok(())
@@ -146,20 +140,35 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
 
 /// # Errors
 ///
-/// Returns [`AtmError`] when the canonical same-host daemon socket path cannot
+/// Returns [`AtmError`] when the canonical same-host daemon HTTP record cannot
 /// be resolved into a local IPC endpoint.
 pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path()?)
+    DaemonLocalIpcEndpoint::new(host_local_http_record_path()?)
 }
 
 /// # Errors
 ///
-/// Returns [`AtmError`] when the canonical same-host daemon socket path for
-/// `home_dir` cannot be resolved into a local IPC endpoint.
+/// Returns [`AtmError`] when the canonical host-scoped daemon HTTP record
+/// cannot be resolved into a local IPC endpoint.
+///
+/// The parameter is retained for source compatibility with callers that
+/// previously supplied an ATM configuration home. Runtime endpoint discovery
+/// is intentionally independent of `ATM_HOME`.
 pub fn resolve_daemon_local_ipc_endpoint_from_home(
-    home_dir: &Path,
+    _home_dir: &Path,
 ) -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(protocol::daemon_socket_path_from_home(home_dir))
+    resolve_daemon_local_ipc_endpoint()
+}
+
+fn host_local_http_record_path() -> Result<PathBuf, AtmError> {
+    #[cfg(windows)]
+    reject_socket_override()?;
+
+    let runtime_scope = atm_core::home::current_host_runtime_scope()?;
+    Ok(runtime_scope
+        .runtime_root
+        .as_ref()
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME))
 }
 
 /// # Errors
@@ -174,10 +183,10 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
         return DaemonBinaryPath::new(PathBuf::from(path));
     }
     let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to resolve the current {current_host_label} executable path"
-        ))
-        .with_source(source)
+        AtmError::daemon_unavailable_with_cause(
+            format!("failed to resolve the current {current_host_label} executable path"),
+            source,
+        )
     })?;
     DaemonBinaryPath::new(
         current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
@@ -186,7 +195,6 @@ pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, 
 
 pub fn parse_bootstrap_caller_context() -> Result<CallerContext, AtmError> {
     resolve_cli_caller_context(CallerContextOverrides::default())
-        .map_err(|error| error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set."))
 }
 
 pub fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
@@ -237,7 +245,7 @@ impl<'a> BootstrapTraceability<'a> {
             outcome,
             team: self.team.clone(),
             agent: self.agent.clone(),
-            error_code: error.map(|error| error.code),
+            error_code: error.map(|error| error.code()),
             error_message: error.map(ToString::to_string),
         };
         if let Err(emit_error) = (self.emit_event)(event) {
@@ -358,194 +366,154 @@ impl BootstrapTraceState {
 }
 
 fn format_bootstrap_error_detail(error: &AtmError) -> String {
-    match error.primary_recovery() {
-        Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
-        None => error.message.clone(),
-    }
+    error.message().to_owned()
 }
 
-pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    let ipc_name = wire::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    thread::Builder::new()
-        .name("daemon-local-ipc-connect".to_string())
-        .spawn(move || {
-            if result_tx.send(LocalSocketStream::connect(ipc_name)).is_err() {
-                tracing::debug!(
-                    "daemon local IPC connect worker dropped its result because the caller timed out first"
-                );
-            }
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn bounded daemon local IPC connect worker")
-                .with_recovery(
-                    "Retry the request after the local runtime can create the same-host daemon connect helper thread again.",
-                )
-                .with_source(source)
-        })?;
-    match result_rx.recv_timeout(LOCAL_IPC_CONNECT_DEADLINE) {
-        Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(source)) => Err(AtmError::daemon_unavailable(format!(
-            "failed to connect to daemon local IPC endpoint at {}",
-            endpoint.display()
-        ))
-        .with_source(source)),
-        Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(format!(
-            "timed out connecting to daemon local IPC endpoint at {}",
-            endpoint.display()
-        ))
-        .with_recovery(
-            "Retry the request after atm-daemon reaches serving state. If the same-host connect path remains stuck, inspect daemon startup and local IPC health before retrying again.",
-        )),
-        Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(format!(
-            "daemon local IPC connect worker disconnected unexpectedly for {}",
-            endpoint.display()
-        ))
-        .with_recovery(
-            "Retry the request after the same-host daemon connect helper can be created again.",
-        )),
-    }
+/// A connected same-host daemon stream.
+///
+/// Unix UDS and loopback TCP carry the same HTTP request/response contract;
+/// the variant only records the explicitly selected transport.
+pub enum LocalDaemonConnection {
+    #[cfg(unix)]
+    UnixDomainSocket(LocalSocketStream),
+    TcpLoopback(TcpStream),
 }
 
-/// This function performs blocking IPC I/O. Callers in async contexts must
-/// wrap this in `tokio::task::spawn_blocking`.
-pub fn exchange_envelope(
+pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConnection, AtmError> {
+    try_connect_with_transport(endpoint, local_daemon_transport()?)
+}
+
+#[cfg(unix)]
+fn try_connect_unix_socket(
     endpoint: &DaemonLocalIpcEndpoint,
-    request: RpcEnvelope,
-    request_deadline: Duration,
-) -> Result<RpcEnvelope, AtmError> {
-    let mut stream = try_connect(endpoint)?;
-    let _send_deadline_support = apply_local_ipc_deadline(
-        stream.set_send_timeout(Some(request_deadline)),
-        "failed to configure daemon local IPC write timeout",
-    )?;
-    let recv_deadline_support = apply_local_ipc_deadline(
-        stream.set_recv_timeout(Some(request_deadline)),
-        "failed to configure daemon local IPC read timeout",
-    )?;
-    let request_id = request.header.request_id();
-    let frame = request.into_frame_payload();
-    wire::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
-    })?;
-    let response_frame =
-        read_response_frame_with_deadline(stream, request_deadline, recv_deadline_support)?;
-    let response = RpcEnvelope::from_frame_payload(response_frame);
-    if response.header.request_id() != request_id {
-        return Err(AtmError::daemon_unavailable(format!(
-            "daemon response request_id {} did not match request_id {}",
-            response.header.request_id(),
-            request_id
-        ))
-        .with_recovery(
-            "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
-        ));
-    }
-    Ok(response)
-}
-
-fn read_response_frame_with_deadline(
-    mut stream: LocalSocketStream,
-    _request_deadline: Duration,
-    _recv_deadline_support: LocalIpcDeadlineSupport,
-) -> Result<FramePayload, AtmError> {
-    #[cfg(windows)]
-    if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
-        return read_response_frame_with_helper(stream, _request_deadline);
-    }
-
-    read_response_frame(&mut stream)
-}
-
-#[cfg(windows)]
-fn read_response_frame_with_helper(
-    mut stream: LocalSocketStream,
-    request_deadline: Duration,
-) -> Result<FramePayload, AtmError> {
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    thread::Builder::new()
-        .name("local-ipc-response-read-helper".to_string())
-        .spawn(move || {
-            let result = read_response_frame(&mut stream);
-            if result_tx.send(result).is_err() {
-                tracing::debug!(
-                    "daemon local IPC response-read helper dropped its result because the caller timed out first"
-                );
-            }
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
-                .with_recovery(
-                    "Retry the request after the same-host daemon read helper can be created again.",
-                )
-                .with_source(source)
-        })?;
-
-    let started = Instant::now();
-    loop {
-        let remaining = request_deadline.saturating_sub(started.elapsed());
-        if remaining.is_zero() {
-            return Err(AtmError::daemon_unavailable(
-                "timed out reading daemon response frame",
-            )
-            .with_recovery(
-                "Retry the request after atm-daemon reaches serving state. If the same-host read path remains stuck, inspect daemon and local IPC health before retrying again.",
-            ));
-        }
-        let poll = std::cmp::min(remaining, LOCAL_IPC_READ_HELPER_POLL_INTERVAL);
-        match result_rx.recv_timeout(poll) {
-            Ok(result) => return result,
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return Err(AtmError::daemon_unavailable(
-                    "daemon local IPC read helper disconnected unexpectedly",
-                )
-                .with_recovery(
-                    "Retry the request after the same-host daemon read helper can be created again.",
-                ));
-            }
-        }
-    }
-}
-
-fn read_response_frame(stream: &mut LocalSocketStream) -> Result<FramePayload, AtmError> {
-    wire::read_frame(
-        stream,
-        "failed to read daemon response frame",
-        "daemon response frame exceeded the maximum supported size",
-    )?
-    .ok_or_else(|| {
-        AtmError::daemon_unavailable(
-            "daemon closed the local IPC connection before returning a response frame",
-        )
-        .with_recovery(
-            "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
+) -> Result<LocalSocketStream, AtmError> {
+    let socket_path = endpoint.unix_socket_path()?;
+    let name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)?;
+    LocalSocketStream::connect(name).map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to connect to daemon UDS endpoint {}: {source}",
+                socket_path.display(),
+            ),
+            source,
         )
     })
 }
 
-fn apply_local_ipc_deadline(
-    result: std::io::Result<()>,
-    message: &'static str,
-) -> Result<LocalIpcDeadlineSupport, AtmError> {
-    match result {
-        Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
-        #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
-            Ok(LocalIpcDeadlineSupport::Unsupported)
+fn try_connect_local_http_record(record_path: &Path) -> Result<TcpStream, AtmError> {
+    let record = load_local_http_record(record_path)?;
+    record.capability()?;
+    let endpoint = record
+        .ipv4_loopback
+        .or(record.ipv6_loopback)
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable("local HTTP endpoint record has no loopback endpoint")
+        })?;
+    TcpStream::connect_timeout(&endpoint, LOCAL_IPC_CONNECT_DEADLINE).map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
+            format!("failed to connect to daemon local HTTP endpoint {endpoint}: {source}"),
+            source,
+        )
+    })
+}
+
+/// Exchange one canonical request through the selected same-host HTTP transport.
+///
+/// Unix defaults to the daemon-owned UDS. TCP is used only when explicitly
+/// requested with `ATM_LOCAL_TRANSPORT=tcp`; Windows always uses that path.
+pub fn exchange_request(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    exchange_request_with_transport(
+        endpoint,
+        request,
+        request_deadline,
+        local_daemon_transport()?,
+    )
+}
+
+fn exchange_request_with_transport(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+    transport: LocalDaemonTransport,
+) -> Result<ResponseEnvelope, AtmError> {
+    match try_connect_with_transport(endpoint, transport)? {
+        #[cfg(unix)]
+        LocalDaemonConnection::UnixDomainSocket(stream) => {
+            exchange_uds_request(stream, request, request_deadline)
         }
-        Err(source) => Err(AtmError::daemon_unavailable(message).with_source(source)),
+        LocalDaemonConnection::TcpLoopback(stream) => {
+            exchange_tcp_request(stream, endpoint, request, request_deadline)
+        }
     }
+}
+
+fn try_connect_with_transport(
+    endpoint: &DaemonLocalIpcEndpoint,
+    transport: LocalDaemonTransport,
+) -> Result<LocalDaemonConnection, AtmError> {
+    match transport {
+        #[cfg(unix)]
+        LocalDaemonTransport::UnixDomainSocket => {
+            try_connect_unix_socket(endpoint).map(LocalDaemonConnection::UnixDomainSocket)
+        }
+        LocalDaemonTransport::TcpLoopback => {
+            try_connect_local_http_record(endpoint.as_ref()).map(LocalDaemonConnection::TcpLoopback)
+        }
+    }
+}
+
+fn exchange_tcp_request(
+    mut stream: TcpStream,
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let response_deadline = request_deadline.saturating_add(LOCAL_IPC_RESPONSE_GRACE);
+    let _send_deadline_support = apply_local_ipc_deadline(
+        set_stream_write_timeout(&stream, Some(request_deadline)),
+        "failed to configure daemon local IPC write timeout",
+    )?;
+    let recv_deadline_support = apply_local_ipc_deadline(
+        set_stream_read_timeout(&stream, Some(response_deadline)),
+        "failed to configure daemon local IPC read timeout",
+    )?;
+    write_local_http_request(&mut stream, request, endpoint.as_ref())?;
+    read_http_response_with_deadline(stream, request, response_deadline, recv_deadline_support)
+}
+
+#[cfg(unix)]
+fn exchange_uds_request(
+    mut stream: LocalSocketStream,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let response_deadline = request_deadline.saturating_add(LOCAL_IPC_RESPONSE_GRACE);
+    // UDS timeout support is platform/backend-dependent. Match loopback TCP:
+    // preserve real setup failures, but continue when the backend explicitly
+    // reports that socket timeouts are unsupported.
+    let _send_deadline_support = apply_local_ipc_deadline(
+        stream.set_send_timeout(Some(request_deadline)),
+        "failed to configure daemon UDS write timeout",
+    )?;
+    let _recv_deadline_support = apply_local_ipc_deadline(
+        stream.set_recv_timeout(Some(response_deadline)),
+        "failed to configure daemon UDS read timeout",
+    )?;
+    atm_core::api::write_http_request(&mut stream, request)?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable_with_cause("failed to flush daemon UDS request", source)
+    })?;
+    atm_core::api::read_http_response(&mut stream, request)
 }
 
 pub fn unexpected_response(command: &str, response: impl fmt::Debug) -> AtmError {
     AtmError::validation(format!(
         "transport returned an unexpected response for `{command}`: {response:?}"
     ))
-    .with_recovery(
-        "Retry the request once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
-    )
 }
 
 impl DaemonSupervisor {
@@ -668,14 +636,14 @@ impl DaemonSupervisor {
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        if self.try_connect_with_traceability(&mut try_connect, traceability, "initial_miss")? {
+        if self.try_connect_with_traceability(&mut try_connect, traceability, "initial_miss") {
             return Ok(());
         }
         let deadline = Instant::now() + publish_timeout;
         let mut gate_contention_reported = false;
         loop {
             self.emit_trace(traceability, "daemon_connect", "retry_attempt", None);
-            if self.try_connect_with_traceability(&mut try_connect, traceability, "pending")? {
+            if self.try_connect_with_traceability(&mut try_connect, traceability, "pending") {
                 return Ok(());
             }
             let launch_gate = match LaunchGateGuard::try_acquire_at(launch_lock_path.clone()) {
@@ -687,11 +655,7 @@ impl DaemonSupervisor {
             };
             if let Some(_guard) = launch_gate {
                 self.emit_trace(traceability, "daemon_launch_gate", "acquired", None);
-                if self.try_connect_with_traceability(
-                    &mut try_connect,
-                    traceability,
-                    "connected",
-                )? {
+                if self.try_connect_with_traceability(&mut try_connect, traceability, "connected") {
                     return Ok(());
                 }
                 return self.spawn_and_wait_for_daemon(
@@ -725,18 +689,18 @@ impl DaemonSupervisor {
         try_connect: &mut F,
         traceability: Option<&BootstrapTraceability<'_>>,
         miss_stage: &'static str,
-    ) -> Result<bool, AtmError>
+    ) -> bool
     where
         F: FnMut() -> Result<(), AtmError>,
     {
         match try_connect() {
             Ok(()) => {
                 self.emit_trace(traceability, "daemon_connect", "connected", None);
-                Ok(true)
+                true
             }
             Err(error) => {
                 self.emit_trace(traceability, "daemon_connect", miss_stage, Some(&error));
-                Ok(false)
+                false
             }
         }
     }
@@ -753,23 +717,31 @@ impl DaemonSupervisor {
         F: FnMut() -> Result<(), AtmError>,
     {
         self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
-        if let Err(error) = self.spawn_daemon() {
-            self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
-            return Err(error);
-        }
+        let child = match self.spawn_daemon() {
+            Ok(child) => child,
+            Err(error) => {
+                self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
+                return Err(error);
+            }
+        };
+        let mut cleanup = FailedAutoStartChild::new(child);
         self.emit_trace(
             traceability,
             "daemon_auto_start",
             "publish_wait_started",
             None,
         );
-        self.wait_for_published_daemon(
+        let result = self.wait_for_published_daemon(
             try_connect,
             deadline,
             publish_timeout,
             poll_interval,
             traceability,
-        )
+        );
+        if result.is_ok() {
+            cleanup.disarm();
+        }
+        result
     }
 
     fn wait_for_published_daemon<F>(
@@ -785,9 +757,18 @@ impl DaemonSupervisor {
     {
         let halfway_deadline = Instant::now() + (publish_timeout / 2);
         let mut halfway_reported = false;
+        let mut current_poll_interval = poll_interval;
+        let mut last_connect_error = None;
         while Instant::now() < deadline {
-            if self.try_connect_with_traceability(try_connect, traceability, "pending")? {
-                return Ok(());
+            match try_connect() {
+                Ok(()) => {
+                    self.emit_trace(traceability, "daemon_connect", "connected", None);
+                    return Ok(());
+                }
+                Err(error) => {
+                    self.emit_trace(traceability, "daemon_connect", "pending", Some(&error));
+                    last_connect_error = Some(error);
+                }
             }
             if !halfway_reported && Instant::now() >= halfway_deadline {
                 tracing::warn!(
@@ -803,15 +784,22 @@ impl DaemonSupervisor {
                 "publish_wait_continuing",
                 None,
             );
-            thread::sleep(poll_interval);
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            thread::sleep(current_poll_interval.min(remaining));
+            current_poll_interval = next_auto_start_poll_interval(current_poll_interval);
         }
+        let detail = last_connect_error
+            .as_ref()
+            .map_or_else(String::new, |error| {
+                format!("; last local IPC failure: {error}")
+            });
         let error = AtmError::daemon_auto_start_failed(format!(
-            "failed to connect to daemon local IPC endpoint at {} after auto-start",
+            "failed to connect to daemon local IPC endpoint at {} after auto-start{detail}",
             self.endpoint.display()
-        ))
-        .with_recovery(
-            "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
-        );
+        ));
         self.emit_trace(
             traceability,
             "daemon_auto_start",
@@ -833,17 +821,12 @@ impl DaemonSupervisor {
         }
     }
 
-    fn spawn_daemon(&self) -> Result<(), AtmError> {
+    fn spawn_daemon(&self) -> Result<Child, AtmError> {
         if !self.daemon_bin.as_ref().is_file() {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "daemon binary is missing at {}",
-                    self.daemon_bin.display()
-                ))
-                .with_recovery(
-                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
-                ),
-            );
+            return Err(AtmError::daemon_unavailable(format!(
+                "daemon binary is missing at {}",
+                self.daemon_bin.display()
+            )));
         }
 
         let mut command = Command::new(self.daemon_bin.as_ref());
@@ -853,16 +836,59 @@ impl DaemonSupervisor {
             .stderr(Stdio::null());
         command.spawn().map_err(|source| {
             AtmError::daemon_auto_start_failed(format!(
-                "failed to spawn daemon binary at {}",
+                "failed to spawn daemon binary at {}: {source}",
                 self.daemon_bin.display()
             ))
-            .with_recovery(
-                "Confirm ATM_DAEMON_BIN points to an executable atm-daemon binary and retry after fixing the daemon launch environment.",
-            )
-            .with_source(source)
-        })?;
-        Ok(())
+        })
     }
+}
+
+/// A daemon started by this invocation must not outlive a failed publish wait.
+/// Existing daemons are never represented by this child handle, so this cleanup
+/// cannot affect the host-wide singleton owned by another CLI invocation.
+fn reap_failed_auto_start(child: &mut Child) {
+    match child.try_wait() {
+        Ok(Some(_)) => return,
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(error = %error, "failed to inspect daemon child after auto-start timeout");
+            return;
+        }
+    }
+    if let Err(error) = child.kill() {
+        tracing::warn!(error = %error, "failed to terminate daemon child after auto-start timeout");
+        return;
+    }
+    if let Err(error) = child.wait() {
+        tracing::warn!(error = %error, "failed to reap daemon child after auto-start timeout");
+    }
+}
+
+/// Reaps only the daemon process spawned by this CLI invocation unless its
+/// publication succeeds.  Keeping this guard live across the wait also covers
+/// an unexpected unwind in tracing or connection polling.
+struct FailedAutoStartChild(Option<Child>);
+
+impl FailedAutoStartChild {
+    fn new(child: Child) -> Self {
+        Self(Some(child))
+    }
+
+    fn disarm(&mut self) {
+        self.0.take();
+    }
+}
+
+impl Drop for FailedAutoStartChild {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.as_mut() {
+            reap_failed_auto_start(child);
+        }
+    }
+}
+
+fn next_auto_start_poll_interval(current: Duration) -> Duration {
+    current.saturating_mul(2).min(AUTO_START_MAX_POLL_INTERVAL)
 }
 
 pub struct LaunchGateGuard {
@@ -881,22 +907,18 @@ impl LaunchGateGuard {
             "daemon launch gate remained owned while connecting to {}",
             endpoint.display()
         ))
-        .with_recovery(
-            "Wait for the in-flight daemon launch to finish, then retry the same-host connection. If the launch gate stays owned, inspect the launch-lock owner and clear stale launch state before retrying.",
-        )
     }
 
     pub fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
         if let Some(parent) = lock_path.parent() {
             fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon launch lock directory at {}",
-                    parent.display()
-                ))
-                .with_recovery(
-                    "Create or grant write access to the daemon launch-lock directory before retrying daemon auto-start.",
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to create daemon launch lock directory at {}",
+                        parent.display()
+                    ),
+                    source,
                 )
-                .with_source(source)
             })?;
         }
         let file = OpenOptions::new()
@@ -906,27 +928,25 @@ impl LaunchGateGuard {
             .truncate(false)
             .open(&lock_path)
             .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to open daemon launch gate at {}",
-                    lock_path.display()
-                ))
-                .with_recovery(
-                    "Confirm the daemon launch-lock path is writable and not blocked by another process before retrying daemon auto-start.",
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to open daemon launch gate at {}",
+                        lock_path.display()
+                    ),
+                    source,
                 )
-                .with_source(source)
             })?;
 
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { file })),
             Err(error) if is_launch_gate_contention_error(&error) => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
-                "failed to acquire daemon launch gate at {}",
-                lock_path.display()
-            ))
-            .with_recovery(
-                "Inspect the daemon launch-lock owner and repair stale lock state before retrying daemon auto-start.",
-            )
-            .with_source(source)),
+            Err(source) => Err(AtmError::daemon_unavailable_with_cause(
+                format!(
+                    "failed to acquire daemon launch gate at {}",
+                    lock_path.display()
+                ),
+                source,
+            )),
         }
     }
 }
@@ -958,20 +978,30 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use std::io;
+    use std::net::{Ipv4Addr, TcpListener};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    use interprocess::local_socket::ListenerOptions;
+    #[cfg(unix)]
+    use interprocess::local_socket::prelude::*;
+
     use super::{
-        BootstrapAutoStartOutcome, BootstrapCommandEvent, BootstrapConnectOutcome,
-        BootstrapLaunchGateOutcome, BootstrapTraceReport, BootstrapTraceability, DaemonBinaryPath,
-        DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
-        apply_local_ipc_deadline,
+        AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
+        BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
+        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
+        apply_local_ipc_deadline, exchange_request_with_transport, next_auto_start_poll_interval,
+        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
     };
+    #[cfg(unix)]
+    use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
@@ -991,13 +1021,181 @@ mod tests {
 
     fn supervisor(tempdir: &TempDir) -> DaemonSupervisor {
         DaemonSupervisor::new(
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint"),
+            DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE),
+            )
+            .expect("endpoint"),
             DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon path"),
         )
     }
 
     fn launch_lock_path(tempdir: &TempDir) -> PathBuf {
         tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE)
+    }
+
+    #[test]
+    fn local_ipc_endpoint_is_host_scoped_not_atm_home_scoped() {
+        let supplied_atm_home = TempDir::new().expect("temp ATM home");
+        let expected = atm_core::home::current_host_runtime_scope()
+            .expect("host runtime scope")
+            .runtime_root
+            .as_ref()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+
+        let canonical = resolve_daemon_local_ipc_endpoint().expect("canonical endpoint");
+        let compatibility_endpoint =
+            resolve_daemon_local_ipc_endpoint_from_home(supplied_atm_home.path())
+                .expect("compatibility endpoint");
+
+        assert_eq!(canonical.as_ref(), expected);
+        assert_eq!(compatibility_endpoint.as_ref(), expected);
+    }
+
+    #[test]
+    fn side_effecting_deadline_response_has_time_to_cross_local_http() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind local HTTP");
+        let endpoint = listener.local_addr().expect("local HTTP address");
+        let capability = atm_core::local_http::LocalCapability::generate().expect("capability");
+        let record_path = tempdir
+            .path()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        let record = atm_core::local_http::LocalHttpEndpointRecord::active(
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                .parse()
+                .expect("daemon instance id"),
+            Some(endpoint),
+            None,
+            &capability,
+        );
+        let instance_id = record.daemon_instance_id;
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&record).expect("serialize endpoint record"),
+        )
+        .expect("write endpoint record");
+        std::fs::write(
+            tempdir
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:test:{instance_id}"),
+        )
+        .expect("write owner record");
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept local HTTP request");
+            let request = atm_core::api::read_http_request(&mut stream)
+                .expect("read HTTP request")
+                .expect("request");
+            let (_wait_tx, wait_rx) = std::sync::mpsc::sync_channel::<()>(1);
+            assert!(matches!(
+                wait_rx.recv_timeout(Duration::from_millis(40)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ));
+            atm_core::api::write_http_response(
+                &mut stream,
+                &atm_core::ResponseEnvelope::Error(AtmError::remote_delivery_unconfirmed(
+                    "peer delivery deadline elapsed",
+                )),
+            )
+            .expect("write terminal response");
+            drop(request);
+        });
+
+        let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+        let response = exchange_request_with_transport(
+            &DaemonLocalIpcEndpoint::new(record_path).expect("endpoint path"),
+            &request,
+            Duration::from_millis(30),
+            LocalDaemonTransport::TcpLoopback,
+        )
+        .expect("typed terminal response must outlive the work deadline");
+
+        assert!(matches!(
+            response,
+            atm_core::ResponseEnvelope::Error(error)
+                if error.code() == AtmErrorCode::RemoteDeliveryUnconfirmed
+        ));
+        server.join().expect("server join");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn uds_and_tcp_modes_share_the_http_response_contract() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let socket_path = tempdir
+            .path()
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
+        let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("UDS name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name)
+            .create_sync()
+            .expect("bind UDS listener");
+        let server = std::thread::spawn(move || {
+            let mut stream = listener.accept().expect("accept UDS request");
+            let request = atm_core::api::read_http_request(&mut stream)
+                .expect("read request")
+                .expect("request");
+            assert_eq!(request.path, "/v1/atm/doctor");
+            atm_core::api::write_http_response(
+                &mut stream,
+                &atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                    "same dispatcher response",
+                )),
+            )
+            .expect("write response");
+        });
+
+        let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+        let response = exchange_request_with_transport(
+            &DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+            )
+            .expect("endpoint"),
+            &request,
+            Duration::from_secs(1),
+            LocalDaemonTransport::UnixDomainSocket,
+        )
+        .expect("UDS HTTP response");
+
+        assert!(
+            matches!(response, atm_core::ResponseEnvelope::Error(error) if error.is_daemon_unavailable())
+        );
+        server.join().expect("server join");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn uds_connect_failure_keeps_the_socket_cause_in_the_displayed_error() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let socket_path = tempdir
+            .path()
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
+        let result = try_connect_with_transport(
+            &DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+            )
+            .expect("endpoint"),
+            LocalDaemonTransport::UnixDomainSocket,
+        );
+        let Err(error) = result else {
+            panic!("no UDS listener exists");
+        };
+        assert!(
+            error.message().contains(&socket_path.display().to_string()),
+            "the displayed error identifies the failed UDS endpoint: {error:?}"
+        );
+        assert!(
+            error.cause().is_some_and(|cause| !cause.is_empty()),
+            "the underlying UDS connection failure remains structured"
+        );
     }
 
     #[test]
@@ -1093,7 +1291,7 @@ mod tests {
             )
             .expect_err("spawn failure");
 
-        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
         let recorded = events.events();
         assert!(recorded.iter().any(|event| {
             event.action == "daemon_auto_start" && event.outcome == "spawn_requested"
@@ -1131,11 +1329,15 @@ mod tests {
     #[test]
     fn launch_gate_rejected_error_uses_daemon_launch_gate_code() {
         let tempdir = TempDir::new().expect("tempdir");
-        let endpoint =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint");
+        let endpoint = DaemonLocalIpcEndpoint::new(
+            tempdir
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE),
+        )
+        .expect("endpoint");
 
         let error = LaunchGateGuard::rejected_error(&endpoint);
-        assert_eq!(error.code, AtmErrorCode::DaemonLaunchGateRejected);
+        assert_eq!(error.code(), AtmErrorCode::DaemonLaunchGateRejected);
     }
 
     #[test]
@@ -1143,26 +1345,15 @@ mod tests {
         let result = apply_local_ipc_deadline(
             Err(io::Error::new(
                 io::ErrorKind::Unsupported,
-                "named pipes do not support I/O timeouts",
+                "local socket backend does not support I/O timeouts",
             )),
             "failed to configure daemon local IPC write timeout",
         );
 
-        #[cfg(windows)]
-        assert!(result.is_ok());
-
-        #[cfg(not(windows))]
-        {
-            let error = result.expect_err(
-                "non-Windows local IPC transports should keep unsupported deadline setup as an error",
-            );
-            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-            assert!(
-                error
-                    .message
-                    .contains("failed to configure daemon local IPC write timeout")
-            );
-        }
+        assert!(
+            result.is_ok(),
+            "HTTP loopback transports tolerate unsupported I/O timeout setup"
+        );
     }
 
     #[test]
@@ -1176,11 +1367,115 @@ mod tests {
         )
         .expect_err("non-unsupported timeout errors should remain failures");
 
-        assert_eq!(result.code, AtmErrorCode::DaemonUnavailable);
+        assert_eq!(result.code(), AtmErrorCode::DaemonUnavailable);
         assert!(
             result
-                .message
+                .message()
                 .contains("failed to configure daemon local IPC write timeout")
+        );
+    }
+
+    #[test]
+    fn auto_start_publish_budget_covers_cold_daemon_bootstrap() {
+        assert_eq!(AUTO_START_PUBLISH_TIMEOUT, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn auto_start_poll_backoff_is_bounded() {
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(25)),
+            Duration::from_millis(50)
+        );
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(200)),
+            Duration::from_millis(250)
+        );
+        assert_eq!(
+            next_auto_start_poll_interval(Duration::from_millis(250)),
+            Duration::from_millis(250)
+        );
+    }
+
+    #[test]
+    fn publish_wait_retries_until_the_daemon_record_is_connectable() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let supervisor = supervisor(&tempdir);
+        let attempts = AtomicUsize::new(0);
+
+        supervisor
+            .wait_for_published_daemon(
+                &mut || {
+                    if attempts.fetch_add(1, Ordering::SeqCst) < 2 {
+                        Err(AtmError::daemon_unavailable("record not ready"))
+                    } else {
+                        Ok(())
+                    }
+                },
+                Instant::now() + Duration::from_millis(50),
+                Duration::from_millis(1),
+                Duration::from_millis(1),
+                None,
+            )
+            .expect("daemon record becomes connectable before the bounded deadline");
+
+        assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn publish_wait_retains_the_last_local_ipc_failure_in_its_timeout_error() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let supervisor = supervisor(&tempdir);
+        let error = supervisor
+            .wait_for_published_daemon(
+                &mut || Err(AtmError::daemon_unavailable("fixture connection refused")),
+                Instant::now() + Duration::from_millis(2),
+                Duration::from_millis(2),
+                Duration::from_millis(1),
+                None,
+            )
+            .expect_err("unreachable daemon must exhaust the publish wait");
+
+        assert!(
+            error.message().contains("fixture connection refused"),
+            "the timeout must retain the last local IPC diagnostic"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn failed_auto_start_reaps_the_daemon_child() {
+        let mut child = super::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn daemon child fixture");
+
+        reap_failed_auto_start(&mut child);
+
+        assert!(
+            child.try_wait().expect("inspect reaped child").is_some(),
+            "failed auto-start must reap its child"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn auto_start_guard_reaps_the_daemon_child_on_unwind_scope_exit() {
+        let child = super::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn daemon child fixture");
+        let pid = child.id().to_string();
+
+        drop(FailedAutoStartChild::new(child));
+
+        assert!(
+            !super::Command::new("kill")
+                .args(["-0", &pid])
+                .output()
+                .expect("check child process")
+                .status
+                .success(),
+            "dropping the failed-auto-start guard must reap its child"
         );
     }
 }

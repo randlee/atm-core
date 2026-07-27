@@ -1,0 +1,12 @@
+{
+  "review": "Reviewed removals for retired endpoints that have no live canonical router route.",
+  "removals": [
+    "openapi/paths//team/{teamName}",
+    "openapi/paths//teams",
+    "openapi/paths//message/{messageId}",
+    "openapi/paths//message/{messageId}/read",
+    "openapi/paths//message/{messageId}/ack",
+    "openapi/schemas/AckRequest",
+    "openapi/schemas/Team"
+  ]
+}

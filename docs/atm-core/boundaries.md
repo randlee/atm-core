@@ -30,6 +30,10 @@ remains empty for the `atm-core` contract-owner records below.
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/atm-protocol.toml](../../boundaries/atm-core/atm-protocol.toml)
 
+Historical status:
+- retired by AI.6 in favor of ADR-033's HTTP/OpenAPI request contract
+- retained protocol DTOs in `atm_core::protocol` are data contracts, not a
+  live `AtmProtocol` trait boundary
 
 Purpose:
 - Historically owned the custom framed request/response contract. AI.6 retires
@@ -54,6 +58,10 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/client-transport.toml](../../boundaries/atm-core/client-transport.toml)
 
+Historical status:
+- retired by AI.6 in favor of one HTTP/UDS `DaemonApiClient` adapter
+- retained daemon launch/bootstrap helpers live below `atm-daemon-client`, not
+  this atm-core boundary
 
 Purpose:
 - Historically owned the outbound custom-frame client path. AI.6 replaces it
@@ -111,6 +119,10 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/server-transport.toml](../../boundaries/atm-core/server-transport.toml)
 
+Historical status:
+- retired by AI.6 in favor of ADR-033 HTTP/OpenAPI routing
+- runtime adapters translate HTTP and call `ApiRouter`; this is not a live
+  atm-core trait boundary
 
 Purpose:
 - Historically owned inbound custom-frame serving. AI.6 replaces it with an
@@ -124,6 +136,9 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/request-dispatcher.toml](../../boundaries/atm-core/request-dispatcher.toml)
 
+Historical status:
+- retired by AI.6 in favor of `ApiRouter` and the canonical typed handler path
+- retained references are historical boundary inventory only
 
 Purpose:
 - Historically routed custom-frame protocol requests. AI.6 replaces it with
@@ -138,9 +153,15 @@ Notes:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/mail-store.toml](../../boundaries/atm-core/mail-store.toml)
 
+Transitional status:
+- active legacy compile bridge while retained production callers still route
+  through `atm-runtime::legacy_storage_adapters`
+- the authoritative long-term message contract lives in
+  `crates/atm-storage::MessageStore`
 
 Purpose:
-- Owns durable message lifecycle and mailbox-facing state.
+- Bridges legacy `atm-core::boundary::MailStore` callers onto the
+  storage-owned durable message lifecycle contract.
 
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
@@ -171,9 +192,15 @@ Purpose:
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/roster-store.toml](../../boundaries/atm-core/roster-store.toml)
 
+Transitional status:
+- active legacy compile bridge while retained production callers still route
+  through `atm-runtime::legacy_storage_adapters`
+- the authoritative long-term roster contract lives in
+  `crates/atm-storage::RosterStore`
 
 Purpose:
-- Owns durable roster state and routing-relevant member metadata.
+- Bridges legacy `atm-core::boundary::RosterStore` callers onto the
+  storage-owned durable roster state contract.
 
 Notes:
 - Runtime status remains outside durable roster ownership.
@@ -259,6 +286,9 @@ Purpose:
 
 Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
+- `atm-daemon-client` may consume this boundary only for canonical ATM-owned
+  caller/environment/config and daemon-endpoint resolution used by shared
+  same-host bootstrap.
 - canonical ATM roster truth does not live here; normal retained runtime
   membership checks must use `RosterStore` / `ProjectionRoster` instead
 - the `Z.6` send warning path is allowed to mention the underlying
@@ -304,7 +334,7 @@ Purpose:
 - Own config-specific diagnosis so daemon/CLI callers aggregate typed config
   findings instead of embedding backend-specific config investigation logic.
 
-## SourceIngress
+## InboxIngress / SourceIngress
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-ingress.toml](../../boundaries/atm-core/inbox-ingress.toml)
@@ -323,7 +353,7 @@ Notes:
 - Any future compatibility import requires a new approved contract; this
   retired record must not be reactivated by adding an implementation.
 
-## ProjectionExport
+## InboxExport / ProjectionExport
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/inbox-export.toml](../../boundaries/atm-core/inbox-export.toml)
@@ -485,6 +515,21 @@ Notes:
 - the active `atm-core` handoff seam is:
   - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
   - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
+
+## RuntimeFactory
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/runtime-factory.toml](../../boundaries/atm-core/runtime-factory.toml)
+
+Planned status:
+- planned retained-runtime construction seam for CLI and test/smoke entrypoints
+- ambient singleton lookup remains outside this boundary and is governed by the
+  singleton lint line
+
+Purpose:
+- Define the eventual `atm-core` contract for constructing runtime dependency
+  assemblies without leaking concrete storage or daemon process ownership into
+  callers.
 
 ## StatusSource
 

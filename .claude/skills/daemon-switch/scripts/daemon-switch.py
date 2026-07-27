@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -24,8 +25,17 @@ def executable_name(name: str) -> str:
     return f"{name}.exe" if os.name == "nt" else name
 
 
-def run(args: Sequence[str], *, timeout: float = 10.0) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)
+def run(
+    args: Sequence[str], *, timeout: float = 10.0, cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        args,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+        cwd=cwd,
+    )
 
 
 def version(path: Path) -> str | None:
@@ -132,6 +142,16 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
             if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
                 return
             time.sleep(0.1)
+        if args.repair_orphan:
+            # `bootout` has already prevented a replacement process. A
+            # blocked daemon can still keep the job loaded long enough to
+            # defeat the normal polling window, so repair the one verified
+            # socket owner before declaring the singleton unrecoverable.
+            repair_macos_orphan(macos_socket_owner_pids())
+            for _ in range(20):
+                if run(["launchctl", "print", service], timeout=2.0).returncode != 0:
+                    return
+                time.sleep(0.1)
         raise SwitchError("LaunchAgent remained loaded after controlled stop")
 
     last_detail = ""
@@ -142,6 +162,48 @@ def run_service(args: argparse.Namespace, action: str, *, allow_absent: bool = F
         last_detail = (result.stderr or result.stdout).strip()
         time.sleep(0.2)
     raise SwitchError(f"service start failed: {' '.join(command)}: {last_detail}")
+
+
+def macos_socket_owner_pids() -> list[int]:
+    socket_path = Path.home() / ".atm" / "daemon" / "atm-daemon.sock"
+    result = run(["lsof", "-t", str(socket_path)], timeout=5.0)
+    return [int(line) for line in result.stdout.splitlines() if line.strip().isdigit()]
+
+
+def repair_macos_orphan(pids: list[int]) -> None:
+    """Terminate only a verified stale daemon after its LaunchAgent is unloaded."""
+    if len(pids) != 1:
+        raise SwitchError(
+            "managed stop left an ATM socket owner, but it is not exactly one repairable daemon PID"
+        )
+    pid = pids[0]
+    command = run(["ps", "-p", str(pid), "-o", "command="], timeout=5.0).stdout.strip()
+    if "atm-daemon" not in command:
+        raise SwitchError(f"refusing to terminate non-ATM socket owner pid {pid}: {command}")
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    raise SwitchError(f"verified stale ATM daemon pid {pid} did not stop after SIGTERM")
+
+
+def require_stopped_daemon(args: argparse.Namespace, _cli: Path) -> None:
+    if platform.system() != "Darwin":
+        return
+    pids = macos_socket_owner_pids()
+    if not pids:
+        return
+    if not args.repair_orphan:
+        raise SwitchError(
+            "controlled service stop left an ATM socket owner; refuse a split pair. "
+            "On macOS, rerun with --repair-orphan only after verifying the service label/plist."
+        )
+    repair_macos_orphan(pids)
+    if macos_socket_owner_pids():
+        raise SwitchError("ATM daemon socket remains owned after explicit orphan repair")
 
 
 def replace_link(link: Path, target: Path) -> None:
@@ -171,8 +233,19 @@ def validate_selectors(cli_link: Path, daemon_link: Path) -> None:
 def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path) -> None:
     cli_link, daemon_link = selected_links(args)
     validate_selectors(cli_link, daemon_link)
-    old_cli = require_executable(cli_link, "selected atm CLI")
-    old_daemon = require_executable(daemon_link, "selected atm daemon")
+    old_pair: tuple[Path, Path] | None
+    try:
+        old_pair = (
+            require_executable(cli_link, "selected atm CLI"),
+            require_executable(daemon_link, "selected atm daemon"),
+        )
+    except SwitchError:
+        if not args.repair_orphan:
+            raise SwitchError(
+                "selected ATM pair is missing or dangling; refuse to repair selectors without "
+                "--repair-orphan after verifying the managed service"
+            ) from None
+        old_pair = None
     cli_target = require_executable(cli_target, "target atm CLI")
     daemon_target = require_executable(daemon_target, "target atm daemon")
     if cli_target.parent != daemon_target.parent:
@@ -187,19 +260,25 @@ def switch_pair(args: argparse.Namespace, cli_target: Path, daemon_target: Path)
         return
     if not args.yes:
         raise SwitchError("switch changes the system-wide pair; re-run with --yes")
-    save_default_pair(old_cli, old_daemon)
+    if old_pair is not None:
+        save_default_pair(*old_pair)
     run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, old_pair[0] if old_pair is not None else cli_link)
     try:
         replace_link(cli_link, cli_target)
         replace_link(daemon_link, daemon_target)
         run_service(args, "start")
+        matched, detail = live_pair_matches(cli_target)
+        if not matched:
+            raise SwitchError(f"refusing a split CLI/daemon pair: {detail}")
     except Exception:
-        replace_link(cli_link, old_cli)
-        replace_link(daemon_link, old_daemon)
-        try:
-            run_service(args, "start")
-        except SwitchError:
-            pass
+        if old_pair is not None:
+            replace_link(cli_link, old_pair[0])
+            replace_link(daemon_link, old_pair[1])
+            try:
+                run_service(args, "start")
+            except SwitchError:
+                pass
         raise
 
 
@@ -218,13 +297,22 @@ def restore_pair(args: argparse.Namespace) -> tuple[Path, Path]:
 def restart(args: argparse.Namespace) -> None:
     if not args.yes:
         raise SwitchError("restart changes the singleton daemon; re-run with --yes")
+    cli, _daemon = selected_links(args)
     run_service(args, "stop", allow_absent=True)
+    require_stopped_daemon(args, cli)
     run_service(args, "start")
+    matched, detail = live_pair_matches(cli)
+    if not matched:
+        raise SwitchError(f"refusing a split CLI/daemon pair after restart: {detail}")
 
 
 def doctor(cli: Path) -> dict[str, object]:
     try:
-        result = run([str(cli), "doctor", "--json"], timeout=10.0)
+        # The managed daemon must not be forced to traverse a caller's source
+        # worktree merely to validate the selected service pair. In particular,
+        # macOS privacy controls can hold a launch-agent request at that file
+        # boundary. Pair validation has no workspace-config dependency.
+        result = run([str(cli), "doctor", "--json"], timeout=10.0, cwd=Path.home())
     except (OSError, subprocess.TimeoutExpired) as error:
         return {"error": str(error)}
     if result.returncode != 0:
@@ -233,6 +321,39 @@ def doctor(cli: Path) -> dict[str, object]:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
         return {"error": "doctor returned non-JSON output"}
+
+
+def context_version(payload: object, context: str) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get(context)
+    if not isinstance(value, dict):
+        return None
+    version_value = value.get("version")
+    return version_value if isinstance(version_value, str) else None
+
+
+def selected_release_version(cli: Path) -> str:
+    value = version(cli)
+    if not value:
+        raise SwitchError(f"cannot determine selected ATM CLI version: {cli}")
+    return value.rsplit(maxsplit=1)[-1]
+
+
+def live_pair_matches(cli: Path) -> tuple[bool, str]:
+    """Prove the running daemon changed together with both selectors."""
+    expected = selected_release_version(cli)
+    payload = doctor(cli)
+    if "error" in payload:
+        return False, f"live daemon is unavailable after switch: {payload['error']}"
+    client = context_version(payload, "client_context")
+    daemon = context_version(payload, "daemon_context")
+    if client != expected or daemon != expected:
+        return False, (
+            f"selected {expected}, but doctor reports client={client or '<missing>'} "
+            f"daemon={daemon or '<missing>'}"
+        )
+    return True, f"CLI and daemon both report {expected}"
 
 
 def status(args: argparse.Namespace) -> None:
@@ -258,6 +379,11 @@ def parser() -> argparse.ArgumentParser:
     selectors.add_argument("--daemon-link", help="system selector symlink for atm-daemon")
     selectors.add_argument("--service", help="LaunchAgent label or system service name")
     selectors.add_argument("--launch-agent-plist", help="macOS LaunchAgent plist used to restart the singleton")
+    selectors.add_argument(
+        "--repair-orphan",
+        action="store_true",
+        help="macOS only: SIGTERM one verified stale ATM socket owner after controlled service stop",
+    )
     sub = result.add_subparsers(dest="command", required=True)
     status_parser = sub.add_parser("status", parents=[selectors])
     status_parser.add_argument("--doctor", action="store_true", help="query the live daemon through the selected CLI")

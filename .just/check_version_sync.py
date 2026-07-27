@@ -39,10 +39,11 @@ def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
 
 
 def extract_version_from_url(url: str) -> str | None:
-    match = re.search(r"/download/v(?P<version>\d+\.\d+\.\d+)/", url)
+    semver = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    match = re.search(rf"/download/v(?P<version>{semver})/", url)
     if match:
         return match.group("version")
-    match = re.search(r"[_-](?P<version>\d+\.\d+\.\d+)[_/]", url)
+    match = re.search(rf"[_-](?P<version>{semver})[/_]", url)
     if match:
         return match.group("version")
     return None

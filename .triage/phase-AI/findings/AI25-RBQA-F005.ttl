@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F005>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F005" ;
+  triage:title "Hardcoded AST test for AI25 recipient-authority leak not superseded by the new generic io_forbidden mapping" ;
+  triage:description "Reported by ruthless-boundary-qa during AICH-S11-QA-BOUNDARYLINT (PR #655, commit 00683e72, branch fix/close-out-boundary-lint-mapping). The generic IO_FORBIDDEN_SOURCE_PATTERNS mapping added by this PR now mechanically enforces that BOUNDARY-PeerHttpAdapter-Daemon's implementation module (atm_daemon::https_transport) does not call resolve_peer_authority (mapped under the recipient_routing tag). However, the pre-existing bespoke single-incident AST test crates/atm-architecture/tests/boundary_enforcement.rs::ai25_peer_authority_selection_is_not_owned_by_the_https_adapter was left in place, meaning the same policy decision now has two independent owners with two different failure modes. The triage record AI25-RBQA-F002-new explicitly called for a general tag-to-pattern mechanism to supersede this bespoke test, which now exists but the bespoke test was not collapsed into it." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBQA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S11 ;
+  triage:foundAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RBQA-F005/fix-close-out-boundary-lint-mapping/1> ;
+  triage:notes "Non-blocking for merge (not a boundary_violation, class=boundary_tightening -- current design works, is just wider/more duplicated than necessary). Recommend deleting or folding the hardcoded AST assertion into a boundary-fixture-driven regression test using the generic collect_io_forbidden_source_violations path instead." ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI25-RBQA-F005/fix-close-out-boundary-lint-mapping/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 187 ;
+  triage:snippet "ai25_peer_authority_selection_is_not_owned_by_the_https_adapter -- bespoke single-incident AST test not collapsed into the new generic io_forbidden mechanism" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "fix/close-out-boundary-lint-mapping" ;
+  triage:headSha "00683e72" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-close-out-boundary-lint-mapping/00683e72> .
+
+<urn:atm:triage:worktree/fix-close-out-boundary-lint-mapping/00683e72>
+  a triage:WorktreeSnapshot ;
+  triage:path "fix/close-out-boundary-lint-mapping" ;
+  triage:branch "fix/close-out-boundary-lint-mapping" ;
+  triage:headSha "00683e72" ;
+  triage:orderIndex 102 .

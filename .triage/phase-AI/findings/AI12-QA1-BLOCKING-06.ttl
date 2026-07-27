@@ -1,0 +1,573 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI12-QA1-BLOCKING-06>
+  a triage:Finding ;
+  triage:findingId "AI12-QA1-BLOCKING-06" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "7 of 8 required-tests-table rows have no corresponding test in the diff" ;
+  triage:description "AI.12 sprint doc specifies 8 required tests (Ordering, Local write, Peer write, Inbound peer, Failure, Roster ownership, Idempotency, Ingress parity). Current worktrees have only 3 partial implementations. QA confirmed 7 rows fully or partially missing across all branches." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/7> ;
+  triage:openOn <urn:atm:triage:worktree/s11/3642430d> ;
+  triage:openOn <urn:atm:triage:worktree/s12/a8ea0017> ;
+  triage:openOn <urn:atm:triage:worktree/s13/2adc5fa1> ;
+  triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
+  triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
+  triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified against integrate/phase-AI tip as part of arch-ctm's 27-item legacy close/waive batch (task #1177). crates/atm-core/src/send/post_write_tests.rs (10 #[test] fns) and crates/atm-core/src/send/tests.rs both greped directly -- confirmed still genuinely OPEN, not disproven: no test named/covering 'Ordering' (persistence/mutation-precedes-router-action instrumentation), 'Peer write' (present-host-persists-once-then-calls-peer-transport), 'Inbound peer' (mTLS-delivered write reaches writer without re-forwarding), or 'Ingress parity' (CLI/graft/UDS/TCP/HTTPS fixtures share instrumentation points) exists anywhere in the workspace. duplicate_ulid_with_same_immutable_payload_is_idempotent (send/tests.rs:554) partially covers 'Idempotency' but the replay-returns-existing-record-without-repeating-side-effects half is not confirmed covered. Declining to close; status remains open as recorded." .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/7>
+  a triage:Occurrence ;
+  triage:testCase "Idempotency" ;
+  triage:description "A peer-delivered write retains the origin ULID exactly. Replaying the same immutable payload returns the existing record and does not repeat nudge, acknowledgement mutation, or peer delivery. Reusing the ULID with different immutable data returns a typed conflict, logs the discrepancy, preserves the original, and has no side effects." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:reason "No post_write_tests.rs exists; required test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/3642430d> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs exists but Ordering test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has canonical_writer_persists_before_router_owned_local_nudge (partial) but comprehensive Local write test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has no Peer write test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has no Inbound peer test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has failed_peer_route_leaves_acknowledgement_source_pending (partial) but comprehensive Failure test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid (partial) but comprehensive Roster ownership test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s12/7>
+  a triage:Occurrence ;
+  triage:testCase "Ingress parity" ;
+  triage:description "CLI, graft, UDS, loopback TCP, and HTTPS fixtures traverse the same typed writer/router instrumentation points." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:reason "post_write_tests.rs has no Ingress parity test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s12/a8ea0017> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs exists but Ordering test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has canonical_writer_persists_before_router_owned_local_nudge (partial) but comprehensive Local write test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has no Peer write test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has no Inbound peer test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has failed_peer_route_leaves_acknowledgement_source_pending (partial) but comprehensive Failure test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid (partial) but comprehensive Roster ownership test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s13/7>
+  a triage:Occurrence ;
+  triage:testCase "Ingress parity" ;
+  triage:description "CLI, graft, UDS, loopback TCP, and HTTPS fixtures traverse the same typed writer/router instrumentation points." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:reason "post_write_tests.rs has no Ingress parity test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s13/2adc5fa1> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs exists but Ordering test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has canonical_writer_persists_before_router_owned_local_nudge (partial) but comprehensive Local write test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has no Peer write test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has no Inbound peer test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has failed_peer_route_leaves_acknowledgement_source_pending (partial) but comprehensive Failure test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid (partial) but comprehensive Roster ownership test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s14/7>
+  a triage:Occurrence ;
+  triage:testCase "Ingress parity" ;
+  triage:description "CLI, graft, UDS, loopback TCP, and HTTPS fixtures traverse the same typed writer/router instrumentation points." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:reason "post_write_tests.rs has no Ingress parity test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s14/ef0e5e2b> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs exists but Ordering test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has canonical_writer_persists_before_router_owned_local_nudge (partial) but comprehensive Local write test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has no Peer write test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has no Inbound peer test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has failed_peer_route_leaves_acknowledgement_source_pending (partial) but comprehensive Failure test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid (partial) but comprehensive Roster ownership test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s15/7>
+  a triage:Occurrence ;
+  triage:testCase "Ingress parity" ;
+  triage:description "CLI, graft, UDS, loopback TCP, and HTTPS fixtures traverse the same typed writer/router instrumentation points." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:reason "post_write_tests.rs has no Ingress parity test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s15/5a7a762f> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/1>
+  a triage:Occurrence ;
+  triage:testCase "Ordering" ;
+  triage:description "Instrument canonical persistence, acknowledgement mutation, nudge, and peer transport; assert persistence/mutation precede exactly one router action for both send and ack." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs exists but Ordering test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/2>
+  a triage:Occurrence ;
+  triage:testCase "Local write" ;
+  triage:description "Empty host persists once, emits one nudge after persistence, and never calls peer transport." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has canonical_writer_persists_before_router_owned_local_nudge (partial) but comprehensive Local write test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/3>
+  a triage:Occurrence ;
+  triage:testCase "Peer write" ;
+  triage:description "Present host persists once, calls peer transport once after persistence, and never emits a local recipient nudge before remote acceptance." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has no Peer write test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/4>
+  a triage:Occurrence ;
+  triage:testCase "Inbound peer" ;
+  triage:description "An mTLS-delivered write reaches the same writer and post-write router without re-forwarding to its source host." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has no Inbound peer test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/5>
+  a triage:Occurrence ;
+  triage:testCase "Failure" ;
+  triage:description "Failed peer send returns the transport error, does not synthesize replay/receipt state, and does not mutate the target acknowledgement state." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has failed_peer_route_leaves_acknowledgement_source_pending (partial) but comprehensive Failure test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/6>
+  a triage:Occurrence ;
+  triage:testCase "Roster ownership" ;
+  triage:description "Origin sends to an unknown remote recipient without a local roster lookup; receiving peer rejects it from its local roster and leaves recipient state unchanged." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has host_qualified_origin_write_persists_without_remote_roster_and_preserves_origin_ulid (partial) but comprehensive Roster ownership test not implemented" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s16/7>
+  a triage:Occurrence ;
+  triage:testCase "Ingress parity" ;
+  triage:description "CLI, graft, UDS, loopback TCP, and HTTPS fixtures traverse the same typed writer/router instrumentation points." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:reason "post_write_tests.rs has no Ingress parity test implementation" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/1c23ac04> .
+
+<urn:atm:triage:worktree/s11/3642430d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "3642430d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s12/a8ea0017>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s12-post-write-router" ;
+  triage:path "feature/pAI-s12-post-write-router" ;
+  triage:headSha "a8ea0017" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s13/2adc5fa1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s13-peer-smoke-contract" ;
+  triage:path "feature/pAI-s13-peer-smoke-contract" ;
+  triage:headSha "2adc5fa1" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s14/ef0e5e2b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s14-mac-peer-smoke" ;
+  triage:path "feature/pAI-s14-mac-peer-smoke" ;
+  triage:headSha "ef0e5e2b" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s15/5a7a762f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "5a7a762f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s16/1c23ac04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "1c23ac04" ;
+  triage:orderIndex 6 .

@@ -91,16 +91,12 @@ impl SqliteWriter {
             .map_err(|error| {
                 let error = AtmError::daemon_unavailable(format!(
                     "failed to start sqlite writer thread: {error}"
-                ))
-                .with_recovery(
-                    "Inspect process thread limits or host resource exhaustion before retrying sqlite writer startup.",
-                )
-                .with_source(error);
+                ));
                 observability.emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_start",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
                 error
             })?;
@@ -120,8 +116,8 @@ impl SqliteWriter {
                 .emit_or_warn(SqliteObservabilityEvent::new(
                     "writer_submit",
                     SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
+                    error.message().to_owned(),
+                    Some(error.code()),
                 ));
             error
         })?;
@@ -141,8 +137,8 @@ impl SqliteWriter {
                             .emit_or_warn(SqliteObservabilityEvent::new(
                                 "writer_submit",
                                 SqliteObservabilityOutcome::Timeout,
-                                error.message.clone(),
-                                Some(error.code),
+                                error.message().to_owned(),
+                                Some(error.code()),
                             ));
                         return Err(error);
                     }
@@ -155,8 +151,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_submit",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     return Err(error);
                 }
@@ -171,8 +167,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Timeout,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
@@ -182,8 +178,8 @@ impl SqliteWriter {
                         .emit_or_warn(SqliteObservabilityEvent::new(
                             "writer_reply",
                             SqliteObservabilityOutcome::Failed,
-                            error.message.clone(),
-                            Some(error.code),
+                            error.message().to_owned(),
+                            Some(error.code()),
                         ));
                     error
                 }
@@ -274,9 +270,7 @@ impl Drop for SqliteWriter {
 }
 
 fn writer_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer submission channel closed").with_recovery(
-        "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-    )
+    AtmError::daemon_unavailable("sqlite writer submission channel closed")
 }
 
 fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
@@ -284,9 +278,6 @@ fn writer_queue_timeout_error(deadline: Duration) -> AtmError {
         "sqlite writer submission queue did not accept a write within {:?}",
         deadline
     ))
-    .with_recovery(
-        "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-    )
 }
 
 fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
@@ -294,21 +285,14 @@ fn writer_reply_timeout_error(deadline: Duration) -> AtmError {
         "sqlite writer reply did not arrive within {:?}",
         deadline
     ))
-    .with_recovery(
-        "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-    )
 }
 
 fn writer_reply_channel_closed_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer reply channel closed").with_recovery(
-        "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-    )
+    AtmError::daemon_unavailable("sqlite writer reply channel closed")
 }
 
 fn writer_unavailable_reply_error() -> AtmError {
-    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown").with_recovery(
-        "Retry after the sqlite boundary assembly is restarted and the writer lane is accepting submissions again.",
-    )
+    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown")
 }
 
 fn drain_submit_replies(receiver: &Receiver<WriterMessage>) {
@@ -347,8 +331,8 @@ fn checkpoint_writer_connection(
         observability.emit_or_warn(SqliteObservabilityEvent::new(
             "writer_shutdown_checkpoint",
             SqliteObservabilityOutcome::Failed,
-            error.message.clone(),
-            Some(error.code),
+            error.message().to_owned(),
+            Some(error.code()),
         ));
     }
 }
@@ -547,8 +531,8 @@ fn finalize_queued_write(
         }
         Err(_) => {
             drop(savepoint);
-            Err(AtmError::daemon_unavailable("sqlite writer operation panicked").with_recovery(
-                "Inspect the sqlite writer hot-path operation and retry after correcting the panic source.",
+            Err(AtmError::daemon_unavailable(
+                "sqlite writer operation panicked",
             ))
         }
     }
@@ -566,32 +550,6 @@ fn commit_savepoint(
 }
 
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {
-    let mut copied = match error
-        .source
-        .as_deref()
-        .and_then(|source| source.downcast_ref::<rusqlite::Error>())
-    {
-        Some(rusqlite::Error::SqliteFailure(inner, _))
-            if matches!(
-                inner.code,
-                rusqlite::ffi::ErrorCode::DatabaseBusy | rusqlite::ffi::ErrorCode::DatabaseLocked
-            ) =>
-        {
-            match target {
-                SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
-                #[cfg(test)]
-                SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
-                    "timed out waiting for sqlite database lock on {}",
-                    target.display()
-                )),
-            }
-        }
-        _ => match error.code {
-            AtmErrorCode::DaemonUnavailable => AtmError::daemon_unavailable(error.message.clone()),
-            _ => AtmError::mailbox_write(error.message.clone()),
-        },
-    };
-    copied.code = error.code;
-    copied.recovery = error.recovery.clone();
-    copied
+    let _ = target;
+    error.clone()
 }

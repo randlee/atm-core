@@ -7,7 +7,82 @@ use serde_json::{Map, Value};
 
 use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
-use crate::types::IsoTimestamp;
+use crate::types::{HostName, IsoTimestamp};
+
+const AUTHENTICATED_SOURCE_HOST_KEY: &str = "sourceHost";
+const PEER_OUTBOUND_KEY: &str = "peerOutbound";
+
+/// Removes daemon-local transport bookkeeping that is not part of the
+/// immutable user message. The same origin ULID may carry different local
+/// delivery metadata on its origin and receiving hosts.
+pub(crate) fn clear_transport_delivery_metadata(message: &mut InboxMessage) {
+    message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
+    message.extra.remove(PEER_OUTBOUND_KEY);
+}
+
+/// Returns the source host that the HTTPS adapter authenticated for this
+/// immutable inbound message. Local messages intentionally have no value.
+pub(crate) fn authenticated_source_host(
+    message: &InboxMessage,
+) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(AUTHENTICATED_SOURCE_HOST_KEY) else {
+        return Ok(None);
+    };
+    let value = value.as_str().ok_or_else(|| {
+        AtmError::mailbox_read("persisted authenticated source host is not a string")
+    })?;
+    value
+        .parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted authenticated source host is invalid"))
+}
+
+/// Returns the destination host retained on an origin message that awaits
+/// ordinary peer delivery. This is routing metadata, never peer provenance.
+pub(crate) fn peer_outbound_host(message: &InboxMessage) -> Result<Option<HostName>, AtmError> {
+    let Some(value) = message.extra.get(PEER_OUTBOUND_KEY) else {
+        return Ok(None);
+    };
+    let host = value
+        .as_object()
+        .and_then(|object| object.get("host"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| AtmError::mailbox_read("persisted peer outbound host is invalid"))?;
+    host.parse()
+        .map(Some)
+        .map_err(|_| AtmError::mailbox_read("persisted peer outbound host is invalid"))
+}
+
+/// Persists only adapter-authenticated source-host metadata; callers must not
+/// copy this value from an untrusted request payload.
+pub(crate) fn set_authenticated_source_host(message: &mut InboxMessage, host: Option<HostName>) {
+    match host {
+        Some(host) => {
+            message.extra.insert(
+                AUTHENTICATED_SOURCE_HOST_KEY.to_string(),
+                Value::String(host.to_string()),
+            );
+        }
+        None => {
+            message.extra.remove(AUTHENTICATED_SOURCE_HOST_KEY);
+        }
+    }
+}
+
+/// Retains the immutable origin write alongside its canonical local message.
+/// This is metadata on the message itself, not a separate outbox/replay row.
+pub(crate) fn set_peer_outbound_write(
+    message: &mut InboxMessage,
+    host: &HostName,
+    request_json: String,
+) {
+    let mut value = Map::new();
+    value.insert("host".to_string(), Value::String(host.to_string()));
+    value.insert("request".to_string(), Value::String(request_json));
+    message
+        .extra
+        .insert(PEER_OUTBOUND_KEY.to_string(), Value::Object(value));
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct AckIntentFields {
@@ -90,7 +165,6 @@ pub(crate) fn to_shared_inbox_value_with_policy(
             "failed to serialize shared inbox envelope for {} at {:?}: {error}",
             message.from, message.timestamp
         ))
-        .with_source(error)
     })?;
     let object = value
         .as_object_mut()
@@ -99,9 +173,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
                 "failed to serialize shared inbox envelope for {} at {:?}: envelope did not encode as a JSON object",
                 message.from, message.timestamp
             ))
-            .with_recovery(
-                "Preserve the ATM shared-inbox envelope shape so serialization produces one JSON object per message before retrying mailbox export.",
-            )
+
         })?;
     strip_metadata_atm_namespace(object);
     strip_removed_compatibility_fields(object);
@@ -109,9 +181,6 @@ pub(crate) fn to_shared_inbox_value_with_policy(
         let message_id = message.message_id.ok_or_else(|| {
             AtmError::mailbox_write(
                 "retrieval stub export requires an ATM-authored message_id on the source envelope",
-            )
-            .with_recovery(
-                "Preserve ATM-authored message ids on envelopes that export retrieval stubs before retrying shared inbox projection.",
             )
         })?;
         let retrieval_stub = retrieval_stub_text(message_id);
@@ -132,9 +201,7 @@ fn should_export_retrieval_stub(
                 "failed to compare ATM-authored export cap for {} at {:?}: configured byte cap does not fit into usize",
                 message.from, message.timestamp
             ))
-            .with_recovery(
-                "Lower [atm].claude_jsonl_body_export_max_bytes to a bounded value before retrying mailbox export.",
-            )
+
         })?;
 
     Ok(message.message_id.is_some()
@@ -213,6 +280,7 @@ mod tests {
         // docs/legacy-atm-message-schema.md and docs/atm-message-schema.md.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -221,6 +289,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: true,
@@ -363,6 +432,7 @@ mod tests {
     fn shared_inbox_write_keeps_only_approved_immutable_fields() {
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -371,6 +441,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("hello".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: true,
@@ -409,6 +480,7 @@ mod tests {
         // survive to_shared_inbox_value when they carry non-None values.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "threaded message".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -417,6 +489,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -448,6 +521,7 @@ mod tests {
         // shared inbox export even when the envelope carries a non-None value.
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "expiring message".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -456,6 +530,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -490,6 +565,7 @@ mod tests {
         );
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "ack reply".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -498,6 +574,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("ack reply".into()),
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,
@@ -522,6 +599,7 @@ mod tests {
         let message_id = AtmMessageId::new();
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -530,6 +608,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("oversized".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -565,6 +644,7 @@ mod tests {
         let text = "x".repeat(32);
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: text.clone(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -573,6 +653,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("exact-cap".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -603,6 +684,7 @@ mod tests {
         let text = "x".repeat(32);
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text,
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -611,6 +693,7 @@ mod tests {
             ),
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
+            destination_chat_id: None,
             summary: Some("above-cap".into()),
             message_id: Some(message_id),
             requires_ack: false,
@@ -642,6 +725,7 @@ mod tests {
     fn shared_inbox_write_keeps_full_body_for_claude_native_messages() {
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "x".repeat(32),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -650,6 +734,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: Some("native".into()),
             message_id: None,
             requires_ack: false,
@@ -686,6 +771,7 @@ mod tests {
         );
         let envelope = InboxMessage {
             from: TEST_SENDER.parse().expect("agent"),
+            source_chat_id: None,
             text: "hello".into(),
             timestamp: IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
@@ -694,6 +780,7 @@ mod tests {
             ),
             read: false,
             source_team: None,
+            destination_chat_id: None,
             summary: None,
             message_id: Some(AtmMessageId::new()),
             requires_ack: false,

@@ -12,7 +12,7 @@ Current design assumption:
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
 - after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
-  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
+  `atm-runtime`; a direct `atm-daemon -> atm-storage-rusqlite` dependency is a
   boundary violation guarded by both the boundary TOMLs and
   `cargo test --package atm-architecture`
 - Phase AD retired the watch/reconcile runtime lanes; any retained
@@ -26,6 +26,9 @@ Current design assumption:
 - Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
   above that owner boundary; harness-specific compatibility-export policy must
   now stay centralized there rather than leaking back into command callers.
+- This daemon-side retained runtime policy coordinator is distinct from the
+  `atm-core` delivery policy module, which owns message delivery-plan
+  decisions inside the reusable service library.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:
@@ -103,22 +106,22 @@ Notes:
 - `run_daemon()` must enter the daemon only through this lifecycle boundary;
   direct listener bootstrap is a boundary violation.
 
-## LocalIpcServerTransportAdapter (historical through AI.5)
+## Local transport adapters
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/socket-server-transport.toml](../../boundaries/atm-daemon/socket-server-transport.toml)
 
 
 Purpose:
-- Historically owned the same-host listener for the custom-frame contract.
-  AI.11 is planned to replace it with Unix HTTP-over-UDS and loopback TCP, plus Windows
-  loopback-TCP, adapters that call `ApiRouter`.
+- Own Unix HTTP-over-UDS and loopback-TCP listeners, plus the Windows
+  loopback-TCP listener. Every listener authenticates its ingress then calls
+  `ApiRouter`.
 
 Notes:
 - Runtime composition stays in daemon-owned code, but business logic does not.
-- The target boundary is Unix HTTP-over-UDS plus loopback TCP, and Windows
-  loopback TCP only. Legacy Windows local transports, custom frame headers, and
-  frame decoders are retired and must not be retained as fallback.
+- Unix provides HTTP-over-UDS plus loopback TCP; Windows provides loopback TCP
+  only. Legacy Windows local transports, custom frame headers, and frame
+  decoders are retired and must not be retained as fallback.
 - The adapter owns HTTP decode/response translation and same-user endpoint
   ownership only; `ApiRouter` owns route selection and application handlers.
 - the adapter owns logical endpoint naming and same-user access-control
@@ -132,24 +135,31 @@ Notes:
   so request accounting and shutdown remain in one place during Phase S
   closeout; the follow-on partitioning sprint owns the final split
 
-## PeerClientTransportAdapter
+## PeerHttpAdapter
 
 Canonical machine-readable boundary source:
-- [../../boundaries/atm-daemon/peer-client-transport.toml](../../boundaries/atm-daemon/peer-client-transport.toml)
+- [../../boundaries/atm-daemon/peer-http-adapter.toml](../../boundaries/atm-daemon/peer-http-adapter.toml)
 
-Current implementation:
-- `PeerClientTransport` is a private `ClientTransport` implementation in
-  `atm_daemon::peer_transport`, constructed only by
-  `atm_daemon::composition::compose_runtime`.
-- It owns outbound remote protocol requests, peer request deadlines, and peer
-  response decoding for the current `AtmProtocol` request/response contract.
-- It must not access SQLite or spawn processes. No external crate may depend
-  on it or construct it directly.
-- Historical timeout/retry and durable replay-resume behavior is retired. The
-  Phase AI HTTPS adapter owns only HTTP(S) adaptation. ADR-038's separate,
-  daemon-private coordinator may ask the storage trait for canonical records,
-  but neither adapter nor coordinator can own a replay store, outbox, retry
-  queue, receipt, message payload, or persistence implementation.
+Purpose:
+- Own the current HTTP(S) socket/TLS adapter in `atm_daemon::https_transport`.
+
+Notes:
+- `HttpsTransport` and `HttpsListenerSet` own socket/TLS adaptation, HTTP
+  translation, and peer ingress authentication only.
+- This adapter cannot persist, queue, retry, route, or nudge. It has no
+  storage, payload, receipt, or delivery-state capability.
+- `PeerHttpAdapter` is distinct from the retired `PeerClientTransport` and
+  retired `peer_transport` module below; the historical name must not be
+  reused for this HTTP adapter.
+
+## Historical: PeerClientTransportAdapter (retired)
+
+`PeerClientTransport`, its `peer_transport` module, and the corresponding
+machine-readable boundary manifest were retired during the Phase AI reset.
+This section is retained only to explain older references; it describes no
+current adapter, module, manifest, timeout/retry, or replay behavior. The
+current daemon API contract is the HTTP/OpenAPI surface documented in
+[`http-api.md`](./http-api.md).
 
 ## LifecycleControlSourceAdapter
 
@@ -270,17 +280,21 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-daemon/daemon-request-dispatcher.toml](../../boundaries/atm-daemon/daemon-request-dispatcher.toml)
 
 
+Historical status:
+- retired by `AI.6`
+- retained only as a historical boundary record for the deleted
+  `RequestDispatcher` frame boundary
+
 Purpose:
-- Owns the runtime dispatcher implementation that routes protocol requests into core services.
+- Historically owned the runtime dispatcher implementation behind the retired
+  `RequestDispatcher` contract.
 
 Notes:
-- This adapter exists to keep transport loops and service logic separate.
-- The active dispatcher now owns:
-  - typed heartbeat request routing
-  - durable pid continuity checks through the SQLite boundary assembly
-  - daemon-backed doctor health projection over runtime status
-  - direct post-send emission that may surface typed sender warnings when a
-    receiver-owned graft path is unavailable
+- The live daemon dispatcher now implements `atm_core::ApiRouter` directly for
+  HTTP-over-UDS requests. It is no longer governed by the retired
+  `RequestDispatcher` boundary trait.
+- The active `ApiRouter` dispatcher receives typed `ApiRequest` values decoded
+  from HTTP-over-UDS and delegates them to the canonical application handlers.
 - The dispatcher must not own graft session registration, pending nudge
   queues, fetch/drain inspection, or any client-specific receive loop.
 - `R.20` planning treats this as an overgrown adapter surface. The follow-on

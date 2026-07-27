@@ -10,7 +10,7 @@ phase: AI
 sprint: AI.23
 worktree: ../atm-core-worktrees/feature/pAI-s23-crosshost-shared-write-path
 branch: feature/pAI-s23-crosshost-shared-write-path
-status: proposed
+status: complete
 estimated_scope: one canonical write endpoint, ingress convergence, and structural enforcement
 ```
 
@@ -100,7 +100,7 @@ call it cannot select a different write, persistence, ACK, or nudge handler.
 
 ## Release candidate
 
-- First commit: set every releasable ATM assembly to `1.3.2-beta-23` and prove
+- First commit: set every releasable ATM assembly to `1.3.2-beta.23` and prove
   the matching client/daemon value through `atm doctor --json` before runtime
   evidence.
 
@@ -183,11 +183,11 @@ call it cannot select a different write, persistence, ACK, or nudge handler.
 
 5. **Set the sprint release identity before runtime evidence.**
    - Development work: first commit updates the workspace release metadata for
-     every releasable ATM assembly to `1.3.2-beta-23`; never version CLI and
+     every releasable ATM assembly to `1.3.2-beta.23`; never version CLI and
      daemon independently. Update `Cargo.lock` only if Cargo changes it.
    - Required tests: release-build `atm` and `atm-daemon`, run exactly one
      managed daemon, and require `atm doctor --json` to report matching
-     `1.3.2-beta-23` client/daemon releases before endpoint proof begins.
+     `1.3.2-beta.23` client/daemon releases before endpoint proof begins.
    - Required document update: record this target in the Phase AI plan index.
 
 ## Split Recommendation
@@ -224,7 +224,7 @@ an exception.
 - Structural tests fail the build if a second HTTP write resource, dispatcher,
   persistence call path, post-write router invocation, or nudge handler is
   introduced.
-- `atm doctor --json` reports client and daemon `1.3.2-beta-23` before the
+- `atm doctor --json` reports client and daemon `1.3.2-beta.23` before the
   runtime proof.
 - An independent quality review uses the release-built branch daemon and real
   CLI/HTTP traffic to observe the local-TCP and peer-TCP adapters converge at

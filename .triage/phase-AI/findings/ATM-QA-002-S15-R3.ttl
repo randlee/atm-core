@@ -1,0 +1,216 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002-S15-R3>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002-S15-R3" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:title "forbidden_daemon_log_entries strings never match real daemon log output" ;
+  triage:description "In scripts/smoke/run_peer_pair.py's new semantic-verification mechanism (added on feature/pAI-s15-windows-peer-smoke, commit 12f4b96e), untrusted_or_allowlist_rejection's shipped forbidden_daemon_log_entries strings (\"peer delivery\"/\"duplicate nudge\") match no real daemon log output, so the check can never fail regardless of a real violation -- an always-passing check. Found by req-qa during QA-2 verification of the BLOCKING-02/04 fix on PR #611." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo-wide" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "2026-07-27 (quality-mgr): ATMQA002-S15R3-QA-1 fix-verification PASS for PR #662 (0920faea) on fix/legacy-atmqa002-smoke-evidence -> integrate/phase-AI. Independently re-verified against the actual code, not self-report. scripts/smoke/run_peer_pair.py's require_semantic_verification now FAILS the config if forbidden_daemon_log_entries is present at all (\"was removed; use required_daemon_log_events or forbidden_daemon_log_events\", line ~198-201), replacing it with require_log_event_selectors: required_daemon_log_events/forbidden_daemon_log_events are structured selector objects matched field-by-field (action/outcome/message/level/service/target/fields) against real parsed JSONL daemon log events via verify_daemon_log_events/daemon_log_event_matches (lines ~325-390), not substring search. Confirmed the untrusted_or_allowlist_rejection case's REJECTION_EVENT selector ({action:request, outcome:rejected, message:'HTTPS peer request was rejected before or during shared API routing', fields.subsystem:https_transport}) matches a real daemon-emitted tracing::warn! event at crates/atm-daemon/src/https_transport.rs:566-575 (log_peer_request_result), and ROUTING_EVENT ({action:peer_delivery, outcome:write_persisted}) matches the real DaemonEvent emitted via SubsystemObservability::event(\"peer_delivery\", event.kind.as_str(), ...) in crates/atm-daemon/src/peer_delivery_observability.rs -- these are genuine daemon-side action/outcome literals, not relabeled unmatchable strings. scripts/smoke/test_run_peer_pair.py and .just/tests/test_peer_pair_smoke.py were updated consistently: new tests assert fail-closed behavior for a missing required event, a forbidden event present, and malformed/non-JSONL log delta lines, plus a passing case using a real encoded structured event. docs/peer-pair-smoke.md documents the new exact-selector contract and the concrete real event shape. All 8 GH Actions legs pass at 0920faea; independently re-ran just lint (22/22 pass) and just test locally (120 passed, 1 pre-existing unrelated failure -- peer_resolution::tests::failed_dns_resolution_preserves_the_underlying_cause -- independently reproduced identically on integrate/phase-AI tip, confirmed pre-existing/environmental, not introduced by this diff). Diff touches only scripts/docs, no RSH-002-relevant production code -- no regression risk to that or any other closed finding. Closing as fixed and superseding all 6 repeatable occurrences (s15-s20) on the shared script/test files, since the fix lands at the shared source these branches all reference through integrate/phase-AI." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s16/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s17/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s18/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s20/2> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s15/12f4b96e> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s16/34e055b9> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s17/2825b1c0> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s18/a3cfdaa6> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s19/e88825a7> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s20/bed07594> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s15/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 85 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/12f4b96e> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s15/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 89 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s15/12f4b96e> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s16/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 94 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s16-offline-reconciliation" ;
+  triage:headSha "34e055b9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16/34e055b9> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s16/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 98 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s16-offline-reconciliation" ;
+  triage:headSha "34e055b9" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s16/34e055b9> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s17/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 94 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2825b1c0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/2825b1c0> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s17/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 98 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2825b1c0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s17/2825b1c0> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s18/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 94 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s18-graft-python-bindings" ;
+  triage:headSha "a3cfdaa6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s18/a3cfdaa6> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s18/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 98 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s18-graft-python-bindings" ;
+  triage:headSha "a3cfdaa6" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s18/a3cfdaa6> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s19/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 94 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s19-hermes-graft-integration" ;
+  triage:headSha "e88825a7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s19/e88825a7> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s19/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 98 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s19-hermes-graft-integration" ;
+  triage:headSha "e88825a7" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s19/e88825a7> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s20/1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_peer_pair.py" ;
+  triage:line 94 ;
+  triage:snippet "forbidden_log_entries = verification.get(\"forbidden_daemon_log_entries\", [])" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s20/bed07594> .
+
+<urn:atm:triage:occurrence/ATM-QA-002-S15-R3/s20/2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_peer_pair.py" ;
+  triage:line 98 ;
+  triage:snippet "case[\"verification\"][\"forbidden_daemon_log_entries\"] = [\"peer delivery\"]" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s20/bed07594> .
+
+<urn:atm:triage:worktree/pAI-s15/12f4b96e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s15-windows-peer-smoke" ;
+  triage:path "feature/pAI-s15-windows-peer-smoke" ;
+  triage:headSha "12f4b96e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s16/34e055b9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "34e055b9" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s17/2825b1c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "2825b1c0" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s18/a3cfdaa6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "a3cfdaa6" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s19/e88825a7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "e88825a7" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 8 .

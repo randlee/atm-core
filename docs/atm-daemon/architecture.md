@@ -14,10 +14,9 @@ This document defines the `atm-daemon` crate architectural boundary.
 It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns runtime composition only.
 
-Current implementation wire contract:
-- [`./protocol-icd.md`](./protocol-icd.md)
-
-Phase AI target contract (not yet implemented):
+The legacy frame protocol ICD was intentionally deleted with the AI.6 HTTP
+router landing (`764bdd32`); it is not a retained or fallback contract.
+Phase AI's versioned target contract is:
 - [`./http-api.md`](./http-api.md)
 
 The crate-local machine-readable boundary inventory lives in:
@@ -315,10 +314,9 @@ implementation is accepted.
 
 ## 3.0.2 Historical Shared Frame Contract
 
-Through AI.5, the daemon host shell uses the shared ATM frame contract defined
-in [`protocol-icd.md`](./protocol-icd.md). AI.6 retires it for ADR-033's
-HTTP-over-UDS contract; the frame contract must not be extended or preserved as
-a fallback.
+Through AI.5, the daemon host shell used the shared ATM frame contract. AI.6
+retired that contract for ADR-033's HTTP contract; the frame contract must not
+be extended or preserved as a fallback.
 
 That includes:
 - one fixed ATM frame header
@@ -544,7 +542,7 @@ Accepted daemon-private partitions:
     `atm doctor`
   - reader projection uses immutable snapshot publication rather than shared
     mutable cache locking
-- `peer_transport`
+- `peer_http_adapter`
   - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
     route, or nudge
 - `peer_recovery`
@@ -739,8 +737,6 @@ Architectural rules:
 
 Required timeout defaults:
 - same-host daemon request deadline: `3s`
-- per-leg TCP/TLS connect deadline: `5s`
-- per-leg TCP/TLS read/write deadline: `5s`
 - remote synchronous wait deadline: `10s`
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
@@ -751,6 +747,10 @@ Required timeout defaults:
   they must not violate the floor contract:
   - global minimum timeout floor: `250ms`
   - same-host request and daemon-health minimum floor: `1s`
+
+TCP/TLS connect, handshake, request, and read/write activity consume the one
+absolute remote request deadline. They have no independent timeout floor or
+ceiling that can outlive or override that deadline.
 
 Shutdown sub-deadline rationale:
 - these per-component bounds sit under the existing daemon shutdown ceilings so

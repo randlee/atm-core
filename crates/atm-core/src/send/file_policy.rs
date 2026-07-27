@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::error::{AtmError, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorCode};
 use crate::types::TeamName;
 
 const MAX_FILE_REFERENCE_BYTES: u64 = 10 * 1024 * 1024;
@@ -23,11 +23,10 @@ pub fn process_file_reference(
     home_dir: &Path,
 ) -> Result<String, AtmError> {
     if !file_path.is_file() {
-        return Err(
-            AtmError::file_policy(format!("file not found: {}", file_path.display())).with_recovery(
-                "Pass an existing file to `atm send --file`, or verify that the file was not moved or deleted before retrying.",
-            ),
-        );
+        return Err(AtmError::file_policy(format!(
+            "file not found: {}",
+            file_path.display()
+        )));
     }
 
     if is_file_in_repo(file_path, current_dir) {
@@ -36,12 +35,8 @@ pub fn process_file_reference(
 
     let file_size = fs::metadata(file_path).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::FilePolicy,
+            AtmErrorCode::FilePolicyRejected,
             format!("failed to inspect file {}: {error}", file_path.display()),
-        )
-        .with_source(error)
-        .with_recovery(
-            "Check that the source file still exists and is readable, then retry the send.",
         )
     })?;
     if file_size.len() > MAX_FILE_REFERENCE_BYTES {
@@ -49,10 +44,7 @@ pub fn process_file_reference(
             "file reference exceeds the {}-byte limit: {}",
             MAX_FILE_REFERENCE_BYTES,
             file_path.display()
-        ))
-        .with_recovery(
-            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
-        ));
+        )));
     }
 
     let share_dir = home_dir
@@ -62,30 +54,20 @@ pub fn process_file_reference(
         .join(team_name.as_str());
     fs::create_dir_all(&share_dir).map_err(|error| {
         AtmError::new(
-            AtmErrorKind::FilePolicy,
+            AtmErrorCode::FilePolicyRejected,
             format!(
                 "failed to create share directory {}: {error}",
                 share_dir.display()
             ),
         )
-        .with_source(error)
-        .with_recovery(
-            "Check the ATM share directory permissions for the target team and retry the send.",
-        )
     })?;
 
-    let file_name = file_path.file_name().ok_or_else(|| {
-        AtmError::file_policy("file path has no file name").with_recovery(
-            "Pass a concrete file path with a terminal file name or retry with inline message text.",
-        )
-    })?;
+    let file_name = file_path
+        .file_name()
+        .ok_or_else(|| AtmError::file_policy("file path has no file name"))?;
     let share_copy = share_dir.join(file_name);
     let copied_bytes = fs::copy(file_path, &share_copy).map_err(|error| {
         AtmError::file_policy(format!("failed to copy file into share directory: {error}"))
-            .with_source(error)
-            .with_recovery(
-                "Check source/share permissions and available disk space, then retry the send.",
-            )
     })?;
     if copied_bytes > MAX_FILE_REFERENCE_BYTES {
         let _ = fs::remove_file(&share_copy);
@@ -93,10 +75,7 @@ pub fn process_file_reference(
             "file reference exceeds the {}-byte limit after copy: {}",
             MAX_FILE_REFERENCE_BYTES,
             file_path.display()
-        ))
-        .with_recovery(
-            "Use a file no larger than 10 MiB or move the content into the repository so ATM can reference it without copying.",
-        ));
+        )));
     }
 
     Ok(render_reference_message(message_text, &share_copy))
@@ -161,14 +140,9 @@ mod tests {
         )
         .expect_err("oversized file should fail");
 
-        assert!(error.is_file_policy());
-        assert!(error.message.contains("exceeds"));
-        assert_eq!(
-            error.primary_recovery(),
-            Some(
-                "Update the referenced file, path, or policy inputs so they satisfy ATM file-policy rules before retrying the command."
-            )
-        );
+        assert!(error.code() == crate::error_codes::AtmErrorCode::FilePolicyRejected);
+        assert!(error.message().contains("exceeds"));
+        assert!(error.message().contains("Recovery:"));
         assert!(
             fs::read_dir(
                 home_dir

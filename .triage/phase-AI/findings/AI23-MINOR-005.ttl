@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-005>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-005" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Unused send_command()/receive_command() accessors retained under speculative future-phase justification" ;
+  triage:description "crates/atm/src/composition.rs:253-275 -- send_command() and receive_command() accessors are marked #[expect(dead_code, reason = \"reserved for future command-routing phase\")] and are unused in production. Per repo Rust guidelines, a code path with no current retained requirement is presumed unnecessary until proven otherwise; 'reserved for a future phase' with no specific sprint ID cited is not a traceable justification." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-005/AI23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-005/AI23/2> ;
+  triage:openOn <urn:atm:triage:worktree/AI23/b88ca016> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-005/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 265 ;
+  triage:snippet "pub(crate) fn send_command(&self) -> &SendCommandEntryPoint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-005/AI23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 273 ;
+  triage:snippet "pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca016> .
+
+<urn:atm:triage:worktree/AI23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .

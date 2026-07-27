@@ -1,0 +1,212 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-ATMQA-006>
+  a triage:Finding ;
+  triage:findingId "AI25-ATMQA-006" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "Sprint doc's own version string uses wrong separator (hyphen vs dot)" ;
+  triage:description "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md writes the version as 1.3.2-beta-25 (hyphen) but the shipped/parser-accepted form is 1.3.2-beta.25 (dot). Doc-only fix." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATMQA" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T02:40:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s21pre/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s24/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s26/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s27/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s28/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s29/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-006/s30/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/b49f0840> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s21pre/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
+  triage:occursIn <urn:atm:triage:worktree/s21pre/42fbd9fa> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813b3a8f440e586550a5c67187ed65428db" ;
+  triage:occursIn <urn:atm:triage:worktree/s22/a5aa6813> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:occursIn <urn:atm:triage:worktree/s23/c528137c> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s24/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7f0fa6b1d612020c11854ecdcd5c2498f" ;
+  triage:occursIn <urn:atm:triage:worktree/s24/c326cbe7> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s25/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/b49f0840> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s26/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:occursIn <urn:atm:triage:worktree/s26/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s27/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:occursIn <urn:atm:triage:worktree/s27/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s28/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:occursIn <urn:atm:triage:worktree/s28/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s29/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:occursIn <urn:atm:triage:worktree/s29/b5eec1bf> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-006/s30/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" ;
+  triage:line 13 ;
+  triage:snippet "1.3.2-beta-25" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca724b9c31480824ddbf11c982b83cf60b" ;
+  triage:occursIn <urn:atm:triage:worktree/s30/77252eca> .
+
+<urn:atm:triage:worktree/s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9faa3c52c06b99784487e64152e6c658941" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813b3a8f440e586550a5c67187ed65428db" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137cd07c8c329572cdb8e852faffb3fc9c94" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7f0fa6b1d612020c11854ecdcd5c2498f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s25/b49f0840>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf4603069c90e5c2cde77908dcede7a533" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca724b9c31480824ddbf11c982b83cf60b" ;
+  triage:orderIndex 10 .

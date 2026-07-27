@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH>
+  a triage:Finding ;
+  triage:findingId "AI11-IMPORTANT-01-INGRESS-GATE-STRING-MATCH" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "canonical_write_router_has_one_host_routing_decision uses string matching; AST-based check deferred then never delivered" ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Sprint-ai-6.md Deliverable 8 explicitly required AST-based boundary checking ('String matching is not an acceptable graph check') and was granted a Closure Waiver deferring the implementation to AI.7 'where the writer and post-write router types are introduced.' AI.7 is now merged and complete but never delivered the AST-based check. The test at crates/atm-architecture/tests/boundary_enforcement.rs:82-112 (canonical_write_router_has_one_host_routing_decision) remains pure string matching using source.contains(...) and source.matches(...).count() semantics. The waiver's deferred condition was met (AI.7 types exist) but the required deliverable was never fulfilled. Verdict: waiver condition satisfied but enforcement not delivered; this is a regression against an explicitly documented requirement with a specific deferral timeline." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary-enforcement-tool" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-IMPORTANT-01/pAI-11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s20/bed07594> ;
+  triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:highestFixedBranch "none" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. Scope: crates/atm-architecture/tests/boundary_enforcement.rs (test only, not production code). Historical context: AI.6 Deliverable 8 recorded a Closure Waiver on this check deferring AST-based implementation to AI.7 (waiver text in .triage/.../AI6-DELIVERABLE-8-ARCHITECTURE-TEST.ttl or related). AI.7 delivered MessageWriter trait and PostWriteRouter trait (meeting waiver condition), but did not deliver the upgraded boundary check using those types as AST anchors. The test should use syn crate to parse and validate routing decisions, not source.contains() text matching. Recommended: upgrade boundary_enforcement.rs canonical_write_router_has_one_host_routing_decision to use syn::parse_file + trait traversal. STALE-POINTER FIX (2026-07-22 sweep): promoteTo/highestOpenBranch previously targeted feature/pAI-s11-post-merge-remediation, which merged (PR #607); re-verified against current integrate/phase-AI and confirmed canonical_write_router_has_one_host_routing_decision still uses source.contains(...) string matching, not an AST-based check. Finding remains genuinely open and was redirected to the current highest open branch, feature/pAI-s20-hermes-bridge-deployment." .
+
+<urn:atm:triage:occurrence/AI11-IMPORTANT-01/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 210 ;
+  triage:snippet "#[test] fn canonical_write_router_has_one_host_routing_decision() { ... syn::parse_file(...) ... visitor.visit_file(&file) ... HostRoutingVisitor AST traversal ... }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (efe73e1c) -- test canonical_write_router_has_one_host_routing_decision has been completely rewritten to use AST-based checking. Now parses all canonical_write_modules with syn::parse_file and uses HostRoutingVisitor to traverse the AST (lines 216-220), enforcing AI.12 routing constraints via visitor pattern, not string matching. Defect resolved by implementation of required AST-based boundary check. (2026-07-26)" ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "efe73e1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/efe73e1c> .
+
+<urn:atm:triage:worktree/pAI-integrate/efe73e1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "efe73e1c" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-s20/bed07594>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "bed07594" ;
+  triage:orderIndex 20 .

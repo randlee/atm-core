@@ -106,10 +106,12 @@ receipt, or per-message delivery state.
    drain. A daemon restart creates no immediate probe: it waits at least 60
    seconds and only when eligible records exist. There is no periodic ping or
    empty-peer monitor.
-7. Emit AI.27's retained `peer_recovery_scheduled`, `peer_recovery_attempt`,
-   `peer_recovery_confirmed`, and `peer_recovery_unconfirmed` events, including
-   hostname, bounded candidate count, delay, and typed error but never body,
-   certificate material, or message payload. Deliver each event to
+7. Extend AI.27's foreground-only `PeerDeliveryEventKind` with
+   `peer_recovery_scheduled`, `peer_recovery_attempt`,
+   `peer_recovery_confirmed`, and `peer_recovery_unconfirmed`, and add the
+   recovery-only bounded candidate-count and next-attempt fields. Emit those
+   events with hostname, bounded candidate count, delay, and typed error but
+   never body, certificate material, or message payload. Deliver each event to
    AI.27's `DaemonRequestDispatcher::record_peer_delivery_event`; that function
    alone updates the `PeerLinkStatus` projection.
 8. Stop and discard the in-memory slot when the window is empty, policy is

@@ -43,11 +43,5 @@ Notes:
 - `StorageBackends<M, R>` is the approved composition seam for concrete shared
   backend handles
 - `RuntimeDoctorPorts` replaces the older runtime-bundle doctor grouping
-- the replay-store contract keeps the richer retained-request shape
-  (`team`/`agent`/`message_key`, endpoint, request envelope, retry metadata)
-  rather than the original planning stub because daemon replay resume needs
-  that identity and expiry data directly
-- runtime shutdown finalization is exported through the storage-neutral
-  `RuntimeStorageFinalizer` seam
 - daemon startup remains fail-closed on any `RuntimeAssembly` construction
   error

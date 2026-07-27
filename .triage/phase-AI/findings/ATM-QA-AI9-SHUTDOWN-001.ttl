@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-AI9-SHUTDOWN-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI9-SHUTDOWN-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-20T23:30:00Z"^^xsd:dateTime ;
+  triage:title "AI.9 HTTPS/mTLS accept_loop spawns per-connection threads detached, never joined on shutdown" ;
+  triage:resolution "FIXED in integrate/phase-AI @ 98e6fc38 (PR #604, PR #605, commit 462f25d3). HTTPS listener shutdown now properly joins all spawned per-connection worker threads. HttpsListenerSet::shutdown() joins listener threads and retains/joins accumulated request JoinHandles via Arc<Mutex<Vec<JoinHandle>>>. Test shutdown_joins_an_incomplete_peer_request_within_its_deadline verifies graceful timeout. Propagated through merge-forward to pAI-10 and merged into integrate/phase-AI." ;
+  triage:description "quality-mgr's AI9-QA-1 verdict (PR #604 @ 7cf40edd, feature/pAI-s9-https-peer-transport) reports a shutdown-draining gap in the HTTPS peer transport's accept loop. Per-connection worker threads are spawned detached (std::thread::Builder::spawn() result assigned to `let _`) and are never joined when the transport shuts down. A slow or wedged connection can outlive shutdown, causing resource leaks and improper graceful-shutdown semantics. HttpsListenerSet::shutdown() joins listener threads (line 213) but not the spawned per-connection workers (accept_loop lines 243-256). Verified on feature/pAI-s9-https-peer-transport @ 7cf40edd: crates/atm-daemon/src/https_transport.rs lines 243-256 spawn worker threads and discard JoinHandle without tracking. FIXED on feature/pAI-s10-crosshost-proof-closeout @ d461c936: accept_loop now takes a requests: Arc<Mutex<Vec<JoinHandle>>> parameter, stores each spawned handle, and shutdown() joins all stored handles before completing (lines 242-249 shutdown, lines 276-295 spawn-and-track)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "single_site" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI9-SHUTDOWN-001/pAI-9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-9/7cf40edd> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-10/d461c936> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-10/d461c936> ;
+  triage:highestOpenBranch "feature/pAI-s9-https-peer-transport" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:triagedAt "2026-07-20T23:30:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-AI9-SHUTDOWN-001/pAI-9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 243 ;
+  triage:snippet "let _ = std::thread::Builder::new() .name(\"atm-https-peer-request\".to_string()) .spawn(move || { ... }) -- JoinHandle discarded, thread spawned detached and never joined on shutdown" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-9/7cf40edd> .
+
+<urn:atm:triage:worktree/pAI-9/7cf40edd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s9-https-peer-transport" ;
+  triage:path "feature/pAI-s9-https-peer-transport" ;
+  triage:headSha "7cf40edd" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-10/d461c936>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:path "feature/pAI-s10-crosshost-proof-closeout" ;
+  triage:headSha "d461c936" ;
+  triage:orderIndex 10 .

@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI26-ATMQA-003>
+  a triage:Finding ;
+  triage:findingId "AI26-ATMQA-003" ;
+  triage:foundAt "2026-07-25T15:12:03Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S6 ;
+  triage:title "Cosmetic sleep-avoidance rewrite in DelayedPeerHttpsDelivery::deliver does not fix the underlying timing-dependency" ;
+  triage:description "Commit f7b779ab50ea8ff6f35ab02388b7dab23df9c3db ('test: avoid sleep in peer deadline checks') on feature/pAI-s27-peer-delivery-observability replaced std::thread::sleep(Duration::from_millis(10)) in crates/atm-daemon/src/tests/runtime_root.rs:136-138 (inside DelayedPeerHttpsDelivery::deliver) with: let (stall_tx, stall_rx) = std::sync::mpsc::sync_channel::<()>(1); let _keep_stall_open = stall_tx; let _ = stall_rx.recv_timeout(Duration::from_millis(10)). stall_tx is never sent on anywhere, so recv_timeout always blocks the full 10ms and times out — functionally identical to the removed sleep(10ms). This evades the textual 'fixed-sleep' hygiene lint (a regex match on 'thread::sleep(' in .just/check_fixed_sleep_hygiene.py) without resolving the underlying timing-dependency the lint exists to catch. An inaccurate inline comment ('A deterministic peer stall...') was added describing this as deterministic. By contrast, the sibling fix in https_transport.rs's 'stalled_tls_handshake_reports_remote_delivery_unconfirmed' test is genuinely event-driven (server thread blocks on release_rx.recv_timeout(1s), unblocked by the main thread only after the deadline assertion completes) — that one is NOT part of this finding, only the DelayedPeerHttpsDelivery::deliver instance is. Required correction: replace with genuine coordination (a blocking recv() released by an actual caller-side signal after the assertion needs the delayed response, matching the pattern already used correctly in the sibling https_transport.rs fix in the same commit), or at minimum stop describing the fixed-duration wait as 'deterministic' in comments if a real fix is not feasible." ;
+  triage:phaseId "phase-AI" ;
+  triage:category "ATM-QA" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T15:12:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-25T15:42:36Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AICH-S6-FIX-2 recheck PASS (all 3 reviewers): DelayedPeerHttpsDelivery::deliver (peer_reconciliation.rs:32-69) now signals entered_tx then blocks on a bare release_rx.recv() with no timeout at all, unblocked only by an explicit release_tx.send() from the driving test thread. rust-qa-agent confirmed via grep no disguised fixed-duration wait remains. See /Users/randlee/.config/atm/share/atm-dev/aich-s6-fix2-verdict.md." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI26-ATMQA-003/pAI-s27/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s27/f7b779ab> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:occurrence/AI26-ATMQA-003/pAI-s27/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests/runtime_root.rs" ;
+  triage:line 138 ;
+  triage:snippet "FIXED on efb92da0: replaced with entered_tx.send(()) then bare release_rx.recv() (no timeout), released only by an explicit test-thread signal. Genuine event-driven synchronization, no disguised fixed-duration wait remains (confirmed via grep by rust-qa-agent)." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "efb92da0" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s27/f7b779ab> .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/0265c94f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/dc079fff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "dc079fff" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/f7b779ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "f7b779ab" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

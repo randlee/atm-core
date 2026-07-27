@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-002>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-002" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "Near-identical AckRequest-to-into_write_request() construction duplicated across atm-daemon test modules" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs (~line 1085-1095) and crates/atm-daemon/src/local_tcp_transport.rs (~line 712-723) both hand-construct the same AckRequest { home_dir, current_dir, caller_identity, caller_chat_id: None, caller_team, message_id, reply_body }.into_write_request() shape. Both are in the atm-daemon crate and could share a helper in crates/atm-daemon/src/test_support.rs (e.g. sample_ack_write_request(message_id) -> WriteRequest), which currently has no public helpers. A third occurrence in crates/atm-core/src/api.rs is in a separate crate so cross-crate sharing isn't practical there." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-002/AI.23/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-002/AI.23/2> ;
+  triage:openOn <urn:atm:triage:worktree/AI.23/b88ca016> ;
+  triage:promoteTo <urn:atm:triage:worktree/AI.23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-002/AI.23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1086 ;
+  triage:snippet "AckRequest { home_dir, current_dir, caller_identity, caller_chat_id: None, caller_team, message_id, reply_body }.into_write_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI.23/b88ca016> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-002/AI.23/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 713 ;
+  triage:snippet "AckRequest { home_dir, current_dir, caller_identity, caller_chat_id: None, caller_team, message_id, reply_body }.into_write_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca016" ;
+  triage:occursIn <urn:atm:triage:worktree/AI.23/b88ca016> .
+
+<urn:atm:triage:worktree/AI.23/b88ca016>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca016" ;
+  triage:orderIndex 23 .

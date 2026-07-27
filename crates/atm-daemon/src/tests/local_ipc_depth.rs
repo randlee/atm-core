@@ -5,6 +5,7 @@ use crate::local_ipc_transport::{
     DISPATCH_PANIC_RECOVERED_MESSAGE, LocalIpcServerTransportAdapter, RuntimeServeHooks,
     install_injected_accept_error_for_test,
 };
+use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 use crate::test_observability::TestDaemonObservability;
 #[cfg(windows)]
 use crate::test_support::connect_local_ipc_with_timeout;
@@ -12,16 +13,16 @@ use crate::test_support::{
     DoctorOnlyDispatcher, LifecycleFlagResetGuard, PanicDispatcherWithUnwindSignal,
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::doctor::DoctorQuery;
 use atm_core::error::AtmError;
 #[cfg(unix)]
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::test_support::EnvGuard;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 #[cfg(unix)]
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
@@ -72,18 +73,84 @@ fn send_doctor_request(
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read response", "response frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
-    response
+    atm_core::api::write_http_request(&mut stream, &request).expect("write doctor request");
+    atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response")
+}
+
+fn send_reload_request(socket_path: &Path, ready_rx: mpsc::Receiver<()>) -> ResponseEnvelope {
+    let mut stream = connect_daemon_local_ipc_until_ready(socket_path, ready_rx);
+    configure_test_local_ipc_timeouts(&stream);
+    let request = RequestEnvelope::ReloadRuntimeView;
+    atm_core::api::write_http_request(&mut stream, &request).expect("write reload request");
+    atm_core::api::read_http_response(&mut stream, &request).expect("read reload response")
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn local_ipc_reload_runtime_view_runs_trust_refresh_hook_over_a_real_socket() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let _env = local_ipc_depth_env(&tempdir, &atm_home);
+    let socket_path = tempdir.path().join("daemon.sock");
+    let server_transport = LocalIpcServerTransportAdapter::new();
+    let mut runtime = server_transport
+        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
+        .expect("prepare runtime");
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
+    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+    let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+    let dispatcher = Arc::new(DaemonRequestDispatcher::new_for_test(
+        atm_home.clone(),
+        RuntimeStatusCache::new(),
+        tempdir.path().join("runtime.db"),
+    ));
+    let refreshed = Arc::new(AtomicBool::new(false));
+    let refresh_flag = Arc::clone(&refreshed);
+    dispatcher
+        .install_runtime_reload_hook(Arc::new(move || {
+            refresh_flag.store(true, Ordering::SeqCst);
+            Ok(())
+        }))
+        .expect("install trust refresh hook");
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = dispatcher;
+    let (serve_result_tx, serve_result_rx) = mpsc::channel();
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+
+    let join = std::thread::spawn(move || {
+        let result = runtime.serve_with_runtime_hooks(
+            dispatcher,
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                publish_ready: move || {
+                    ready_tx.send(()).map_err(|_| {
+                        AtmError::daemon_unavailable("reload test failed to observe daemon ready")
+                    })
+                },
+            },
+        );
+        serve_result_tx.send(result).expect("send serve result");
+    });
+
+    assert!(matches!(
+        send_reload_request(&socket_path, ready_rx),
+        ResponseEnvelope::RuntimeViewReloaded
+    ));
+    assert!(
+        refreshed.load(Ordering::SeqCst),
+        "the real local IPC request must run the installed trust refresh hook"
+    );
+
+    lifecycle.set_terminate_for_test(true);
+    serve_result_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("receive serve result")
+        .expect("serve runtime");
+    join.join().expect("join serve thread");
 }
 
 #[test]
@@ -102,7 +169,7 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle);
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (inject_tx, inject_rx) = mpsc::sync_channel(1);
     install_injected_accept_error_for_test(&mut runtime, inject_tx);
@@ -116,7 +183,6 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: || Ok(()),
             },
         );
@@ -135,7 +201,7 @@ fn local_ipc_accept_error_injection_fails_fast_and_logs_once() {
         shutdown_started.elapsed() <= Duration::from_secs(1),
         "accept error path should remain bounded",
     );
-    assert!(error.message.contains("accept error") || error.message.contains("accepting"));
+    assert!(error.message().contains("accept error") || error.message().contains("accepting"));
     observability
         .wait_for_message_contains(
             "injected daemon local IPC accept error for test",
@@ -160,7 +226,7 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
     let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
@@ -173,14 +239,10 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
                             "shutdown rejection test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Restore the bounded ready-signal handshake before retrying the same-host daemon shutdown rejection test.",
                         )
                     })
                 },
@@ -200,8 +262,8 @@ fn local_ipc_post_terminate_rejection_is_bounded() {
         );
         match response {
             ResponseEnvelope::Error(error) => {
-                assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-                assert!(error.message.contains("shutting down"));
+                assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+                assert!(error.message().contains("shutting down"));
             }
             other => panic!("unexpected shutdown response: {other:?}"),
         }
@@ -252,7 +314,7 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
     let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
     let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
     let (panic_unwound_tx, panic_unwound_rx) = mpsc::sync_channel(1);
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> =
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> =
         Arc::new(PanicDispatcherWithUnwindSignal::new(panic_unwound_tx));
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
@@ -266,14 +328,10 @@ fn local_ipc_dispatch_panic_during_shutdown_is_bounded_and_logs_once() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
                             "panic recovery test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Restore the bounded ready-signal handshake before retrying the same-host panic recovery test.",
                         )
                     })
                 },

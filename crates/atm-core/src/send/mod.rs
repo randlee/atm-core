@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Map;
 use tracing::warn;
 
+use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
@@ -22,27 +23,35 @@ use crate::delivery_policy::{
 use crate::error::AtmError;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
-use crate::schema::{AckIntentFields, AtmMessageId, InboxMessage, ThreadMode};
+use crate::provenance::{
+    ValidatedWriteProvenance, WriteIngress, WriteProvenance, validate_write_provenance,
+};
+use crate::schema::{
+    AckIntentFields, AtmMessageId, InboxMessage, ThreadMode, set_authenticated_source_host,
+    set_peer_outbound_write,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, ChatId, CommandAction, HostName, IsoTimestamp, TaskId, TeamName};
 
 mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(crate) mod hook;
-#[expect(
-    dead_code,
-    reason = "The s11 merge-forward keeps the older hook_tmux helper module while this branch still inlines the tmux seam in hook.rs; the follow-on cleanup can delete the obsolete duplicate once the AD forward-merge settles."
-)]
-mod hook_tmux;
 pub mod input;
 #[doc(hidden)]
-pub mod nudge_template;
+pub(crate) mod nudge_template;
 mod persistence;
 pub(crate) mod summary;
 
-pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+pub(crate) use delivery_persistence::{
+    DeliveryPersistenceDisposition, DeliveryPersistenceResult, DuplicateWriteDisposition,
+};
+#[doc(hidden)]
+pub use nudge_template::{
+    default_template, qualified_sender_identity as qualified_nudge_sender_identity,
+    render_resolved_built_in_nudge,
+};
 pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -57,12 +66,30 @@ pub enum SendMessageSource {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SendRequest {
+pub struct WriteRequest {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
     pub caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_chat_id: Option<ChatId>,
     pub caller_team: TeamName,
-    pub to: AgentAddress,
+    /// Set only by the authenticated HTTPS ingress before the shared writer
+    /// persists an inbound record. It is not trusted from wire JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authenticated_source_host: Option<HostName>,
+    /// The immutable identity assigned by the origin canonical writer.
+    /// Authenticated peer ingress preserves it so both hosts store one ULID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_message_id: Option<AtmMessageId>,
+    /// The immutable origin timestamp carried with a peer write.  It is set
+    /// alongside `origin_message_id` by the canonical origin writer so a
+    /// repeated peer delivery compares equal at the receiving store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_timestamp: Option<IsoTimestamp>,
+    /// Destination is omitted only by an `atm ack` command.  The daemon
+    /// resolves that destination from the acknowledged source before calling
+    /// the canonical writer.
+    pub to: Option<AgentAddress>,
     pub message_source: SendMessageSource,
     pub summary_override: Option<String>,
     pub requires_ack: bool,
@@ -70,10 +97,14 @@ pub struct SendRequest {
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub expires_at: Option<crate::types::IsoTimestamp>,
+    /// When present this write is an acknowledgement reply.  It otherwise
+    /// follows the exact same persistence and post-write path as a send.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
     pub dry_run: bool,
 }
 
-impl SendRequest {
+impl WriteRequest {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         home_dir: PathBuf,
@@ -91,8 +122,12 @@ impl SendRequest {
             home_dir,
             current_dir,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
-            to: to.parse()?,
+            authenticated_source_host: None,
+            origin_message_id: None,
+            origin_timestamp: None,
+            to: Some(to.parse()?),
             message_source,
             summary_override,
             requires_ack,
@@ -100,8 +135,196 @@ impl SendRequest {
             parent_message_id: None,
             thread_mode: None,
             expires_at: None,
+            acknowledges_message_id: None,
             dry_run,
         })
+    }
+
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.caller_chat_id = caller_chat_id;
+        self
+    }
+
+    #[must_use]
+    pub fn with_origin_message_id(mut self, message_id: AtmMessageId) -> Self {
+        self.origin_message_id = Some(message_id);
+        self
+    }
+
+    #[must_use]
+    pub fn with_origin_metadata(
+        mut self,
+        message_id: AtmMessageId,
+        timestamp: IsoTimestamp,
+    ) -> Self {
+        self.origin_message_id = Some(message_id);
+        self.origin_timestamp = Some(timestamp);
+        self
+    }
+}
+
+/// Compatibility name for existing callers.  There is one write payload;
+/// acknowledgement is represented by `acknowledges_message_id` on it.
+pub type SendRequest = WriteRequest;
+
+/// Result of the one canonical write operation.
+///
+/// An acknowledgement is not a second transport operation: it is a write
+/// whose request carries `acknowledges_message_id`.  The distinct outcome only
+/// preserves the CLI/API response shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WriteOutcome {
+    Sent(SendOutcome),
+    Acknowledged(AckOutcome),
+}
+
+impl WriteOutcome {
+    /// Returns the immutable identity persisted by this canonical write.
+    #[must_use]
+    pub fn persisted_message_id(&self) -> AtmMessageId {
+        match self {
+            Self::Sent(outcome) => outcome.message_id,
+            Self::Acknowledged(outcome) => match outcome.reply_disposition {
+                crate::ack::AckReplyDisposition::Sent {
+                    reply_message_id, ..
+                } => reply_message_id,
+            },
+        }
+    }
+}
+
+/// A durable write awaiting its one post-write action.
+///
+/// The daemon owns the routing choice and invokes either local notification or
+/// peer delivery before calling [`PreparedWrite::finish`].  Keeping the
+/// acknowledgement source mutation here ensures an acknowledgement cannot be
+/// committed when peer delivery fails.
+pub struct PreparedWrite {
+    outcome: SendOutcome,
+    outbound_request: WriteRequest,
+    persisted_timestamp: IsoTimestamp,
+    post_write_needed: bool,
+    same_store_peer_receipt: bool,
+    post_write: LocalPostWrite,
+    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+}
+
+struct LocalPostWrite {
+    post_send_config: Option<config::AtmConfig>,
+    recipient: ResolvedRecipient,
+    delivery_snapshot: DeliveryRecipientSnapshot,
+    messages: Vec<crate::delivery_plan::LogicalMessage>,
+}
+
+impl PreparedWrite {
+    /// Returns the immutable identifier persisted by the canonical writer.
+    #[must_use]
+    pub fn persisted_message_id(&self) -> AtmMessageId {
+        self.outcome.message_id
+    }
+
+    #[must_use]
+    pub fn persisted_timestamp(&self) -> IsoTimestamp {
+        self.persisted_timestamp
+    }
+
+    /// Returns the canonical, resolved write payload for the post-write
+    /// router.  For an acknowledgement this includes the reply destination
+    /// resolved from the durable source record; it is not a second path.
+    #[must_use]
+    pub fn outbound_request(&self) -> WriteRequest {
+        self.outbound_request.clone()
+    }
+
+    /// Emits the local post-write notification after durable persistence.
+    ///
+    /// This is intentionally called only from the daemon's
+    /// `PostWriteRouter::dispatch` local branch.
+    pub fn emit_local_post_write(
+        &mut self,
+        runtime: &LocalServiceRuntime,
+        post_send_emitter: &dyn PostSendHookEmitter,
+    ) {
+        hook::emit_post_send_effects(
+            runtime,
+            &mut self.outcome.warnings,
+            self.post_write.post_send_config.as_ref(),
+            Some(post_send_emitter),
+            &self.post_write.recipient,
+            &self.post_write.delivery_snapshot,
+            &self.post_write.messages,
+        );
+    }
+
+    #[cfg(test)]
+    pub(crate) fn emit_local_post_write_for_test<
+        R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
+    >(
+        &mut self,
+        runtime: &R,
+        post_send_emitter: &dyn PostSendHookEmitter,
+    ) {
+        hook::emit_post_send_effects(
+            runtime,
+            &mut self.outcome.warnings,
+            self.post_write.post_send_config.as_ref(),
+            Some(post_send_emitter),
+            &self.post_write.recipient,
+            &self.post_write.delivery_snapshot,
+            &self.post_write.messages,
+        );
+    }
+
+    /// Completes the canonical write only after the router's selected action
+    /// succeeded.  For acknowledgements this is where source state becomes
+    /// acknowledged; a peer-delivery error therefore leaves it pending.
+    pub fn finish(
+        self,
+        runtime: &LocalServiceRuntime,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError> {
+        self.finish_with_runtime(runtime, observability)
+    }
+
+    fn finish_with_runtime<R>(
+        self,
+        runtime: &R,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<WriteOutcome, AtmError>
+    where
+        R: RetainedMailboxRuntime,
+    {
+        match self.acknowledgement {
+            Some(acknowledgement) => acknowledgement
+                .finish(runtime, observability, self.outcome)
+                .map(WriteOutcome::Acknowledged),
+            None => Ok(WriteOutcome::Sent(self.outcome)),
+        }
+    }
+
+    #[must_use]
+    pub fn requires_post_write_route(&self) -> bool {
+        !self.outcome.dry_run && self.post_write_needed
+    }
+
+    /// Whether this write reused an existing immutable record after an
+    /// authenticated receipt returned to the same store. The daemon still
+    /// performs the ordinary local post-write action exactly once for that
+    /// receipt and records the explicit duplicate disposition.
+    #[must_use]
+    pub fn is_same_store_peer_receipt(&self) -> bool {
+        self.same_store_peer_receipt
+    }
+
+    /// Whether this canonical write arrived from a peer transport.
+    ///
+    /// The canonical address deliberately preserves its host qualifier.  The
+    /// post-write router therefore must use ingress provenance—not the
+    /// address—to choose the one local-vs-peer action.
+    #[must_use]
+    pub fn is_peer_receipt(&self) -> bool {
+        has_authenticated_peer_provenance(&self.outbound_request)
     }
 }
 
@@ -181,8 +404,11 @@ impl WarningEntry {
             _ => self.message.clone(),
         };
         match &self.recovery {
-            Some(recovery) => format!("{message} Recovery: {recovery}"),
+            Some(recovery) if !message.contains("Recovery:") => {
+                format!("{message} Recovery: {recovery}")
+            }
             None => message,
+            Some(_) => message,
         }
     }
 }
@@ -211,31 +437,112 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
+/// Execute one canonical write without daemon-owned post-write delivery.
+pub fn write_mail(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+) -> Result<WriteOutcome, AtmError> {
+    let runtime = default_runtime()?;
+    write_mail_with_runtime(request, observability, &runtime)
+}
+
+/// Execute one canonical write with an explicit local runtime.
+pub fn write_mail_with_runtime(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<WriteOutcome, AtmError> {
+    let prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    prepared.finish(runtime, observability)
+}
+
 pub fn send_mail_with_runtime(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, None)
+    match write_mail_with_runtime_impl(request, observability, runtime)?
+        .finish(runtime, observability)?
+    {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "send helper cannot finish an acknowledgement write",
+        )),
+    }
 }
 
-pub fn send_mail_with_runtime_and_post_send_emitter(
-    request: SendRequest,
+/// Prepares the shared durable write for daemon-owned post-write routing.
+///
+/// This performs canonical validation and persistence, but deliberately does
+/// not emit a nudge, send to a peer, or mutate an acknowledgement source.
+/// `PostWriteRouter` owns those actions and calls [`PreparedWrite::finish`]
+/// after its selected action succeeds.
+pub fn prepare_write_with_runtime(
+    request: WriteRequest,
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
-    post_send_emitter: &dyn PostSendHookEmitter,
-) -> Result<SendOutcome, AtmError> {
-    send_mail_with_runtime_impl(request, observability, runtime, Some(post_send_emitter))
+) -> Result<PreparedWrite, AtmError> {
+    write_mail_with_runtime_impl(request, observability, runtime)
 }
 
-fn send_mail_with_runtime_impl<
+/// The sole write pipeline. `acknowledges_message_id` selects only an
+/// acknowledgement-source normalization step; both variants persist through
+/// the same canonical writer exactly once.
+fn write_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    let provenance = validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    if request.acknowledges_message_id.is_none() {
+        if request.to.is_none() {
+            return Err(AtmError::validation(
+                "message write is missing a destination",
+            ));
+        }
+        return prepare_persisted_write(request, observability, runtime, None);
+    }
+    if request.to.is_some() && provenance.is_authenticated_peer() {
+        let acknowledgement = crate::ack::resolve_received_acknowledgement_write(request, runtime)?;
+        return prepare_persisted_write(
+            acknowledgement.request(),
+            observability,
+            runtime,
+            Some(acknowledgement),
+        );
+    }
+    if request.to.is_some() {
+        return Err(AtmError::validation(
+            "acknowledgement write must not include a client-supplied destination",
+        ));
+    }
+    let acknowledgement = crate::ack::resolve_acknowledgement_write(request, runtime)?;
+    prepare_persisted_write(
+        acknowledgement.request(),
+        observability,
+        runtime,
+        Some(acknowledgement),
+    )
+}
+
+fn prepare_persisted_write<
     R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
 >(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
-) -> Result<SendOutcome, AtmError> {
+    acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
+) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
     let requires_ack = request.requires_ack || task_id.is_some();
@@ -246,9 +553,8 @@ fn send_mail_with_runtime_impl<
         &context.recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = AtmMessageId::new();
-    let timestamp = IsoTimestamp::now();
-
+    let message_id = request.origin_message_id.unwrap_or_default();
+    let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
     let persistence = persist_send_message(
         runtime,
         &request,
@@ -260,10 +566,17 @@ fn send_mail_with_runtime_impl<
         requires_ack,
         task_id.clone(),
     )?;
-    finalize_send_outcome(
+    // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
+    // skips its duplicate row, but the ordinary post-write route still emits
+    // the visible local nudge once the peer receipt has completed.
+    let post_write_needed = persistence.requires_post_write();
+    let same_store_peer_receipt =
+        persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
+    let messages =
+        post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
+    let outcome = finalize_send_outcome(
         runtime,
         observability,
-        post_send_emitter,
         &request,
         &context,
         &body,
@@ -272,7 +585,59 @@ fn send_mail_with_runtime_impl<
         requires_ack,
         task_id,
         persistence,
+    )?;
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: request,
+        persisted_timestamp: timestamp,
+        post_write_needed,
+        same_store_peer_receipt,
+        post_write: LocalPostWrite {
+            post_send_config: context.post_send_config,
+            recipient: context.recipient,
+            delivery_snapshot: context.delivery_snapshot,
+            messages,
+        },
+        acknowledgement,
+    })
+}
+
+fn has_authenticated_peer_provenance(request: &WriteRequest) -> bool {
+    validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: request.to.as_ref().and_then(|address| address.host()),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
     )
+    .is_ok_and(ValidatedWriteProvenance::is_authenticated_peer)
+}
+
+#[cfg(test)]
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    request: WriteRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    post_send_emitter: Option<&dyn PostSendHookEmitter>,
+) -> Result<SendOutcome, AtmError> {
+    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    if prepared.requires_post_write_route()
+        && let Some(post_send_emitter) = post_send_emitter
+    {
+        // Test-only harness: production notification is owned by
+        // `PostWriteRouter::dispatch` in atm-daemon.
+        prepared.emit_local_post_write_for_test(runtime, post_send_emitter);
+    }
+    match prepared.finish_with_runtime(runtime, observability)? {
+        WriteOutcome::Sent(outcome) => Ok(outcome),
+        WriteOutcome::Acknowledged(_) => Err(AtmError::validation(
+            "test send helper cannot finish an acknowledgement write",
+        )),
+    }
 }
 
 #[expect(
@@ -284,7 +649,6 @@ fn finalize_send_outcome<
 >(
     runtime: &R,
     observability: &dyn ObservabilityPort,
-    post_send_emitter: Option<&dyn PostSendHookEmitter>,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -311,16 +675,6 @@ fn finalize_send_outcome<
         &persistence,
     );
     if !request.dry_run {
-        let post_send_messages = post_send_messages_from_persistence(&persistence, requires_ack)?;
-        hook::emit_post_send_effects(
-            runtime,
-            &mut outcome.warnings,
-            context.post_send_config.as_ref(),
-            post_send_emitter,
-            &context.recipient,
-            &context.delivery_snapshot,
-            &post_send_messages,
-        );
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
         let execution = execute_delivery_plan(runtime, context.command_config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
@@ -397,11 +751,7 @@ fn build_send_delivery_plan(
         ),
         context.recipient.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| {
-                AtmError::mailbox_write(error.to_string()).with_recovery(
-                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
-                )
-            })?,
+            .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
         persistence.warnings.clone(),
     ))
 }
@@ -409,18 +759,15 @@ fn build_send_delivery_plan(
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
+    is_ack: bool,
 ) -> Result<Vec<crate::delivery_plan::LogicalMessage>, AtmError> {
     crate::delivery_plan::LogicalMessage::new(
         persistence.original_message.clone(),
         requires_ack,
-        false,
+        is_ack,
     )
     .map(|message| vec![message])
-    .map_err(|error| {
-        AtmError::mailbox_write(error.to_string()).with_recovery(
-            "Repair the persisted delivery record shape before retrying post-send emission.",
-        )
-    })
+    .map_err(|error| AtmError::mailbox_write(error.to_string()))
 }
 
 struct SendExecutionContext {
@@ -450,22 +797,42 @@ fn prepare_send_context<
         Err(error) => (
             None,
             vec![WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity, request.caller_team, error.message
+                    request.caller_identity,
+                    request.caller_team,
+                    error.message()
                 ),
-                error.primary_recovery().map(str::to_owned),
+                Some(error.message().to_owned()),
             )],
         ),
     };
     let canonical_sender = request.caller_identity.clone();
-    let recipient = resolve_recipient(&request.to, &request.caller_team, command_config.as_ref())?;
-    validate_non_self_recipient(&canonical_sender, &request.caller_team, &recipient)?;
+    let target = request.to.as_ref().ok_or_else(|| {
+        AtmError::validation("write request destination must be resolved before persistence")
+    })?;
+    let provenance = validate_write_provenance(
+        WriteIngress::Canonical,
+        WriteProvenance {
+            target_host: target.host(),
+            authenticated_source_host: request.authenticated_source_host.as_ref(),
+            origin_message_id: request.origin_message_id.is_some(),
+            origin_timestamp: request.origin_timestamp.is_some(),
+        },
+    )?;
+    let recipient = resolve_recipient(target, &request.caller_team, command_config.as_ref())?;
+    validate_non_self_recipient(
+        &canonical_sender,
+        &request.caller_team,
+        &recipient,
+        target,
+        provenance,
+    )?;
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =
-        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
+        delivery_policy.resolve_write_recipient_snapshot(runtime, &recipient, provenance)?;
     let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
         request.parent_message_id,
         request.thread_mode,
@@ -497,54 +864,93 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     requires_ack: bool,
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
-    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
-    if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted(InboxMessage {
-            from: context.canonical_sender.clone(),
-            text: body.to_string(),
-            timestamp,
-            read: false,
-            source_team: Some(request.caller_team.clone()),
-            summary: Some(summary.to_string()),
-            message_id: Some(message_id),
-            requires_ack: ack_intent.requires_ack,
-            pending_ack_at: ack_intent.pending_ack_at,
-            acknowledged_at: ack_intent.acknowledged_at,
-            acknowledges_message_id: None,
-            parent_message_id: request.parent_message_id,
-            thread_mode: request.thread_mode,
-            expires_at: request.expires_at,
-            task_id: task_id.clone(),
-            extra: Map::new(),
-        }));
-    }
-    let envelope = InboxMessage {
-        from: context.canonical_sender.clone(),
-        text: body.to_string(),
+    let mut envelope = build_send_envelope(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
         timestamp,
-        read: false,
-        source_team: Some(request.caller_team.clone()),
-        summary: Some(summary.to_string()),
-        message_id: Some(message_id),
-        requires_ack: ack_intent.requires_ack,
-        pending_ack_at: ack_intent.pending_ack_at,
-        acknowledged_at: ack_intent.acknowledged_at,
-        acknowledges_message_id: None,
-        parent_message_id: request.parent_message_id,
-        thread_mode: request.thread_mode,
-        expires_at: request.expires_at,
-        task_id: task_id.clone(),
-        extra: Map::new(),
-    };
-    let persistence = persist_message(
+        requires_ack,
+        task_id,
+    );
+    if request.dry_run {
+        return Ok(DeliveryPersistenceResult::persisted(envelope));
+    }
+    // Origin metadata is assigned only by the canonical origin writer and is
+    // required on every peer receipt. It prevents an inbound peer write from
+    // becoming a second outbound peer delivery while preserving its original
+    // host-qualified address for the shared writer and a later ACK.
+    if request.authenticated_source_host.is_none()
+        && request.origin_message_id.is_none()
+        && let Some(host) = request.to.as_ref().and_then(|address| address.host())
+    {
+        let exact_request = request.clone().with_origin_metadata(message_id, timestamp);
+        let request_json = serde_json::to_string(&exact_request).map_err(|_source| {
+            AtmError::mailbox_write("failed to serialize immutable peer outbound write")
+        })?;
+        set_peer_outbound_write(&mut envelope, host, request_json);
+    }
+    persist_message(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
         &context.inbox_path,
         &envelope,
         false,
-    )?;
-    Ok(persistence)
+        request
+            .authenticated_source_host
+            .as_ref()
+            .and_then(|source_host| {
+                request
+                    .to
+                    .as_ref()
+                    .and_then(|destination| destination.host())
+                    .map(|destination_host| (source_host, destination_host))
+            }),
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the immutable envelope is assembled from the canonical write fields"
+)]
+fn build_send_envelope(
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+) -> InboxMessage {
+    let ack_intent = AckIntentFields::from_requires_ack(requires_ack, timestamp);
+    let mut envelope = InboxMessage {
+        from: context.canonical_sender.clone(),
+        source_chat_id: request.caller_chat_id.clone(),
+        text: body.to_string(),
+        timestamp,
+        read: false,
+        source_team: Some(request.caller_team.clone()),
+        destination_chat_id: request
+            .to
+            .as_ref()
+            .and_then(|address| address.chat_id().cloned()),
+        summary: Some(summary.to_string()),
+        message_id: Some(message_id),
+        requires_ack: ack_intent.requires_ack,
+        pending_ack_at: ack_intent.pending_ack_at,
+        acknowledged_at: ack_intent.acknowledged_at,
+        acknowledges_message_id: request.acknowledges_message_id,
+        parent_message_id: request.parent_message_id,
+        thread_mode: request.thread_mode,
+        expires_at: request.expires_at,
+        task_id: task_id.clone(),
+        extra: Map::new(),
+    };
+    set_authenticated_source_host(&mut envelope, request.authenticated_source_host.clone());
+    envelope
 }
 
 fn emit_send_command_event(
@@ -582,14 +988,16 @@ pub(crate) fn validate_non_self_recipient(
     sender: &AgentName,
     sender_team: &TeamName,
     recipient: &ResolvedRecipient,
+    target: &AgentAddress,
+    provenance: ValidatedWriteProvenance,
 ) -> Result<(), AtmError> {
-    if sender
+    let same_identity = sender
         .as_str()
         .eq_ignore_ascii_case(recipient.agent.as_str())
         && sender_team
             .as_str()
-            .eq_ignore_ascii_case(recipient.team.as_str())
-    {
+            .eq_ignore_ascii_case(recipient.team.as_str());
+    if same_identity && target.host().is_none() && !provenance.is_authenticated_peer() {
         return Err(AtmError::self_addressed_send_invalid(format!(
             "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
         )));
@@ -600,11 +1008,23 @@ pub(crate) fn validate_non_self_recipient(
 #[cfg(test)]
 mod self_address_tests {
     use super::{ResolvedRecipient, validate_non_self_recipient};
+    use crate::address::AgentAddress;
     use crate::error_codes::AtmErrorCode;
+    use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
     use crate::types::{AgentName, TeamName};
 
     #[test]
     fn validate_non_self_recipient_rejects_case_variant_self_target() {
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: None,
+                authenticated_source_host: None,
+                origin_message_id: false,
+                origin_timestamp: false,
+            },
+        )
+        .expect("local provenance");
         let error = validate_non_self_recipient(
             &AgentName::from_validated("Sender-A"),
             &TeamName::from_validated("Test-Team"),
@@ -612,11 +1032,71 @@ mod self_address_tests {
                 agent: AgentName::from_validated("sender-a"),
                 team: TeamName::from_validated("test-team"),
             },
+            &"sender-a@test-team"
+                .parse::<AgentAddress>()
+                .expect("target"),
+            provenance,
         )
         .expect_err("case-variant self target must be rejected");
 
-        assert!(error.is_validation(), "{error:?}");
-        assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+        assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_host_qualified_self_target() {
+        let target = "sender-a@test-team.127.0.0.1"
+            .parse::<AgentAddress>()
+            .expect("host-qualified target");
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: target.host(),
+                authenticated_source_host: None,
+                origin_message_id: false,
+                origin_timestamp: false,
+            },
+        )
+        .expect("host-qualified origin provenance");
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            &target,
+            provenance,
+        )
+        .expect("host-qualified self target must use the ordinary peer route");
+    }
+
+    #[test]
+    fn validate_non_self_recipient_allows_authenticated_peer_after_target_normalization() {
+        let target = "sender-a@test-team"
+            .parse::<AgentAddress>()
+            .expect("normalized target");
+        let peer_host = "peer.example.test".parse().expect("peer host");
+        let provenance = validate_write_provenance(
+            WriteIngress::Canonical,
+            WriteProvenance {
+                target_host: target.host(),
+                authenticated_source_host: Some(&peer_host),
+                origin_message_id: true,
+                origin_timestamp: true,
+            },
+        )
+        .expect("authenticated peer provenance");
+        validate_non_self_recipient(
+            &AgentName::from_validated("sender-a"),
+            &TeamName::from_validated("test-team"),
+            &ResolvedRecipient {
+                agent: AgentName::from_validated("sender-a"),
+                team: TeamName::from_validated("test-team"),
+            },
+            &target,
+            provenance,
+        )
+        .expect("authenticated peer receipt must not become a local self-send");
     }
 }
 
@@ -625,15 +1105,15 @@ fn resolve_recipient(
     caller_team: &TeamName,
     config: Option<&config::AtmConfig>,
 ) -> Result<ResolvedRecipient, AtmError> {
+    // `AgentAddress` has already validated the explicit team segment. Never
+    // parse it again and silently substitute the caller team on failure.
     let team = target_address
-        .team
-        .as_deref()
-        .and_then(|team| team.parse().ok())
-        .or_else(|| Some(caller_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
+        .team()
+        .cloned()
+        .unwrap_or_else(|| caller_team.clone());
 
     Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(&target_address.agent, config)?,
+        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
         team,
     })
 }
@@ -674,16 +1154,12 @@ fn prepare_threaded_message(
         (None, None, _) => Ok(()),
         (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
             "ephemeral messages may not participate in a message thread",
-        )
-        .with_recovery(
-            "Send the message either as a standalone ephemeral note or as a non-ephemeral thread update.",
         )),
-        (Some(parent_id), Some(_), None) => validate_thread_append(envelope, inbox_messages, parent_id),
+        (Some(parent_id), Some(_), None) => {
+            validate_thread_append(envelope, inbox_messages, parent_id)
+        }
         (Some(_), None, _) | (None, Some(_), _) => Err(AtmError::validation(
             "thread updates must set both parent_message_id and thread_mode",
-        )
-        .with_recovery(
-            "Provide both the parent message id and either add-details or supersede when appending to an existing thread.",
         )),
     }
 }
@@ -699,17 +1175,11 @@ fn validate_thread_append(
             "thread parent message {} was not found in the recipient inbox",
             parent_id
         ))
-        .with_recovery(
-            "Refresh the recipient inbox state and retry the update against a message id that still exists in that thread.",
-        )
     })?;
 
     if is_ephemeral(parent) {
         return Err(AtmError::validation(
             "ephemeral messages may not be updated or superseded",
-        )
-        .with_recovery(
-            "Send a fresh standalone message instead of trying to append to an ephemeral message.",
         ));
     }
 
@@ -717,27 +1187,18 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "thread root could not be resolved for parent message {}",
             parent_id
-        ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        ));
+        )));
     };
     let root = index.message(root_id).ok_or_else(|| {
         AtmError::validation(format!(
             "thread root message {} was not found in the recipient inbox",
             root_id
         ))
-        .with_recovery(
-            "Repair the malformed message thread or resend the correction as a fresh standalone message.",
-        )
     })?;
 
     if canonical_sender_identity(root) != canonical_sender_identity(envelope) {
         return Err(AtmError::validation(
             "only the original sender may append details or supersede a message thread",
-        )
-        .with_recovery(
-            "Send a new message instead of appending to a thread you did not originate.",
         ));
     }
 
@@ -745,10 +1206,7 @@ fn validate_thread_append(
         return Err(AtmError::validation(format!(
             "message {} already has a successor; ATM threads are strictly linear",
             parent_id
-        ))
-        .with_recovery(
-            "Append to the current terminal message in the thread instead of branching from an older message.",
-        ));
+        )));
     }
 
     let thread_requires_ack = index.thread_requires_ack(parent_id);
@@ -773,5 +1231,7 @@ pub(super) fn qualified_sender_identity(
 
 #[cfg(test)]
 mod graft_warning_tests;
+#[cfg(test)]
+mod post_write_tests;
 #[cfg(test)]
 mod tests;

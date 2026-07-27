@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI11-IMPORTANT-02-AI5-DOC-STATUS>
+  a triage:Finding ;
+  triage:findingId "AI11-IMPORTANT-02-AI5-DOC-STATUS" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:title "sprint-ai-5.md status field reads 'proposed' instead of 'complete'" ;
+  triage:resolution "FIXED in integrate/phase-AI @ a0ca6800939aa2bdd7e6eedb49869d41b2f58ae5 (docs(phase-ai): flip sprint-ai-5 status to complete (AI11-IMPORTANT-02)). Verified directly against integrate/phase-AI current source (not merely the commit message): docs/plans/phase-ai/sprint-ai-5.md line 3 confirmed to read 'status: complete'; commit diff confirmed to touch only that single line; frontmatter format cross-checked against sprint-ai-2.md, sprint-ai-6.md, and sprint-ai-9.md and matches the established 'status: complete' convention exactly." ;
+  triage:description "Post-merge audit of integrate/phase-AI (quality-mgr + qa-triage independent confirmation). Docs/plans/phase-ai/sprint-ai-5.md front matter (line 3) still reads 'status: proposed' despite AI.5 being fully implemented, merged, and closed. All other completed sprints in phase-AI (AI.1, AI.2, AI.3, AI.4, AI.6, AI.7, AI.8, AI.9) show 'status: complete' in their sprint-plan front matter. This is a documentation consistency issue. No evidence of incomplete AI.5 deliverables; the finding scope is docs-only (status field mismatch)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation-consistency" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI11-IMPORTANT-02/pAI-11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-11-remediation/0> ;
+  triage:highestOpenBranch "feature/pAI-s11-post-merge-remediation" ;
+  triage:highestFixedBranch "integrate/phase-AI" ;
+  triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
+  triage:reviewedBy "qa-triage", "quality-mgr" ;
+  triage:notes "Post-merge audit finding. Scope: docs-only. Fix applied: docs/plans/phase-ai/sprint-ai-5.md front matter line 3 changed from 'status: proposed' to 'status: complete' at commit a0ca6800939aa2bdd7e6eedb49869d41b2f58ae5, matching all other completed sprints in the phase. Verified directly against integrate/phase-AI current source, not merely the commit message." .
+
+<urn:atm:triage:occurrence/AI11-IMPORTANT-02/pAI-11/1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-5.md" ;
+  triage:line 3 ;
+  triage:snippet "status: complete" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-AI" ;
+  triage:headSha "a0ca6800939aa2bdd7e6eedb49869d41b2f58ae5" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-integrate/8d0ccf01> .
+
+<urn:atm:triage:worktree/pAI-integrate/8d0ccf01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "8d0ccf01" ;
+  triage:orderIndex 999 .
+
+<urn:atm:triage:worktree/pAI-11-remediation/0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s11-post-merge-remediation" ;
+  triage:path "feature/pAI-s11-post-merge-remediation" ;
+  triage:headSha "0" ;
+  triage:orderIndex 0 .

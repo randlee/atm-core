@@ -3,16 +3,16 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-034 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
 | Relates to | ADR-018, ADR-028, ADR-029, ADR-030, ADR-033, Phase AI |
 
 ## Decision
 
 Cross-host communication is HTTPS requests to the same daemon HTTP router used
-by Unix UDS and loopback-TCP local clients. A daemon is simultaneously an HTTPS
-listener for allowed peers and an HTTPS client when its post-write router
-selects a remote host.
+by Unix direct-UDS local clients and loopback-TCP local clients. A daemon is
+simultaneously an HTTPS listener for allowed peers and an HTTPS client when its
+post-write router selects a remote host.
 There is no second daemon and no cross-host application service.
 
 TLS and local connection authentication are adapter responsibilities before the

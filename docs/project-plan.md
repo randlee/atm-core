@@ -38,9 +38,10 @@ Phase-S planning note:
   full daemon feature set must work on Windows as well as Unix-like hosts
 - the active planning line for that correction is Phase S, tracked in
   [`docs/plans/phase-S/plan-phase-S.md`](./plans/phase-S/plan-phase-S.md)
-- the canonical daemon wire contract, current daemon packet surface, and shared
-  local-IPC/host-host frame rules are tracked in
-  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- the canonical daemon API contract is
+  [`docs/atm-daemon/http-api.md`](./atm-daemon/http-api.md) and its checked-in
+  OpenAPI specification; the legacy frame `protocol-icd.md` was intentionally
+  removed
 - Phase S is not satisfied by Windows compilation or temporary unsupported-path
   stubs; it closes only when daemon functionality is production-ready on every
   supported operating system behind the documented portability boundaries
@@ -685,7 +686,7 @@ Before implementation starts, the docs should be reviewed with these checks:
 
 - **Phase Z: Smoke, Dogfood, And Release Sign-Off [COMPLETE]** — Validated the first daemon + SQLite mail-SSOT release with real-binary smoke, roster truth cutover, watcher-owned Claude config ingest, boundary lint gates, `atm-dev` canary and dogfood, and final release sign-off; verdict `READY` on `feature/pZ-smoke-atm-graft @ 84935774` authorized in `docs/phase-Z/readiness.md` (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`). (Sprints Z.1–Z.24 and Z.3–Z.4; integration branch: `integrate/phase-Z`)
 
-## 37. Phase AG Windows/macOS Cross-Host Validation
+## 37. Phase AG Windows/macOS Cross-Host Validation [HISTORICAL]
 
 Status summary:
 - `Phase Z` is complete and remains the accepted same-host release-readiness
@@ -700,8 +701,9 @@ Status summary:
   - CLI management for both
   - `atm doctor` visibility for both
   - retained loopback self-test support
-- `Phase AG` remains the active planning line, but now as a product-completion
-  plus validation phase rather than a validation-only phase.
+- Phase AG is retired. It documents the rejected custom-frame/TCP design and
+  must not be used for implementation or release evidence; Phase AI owns the
+  replacement HTTP/UDS and HTTPS proof line.
 - `Phase AB` remains historical source material only.
 
 Planning branch:
@@ -764,9 +766,6 @@ Execution shape:
 
 Immediate planning outputs:
 - `docs/plans/phase-AG/plan-phase-AG.md`
-- `docs/plans/phase-AG/cross-host-setup-runbook.md`
-- `docs/plans/phase-AG/cross-host-smoke-checklist.md`
-- `docs/plans/phase-AG/cross-host-findings-ledger.md`
 - `docs/plans/phase-AG/readiness.md`
 - `docs/plans/phase-AG/sprint-AG1.md`
 - `docs/plans/phase-AG/sprint-AG2.md`
@@ -949,10 +948,15 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI — HTTP daemon and minimal cross-host transport [PLANNED]
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.30; readiness blocked]
 
 Planning branch: `plan/phase-ai-planning`
 Integration branch: `integrate/phase-AI`
+
+Implementation is merged through AI.30. Post-AI.30 legacy-finding and
+hardening cleanup is in progress on follow-up branches. This implementation
+status does not close the phase: [`docs/plans/phase-ai/readiness.md`](./plans/phase-ai/readiness.md)
+still blocks release pending physical two-Mac and Mac↔Windows peer evidence.
 
 AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
 baseline. It retains only the local-IPC singleton while deleting peer transport,
@@ -962,7 +966,46 @@ custom local frame protocol, and the same router later serves authenticated
 HTTPS/TCP peers. The final line has no legacy Windows local-transport fallback, peer/replay state, parallel
 send/ack paths, or cross-host-specific mailbox logic.
 
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `AI.1` | `complete` | `feature/pAI-1-daemon-preag-reset` | deleted peer transport/replay state and retired daemon compatibility adapters |
+| `AI.2` | `complete` | `feature/pAI-s2-storage-topology` | storage topology cleanup, backend-neutral runtime factory, atm-core boundary retirement gate |
+| `AI.3` | `complete` | `feature/pAI-s3-error-contract-foundation` | serializable error contract foundation and retired protocol error envelope cleanup |
+| `AI.4` | `complete` | `feature/pAI-s4-error-consumer-migration` | consumers migrated onto the two-field error contract |
+| `AI.5` | `complete` | `feature/pAI-s5-chat-address-identity` | chat-address identity contract aligned for HTTP daemon ingress |
+| `AI.6` | `complete` | `feature/pAI-s6-http-uds-router` | REST router and HTTP-over-UDS local daemon transport, with AI.7 write-graph waiver recorded |
+| `AI.7` | `complete` | `feature/pAI-s7-canonical-write-path` | canonical write request, single host-routing seam, and collapsed send/ack ingress |
+| `AI.8` | `complete` | `feature/pAI-s8-crosshost-control-plane` | durable HTTPS interface, certificate, and trust configuration |
+| `AI.9` | `complete` | `feature/pAI-s9-https-peer-transport` | peer HTTPS transport |
+| `AI.10` | `complete` | `feature/pAI-s10-crosshost-proof-closeout` | proof matrix and closeout; live physical-peer rows remain readiness blockers |
+| `AI.11` | `complete` | `feature/pAI-s11-post-merge-remediation` | route-specific HTTP bodies and Windows loopback-TCP local transport |
+| `AI.12` | `complete` | `feature/pAI-s12-post-write-router` | canonical post-write peer routing and immutable outbound persistence |
+| `AI.13` | `complete` | `feature/pAI-s13-peer-smoke-contract` | repository-owned peer-pair smoke runner and release evidence contract |
+| `AI.14` | `complete` | `feature/pAI-s14-mac-peer-smoke` | physical Mac↔Mac peer-pair proof implementation; live evidence remains blocked |
+| `AI.15` | `complete` | `feature/pAI-s15-windows-peer-smoke` | physical Mac↔Windows peer-pair proof implementation; live evidence remains blocked |
+| `AI.16` | `complete` | `feature/pAI-s16-offline-reconciliation` | durable-age-bounded canonical-message reconciliation |
+| `AI.17` | `complete` | `feature/pAI-s17-hermes-chat-identity` | ambient `ATM_CHAT_ID` identity context |
+| `AI.18` | `complete` | `feature/pAI-s18-graft-python-bindings` | PyO3/Maturin graft client/nudge binding |
+| `AI.19` | `complete` | `feature/pAI-s19-hermes-graft-integration` | typed Hermes graft bridge after canonical persistence |
+| `AI.20` | `complete` | `feature/pAI-s20-hermes-bridge-deployment` | per-profile launchd bridge deployment and runbook |
+| `AI.21` | `complete` | `feature/pAI-s21-hermes-closure` | retained Hermes end-to-end production evidence |
+| `AI.21-pre` | `complete` | `feature/pAI-s21pre-crosshost-evidence-harness` | supported peer-smoke harness and plaintext-test diagnostic profile |
+| `AI.22` | `complete` | `feature/pAI-s22-loopback-self-send-exemption` | host-qualified self-send exemption and advertised-IP proof path |
+| `AI.23` | `complete` | `feature/pAI-s23-crosshost-shared-write-path` | one shared HTTP write path and post-write router |
+| `AI.24` | `complete` | `feature/pAI-s24-host-qualified-ack-receipt` | host-qualified ACK receipt and peer nudge |
+| `AI.25` | `complete` | `feature/pAI-s25-peer-authority-resolution` | hostname/pin peer authority and live trust refresh |
+| `AI.26` | `complete` | `feature/pAI-s26-peer-write-deadline` | propagated peer-write deadline |
+| `AI.27` | `complete` | `feature/pAI-s27-peer-delivery-observability` | truthful peer delivery outcomes and terminal events |
+| `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
+| `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
+| `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
+
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
+
+AI.3 (`feature/pAI-s3-error-contract-foundation`) completes the two-field
+serializable error contract and removes the retired protocol error envelope.
 
 ## Publishing Improvements
 

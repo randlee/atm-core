@@ -1,9 +1,24 @@
 use crate::observability::CliObservability;
 use crate::output;
 use anyhow::Result;
-use atm_core::doctor::{self, DoctorQuery};
-use atm_runtime::assemble_default_runtime;
+use atm_core::doctor::{self, DaemonRuntimeDoctorReport, DoctorQuery, PeerLinkStatus};
+use atm_daemon_bootstrap::assemble_default_runtime;
 use clap::Args;
+
+fn configured_peer_links(
+    peer_config: &doctor::PeerConfigDoctorReport,
+) -> Result<Vec<PeerLinkStatus>> {
+    peer_config
+        .trusted_peers
+        .iter()
+        .map(|peer| {
+            peer.host
+                .parse()
+                .map(PeerLinkStatus::misconfigured)
+                .map_err(anyhow::Error::from)
+        })
+        .collect()
+}
 
 use crate::composition::{
     AtmHomePath, CliComposition, InvocationDir, resolve_command_runtime_context,
@@ -46,13 +61,7 @@ impl DoctorCommand {
         let team_override = self
             .team
             .as_ref()
-            .map(|value| {
-                value.parse::<atm_core::types::TeamName>().map_err(|error| {
-                    error.with_recovery(
-                        "Use `--team <team>` with a valid ATM team name when running `atm doctor`.",
-                    )
-                })
-            })
+            .map(|value| value.parse::<atm_core::types::TeamName>())
             .transpose()?;
         // Capture the invoking CLI process's identity here, where the process
         // environment is genuinely the caller's. When the doctor request is
@@ -102,12 +111,20 @@ impl DoctorCommand {
     ) -> Result<atm_core::doctor::DoctorReport> {
         let query = self.build_query(home_dir, current_dir)?;
         let runtime = assemble_default_runtime()?;
+        let (peer_config, peer_findings) =
+            doctor::peer_config_doctor_report(runtime.peer_config_store().as_ref());
+        let peer_links = configured_peer_links(&peer_config)?;
         doctor::run_doctor_with_runtime_ports(
             query,
             observability,
             &runtime.service_runtime,
             &runtime.doctor_ports,
-            None,
+            Some(DaemonRuntimeDoctorReport {
+                findings: peer_findings,
+                peer_config: Some(peer_config),
+                peer_links,
+                peer_wire_security: None,
+            }),
         )
         .map_err(anyhow::Error::from)
     }
@@ -120,7 +137,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::DoctorCommand;
+    use super::{DoctorCommand, configured_peer_links};
     use crate::observability::CliObservability;
 
     fn test_paths() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
@@ -159,11 +176,27 @@ mod tests {
             .expect_err("invalid team override should fail");
         let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
 
+        assert!(atm_error.message().contains("Recovery:"));
+    }
+
+    #[test]
+    fn configured_peer_links_keeps_one_direct_local_row_per_peer() {
+        let peer_config = atm_core::doctor::PeerConfigDoctorReport {
+            trusted_peers: vec![atm_core::doctor::PeerAuthorityDoctorReport {
+                host: "peer.example.test".to_string(),
+                https_port: 43101,
+                enabled: true,
+            }],
+            ..Default::default()
+        };
+
+        let links = configured_peer_links(&peer_config).expect("configured peer links");
+
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].peer.as_str(), "peer.example.test");
         assert_eq!(
-            atm_error.primary_recovery(),
-            Some(
-                "Correct the ATM address format and retry with a valid <agent> or <agent>@<team> target."
-            )
+            links[0].quality,
+            atm_core::doctor::PeerLinkQuality::Misconfigured
         );
     }
 
@@ -195,9 +228,32 @@ mod tests {
             .expect("report");
 
         assert!(
-            report.daemon_runtime.is_none(),
-            "hermetic local doctor must not report a daemon"
+            report
+                .daemon_runtime
+                .as_ref()
+                .and_then(|runtime| runtime.peer_config.as_ref())
+                .is_some(),
+            "direct-local doctor must retain peer configuration visibility"
         );
+        let daemon_runtime = report
+            .daemon_runtime
+            .as_ref()
+            .expect("direct-local daemon report");
+        let peer_config = daemon_runtime
+            .peer_config
+            .as_ref()
+            .expect("direct-local peer configuration");
+        assert_eq!(
+            daemon_runtime.peer_links.len(),
+            peer_config.trusted_peers.len()
+        );
+        assert!(daemon_runtime.peer_links.iter().all(|link| {
+            link.quality == atm_core::doctor::PeerLinkQuality::Misconfigured
+                && peer_config
+                    .trusted_peers
+                    .iter()
+                    .any(|peer| peer.host == link.peer.as_str())
+        }));
         assert!(
             report.runtime_status.is_none(),
             "hermetic local doctor must not report live daemon runtime status"

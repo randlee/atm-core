@@ -1,3 +1,7 @@
+#[cfg(not(windows))]
+use super::local_ipc_transport::RuntimeServeHooks;
+#[cfg(windows)]
+use super::local_tcp_transport::RuntimeServeHooks;
 use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
@@ -5,14 +9,14 @@ use super::{
     LocalIpcServerTransportAdapter,
     composition::build_production_runtime,
     lifecycle_control::LifecycleControlSourceAdapter,
-    local_ipc_transport::RuntimeServeHooks,
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+    write_test_local_ipc_request,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::ApiRouter;
 use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
@@ -30,7 +34,6 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::{
     SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -55,6 +58,7 @@ impl Drop for ShutdownFinalizerDrainGuard {
     }
 }
 
+#[cfg(not(windows))]
 mod local_ipc_depth;
 mod runtime_root;
 
@@ -93,7 +97,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         (lifecycle, reset)
     };
-    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
@@ -106,14 +110,10 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                 force_cancel_deadline: Duration::from_secs(2),
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
-                finalize_shutdown: || {},
                 publish_ready: move || {
                     ready_tx.send(()).map_err(|_| {
                         AtmError::daemon_unavailable(
                             "doctor round-trip test failed to observe the daemon ready signal",
-                        )
-                        .with_recovery(
-                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
                         )
                     })
                 },
@@ -130,23 +130,55 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    write_test_local_ipc_request(&mut stream, &request).expect("write doctor request");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(report.summary.status, DoctorStatus::Healthy);
         }
         other => panic!("unexpected response: {other:?}"),
     }
+
+    // The loopback TCP record is published by whichever transport bound the
+    // runtime. On Windows the local_tcp_transport ignores the caller's socket
+    // path and writes the record under the host runtime root, so we resolve it
+    // through the same production lookup a client would use. On Unix the
+    // local_ipc_transport writes the record next to the endpoint socket
+    // (`endpoint_path.parent()`), so we read it from `socket_path`'s parent.
+    // Resolving the record from its real write location keeps this full
+    // round-trip assertion running on every platform.
+    #[cfg(windows)]
+    let record_path = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+        .expect("resolve local loopback TCP endpoint record")
+        .as_ref()
+        .to_path_buf();
+    #[cfg(not(windows))]
+    let record_path = socket_path
+        .parent()
+        .expect("socket path has a runtime directory")
+        .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+
+    let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(
+        &std::fs::read(&record_path).expect("read local loopback TCP endpoint record"),
+    )
+    .expect("parse local loopback TCP endpoint record");
+    let capability = record.capability().expect("active local capability");
+    let capability_header = capability.to_base64url();
+    let endpoint = record.ipv4_loopback.expect("IPv4 loopback endpoint");
+    let mut tcp_stream = std::net::TcpStream::connect(endpoint).expect("connect loopback TCP");
+    atm_core::api::write_http_request_with_headers(
+        &mut tcp_stream,
+        &request,
+        &[(
+            atm_core::local_http::LOCAL_CAPABILITY_HEADER,
+            capability_header.as_str(),
+        )],
+    )
+    .expect("write loopback TCP doctor request");
+    let tcp_response = atm_core::api::read_http_response(&mut tcp_stream, &request)
+        .expect("read loopback TCP doctor response");
+    assert!(matches!(tcp_response, ResponseEnvelope::Doctor(_)));
 
     lifecycle.set_terminate_for_test(true);
     serve_result_rx
@@ -158,7 +190,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 
 #[test]
 #[serial_test::serial(env)]
-fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
+fn runtime_composition_start_writes_retained_log_and_reports_healthy_observability() {
     install_retained_runtime_factory();
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
@@ -189,8 +221,12 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         .expect("test observability"),
     );
     let socket_path = tempdir.path().join("daemon.sock");
-    let runtime =
-        crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
+    let runtime = crate::composition::RuntimeComposition::new_with_runtime_db_path(
+        crate::AtmHomeDir::from_path_for_test(atm_home.clone()),
+        db_path.clone(),
+        observability.clone(),
+    )
+    .expect("compose test runtime");
     let (result_tx, result_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let runtime_socket_path = socket_path.clone();
@@ -208,17 +244,9 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         team_override: None,
         ..DoctorQuery::default()
     });
-    let request_id = atm_core::protocol::next_request_id();
-    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
-    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
-    stream.flush().expect("flush");
-    let response_frame =
-        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
-            .expect("read frame")
-            .expect("response frame");
-    let (response_id, response) =
-        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
-    assert_eq!(response_id, request_id);
+    write_test_local_ipc_request(&mut stream, &request).expect("write doctor request");
+    let response =
+        atm_core::api::read_http_response(&mut stream, &request).expect("read doctor response");
     match response {
         ResponseEnvelope::Doctor(report) => {
             assert_eq!(
@@ -255,14 +283,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .collect::<Vec<_>>();
     assembly
         .roster_store_arc()
-        .replace_roster(
-            test_team(),
-            &roster,
-            Some(
-                &atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
-                    .expect("replay source"),
-            ),
-        )
+        .replace_roster(test_team(), &roster)
         .expect("replace roster");
 }
 
@@ -518,23 +539,6 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
 }
 
 #[test]
-#[serial_test::serial(env)]
-fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
-    let _drain_guard = ShutdownFinalizerDrainGuard;
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    let db_path = tempdir.path().join("mail.db");
-
-    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
-
-    dispatcher.finalize_storage_shutdown();
-    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
-}
-
-#[test]
 fn heartbeat_rejects_live_pid_conflict() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -568,10 +572,11 @@ fn heartbeat_rejects_live_pid_conflict() {
         }))
         .expect_err("live pid conflict");
 
-    assert_eq!(error.code, AtmErrorCode::IdentityConflict);
-    assert_eq!(
-        error.message,
-        "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
+    assert_eq!(error.code(), AtmErrorCode::IdentityConflict);
+    assert!(
+        error
+            .message()
+            .starts_with("ATM_IDENTITY_CONFLICT: stop and report to user immediately")
     );
     assert_eq!(
         status_cache.member_state_for_test(&team, &member),

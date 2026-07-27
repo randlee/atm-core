@@ -1,0 +1,174 @@
+openapi: 3.1.0
+info:
+  title: ATM daemon API
+  version: v1
+  description: HTTP contract shared by local UDS and future peer HTTPS adapters.
+servers:
+  - url: /v1/atm
+paths:
+  /messages:
+    get:
+      operationId: listMessages
+      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/ListQuery' } } } }
+      parameters:
+        - $ref: '#/components/parameters/Agent'
+        - $ref: '#/components/parameters/ChatId'
+      responses:
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    post:
+      operationId: writeMessage
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WriteRequest' } } } }
+      responses:
+        '201': { description: Created message, content: { application/json: { schema: { $ref: '#/components/schemas/Message' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+    delete:
+      operationId: clearMessages
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ClearQuery' } } } }
+      responses:
+        '204':
+          description: Cleared; no response body.
+          headers:
+            X-ATM-Clear-Outcome:
+              description: Base64url-encoded clear result for CLI rendering.
+              schema: { type: string }
+        default: { $ref: '#/components/responses/AtmError' }
+  /messages/inspect:
+    post:
+      operationId: inspectMessages
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeekQuery' } } } }
+      responses:
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /messages/read:
+    post:
+      operationId: readMessages
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReadQuery' } } } }
+      responses:
+        '200': { description: Messages, content: { application/json: { schema: { $ref: '#/components/schemas/MessageList' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /doctor:
+    get:
+      operationId: doctor
+      responses:
+        '200': { description: Daemon health, content: { application/json: { schema: { type: object } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /peers/{peer}/sync:
+    post:
+      operationId: syncPeer
+      parameters:
+        - name: peer
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncRequest' } } } }
+      responses:
+        '200': { description: Bounded explicit peer reconciliation result, content: { application/json: { schema: { $ref: '#/components/schemas/PeerSyncOutcome' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /compatibility:
+    post:
+      operationId: compatibilityPreflight
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CompatibilityPreflight' } } } }
+      responses:
+        '200': { description: Compatibility verdict, content: { application/json: { schema: { $ref: '#/components/schemas/CompatibilityVerdict' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /heartbeat:
+    post:
+      operationId: teamMemberHeartbeat
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatRequest' } } } }
+      responses:
+        '200': { description: Heartbeat result, content: { application/json: { schema: { $ref: '#/components/schemas/HeartbeatResponse' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+  /runtime/reload:
+    post:
+      operationId: reloadRuntimeView
+      requestBody: { required: true, content: { application/json: { schema: { type: 'null' } } } }
+      responses:
+        '200': { description: Runtime view reloaded, content: { application/json: { schema: { type: 'null' } } } }
+        default: { $ref: '#/components/responses/AtmError' }
+components:
+  parameters:
+    Agent: { name: agent, in: query, schema: { type: string } }
+    ChatId: { name: chat_id, in: query, schema: { type: string } }
+    Peer: { name: peer, in: path, required: true, schema: { type: string } }
+  responses:
+    AtmError:
+      description: ATM error
+      content: { application/json: { schema: { $ref: '#/components/schemas/AtmError' } } }
+  schemas:
+    AgentAddress:
+      type: object
+      required: [agent, team]
+      properties:
+        agent: { type: string }
+        chat_id: { type: string }
+        team: { type: string }
+        host: { type: string }
+    WriteRequest:
+      type: object
+      required: [message_id, from, to, body]
+      properties:
+        message_id: { type: string }
+        from: { $ref: '#/components/schemas/AgentAddress' }
+        to: { $ref: '#/components/schemas/AgentAddress' }
+        body: { type: string }
+        requires_ack: { type: boolean }
+        acknowledges_message_id: { type: string }
+    PeekQuery:
+      type: object
+      description: Canonical inspect query; fields are validated by the daemon.
+    ReadQuery:
+      type: object
+      description: Canonical read query; fields are validated by the daemon.
+    ClearQuery:
+      type: object
+      description: Canonical clear query; fields are validated by the daemon.
+    ListQuery:
+      type: object
+      description: Canonical list query; fields are validated by the daemon.
+    CompatibilityPreflight:
+      type: object
+      description: Client and daemon release compatibility request.
+    CompatibilityVerdict:
+      type: object
+      description: Compatibility result.
+    HeartbeatRequest:
+      type: object
+      description: Team-member heartbeat request.
+    HeartbeatResponse:
+      type: object
+      description: Team-member heartbeat result.
+    PeerSyncRequest:
+      type: object
+      required: [peer]
+      properties:
+        peer: { type: string }
+    PeerSyncOutcome:
+      type: object
+      required: [peer, delivered]
+      properties:
+        peer: { type: string }
+        delivered: { type: integer, minimum: 0 }
+        disposition: { type: string, enum: [completed, disabled, rate_limited] }
+    Message:
+      type: object
+      required: [message_id, from, to, body]
+      properties:
+        message_id: { type: string }
+        from: { $ref: '#/components/schemas/AgentAddress' }
+        to: { $ref: '#/components/schemas/AgentAddress' }
+        body: { type: string }
+        requires_ack: { type: boolean }
+        acknowledges_message_id: { type: string }
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        cursor: { type: string }
+    AtmError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }

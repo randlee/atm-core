@@ -117,6 +117,139 @@ impl PartialEq<&str> for AgentName {
     }
 }
 
+/// Validated, durable identifier for one independently-addressable agent
+/// context. It deliberately uses the same safe segment policy as agent and
+/// team names; `:` remains an address delimiter owned by `AgentIdentity`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct ChatId(String);
+
+impl ChatId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for ChatId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        validate_path_segment(trimmed, "chat id")?;
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Display for ChatId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Validated DNS-name or IPv4-style host component in an ATM address.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct HostName(String);
+
+impl HostName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl FromStr for HostName {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("host must not be empty"));
+        }
+        for label in trimmed.split('.') {
+            validate_path_segment(label, "host label")?;
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for HostName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Display for HostName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The sole parser and renderer for `agent[:chat-id]`. Transport and adapter
+/// layers consume this value rather than splitting `:` themselves.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct AgentIdentity {
+    pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_id: Option<ChatId>,
+}
+
+impl AgentIdentity {
+    pub fn new(agent: AgentName, chat_id: Option<ChatId>) -> Self {
+        Self { agent, chat_id }
+    }
+}
+
+impl FromStr for AgentIdentity {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::address_parse("agent identity must not be empty"));
+        }
+        let (agent, chat_id) = match trimmed.split_once(':') {
+            Some((agent, chat_id)) => {
+                if chat_id.contains(':') {
+                    return Err(AtmError::address_parse(
+                        "agent identity may contain only one ':'",
+                    ));
+                }
+                (agent.parse()?, Some(chat_id.parse()?))
+            }
+            None => (trimmed.parse()?, None),
+        };
+        Ok(Self { agent, chat_id })
+    }
+}
+
+impl fmt::Display for AgentIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.agent.as_str())?;
+        if let Some(chat_id) = &self.chat_id {
+            write!(f, ":{chat_id}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct AgentId(String);
@@ -253,7 +386,35 @@ impl fmt::Display for TeamName {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentName, IsoTimestamp};
+    use super::{AgentId, AgentIdentity, AgentName, ChatId, IsoTimestamp};
+    use std::str::FromStr;
+
+    #[test]
+    fn agent_identity_owns_chat_id_parsing_and_rendering() {
+        let base = AgentIdentity::from_str("omega-prime").expect("base identity");
+        assert_eq!(base.agent, AgentName::from_validated("omega-prime"));
+        assert_eq!(base.chat_id, None);
+
+        let qualified = AgentIdentity::from_str("omega-prime:1234").expect("chat identity");
+        assert_eq!(
+            qualified.chat_id,
+            Some(ChatId::from_str("1234").expect("chat id"))
+        );
+        assert_eq!(qualified.to_string(), "omega-prime:1234");
+
+        for invalid in [
+            "",
+            ":1234",
+            "omega-prime:",
+            "omega-prime:one:two",
+            "omega-prime:bad/name",
+        ] {
+            assert!(
+                AgentIdentity::from_str(invalid).is_err(),
+                "{invalid} must fail"
+            );
+        }
+    }
 
     #[test]
     fn agent_id_new_matches_agent_name_validation_for_valid_value() {
@@ -330,11 +491,7 @@ impl FromStr for TaskId {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
-            return Err(
-                AtmError::validation("task id must not be blank").with_recovery(
-                    "Provide a non-empty --task-id value or omit --task-id for non-task messages.",
-                ),
-            );
+            return Err(AtmError::validation("task id must not be blank"));
         }
         Ok(Self(trimmed.to_string()))
     }

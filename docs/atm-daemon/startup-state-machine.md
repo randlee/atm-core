@@ -114,8 +114,6 @@ When communicating startup status, use these layers separately:
 2. daemon lifecycle
    - did the runtime reach `Starting`, `Running`, `Draining`, or `Stopped`?
 3. startup dependency result
-   - replay store ready?
-   - runtime lanes started?
    - SQLite schema/init succeeded?
    - roster truth hydrated or still empty?
 

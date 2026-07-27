@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI10-TWOMAC-001>
+  a triage:Finding ;
+  triage:findingId "AI10-TWOMAC-001" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T10:30:00-07:00"^^xsd:dateTime ;
+  triage:title "Cross-host bidirectional HTTPS send and ack on two physical Macs — hardware execution gap, not code defect" ;
+  triage:description "Live execution proof that bidirectional HTTPS send and ack work correctly between two physical macOS hosts with authenticated mTLS and exact peer trust enforced, retaining chat-qualified addresses. This is a hardware-execution validation gap, not a code defect. The implementation is complete and correct; the gap is the absence of two physical Macs running simultaneously to execute the full two-host flow. Tracked in readiness.md as explicitly BLOCKED pending separate live-host execution." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:reviewedBy "qa-triage" ;
+  triage:triagedAt "2026-07-21T10:30:00-07:00"^^xsd:dateTime ;
+  triage:resolutionNotes "ACCEPTED-DEFERRED: Hardware validation gap, not code defect. Code implementation complete and correct. Marked as BLOCKED in docs/plans/phase-ai/readiness.md with note 'live two-host execution has not yet been run; separate live-host execution required.' This is a physical environment prerequisite (two functioning macOS hosts with network access) and will be executed post-phase-AI closure during integration/deployment validation. Does not block phase-AI delivery or integration." ;
+  triage:verificationBranch "integrate/phase-AI" ;
+  triage:verificationHeadSha "b2a76894" ;
+  triage:reasonForDeferral "hardware_prerequisite" ;
+  triage:futureValidationMethod "live_two_mac_execution" ;
+  triage:readinessReference "docs/plans/phase-ai/readiness.md line 37" .
+
+<urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "b2a76894" ;
+  triage:orderIndex 0 .

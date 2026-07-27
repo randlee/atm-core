@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI16-CI-001-DAEMON-READINESS-RACE>
+  a triage:Finding ;
+  triage:findingId "AI16-CI-001-DAEMON-READINESS-RACE" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-22T20:00:00Z"^^xsd:dateTime ;
+  triage:title "Ubuntu/macOS daemon auto-start readiness race causes CI leak-check failure on s16" ;
+  triage:description "PR #612 (feature/pAI-s16-offline-reconciliation), commit cd8a3638 ('AUTO_START_PUBLISH_TIMEOUT vs Python smoke-harness timeout collision' fix), did NOT clear CI. Test (ubuntu-latest) and Test (macos-latest) both fail identically with assert_no_process_leak; Test (windows-latest) passes. Root cause: spawn_daemon() discards Child handle on success; if wait_for_published_daemon() timeout is hit, client gives up but daemon keeps running -- Python harness flags as 'leaked pid'. Fix exists on s20 commit a8567ca4 which returns Child handle and reaps on timeout." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "repo" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-22T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s16/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s17/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s18/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/s16/b3749b90> ;
+  triage:openOn <urn:atm:triage:worktree/s17/f3af571e> ;
+  triage:openOn <urn:atm:triage:worktree/s18/1c40c3a1> ;
+  triage:openOn <urn:atm:triage:worktree/s19/fb781b27> ;
+  triage:fixedOn <urn:atm:triage:worktree/s20/a8567ca4> ;
+  triage:promoteTo <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s16/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 843 ;
+  triage:snippet "command.spawn().map_err(...)?; // discards Child handle" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head (line 735-758) — Child handle is retained and reap_failed_auto_start() is called on error; defect was introduced pre-s16 and fixed in s20 by commit a8567ca4. Stale occurrence from superseded branch s16; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:occursIn <urn:atm:triage:worktree/s16/b3749b90> .
+
+<urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s17/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 843 ;
+  triage:snippet "command.spawn().map_err(...)?; // discards Child handle" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — Child handle is retained and reap_failed_auto_start() is called on error; defect fixed in s20. Stale occurrence from superseded branch s17; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:occursIn <urn:atm:triage:worktree/s17/f3af571e> .
+
+<urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s18/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 843 ;
+  triage:snippet "command.spawn().map_err(...)?; // discards Child handle" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — Child handle is retained and reap_failed_auto_start() is called on error; defect fixed in s20. Stale occurrence from superseded branch s18; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:occursIn <urn:atm:triage:worktree/s18/1c40c3a1> .
+
+<urn:atm:triage:occurrence/AI16-CI-001-DAEMON-READINESS-RACE/s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 843 ;
+  triage:snippet "command.spawn().map_err(...)?; // discards Child handle" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — Child handle is retained and reap_failed_auto_start() is called on error; defect fixed in s20. Stale occurrence from superseded branch s19; closing to match reality. (2026-07-26)" ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:occursIn <urn:atm:triage:worktree/s19/fb781b27> .
+
+<urn:atm:triage:worktree/s16/b3749b90>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s16-offline-reconciliation" ;
+  triage:path "feature/pAI-s16-offline-reconciliation" ;
+  triage:headSha "b3749b90" ;
+  triage:orderIndex 16 .
+
+<urn:atm:triage:worktree/s17/f3af571e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s17-hermes-chat-identity" ;
+  triage:path "feature/pAI-s17-hermes-chat-identity" ;
+  triage:headSha "f3af571e" ;
+  triage:orderIndex 17 .
+
+<urn:atm:triage:worktree/s18/1c40c3a1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s18-graft-python-bindings" ;
+  triage:path "feature/pAI-s18-graft-python-bindings" ;
+  triage:headSha "1c40c3a1" ;
+  triage:orderIndex 18 .
+
+<urn:atm:triage:worktree/s19/fb781b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s19-hermes-graft-integration" ;
+  triage:path "feature/pAI-s19-hermes-graft-integration" ;
+  triage:headSha "fb781b27" ;
+  triage:orderIndex 19 .
+
+<urn:atm:triage:worktree/s20/a8567ca4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:path "feature/pAI-s20-hermes-bridge-deployment" ;
+  triage:headSha "a8567ca4" ;
+  triage:orderIndex 20 .

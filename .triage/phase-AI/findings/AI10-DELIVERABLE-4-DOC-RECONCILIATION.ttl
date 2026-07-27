@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI10-DELIVERABLE-4-DOC-RECONCILIATION>
+  a triage:Finding ;
+  triage:findingId "AI10-DELIVERABLE-4-DOC-RECONCILIATION" ;
+  triage:foundIn triage:AICH-Legacy ;
+  triage:foundAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:title "Phase-AI deliverable 4: cross-host documentation reconciliation (runbooks, checklists, findings ledger) and ADR status flips" ;
+  triage:description "Deliverable 4 required retiring cross-host-setup-runbook.md, cross-host-smoke-checklist.md, and cross-host-findings-ledger.md to stub pointers (forwarding users to phase-AG equivalents), and flipping ADR-033 (HTTP Endpoint Contract), ADR-034 (Minimal Cross-Host HTTPS Transport), ADR-036 (Storage Boundary and Composition Topology), and ADR-037 (Chat Address Identity) status from Proposed to Accepted. All ADRs reflect the finalized phase-AI cross-host architecture decisions." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "important" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:reviewedBy "qa-triage" ;
+  triage:triagedAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:resolvedAt "2026-07-21T09:38:21-07:00"^^xsd:dateTime ;
+  triage:resolutionNotes "Fixed at commit 4f9e576a on feature/pAI-s10-crosshost-proof-closeout, merged to integrate/phase-AI @ b2a76894. Evidence: (1) docs/adr/ADR-033-http-endpoint-contract.md — Status: Accepted, (2) docs/adr/ADR-034-minimal-cross-host-https-transport.md — Status: Accepted, (3) docs/adr/ADR-036-storage-boundary-and-composition-topology.md — Status: Accepted, (4) docs/adr/ADR-037-chat-address-identity.md — Status: Accepted. Cross-host docs (runbooks, checklists, ledgers) retired to stubs or relocated to phase-AG planning. Independently QA-verified." ;
+  triage:verificationCommit "4f9e576ac2476049a6f9909d0470a70ced1c9d0c" ;
+  triage:verificationBranch "integrate/phase-AI" ;
+  triage:verificationHeadSha "b2a76894" ;
+  triage:adrsClosed "ADR-033, ADR-034, ADR-036, ADR-037" .
+
+<urn:atm:triage:worktree/integrate-phase-AI/b2a76894>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-AI" ;
+  triage:path "integrate/phase-AI" ;
+  triage:headSha "b2a76894" ;
+  triage:orderIndex 0 .

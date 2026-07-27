@@ -94,12 +94,12 @@ pub(crate) fn emit_post_send_effects<R>(
             && let Err(error) = append_notification_log(&notification_event(&event))
         {
             warnings.push(WarningEntry::with_code(
-                error.code,
+                error.code(),
                 format!(
                     "warning: notification delivery failed for {}@{}: {error}",
                     recipient.agent, recipient.team
                 ),
-                error.primary_recovery().map(str::to_owned),
+                Some(error.message().to_owned()),
             ));
         }
     }
@@ -239,7 +239,7 @@ where
             Ok(row) => row,
             Err(error) => {
                 warn!(
-                    code = %error.code,
+                    code = %error.code(),
                     recipient = %event.recipient,
                     recipient_team = %event.recipient_team,
                     message_id = %event.message_id,
@@ -255,7 +255,7 @@ where
             Ok(rendered) => rendered,
             Err(error) => {
                 warn!(
-                    code = %error.code,
+                    code = %error.code(),
                     recipient = %event.recipient,
                     recipient_team = %event.recipient_team,
                     message_id = %event.message_id,
@@ -636,6 +636,7 @@ fn post_send_event_from_message(
 ) -> PostSendHookEvent {
     PostSendHookEvent {
         sender: message.envelope.from.clone(),
+        sender_chat_id: message.envelope.source_chat_id.clone(),
         sender_team: message
             .envelope
             .source_team
@@ -663,12 +664,16 @@ fn sender_config_root(metadata: &serde_json::Map<String, Value>) -> Option<PathB
 
 fn post_send_warning(prefix: &str, event: &PostSendHookEvent, error: &AtmError) -> WarningEntry {
     WarningEntry::with_code(
-        error.code,
+        error.code(),
         format!(
             "warning: {prefix} for {}@{} message {} ({}): {}.",
-            event.recipient, event.recipient_team, event.message_id, error.code, error.message
+            event.recipient,
+            event.recipient_team,
+            event.message_id,
+            error.code(),
+            error.message()
         ),
-        error.primary_recovery().map(str::to_owned),
+        Some(error.message().to_owned()),
     )
 }
 
@@ -895,7 +900,7 @@ mod tests {
         HookCancellationToken, POST_SEND_HOOK_MAX_STDOUT_BYTES, PostSendHookResultLevel,
         emit_post_send_effects, finish_abandoned_post_send_hook_stdout_capture,
         hook_matches_recipient, hook_result_log_level, load_post_send_config_for_sender,
-        parse_post_send_hook_result, sender_config_root,
+        parse_post_send_hook_result, post_send_event_from_message, sender_config_root,
     };
     use crate::boundary::{
         self, BuiltInNudgeTemplateKind, BuiltInPostSendDispatch, GraftNudgeTarget,
@@ -920,7 +925,7 @@ mod tests {
     use crate::send::ResolvedRecipient;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::test_support::{EnvGuard, TEST_SENDER};
-    use crate::types::{AgentName, IsoTimestamp, PaneId, TeamName};
+    use crate::types::{AgentName, ChatId, IsoTimestamp, PaneId, TeamName};
 
     struct ConfigLookupRuntime {
         roster_entry: Option<RosterEntry>,
@@ -1224,10 +1229,12 @@ mod tests {
         LogicalMessage::new(
             InboxMessage {
                 from: AgentName::from_validated(TEST_SENDER),
+                source_chat_id: None,
                 text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TeamName::from_validated("test-team")),
+                destination_chat_id: None,
                 summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
                 requires_ack: ack_intent.requires_ack,
@@ -1244,6 +1251,25 @@ mod tests {
             false,
         )
         .expect("logical message")
+    }
+
+    #[test]
+    fn post_send_event_preserves_the_canonical_source_chat_id() {
+        let mut message = logical_message("chat-scoped nudge");
+        let chat_id = "chat-42".parse::<ChatId>().expect("chat id");
+        message.envelope.source_chat_id = Some(chat_id.clone());
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated("test-team"),
+        };
+
+        let event = post_send_event_from_message(&recipient, &message, None);
+
+        assert_eq!(event.sender_chat_id, Some(chat_id));
+        assert_eq!(
+            event.source_address().to_string(),
+            "sender-a:chat-42@test-team"
+        );
     }
 
     fn install_test_home(home_dir: &Path) -> EnvGuard {

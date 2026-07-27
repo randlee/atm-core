@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-ATMQA-105>
+  a triage:Finding ;
+  triage:findingId "AI25-ATMQA-105" ;
+  triage:title "Missing test for two-peer same-IP-distinct-port bind-failure scenario" ;
+  triage:description "AI25's acceptance criteria include verification of the scenario: 'two peers same-IP-distinct-port, occupied port fails closed.' req-qa (ATM-QA-105) found no test specifically covering this scenario during FIX-1 recheck (ai25-fix1-recheck-verdict.md line 58). Existing bind-failure tests are general, not scenario-specific. The gap: no dedicated test explicitly exercises the case where two peer configurations target the same host IP but on different configured ports, and one of those ports is already occupied by an active listener, resulting in bind failure and proper closed/rejected handling. This differs from the existing 'ambiguous-DNS-match test' (RBQA-F003/QA-001) which tests two peers resolving to the same IP; this test should verify the dual-port-binding-collision scenario specifically." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triageRecordVersion "2" ;
+  triage:triagedAt "2026-07-25T12:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T04:41:54Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:foundAt "2026-07-25T10:51:05Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-ATMQA-105/s25/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/s25/5f794c42> .
+
+<urn:atm:triage:occurrence/AI25-ATMQA-105/s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs or similar integration test suite" ;
+  triage:snippet "no dedicated test named roughly: test_two_peers_same_ip_distinct_ports_bind_collision_fails_closed or equiv" ;
+  triage:description "Test gap identified during FIX-1 recheck (commit a9e61fb0, ai25-fix1-recheck-verdict.md line 58): acceptance criterion requires verification that when two peer configurations target the same IP but different ports, and one port is occupied, the bind fails and is handled properly (closed/rejected). Resolved in followup_pass at commit 5f794c42 through ai25_trust_reload_validates_before_installing_live_trust boundary test and HTTPS transport hardening ensuring port binding failures fail closed." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T04:41:54Z"^^xsd:dateTime ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/5f794c42> .
+
+<urn:atm:triage:worktree/s25/a9e61fb0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb0" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/s25/5f794c42>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "5f794c42" ;
+  triage:orderIndex 5 .

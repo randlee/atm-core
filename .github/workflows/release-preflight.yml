@@ -80,8 +80,8 @@ jobs:
           raw='${{ github.event.inputs.version }}'
           tag="$raw"
           [[ "$tag" == v* ]] || tag="v${tag}"
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid version: '$raw' (expected X.Y.Z or vX.Y.Z)" >&2
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "Invalid version: '$raw' (expected strict SemVer X.Y.Z[-prerelease][+build] or v-prefixed)" >&2
             exit 1
           fi
           version="${tag#v}"

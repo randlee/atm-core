@@ -1,0 +1,160 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI25-RSH-001" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "Unbounded DNS resolution can stall the connection-worker pool" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs:495 (resolve_peer_address) calls to_socket_addrs() with no timeout, while every other stage on the same outbound path (connect/handshake/request) is explicitly bounded via HttpsRequestDeadline. A slow/unresponsive DNS server can block the calling thread indefinitely. FOLLOWUP (AICH-S5-FIX-1 recheck, a9e61fb0): NOT genuinely fixed — the bounded thread+mpsc::sync_channel+recv_timeout pattern was applied only to resolve_peer_addresses (plural, ~490-522), a helper used solely for literal-IP-to-hostname disambiguation inside resolve_peer_authority. The actual per-delivery resolver resolve_peer_address (singular, ~524-532), which HttpsTransport::deliver() calls at line 171 on every outbound peer delivery and every reconciliation replay (runtime_health.rs:681), remains completely unbounded. 4 independent reviewers converged on this exact fact during the recheck: rust-service-hardening-agent (Critical, unfixed), rust-best-practices-agent (cause-discarding also unfixed on this function, see AI25-RBP-F001), req-qa (ATM-QA-101, Blocking), arch-qa (consistent scope). RSH-002/RSH-003 sub-findings (O(N) fan-out only per-lookup bounded not aggregate-bounded; 5s reconciliation deadline still doesn't cover the resolver call inside deliver()) remain open for the identical root cause. The earlier fixed_partial/fixedOn-pAI-s26 status recorded on this finding was incorrect and is retracted by this update — the finding was never actually fixed on pAI-s25 or forward." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "AI25-RSH" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-25T10:54:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/5> ;
+  triage:promoteTo <urn:atm:triage:worktree/s25/0265c94f> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 488 ;
+  triage:snippet "format!(\"{}:{}\", peer.host, peer.https_port)\n        .to_socket_addrs()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 497 ;
+  triage:snippet "format!(\"{host}:{port}\")\n        .to_socket_addrs()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 526 ;
+  triage:snippet ".to_socket_addrs()" ;
+  triage:description "resolve_peer_address (singular) still calls to_socket_addrs() directly with no timeout — the bounded fix (FIX-1, a9e61fb0) was applied only to resolve_peer_addresses (plural)." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 171 ;
+  triage:snippet "let address = resolve_peer_address(&host, peer.https_port.get())?" ;
+  triage:description "HttpsTransport::deliver() hot-path call site to the unbounded resolve_peer_address; also reached via reconciliation replay at runtime_health.rs:681." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265> .
+
+<urn:atm:triage:occurrence/AI25-RSH-001/pAI-s25/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 534 ;
+  triage:snippet "resolve_peer_address now builds a resolver-only TrustedPeer and delegates to resolve_peer_addresses(&peer, HTTPS_TIMEOUT), inheriting the bounded thread+mpsc::sync_channel+recv_timeout pattern" ;
+  triage:description "FIX-2 (0265c94f) closed the actual root cause: resolve_peer_address (singular, the deliver()/reconciliation hot-path resolver at line 171/runtime_health.rs:681) delegates entirely to the already-bounded resolve_peer_addresses instead of calling to_socket_addrs() unbounded. Verified via git diff a9e61fb0..b520061e on crates/atm-daemon/src/https_transport.rs; same commit also converted 4 adjacent map_err(|_source| ...) discard sites (PEM load, TcpStream::connect_timeout, ServerName::try_from, ClientConnection::new) to daemon_unavailable_with_cause, closing AI25-RBP-F001 on this branch too." ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "0265c94f" ;
+  triage:occursIn <urn:atm:triage:worktree/s25/0265c94f> .
+
+<urn:atm:triage:worktree/pAI-s25-fix1/a9e61fb081de28d706071981e54d179c6e1f9265>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "a9e61fb081de28d706071981e54d179c6e1f9265" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s21pre/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25/b49f08407b8f5b150ae9210f64f4f34aa6beb152>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f08407b8f5b150ae9210f64f4f34aa6beb152" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pAI-s26/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s26-peer-write-deadline" ;
+  triage:path "feature/pAI-s26-peer-write-deadline" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pAI-s27/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s27-peer-delivery-observability" ;
+  triage:path "feature/pAI-s27-peer-delivery-observability" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pAI-s28/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pAI-s29/b5eec1bf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:path "feature/pAI-s29-crosshost-smoke-rerun" ;
+  triage:headSha "b5eec1bf" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pAI-s30/77252eca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s30-semver-http-compatibility" ;
+  triage:path "feature/pAI-s30-semver-http-compatibility" ;
+  triage:headSha "77252eca" ;
+  triage:orderIndex 10 .

@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI25-RBQA-F002>
+  a triage:Finding ;
+  triage:findingId "AI25-RBQA-F002" ;
+  triage:foundAt "2026-07-25T09:19:48Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S5 ;
+  triage:title "No mechanical boundary-enforcement gate for reload/startup validation parity" ;
+  triage:description "The repo already has AST-based single-call-site guards for other invariants (AI.12 routing, AI.16 reconciliation) but none covering 'every trust-install path must route through the retained validator' -- exactly the class of gap that produced AI25-RBQA-F001 (refresh_https_trust bypassing validate_enabled_peer_configuration). This is a process/tooling-gap finding, not a code defect itself. FOLLOWUP (AICH-S5-FIX-1 recheck, a9e61fb0): still open. FIX-1 added a gate but it is a substring/string-match check, not an AST visitor like the AI.12/AI.16 precedents this finding calls for -- confirmed independently by ruthless-boundary-qa and arch-qa (ARCH-002) during the recheck. A substring check does not reliably catch call-site refactors (renames, re-exports, indirection) the way an AST-based single-call-site guard does, so the class of gap this finding describes is not yet mechanically closed." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "process/tooling" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-26T16:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-26T16:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:triageRecordVersion 2 ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9fa> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s22-loopback-self-send-exemption/a5aa6813> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137c> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s24-host-qualified-ack-receipt/c326cbe7> ;
+  triage:fixedOn <urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f0840> ;
+  triage:fixedBranch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:notes "Non-repeatable finding first introduced by the AI.25/AICH-S5 work. Finding is a structural/process gap (missing lint/gate mechanism), not a concrete code occurrence. AST-based guard patterns exist for AI.12 (canonical_write_router_has_one_host_routing_decision) and AI.16 (reconciliation_delivery_calls) in crates/atm-architecture/tests/boundary_enforcement.rs. Similar guard needed to enforce 'every trust-install path must route through validate_enabled_peer_configuration'. Gap exists on all branches where trust-install path exists (s21+). Dispatch requires creation of new boundary-enforcement test gate." .
+
+<urn:atm:triage:worktree/pAI-s21pre-crosshost-evidence-harness/42fbd9fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:path "feature/pAI-s21pre-crosshost-evidence-harness" ;
+  triage:headSha "42fbd9fa" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pAI-s22-loopback-self-send-exemption/a5aa6813>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:path "feature/pAI-s22-loopback-self-send-exemption" ;
+  triage:headSha "a5aa6813" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pAI-s23-crosshost-shared-write-path/c528137c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "c528137c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pAI-s24-host-qualified-ack-receipt/c326cbe7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
+  triage:headSha "c326cbe7" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pAI-s25-peer-authority-resolution/b49f0840>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s25-peer-authority-resolution" ;
+  triage:path "feature/pAI-s25-peer-authority-resolution" ;
+  triage:headSha "b49f0840" ;
+  triage:orderIndex 5 .

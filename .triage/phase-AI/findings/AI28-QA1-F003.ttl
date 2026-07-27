@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-QA1-F003>
+  a triage:Finding ;
+  triage:findingId "AI28-QA1-F003" ;
+  triage:aliasIds "RBQA-AI28-2" ;
+  triage:title "Single-flight contention in acquire() uses 1ms polling sleep instead of event-driven wake" ;
+  triage:description "The acquire() function in the bounded peer recovery coordinator uses a 1ms polling sleep loop to wait for a free slot when the coordinator is at capacity (all 256 slots in use). The implementation is: loop { sleep(1ms); check if slot available; break if yes; }. This is functionally correct but not optimal: under sustained contention (e.g., many peers queuing for recovery simultaneously), threads busy-poll with busy-waits at 1ms intervals, consuming unnecessary CPU and adding latency spikes. A better approach would be to use event-driven synchronization primitives (condvar, parking_lot, or crossbeam channel) to park threads until a slot becomes available, avoiding polling overhead. The issue is cosmetic and currently untested (tests don't exercise the contention path), making it a Minor finding rather than blocking. However, it should be addressed to improve coordinator efficiency and reduce CPU usage under load. Fix recommended: replace the polling sleep loop with proper synchronization primitives (e.g., Condvar::wait() released by release() when a slot is freed) or use a parking_lot::Mutex with ParkerThread parking/unparking. This matches the pattern already correctly used in sibling code paths." ;
+  triage:category "QA" ;
+  triage:severity "Minor" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a. acquire()'s waiting logic (lines 140-159) now uses self.slots.1.wait_timeout(slots, remaining) (a Condvar), not a 1ms polling sleep loop." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-QA1-F003/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-QA1-F003/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "acquire() single-flight loop: loop { sleep(Duration::from_millis(1)); if capacity available { break; } }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Replaced with Condvar::wait_timeout. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

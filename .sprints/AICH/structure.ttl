@@ -1,0 +1,19 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:PhaseAICH a triage:Phase .
+
+triage:AICH-S1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 1 ; triage:criteria "docs/plans/phase-ai/sprint-ai-21-pre-crosshost-evidence-harness.md" .
+triage:AICH-S2 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 2 ; triage:criteria "docs/plans/phase-ai/sprint-ai-22-loopback-self-send-exemption.md" .
+triage:AICH-S3 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 3 ; triage:criteria "docs/plans/phase-ai/sprint-ai-23-crosshost-shared-write-path.md" .
+triage:AICH-S4 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 4 ; triage:criteria "docs/plans/phase-ai/sprint-ai-24-host-qualified-ack-receipt.md" .
+triage:AICH-S5 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 5 ; triage:criteria "docs/plans/phase-ai/sprint-ai-25-peer-authority-resolution.md" .
+triage:AICH-S6 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 6 ; triage:criteria "docs/plans/phase-ai/sprint-ai-26-peer-write-deadline.md" .
+triage:AICH-S7 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 7 ; triage:criteria "docs/plans/phase-ai/sprint-ai-27-peer-delivery-observability.md" .
+triage:AICH-S8 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 8 ; triage:criteria "docs/plans/phase-ai/sprint-ai-28-bounded-peer-recovery.md" .
+triage:AICH-S9 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 9 ; triage:criteria "docs/plans/phase-ai/sprint-ai-30-semver-http-compatibility.md" .
+triage:AICH-S10 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 10 ; triage:criteria "docs/plans/phase-ai/sprint-ai-29-crosshost-smoke-rerun.md" .
+
+triage:AICH-S11 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 11 ; triage:criteria "docs/plans/phase-ai/findings-closeout.md" ; triage:branch "fix/findings-closeout" .
+
+triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .

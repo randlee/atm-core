@@ -17,8 +17,7 @@ use crate::boundary::{
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot};
-use crate::error::{AtmError, AtmErrorKind};
-use crate::error_codes::AtmErrorCode;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
@@ -33,7 +32,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 
-fn message(
+pub(super) fn message(
     from: &str,
     message_id: AtmMessageId,
     parent_message_id: Option<AtmMessageId>,
@@ -42,10 +41,12 @@ fn message(
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: from.parse::<AgentName>().expect("agent"),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+        destination_chat_id: None,
         summary: None,
         message_id: Some(message_id),
         requires_ack: ack_intent.requires_ack,
@@ -100,13 +101,34 @@ fn assert_recovered_payload_texts(
     );
 }
 
+#[test]
+fn warning_render_keeps_catalog_recovery_singleton() {
+    let error = AtmError::new(
+        AtmErrorCode::ConfigParseFailed,
+        "post-send hook configuration is invalid",
+    );
+    let warning = WarningEntry::with_code(
+        error.code(),
+        format!(
+            "warning: post-send hook config lookup failed: {}.",
+            error.message()
+        ),
+        Some(error.message()),
+    );
+
+    assert_eq!(warning.render().matches("Recovery:").count(), 1);
+}
+
 pub(super) struct TestRuntime {
     commit_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
-    roster_member_missing: bool,
+    pub(super) roster_member_missing: bool,
     pub(super) appended_messages: Mutex<Vec<InboxMessage>>,
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+    pub(super) persisted_records: Mutex<Vec<Message>>,
+    pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
 pub(super) struct RecordingPostSendEmitter {
@@ -146,6 +168,9 @@ impl TestRuntime {
             roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
+            persisted_records: Mutex::new(Vec::new()),
+            mailbox_rows: Mutex::new(Vec::new()),
+            persisted_states: Mutex::new(Vec::new()),
         }
     }
 }
@@ -163,12 +188,7 @@ impl PostSendHookEmitter for RecordingPostSendEmitter {
             .expect("post-send emitter lock")
             .push(dispatch.clone());
         if let Some(code) = self.fail_code {
-            return Err(AtmError::new_with_code(
-                code,
-                AtmErrorKind::DaemonUnavailable,
-                "test post-send emitter failure",
-            )
-            .with_recovery("Repair the test post-send emitter and retry."));
+            return Err(AtmError::for_code(code));
         }
         Ok(match dispatch.target {
             PostSendBuiltInTarget::LocalTmux(_) => PostSendEmissionPath::LocalTmux,
@@ -281,32 +301,48 @@ impl RetainedMailboxRuntime for TestRuntime {
         _agent: &AgentName,
         _limit: Option<usize>,
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
-        Ok(Vec::new())
+        Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())
     }
 
     fn load_message_record(
         &self,
         _home_dir: &Path,
-        _team: &TeamName,
-        _agent: &AgentName,
-        _message_key: &MessageKey,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &MessageKey,
     ) -> Result<Option<Message>, AtmError> {
-        Ok(None)
+        Ok(self
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .iter()
+            .find(|record| {
+                &record.team == team && &record.agent == agent && &record.message_key == message_key
+            })
+            .cloned())
     }
 
-    fn persist_message_record(&self, _record: Message) -> Result<(), AtmError> {
+    fn persist_message_record(&self, record: Message) -> Result<(), AtmError> {
         if let Some(message) = self.commit_error_message {
             return Err(AtmError::mailbox_write(message));
         }
+        self.persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .push(record);
         Ok(())
     }
 
-    fn persist_message_state(&self, _state: MailMessageState) -> Result<(), AtmError> {
+    fn persist_message_state(&self, state: MailMessageState) -> Result<(), AtmError> {
+        self.persisted_states
+            .lock()
+            .expect("persisted states lock")
+            .push(state);
         Ok(())
     }
 }
 
-fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
+pub(super) fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
     DeliveryRecipientSnapshot {
         agent: AgentName::from_validated("recipient"),
         team: TeamName::from_validated(TEST_TEAM),
@@ -318,14 +354,16 @@ fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot 
     }
 }
 
-fn outbound_message() -> InboxMessage {
+pub(super) fn outbound_message() -> InboxMessage {
     let ack_intent = AckIntentFields::not_required();
     InboxMessage {
         from: AgentName::from_validated(TEST_SENDER),
+        source_chat_id: None,
         text: "hello".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("hello".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,
@@ -339,30 +377,29 @@ fn outbound_message() -> InboxMessage {
         extra: Map::new(),
     }
 }
-
 pub(super) fn send_request(home_dir: &Path) -> SendRequest {
-    SendRequest {
-        home_dir: home_dir.to_path_buf(),
-        current_dir: home_dir.to_path_buf(),
-        caller_identity: AgentName::from_validated(TEST_SENDER),
-        caller_team: TeamName::from_validated(TEST_TEAM),
-        to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
-        message_source: SendMessageSource::Inline("hello".to_string()),
-        summary_override: Some("hello".to_string()),
-        requires_ack: false,
-        task_id: Some("task-123".parse().expect("task id")),
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        dry_run: false,
-    }
+    SendRequest::new(
+        home_dir.to_path_buf(),
+        home_dir.to_path_buf(),
+        AgentName::from_validated(TEST_SENDER),
+        &format!("recipient@{TEST_TEAM}"),
+        TeamName::from_validated(TEST_TEAM),
+        SendMessageSource::Inline("hello".to_string()),
+        Some("hello".to_string()),
+        false,
+        Some("task-123".parse().expect("task id")),
+        false,
+    )
+    .expect("test send request")
 }
 
 fn self_addressed_send_request(home_dir: &Path) -> SendRequest {
     let mut request = send_request(home_dir);
-    request.to = format!("{TEST_SENDER}@{TEST_TEAM}")
-        .parse()
-        .expect("self address");
+    request.to = Some(
+        format!("{TEST_SENDER}@{TEST_TEAM}")
+            .parse()
+            .expect("self address"),
+    );
     request
 }
 
@@ -379,9 +416,8 @@ fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
 }
 
 #[derive(Default)]
-struct RecordingObservability {
-    // Mutex required: tests may emit delivery-policy events from multiple
-    // runtime calls before assertions snapshot the collected sequence.
+pub(super) struct RecordingObservability {
+    // Mutex records concurrent delivery-policy events for deterministic assertions.
     events: Mutex<Vec<CommandEvent>>,
 }
 
@@ -427,6 +463,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
         &inbox_path,
         &outbound,
         false,
+        None,
     )
     .expect("sqlite fallback recovery");
 
@@ -457,6 +494,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         &inbox_path,
         &outbound,
         false,
+        None,
     )
     .expect("sqlite fallback recovery");
 
@@ -469,6 +507,85 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         &result.original_message,
         result.companion_message.as_ref().expect("companion"),
         &outbound.text,
+    );
+}
+
+#[test]
+fn duplicate_ulid_with_different_immutable_payload_is_rejected_without_overwrite() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+        None,
+    )
+    .expect("original write");
+
+    let mut conflicting = original.clone();
+    conflicting.text = "different immutable payload".to_string();
+    let error = persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &conflicting,
+        false,
+        None,
+    )
+    .expect_err("mismatched duplicate ULID must fail");
+
+    assert_eq!(error.code(), AtmErrorCode::MessageIdConflict);
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("persisted records lock");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].envelope.text, original.text);
+}
+
+#[test]
+fn duplicate_ulid_with_same_immutable_payload_is_idempotent() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+    let recipient = delivery_snapshot(DeliveryHarnessPath::NonClaude);
+    let original = outbound_message();
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+        None,
+    )
+    .expect("original write");
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &recipient,
+        &inbox_path,
+        &original,
+        false,
+        None,
+    )
+    .expect("same immutable replay");
+
+    assert_eq!(
+        runtime
+            .persisted_records
+            .lock()
+            .expect("persisted records lock")
+            .len(),
+        1
     );
 }
 
@@ -508,10 +625,12 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
     let ack_intent = AckIntentFields::not_required();
     let companion = InboxMessage {
         from: AgentName::from_validated("atm-system"),
+        source_chat_id: None,
         text: "sqlite failed".to_string(),
         timestamp: IsoTimestamp::now(),
         read: false,
         source_team: Some(TeamName::from_validated(TEST_TEAM)),
+        destination_chat_id: None,
         summary: Some("sqlite failed".to_string()),
         message_id: Some(AtmMessageId::new()),
         requires_ack: ack_intent.requires_ack,
@@ -753,15 +872,11 @@ fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
     )
     .expect_err("empty atm roster must fail");
 
-    assert!(error.is_agent_not_found());
-    assert_eq!(
-        error.message,
-        format!("agent 'recipient' was not found in team '{TEST_TEAM}'")
-    );
-    assert_eq!(
-        error.primary_recovery(),
-        Some("Update the team membership or target a different recipient.")
-    );
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AgentNotFound);
+    assert!(error.message().starts_with(&format!(
+        "agent 'recipient' was not found in team '{TEST_TEAM}'"
+    )));
+    assert!(error.message().contains("Recovery:"));
     assert!(
         runtime
             .appended_messages
@@ -791,11 +906,10 @@ fn self_addressed_plain_send_is_rejected_before_persistence() {
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed send must fail");
 
-    assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         error
-            .message
+            .message()
             .contains("self-addressed messages are invalid ATM input")
     );
     assert!(
@@ -829,8 +943,7 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
     )
     .expect_err("self-addressed task send must fail");
 
-    assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -854,20 +967,21 @@ fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
     let mut request = self_addressed_send_request(tempdir.path());
-    request.to = format!(
-        "{}@{}",
-        TEST_SENDER.to_ascii_uppercase(),
-        TEST_TEAM.to_ascii_uppercase()
-    )
-    .parse()
-    .expect("case-variant self address");
+    request.to = Some(
+        format!(
+            "{}@{}",
+            TEST_SENDER.to_ascii_uppercase(),
+            TEST_TEAM.to_ascii_uppercase()
+        )
+        .parse()
+        .expect("case-variant self address"),
+    );
     request.dry_run = true;
 
     let error = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
         .expect_err("self-addressed dry-run must fail");
 
-    assert!(error.is_validation());
-    assert_eq!(error.code, AtmErrorCode::SelfAddressedSendInvalid);
+    assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert!(
         runtime
             .appended_messages
@@ -906,14 +1020,14 @@ fn send_request_new_rejects_invalid_recipient_before_command_execution() {
     )
     .expect_err("invalid address");
 
-    assert!(error.message.contains("agent name"));
+    assert!(error.message().contains("agent name"));
 }
 
 #[test]
 fn send_request_new_rejects_invalid_caller_team_before_command_execution() {
     let error: AtmError = "../evil".parse::<TeamName>().expect_err("invalid team");
 
-    assert!(error.message.contains("team name"));
+    assert!(error.message().contains("team name"));
 }
 
 #[test]
@@ -932,7 +1046,7 @@ fn resolve_recipient_rejects_invalid_alias_target() {
     )
     .expect_err("invalid alias target");
 
-    assert!(error.is_address());
+    assert!(error.code() == crate::error_codes::AtmErrorCode::AddressParseFailed);
 }
 
 #[test]
@@ -983,8 +1097,6 @@ fn prepare_threaded_message_rejects_non_originating_sender() {
         Some(root_id),
         Some(ThreadMode::Supersede),
     );
-
     let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
-
-    assert!(error.message.contains("original sender"));
+    assert!(error.message().contains("original sender"));
 }

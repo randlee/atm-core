@@ -21,9 +21,9 @@ the same read/write handlers. Cross-host code is transport-only.
 | --- | --- |
 | Local client transport | Unix HTTP/UDS plus supported loopback HTTP/TCP; Windows loopback HTTP/TCP only |
 | Remote transport | HTTPS/TCP to the same daemon router |
-| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, `/message/{id}/ack`, and `/doctor` endpoints; teams routes are an accepted Phase AI waiver |
+| Public application routes | resource-oriented `/v1/atm/messages`, `/message/{id}`, `/message/{id}/read`, and `/doctor` endpoints; teams routes are an accepted Phase AI waiver |
 | Published interface | checked-in OpenAPI 3.1 plus generated JSON; a future web UI is a client |
-| Ack | `POST /v1/atm/message/{id}/ack` builds a write with `acknowledges_message_id`; receiver applies the transition |
+| Ack | `POST /v1/atm/messages` builds the same write with `acknowledges_message_id`; receiver applies the transition |
 | Agent context | Optional `chat-id` is a separately persisted source/destination address component; agent-facing form is `agent:chat-id` |
 | Host routing | One post-write router; empty host emits local nudge, every present host uses HTTPS |
 | Security | Storage-trait-managed enabled interfaces, local certificate, mTLS, exact trusted peer fingerprint; SQLite is the initial backend |
@@ -181,8 +181,8 @@ integration; they do not alter it.
 | AI.21 | `feature/pAI-s21-hermes-closure` | Four Hermes end-to-end stories have retained production evidence |
 | AI.21-pre | `feature/pAI-s21pre-crosshost-evidence-harness` | Supported Python/XHTML peer-smoke harness and explicit test-only plaintext wire profile |
 | AI.22 | `feature/pAI-s22-loopback-self-send-exemption` | Host-qualified destinations bypass only the unqualified identity self-send guard; advertised-IP is the required same-host TCP proof |
-| AI.23 | `feature/pAI-s23-crosshost-shared-write-path` | Local CLI, own-IP, and peer traffic converge at one HTTP `WriteRequest` endpoint, dispatcher, persistence method, and post-write router |
-| AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route |
+| AI.23 | `feature/pAI-s23-crosshost-shared-write-path` | Local CLI, own-IP, and peer traffic converge at one HTTP `WriteRequest` endpoint, dispatcher, persistence method, and post-write router; release `1.3.2-beta-23` |
+| AI.24 | `feature/pAI-s24-host-qualified-ack-receipt` | Advertised-IP host-qualified ACK reply is persisted, readable, and nudged through the canonical peer route; release `1.3.2-beta-24` |
 | AI.25 | `feature/pAI-s25-peer-authority-resolution` | DNS-backed hostname/pin peer authority and live trust refresh |
 | AI.26 | `feature/pAI-s26-peer-write-deadline` | One propagated peer-write deadline and cancellation contract |
 | AI.27 | `feature/pAI-s27-peer-delivery-observability` | Truthful confirmed/unconfirmed delivery result and terminal events |

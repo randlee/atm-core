@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI28-RSH-001>
+  a triage:Finding ;
+  triage:findingId "AI28-RSH-001" ;
+  triage:title "256-slot capacity cap enforced in acquire() but not in schedule_startup_recovery()" ;
+  triage:description "The bounded peer recovery coordinator enforces a hard capacity limit of 256 concurrent recovery slots in the acquire() method, but the schedule_startup_recovery() path does not check this limit before scheduling recovery for startup-backlog peers. An operator with more than 256 trusted peers that have undelivered startup backlog can trigger schedule_startup_recovery() calls that exceed the coordinator's own stated bound. This creates an inconsistency between the documented capacity model (max 256 slots) and the actual runtime behavior (unbounded under startup recovery). This becomes a production concern at scale when multiple hosts restart with large peer rosters and attempt synchronized recovery. Fix required: apply the same capacity check (current_count < 256) in schedule_startup_recovery() before accepting a startup recovery task, and return an error or queue for retry if capacity is exhausted." ;
+  triage:category "Service-Hardening" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:closedAt "2026-07-26T22:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Independently re-verified against real code on feature/pAI-s28-bounded-peer-recovery current head c0445b1a (not accepted from arch-ctm self-report). schedule_startup_recovery()'s path now enforces the same 256-slot capacity gate as acquire(): peer_drain_coordinator.rs line ~442, `if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(&peer.host) { return Err(...) }`, with MAX_PEER_DRAIN_SLOTS: usize = 256 defined at line 28." ;
+  triage:foundIn triage:AICH-S8 ;
+  triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-25T09:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI28-RSH-001/pAI-s28/1> ;
+  triage:openOn <urn:atm:triage:worktree/pAI-s28/7163648b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:occurrence/AI28-RSH-001/pAI-s28/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 1 ;
+  triage:snippet "schedule_startup_recovery() does not check capacity < 256 before accepting recovery task" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "c0445b1a" ;
+  triage:note "Capacity gate confirmed applied uniformly. Verified on current head c0445b1a." ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s28/7163648b> .
+
+<urn:atm:triage:worktree/pAI-s28/7163648b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:path "feature/pAI-s28-bounded-peer-recovery" ;
+  triage:headSha "7163648b" ;
+  triage:orderIndex 28 ;
+  triage:status "open" .

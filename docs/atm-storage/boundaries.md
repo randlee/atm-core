@@ -2,6 +2,21 @@
 
 This document records shared storage-neutral contracts owned by `atm-storage`.
 
+## PeerConfigStore
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-storage/peer-config-store.toml](../../boundaries/atm-storage/peer-config-store.toml)
+
+Purpose:
+- own backend-neutral durable records for enabled HTTPS interfaces, the local
+  certificate reference, and exact trusted peers
+
+Rules:
+- this contract must not perform socket I/O, TLS, delivery, retry, or message
+  state management
+- `atm-runtime`, `atm-daemon-bootstrap`, and the CLI consume the contract;
+  concrete backends implement it without leaking backend details upstream
+
 ## NudgeTemplateOverrideStore
 
 Canonical machine-readable boundary source:

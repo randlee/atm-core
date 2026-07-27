@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "sprint": "AI.15",
+  "evidence_class": "physical-macos-build",
+  "physical_peer_pair": false,
+  "physical_windows_hardware": false,
+  "marker": "This is a real macOS release build of the same repository commit. It is NOT Mac<->Windows peer-pair evidence and makes no claim about physical Windows hardware.",
+  "commit": "436493ab",
+  "host": {
+    "uname": "Darwin arm64",
+    "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)"
+  },
+  "build": {
+    "command": ["cargo", "build", "--release", "-p", "agent-team-mail"],
+    "profile": "release",
+    "exit_code": 0,
+    "finished_line": "Finished `release` profile [optimized] target(s) in 13.32s",
+    "binary": "target/release/atm",
+    "binary_version_command": ["./target/release/atm", "--version"],
+    "binary_version": "atm 1.3.1"
+  },
+  "meaning": "The migrated loopback-TCP graft post-send transport (no interprocess::local_socket on any platform) compiles and links into the release atm binary on physical macOS. Physical peer-pair execution across a macOS and a Windows host remains open (AI10-WINDOWS-001, AI14-QA1-EVIDENCE-GAP)."
+}

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::address::AgentAddress;
+use crate::address::{AgentAddress, MessageParticipantFilter, ParticipantDirection};
 use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox::source::resolve_target;
@@ -17,7 +17,7 @@ use crate::schema::{AtmMessageId, InboxMessage};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{
-    AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+    AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
     SourceIndex, TaskId, TeamName,
 };
 use metadata_selection::{
@@ -38,6 +38,7 @@ pub struct MailboxQueryFields {
     pub(crate) seen_state_filter: bool,
     pub(crate) message_id_filter: Option<AtmMessageId>,
     pub(crate) sender_filter: Option<AgentName>,
+    pub(crate) participant_filter: Option<MessageParticipantFilter>,
     pub(crate) timestamp_filter: Option<IsoTimestamp>,
     pub(crate) task_filter: Option<TaskId>,
     pub(crate) contains_filter: Option<String>,
@@ -69,16 +70,13 @@ impl MailboxQueryFields {
             seen_state_filter,
             message_id_filter: message_id_filter
                 .map(|value| {
-                    value.parse::<AtmMessageId>().map_err(|source| {
+                    value.parse::<AtmMessageId>().map_err(|_source| {
                         AtmError::validation(format!("invalid message id: {value}"))
-                            .with_recovery(
-                                "Provide a valid ULID-formatted --message-id before retrying the mailbox command.",
-                            )
-                            .with_source(source)
                     })
                 })
                 .transpose()?,
             sender_filter: sender_filter.map(str::parse).transpose()?,
+            participant_filter: None,
             timestamp_filter,
             task_filter: task_filter.map(str::parse).transpose()?,
             contains_filter,
@@ -140,20 +138,26 @@ impl PeekQuery {
         contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
+        let mut mailbox = build_mailbox_query_fields(
+            home_dir,
+            current_dir,
+            target_address,
+            selection_mode,
+            seen_state_filter,
+            message_id_filter,
+            sender_filter,
+            timestamp_filter,
+            task_filter,
+            contains_filter,
+            timeout_secs,
+        )?;
+        mailbox.participant_filter = Some(MessageParticipantFilter {
+            agent: caller_identity.clone(),
+            chat_id: None,
+            direction: ParticipantDirection::To,
+        });
         Ok(Self {
-            mailbox: build_mailbox_query_fields(
-                home_dir,
-                current_dir,
-                target_address,
-                selection_mode,
-                seen_state_filter,
-                message_id_filter,
-                sender_filter,
-                timestamp_filter,
-                task_filter,
-                contains_filter,
-                timeout_secs,
-            )?,
+            mailbox,
             caller_identity,
             caller_team,
         })
@@ -165,6 +169,8 @@ impl PeekQuery {
 pub struct ReadQuery {
     pub(crate) mailbox: MailboxQueryFields,
     pub(crate) caller_identity: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) caller_chat_id: Option<ChatId>,
     pub(crate) caller_team: TeamName,
     pub(crate) seen_state_update: bool,
 }
@@ -202,6 +208,7 @@ impl ReadQuery {
                 timeout_secs,
             )?,
             caller_identity,
+            caller_chat_id: None,
             caller_team,
             seen_state_update,
         })
@@ -231,6 +238,21 @@ impl ReadQuery {
         self.mailbox.timeout_secs
     }
 
+    pub fn caller_chat_id(&self) -> Option<&ChatId> {
+        self.caller_chat_id.as_ref()
+    }
+
+    #[must_use]
+    pub fn with_caller_chat_id(mut self, caller_chat_id: Option<ChatId>) -> Self {
+        self.mailbox.participant_filter = Some(MessageParticipantFilter {
+            agent: self.caller_identity.clone(),
+            chat_id: caller_chat_id.clone(),
+            direction: ParticipantDirection::To,
+        });
+        self.caller_chat_id = caller_chat_id;
+        self
+    }
+
     pub fn with_selection_mode(mut self, selection_mode: ReadSelection) -> Self {
         self.mailbox.selection_mode = selection_mode;
         self
@@ -240,16 +262,14 @@ impl ReadQuery {
 pub(crate) fn normalize_contains_filter(
     contains_filter: Option<&str>,
 ) -> Result<Option<String>, AtmError> {
-    match contains_filter.map(str::trim).filter(|value| !value.is_empty()) {
-        Some(value) if value.len() > MAX_CONTAINS_FILTER_LEN => Err(
-            AtmError::validation(format!(
-                "contains filter exceeds the {}-byte maximum",
-                MAX_CONTAINS_FILTER_LEN
-            ))
-            .with_recovery(
-                "Shorten the `--contains` filter before retrying so ATM can keep daemon-side substring scans bounded.",
-            ),
-        ),
+    match contains_filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) if value.len() > MAX_CONTAINS_FILTER_LEN => Err(AtmError::validation(format!(
+            "contains filter exceeds the {}-byte maximum",
+            MAX_CONTAINS_FILTER_LEN
+        ))),
         Some(value) => Ok(Some(value.to_ascii_lowercase())),
         None => Ok(None),
     }
@@ -260,8 +280,7 @@ fn validate_timeout_secs(timeout_secs: Option<u64>) -> Result<Option<u64>, AtmEr
         Some(value) if value > MAX_TIMEOUT_SECS => Err(AtmError::validation(format!(
             "timeout exceeds the {} second maximum",
             MAX_TIMEOUT_SECS
-        ))
-        .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")),
+        ))),
         _ => Ok(timeout_secs),
     }
 }
@@ -362,6 +381,7 @@ fn peek_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let synthesized = ReadQuery {
         mailbox: query.mailbox,
         caller_identity: query.caller_identity,
+        caller_chat_id: None,
         caller_team: query.caller_team,
         seen_state_update: false,
     };
@@ -803,11 +823,7 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Repair or reload the ATM roster, or read a different mailbox target.",
-            ),
-        );
+        return Err(AtmError::agent_not_found(&target.agent, &target.team));
     }
 
     Ok(())
@@ -827,10 +843,7 @@ fn ensure_owner_only_read_target(
         return Err(AtmError::validation(format!(
             "owner-only `atm read` may not target '{}' in team '{}'; run the command as the mailbox owner or use `atm peek --as` for inspection",
             target.agent, target.team
-        ))
-        .with_recovery(
-            "Rerun `atm read` without a mailbox target as the owner, or use `atm peek --as <member>` for non-mutating inspection.",
-        ));
+        )));
     }
 
     Ok(())
@@ -839,11 +852,10 @@ fn ensure_owner_only_read_target(
 fn message_key_for_classified(
     message: &ClassifiedMessage,
 ) -> Result<boundary::MessageKey, AtmError> {
-    let message_id = message.envelope.message_id.ok_or_else(|| {
-        AtmError::validation("read message is missing a message_id").with_recovery(
-            "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
-        )
-    })?;
+    let message_id = message
+        .envelope
+        .message_id
+        .ok_or_else(|| AtmError::validation("read message is missing a message_id"))?;
     Ok(boundary::MessageKey::from(message_id))
 }
 
@@ -989,8 +1001,8 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
-        AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId,
-        TeamName,
+        AgentName, ChatId, CommandAction, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
+        TaskId, TeamName,
     };
 
     fn selection_state_for_source_files(
@@ -1008,6 +1020,12 @@ mod tests {
             let selected = classified_all
                 .iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
+                .filter(|message| {
+                    crate::read::filters::matches_participant_filter(
+                        message,
+                        query.mailbox.participant_filter.as_ref(),
+                    )
+                })
                 .cloned()
                 .collect();
             let logical_current = metadata_selection::logical_current_messages(classified_all);
@@ -1020,6 +1038,7 @@ mod tests {
             metadata_selection::apply_metadata_only_filters(
                 logical_current,
                 query.mailbox.sender_filter.as_ref(),
+                query.mailbox.participant_filter.as_ref(),
                 query.mailbox.timestamp_filter,
                 query.mailbox.task_filter.as_ref(),
             ),
@@ -1043,12 +1062,19 @@ mod tests {
             return classified
                 .into_iter()
                 .filter(|message| message.envelope.message_id == Some(message_id))
+                .filter(|message| {
+                    crate::read::filters::matches_participant_filter(
+                        message,
+                        query.mailbox.participant_filter.as_ref(),
+                    )
+                })
                 .collect();
         }
         let filtered = crate::read::filters::apply_contains_filter(
             metadata_selection::apply_metadata_only_filters(
                 metadata_selection::logical_current_messages(classified),
                 query.mailbox.sender_filter.as_ref(),
+                query.mailbox.participant_filter.as_ref(),
                 query.mailbox.timestamp_filter,
                 query.mailbox.task_filter.as_ref(),
             ),
@@ -1220,10 +1246,12 @@ mod tests {
     ) -> InboxMessage {
         InboxMessage {
             from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp,
             read,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: None,
             message_id: Some(message_id),
             requires_ack: false,
@@ -1455,6 +1483,71 @@ mod tests {
         .expect("read query")
     }
 
+    #[test]
+    fn chat_qualified_read_filters_source_and_metadata_surfaces_identically() {
+        let chat_a = "chat-a".parse::<ChatId>().expect("chat id");
+        let chat_b = "chat-b".parse::<ChatId>().expect("chat id");
+        let first_id = AtmMessageId::new();
+        let second_id = AtmMessageId::new();
+        let mut first = message("for chat a", first_id, None, None, false);
+        first.destination_chat_id = Some(chat_a.clone());
+        let mut second = message("for chat b", second_id, None, None, false);
+        second.destination_chat_id = Some(chat_b);
+        let source_messages = vec![
+            SourcedMessage {
+                envelope: first.clone(),
+                source_path: PathBuf::from("first.json"),
+                source_index: 0.into(),
+            },
+            SourcedMessage {
+                envelope: second.clone(),
+                source_path: PathBuf::from("second.json"),
+                source_index: 1.into(),
+            },
+        ];
+        let query = ReadQuery::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            "recipient".parse().expect("caller"),
+            None,
+            TEST_TEAM.parse().expect("team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
+        .with_caller_chat_id(Some(chat_a.clone()));
+
+        let source_selected = selected_after_filters(&source_messages, &query, None);
+        assert_eq!(source_selected.len(), 1);
+        assert_eq!(source_selected[0].envelope.message_id, Some(first_id));
+
+        let (mut first_row, _) = metadata_row("for chat a", None, TEST_SENDER);
+        first_row.message_id = Some(first_id);
+        first_row.destination_chat_id = Some(chat_a);
+        let (mut second_row, _) = metadata_row("for chat b", None, TEST_SENDER);
+        second_row.message_id = Some(second_id);
+        second_row.destination_chat_id = second.destination_chat_id;
+        let (_counts, metadata_selected) =
+            metadata_selection::selection_state_for_mailbox_metadata_rows(
+                &[first_row, second_row],
+                &query,
+                None,
+            );
+        assert_eq!(metadata_selected.len(), 1);
+        assert_eq!(metadata_selected[0].envelope.message_id, Some(first_id));
+
+        let mut by_id = query.clone();
+        by_id.mailbox.message_id_filter = Some(second_id);
+        assert!(selected_after_filters(&source_messages, &by_id, None).is_empty());
+    }
+
     fn metadata_row(
         text: &str,
         summary: Option<&str>,
@@ -1464,10 +1557,12 @@ mod tests {
         let message_key = MessageKey::new(format!("atm:{message_id}")).expect("message key");
         let envelope = InboxMessage {
             from: from.parse::<AgentName>().expect("agent"),
+            source_chat_id: None,
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+            destination_chat_id: None,
             summary: summary.map(str::to_string),
             message_id: Some(message_id),
             requires_ack: false,
@@ -1487,6 +1582,8 @@ mod tests {
                 parent_message_id: None,
                 thread_mode: None,
                 from_agent: from.parse::<AgentName>().expect("agent"),
+                source_chat_id: None,
+                destination_chat_id: None,
                 summary: summary.map(str::to_string),
                 message_at: envelope.timestamp,
                 read: false,
@@ -1568,7 +1665,7 @@ mod tests {
         )
         .expect_err("invalid target");
 
-        assert!(error.message.contains("agent name"));
+        assert!(error.message().contains("agent name"));
     }
 
     #[test]
@@ -1935,8 +2032,14 @@ mod tests {
         )
         .expect_err("cross-agent owner-only read must fail");
 
-        assert!(error.is_validation(), "{error:?}");
-        assert!(error.message.contains("owner-only `atm read`"), "{error:?}");
+        assert!(
+            error.code() == crate::error_codes::AtmErrorCode::MessageValidationFailed,
+            "{error:?}"
+        );
+        assert!(
+            error.message().contains("owner-only `atm read`"),
+            "{error:?}"
+        );
     }
 
     #[test]
@@ -1961,8 +2064,11 @@ mod tests {
         )
         .expect_err("peek with explicit missing roster target must fail");
 
-        assert_eq!(error.code, crate::error_codes::AtmErrorCode::AgentNotFound);
-        assert!(error.message.contains("recipient"), "{error:?}");
+        assert_eq!(
+            error.code(),
+            crate::error_codes::AtmErrorCode::AgentNotFound
+        );
+        assert!(error.message().contains("recipient"), "{error:?}");
     }
 
     #[test]
@@ -2005,7 +2111,10 @@ mod tests {
         let error = read_mail_with_runtime_impl(query, &NullObservability, &runtime)
             .expect_err("durable reload failure should surface");
 
-        assert!(error.is_mailbox_read(), "{error:?}");
-        assert!(error.message.contains("simulated durable reload failure"));
+        assert!(
+            error.code() == crate::error_codes::AtmErrorCode::MailboxReadFailed,
+            "{error:?}"
+        );
+        assert!(error.message().contains("simulated durable reload failure"));
     }
 }

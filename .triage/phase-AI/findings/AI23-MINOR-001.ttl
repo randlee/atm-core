@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/AI23-MINOR-001>
+  a triage:Finding ;
+  triage:findingId "AI23-MINOR-001" ;
+  triage:foundAt "2026-07-25T06:25:35Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S3 ;
+  triage:title "ReleaseVersion::parse discards semver's own diagnostic detail via .is_err() instead of .map_err()" ;
+  triage:description "crates/atm-core/src/protocol.rs:88-93: `if semver::Version::parse(value).is_err() { return Err(...) }` discards semver::Error's specific parse-failure description and the resulting AtmError message only echoes the raw input value, not why parsing failed. Recommend `.map_err(|source| AtmError::new(..., format!(\"invalid ATM release version `{value}`: {source}\")))` to fold in semver's own diagnostic." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-07-24T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI23-MINOR-001/AI23/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/AI23/b88ca01> .
+
+<urn:atm:triage:occurrence/AI23-MINOR-001/AI23/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 88 ;
+  triage:snippet "if semver::Version::parse(value).is_err() { return Err(AtmError::new(...)) }" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head -- ReleaseVersion::parse() (lines 97-138 of protocol.rs) now uses custom validation logic for beta and version parts instead of semver::Version::parse().is_err(). The diagnostic-discarding pattern no longer exists; error messages are generated from custom validation. Stale occurrence from superseded branch feature/pAI-s23-crosshost-shared-write-path; closing to match current reality. (2026-07-26)" ;
+  triage:branch "AI.23" ;
+  triage:headSha "b88ca01" ;
+  triage:occursIn <urn:atm:triage:worktree/AI23/b88ca01> .
+
+<urn:atm:triage:worktree/AI23/b88ca01>
+  a triage:WorktreeSnapshot ;
+  triage:branch "AI.23" ;
+  triage:path "feature/pAI-s23-crosshost-shared-write-path" ;
+  triage:headSha "b88ca01" ;
+  triage:orderIndex 23 .
