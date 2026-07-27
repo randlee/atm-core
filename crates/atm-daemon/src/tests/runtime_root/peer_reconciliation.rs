@@ -58,6 +58,76 @@ impl HttpsMessageTransport for ReconciliationReceiverDelivery {
     }
 }
 
+/// Delivers the first item of the first recovery page, then fails the page as
+/// though the connection broke before the peer returned its response. The next
+/// page delivery succeeds. This models the only safe retry contract here: the
+/// source retains immutable writes, retries the full page, and the receiver's
+/// canonical write path deduplicates the already-persisted first message.
+struct PartialPageFailureThenReceiver {
+    receiver: Arc<DaemonRequestDispatcher>,
+    source_host: atm_storage::HostName,
+    fail_first_page: std::sync::atomic::AtomicBool,
+    delivered: std::sync::Mutex<Vec<WriteRequest>>,
+}
+
+impl PartialPageFailureThenReceiver {
+    fn deliver_to_receiver(
+        &self,
+        mut request: WriteRequest,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        request.authenticated_source_host = Some(self.source_host.clone());
+        self.delivered
+            .lock()
+            .expect("delivery count lock")
+            .push(request.clone());
+        ApiRouter::route(
+            self.receiver.as_ref(),
+            ApiRequest::new(RequestEnvelope::Write(Box::new(request))),
+            AuthenticatedIngress::Peer,
+            deadline,
+        )
+        .map(|response| response.into_inner())
+    }
+}
+
+impl HttpsMessageTransport for PartialPageFailureThenReceiver {
+    fn deliver(
+        &self,
+        request: WriteRequest,
+        _peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<ResponseEnvelope, AtmError> {
+        self.deliver_to_receiver(request, deadline)
+    }
+
+    fn deliver_page(
+        &self,
+        requests: &[WriteRequest],
+        _peer: &TrustedPeer,
+        deadline: RequestDeadline,
+    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
+        if self
+            .fail_first_page
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            let first = requests
+                .first()
+                .expect("partial-page fixture requires a stored first write")
+                .clone();
+            self.deliver_to_receiver(first, deadline)?;
+            return Err(AtmError::remote_delivery_unconfirmed(
+                "intentional response loss after the first page item",
+            ));
+        }
+        requests
+            .iter()
+            .cloned()
+            .map(|request| self.deliver_to_receiver(request, deadline))
+            .collect()
+    }
+}
+
 fn recipient_message_count(db_path: &std::path::Path, recipient: &str) -> usize {
     open_sqlite_boundary(db_path)
         .expect("sqlite boundary")
@@ -418,6 +488,161 @@ fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
         recipient_message_count(&receiver_db, "receiver"),
         1,
         "the receiving daemon retains one immutable inbox row for an identical reconciliation duplicate"
+    );
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_rows() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let source_home = tempdir.path().join("source-home");
+    let source_workspace = tempdir.path().join("source-workspace");
+    let source_db = tempdir.path().join("source.db");
+    let receiver_home = tempdir.path().join("receiver-home");
+    let receiver_workspace = tempdir.path().join("receiver-workspace");
+    let receiver_db = tempdir.path().join("receiver.db");
+    for directory in [
+        &source_home,
+        &source_workspace,
+        &receiver_home,
+        &receiver_workspace,
+    ] {
+        std::fs::create_dir_all(directory).expect("test directory");
+    }
+    write_team_config(&source_home, &[]);
+    write_team_config(&receiver_home, &[]);
+    add_member_via_retained_admin(
+        &source_db,
+        &source_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &source_workspace,
+    );
+    add_member_via_retained_admin(
+        &receiver_db,
+        &receiver_home,
+        TEST_TEAM,
+        "receiver",
+        &receiver_workspace,
+    );
+
+    let receiver_host: atm_storage::HostName =
+        "receiver.example.test".parse().expect("receiver host");
+    let source_host: atm_storage::HostName = "source.example.test".parse().expect("source host");
+    let source_peers = open_sqlite_boundary(&source_db)
+        .expect("source sqlite boundary")
+        .peer_config_store();
+    source_peers
+        .save_trusted_peer(&TrustedPeer {
+            host: receiver_host.clone(),
+            fingerprint: "sha256:receiver".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        })
+        .expect("save receiver peer");
+    source_peers
+        .save_peer_sync_policy(
+            &receiver_host,
+            PeerSyncPolicy {
+                max_message_age: Duration::from_secs(60),
+                max_batch_messages: std::num::NonZeroU16::new(8).expect("batch cap"),
+            },
+        )
+        .expect("enable multi-message reconciliation");
+    open_sqlite_boundary(&receiver_db)
+        .expect("receiver sqlite boundary")
+        .peer_config_store()
+        .save_trusted_peer(&TrustedPeer {
+            host: source_host.clone(),
+            fingerprint: "sha256:source".parse().expect("fingerprint"),
+            enabled: true,
+            https_port: std::num::NonZeroU16::new(43101).expect("port"),
+        })
+        .expect("save source peer");
+
+    let receiver = Arc::new(DaemonRequestDispatcher::new_for_test(
+        receiver_home,
+        RuntimeStatusCache::new(),
+        receiver_db.clone(),
+    ));
+    let source = DaemonRequestDispatcher::new_for_test(
+        source_home.clone(),
+        RuntimeStatusCache::new(),
+        source_db,
+    );
+    source
+        .install_https_transport(Arc::new(RecordingHttpsDelivery::default()))
+        .expect("install setup transport");
+    for body in ["first recovery page item", "second recovery page item"] {
+        source
+            .dispatch(RequestEnvelope::Write(Box::new(
+                SendRequest::new(
+                    source_home.clone(),
+                    source_workspace.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("sender"),
+                    "receiver@test-team.receiver.example.test",
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline(body.to_string()),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("peer write"),
+            )))
+            .expect("persist canonical outbound write");
+    }
+
+    let transport = Arc::new(PartialPageFailureThenReceiver {
+        receiver,
+        source_host,
+        fail_first_page: std::sync::atomic::AtomicBool::new(true),
+        delivered: std::sync::Mutex::new(Vec::new()),
+    });
+    source
+        .install_https_transport(transport.clone())
+        .expect("install partial-page transport");
+
+    let first_error = source
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: receiver_host.clone(),
+        }))
+        .expect_err("partial recovery page must remain unconfirmed");
+    assert_eq!(first_error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+    assert_eq!(
+        recipient_message_count(&receiver_db, "receiver"),
+        1,
+        "the first page item reached the receiver before its response was lost"
+    );
+
+    let retry = source
+        .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
+            peer: receiver_host,
+        }))
+        .expect("retry must drain the retained canonical page");
+    assert!(matches!(
+        retry,
+        ResponseEnvelope::PeerSync(PeerSyncOutcome {
+            delivered: 2,
+            disposition: PeerSyncDisposition::Completed,
+            ..
+        })
+    ));
+    assert_eq!(
+        recipient_message_count(&receiver_db, "receiver"),
+        2,
+        "retry delivers the second retained write while the first immutable ULID remains idempotent"
+    );
+    let delivered = transport.delivered.lock().expect("delivery recording lock");
+    assert_eq!(delivered.len(), 3, "retry replays the full retained page");
+    assert_eq!(
+        delivered[0].origin_message_id, delivered[1].origin_message_id,
+        "cursor does not advance after partial-page failure"
+    );
+    assert_ne!(
+        delivered[1].origin_message_id, delivered[2].origin_message_id,
+        "retry retains and eventually delivers the second page item"
     );
 }
 
