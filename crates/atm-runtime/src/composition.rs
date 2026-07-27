@@ -266,6 +266,8 @@ mod tests {
         peers: Vec<TrustedPeer>,
     }
 
+    impl atm_storage::contract::sealed::Sealed for TestPeerConfigStore {}
+
     impl PeerConfigStore for TestPeerConfigStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
             Ok(self.interfaces.clone())

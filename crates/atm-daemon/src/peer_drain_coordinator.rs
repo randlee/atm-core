@@ -19,13 +19,14 @@ use atm_core::send::WriteRequest;
 use atm_core::types::{HostName, IsoTimestamp};
 use atm_storage::{OutboundMessageQuery, PeerConfigStore, TrustedPeer};
 
-use crate::https_transport::HttpsMessageTransport;
+use crate::https_transport::{HttpsMessageTransport, SharedHttpsTransport};
 use crate::peer_delivery_observability::{PeerDeliveryEvent, PeerDeliveryEventKind};
 use crate::runtime_health::peer_authority::resolve_peer_authority;
 
 const INITIAL_BACKOFF: Duration = Duration::from_secs(60);
 const MAX_BACKOFF: Duration = Duration::from_secs(15 * 60);
 const MAX_PEER_DRAIN_SLOTS: usize = 256;
+pub(crate) const PEER_SYNC_REQUEST_DEADLINE: Duration = Duration::from_secs(5);
 
 /// The only non-durable per-peer recovery state. In particular this never
 /// holds a message, cursor, payload, receipt, or attempted-delivery history.
@@ -96,7 +97,7 @@ pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
 pub(crate) struct PeerDrainCoordinator {
     peers: Arc<dyn PeerConfigStore + Send + Sync>,
     outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
-    transport: Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+    transport: SharedHttpsTransport,
     slots: Arc<(Mutex<BTreeMap<HostName, PeerDrainSlot>>, Condvar)>,
     record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
     stop: Arc<AtomicBool>,
@@ -116,7 +117,7 @@ impl PeerDrainCoordinator {
     pub(crate) fn new(
         peers: Arc<dyn PeerConfigStore + Send + Sync>,
         outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
-        transport: Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>,
+        transport: SharedHttpsTransport,
         record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
     ) -> Self {
         Self {
@@ -480,7 +481,7 @@ impl PeerDrainCoordinator {
                     not_before,
                     None,
                     policy.max_batch_messages,
-                    Duration::from_secs(5),
+                    PEER_SYNC_REQUEST_DEADLINE,
                 )?
                 .is_empty()
             {
@@ -525,7 +526,7 @@ impl PeerDrainCoordinator {
             };
             drop(slots);
             if let Some(host) = due {
-                let _ = self.drain(&host, RequestDeadline::after(Duration::from_secs(5)));
+                let _ = self.drain(&host, RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE));
                 if let Err(error) = self.release(&host) {
                     tracing::error!(subsystem = "peer_drain", action = "release", %error, "peer drain slot release failed");
                 }
@@ -653,6 +654,8 @@ mod tests {
 
     struct EmptyPeerStore;
 
+    impl atm_storage::contract::sealed::Sealed for EmptyPeerStore {}
+
     impl PeerConfigStore for EmptyPeerStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
             Ok(Vec::new())
@@ -688,6 +691,8 @@ mod tests {
 
     struct EmptyOutbound;
 
+    impl atm_storage::contract::sealed::Sealed for EmptyOutbound {}
+
     impl OutboundMessageQuery for EmptyOutbound {
         fn page_for_peer(
             &self,
@@ -705,6 +710,8 @@ mod tests {
         peer: TrustedPeer,
         policy: PeerSyncPolicy,
     }
+
+    impl atm_storage::contract::sealed::Sealed for ConfiguredPeerStore {}
 
     impl PeerConfigStore for ConfiguredPeerStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
@@ -744,6 +751,8 @@ mod tests {
         not_before: Mutex<Vec<IsoTimestamp>>,
         limits: Mutex<Vec<NonZeroU16>>,
     }
+
+    impl atm_storage::contract::sealed::Sealed for CapturingOutbound {}
 
     impl OutboundMessageQuery for CapturingOutbound {
         fn page_for_peer(

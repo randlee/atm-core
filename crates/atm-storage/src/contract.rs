@@ -622,7 +622,7 @@ impl Default for PeerSyncPolicy {
 /// This boundary deliberately excludes transport state, retries, receipts,
 /// and mailbox state. HTTPS adapters consume this contract but never SQLite
 /// implementation types.
-pub trait PeerConfigStore: Send + Sync {
+pub trait PeerConfigStore: sealed::Sealed + Send + Sync {
     fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError>;
     fn save_interface(&self, interface: &HttpsInterface) -> Result<(), AtmError>;
     fn remove_interface(&self, bind_addr: std::net::SocketAddr) -> Result<bool, AtmError>;
@@ -659,7 +659,7 @@ pub struct StoredPeerWrite {
 }
 
 /// Read-only selection of local, immutable peer-directed messages.
-pub trait OutboundMessageQuery: Send + Sync {
+pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
     fn page_for_peer(
         &self,
         peer: &HostName,

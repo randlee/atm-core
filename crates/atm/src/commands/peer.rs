@@ -463,6 +463,8 @@ mod tests {
     #[derive(Default)]
     struct InMemoryPeerConfigStore(Mutex<PeerConfigState>);
 
+    impl atm_storage::contract::sealed::Sealed for InMemoryPeerConfigStore {}
+
     impl PeerConfigStore for InMemoryPeerConfigStore {
         fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, atm_storage::AtmError> {
             Ok(self.0.lock().expect("peer state lock").interfaces.clone())

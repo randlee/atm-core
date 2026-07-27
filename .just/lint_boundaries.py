@@ -173,10 +173,10 @@ SCB_OBSERVABILITY_ALLOWLIST_PATH = Path(".just/allowlists/scb_observability_allo
 SCB_OBSERVABILITY_FIXTURE_PATH = Path(".just/fixtures/scb_observability_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
-    "fn load_team_config(",
-    "crate::boundary_support::load_team_config(",
-    "direct_boundaries::load_team_config(",
-    "atm_core::direct_boundaries::load_team_config(",
+    "fn load_workspace_config(",
+    "crate::boundary_support::load_workspace_config(",
+    "direct_boundaries::load_workspace_config(",
+    "atm_core::direct_boundaries::load_workspace_config(",
 )
 SCB_CONFIG_SEND_PATTERNS = (
     "config::load_team_config(",
@@ -185,8 +185,10 @@ SCB_CONFIG_SEND_PATTERNS = (
 )
 SCB_CONFIG_BOUNDARY_FILES = (
     Path("crates/atm-core/src/boundary_support.rs"),
+    # Keep guarding this retired duplicate path if it is ever reintroduced.
     Path("crates/atm-core/src/direct_boundaries.rs"),
 )
+SCB_CONFIG_CANONICAL_HELPER_FILE = Path("crates/atm-core/src/boundary_support.rs")
 # team_admin's sibling split files (restore.rs, filesystem.rs, projection.rs) were
 # reviewed as of the member_mutation.rs split (PR #471) and found not to call
 # service_runtime_store::default_runtime() or load_config() -- no gate entry needed
@@ -1929,10 +1931,14 @@ def collect_scb_config_rule_violations(
                         )
                     )
 
-            if is_boundary_file and any(pattern in stripped for pattern in SCB_CONFIG_GENERIC_HELPER_PATTERNS):
+            if (
+                is_boundary_file
+                and rel_path != SCB_CONFIG_CANONICAL_HELPER_FILE
+                and any(pattern in stripped for pattern in SCB_CONFIG_GENERIC_HELPER_PATTERNS)
+            ):
                 violations.append(
                     BoundaryViolation(
-                        f"SCB-CONFIG-002 {rel_source}:{line_number} generic load_team_config helper surface is forbidden",
+                        f"SCB-CONFIG-002 {rel_source}:{line_number} generic load_workspace_config helper surface is forbidden",
                         "",
                     )
                 )

@@ -400,7 +400,7 @@ sunset_sprint = "Z.8"
             """\
 use crate::config;
 
-fn load_team_config(team_dir: &std::path::Path) {
+fn load_workspace_config(team_dir: &std::path::Path) {
     let _ = config::load_team_config(team_dir);
 }
 
@@ -539,8 +539,8 @@ fn hydrate_roster_from_team_config_once_at_startup_if_empty(team_dir: &std::path
             self.write_scb_workspace_support(repo_root)
             self.write_scb_singleton_support(repo_root)
             self.write_scb_observability_support(repo_root)
-            (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
-                "fn load_team_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
+            (repo_root / "crates/atm-core/src/direct_boundaries.rs").write_text(
+                "fn load_workspace_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
                 encoding="utf-8",
             )
             send_dir = repo_root / "crates/atm-core/src/send"

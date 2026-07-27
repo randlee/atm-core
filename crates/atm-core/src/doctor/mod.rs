@@ -697,6 +697,8 @@ mod tests {
         failure: Option<AtmError>,
     }
 
+    impl atm_storage::contract::sealed::Sealed for StubPeerConfigStore {}
+
     impl StubPeerConfigStore {
         fn healthy() -> Self {
             Self { failure: None }

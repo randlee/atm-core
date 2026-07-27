@@ -185,15 +185,23 @@ class PeerPairSmokeTests(unittest.TestCase):
             owned = runtime / "owned.sock"
             owned.touch()
             process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
-            config = {"daemon": {
-                "endpoint": "127.0.0.1:1",
-                "runtime_dir": str(runtime),
-                "owned_runtime_paths": [str(owned)],
-                "launch_command": ["atm-daemon"],
-            }}
-            result = RUNNER.stop_owned(process, config)
-            self.assertEqual(result["status"], "ownership_marker_missing")
-            self.assertTrue(owned.exists())
+            try:
+                config = {"daemon": {
+                    "endpoint": "127.0.0.1:1",
+                    "runtime_dir": str(runtime),
+                    "owned_runtime_paths": [str(owned)],
+                    "launch_command": ["atm-daemon"],
+                }}
+                result = RUNNER.stop_owned(process, config)
+                self.assertEqual(result["status"], "ownership_marker_missing")
+                self.assertTrue(owned.exists())
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
 
 
 if __name__ == "__main__":
