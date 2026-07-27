@@ -3629,7 +3629,9 @@ mail correctness.
   test adapter.
 
   Required behavior:
-  - Unix same-host clients use HTTP over UDS and may use HTTP over loopback TCP;
+  - Unix same-host clients use HTTP over UDS through the shared
+    `atm-daemon-client` facade and may use HTTP over loopback TCP; consumers
+    such as `atm-graft` must not take a direct `interprocess` dependency.
     Windows same-host clients use HTTP over loopback TCP only
   - normal remote peers use HTTPS over TCP; the explicit daemon-only
     `plaintext-test` smoke profile is governed by
@@ -3653,6 +3655,9 @@ mail correctness.
     adapters must not infer local/peer status from socket family or address
   - Unix/Windows parity requires equivalent local HTTP request/response tests:
     UDS plus loopback TCP on Unix and loopback TCP on Windows
+  - Unix clients select UDS by default. `ATM_LOCAL_TRANSPORT=tcp` is the
+    explicit, observable loopback-TCP parity/diagnostic mode; an unavailable
+    UDS endpoint must fail rather than silently falling back to TCP
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
   router and injectable typed application handlers.

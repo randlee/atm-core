@@ -207,8 +207,11 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
         let _endpoint_path = endpoint_path;
         let endpoint = atm_daemon_client::resolve_daemon_local_ipc_endpoint()
             .expect("windows local HTTP endpoint");
-        atm_daemon_client::try_connect(&endpoint)
+        match atm_daemon_client::try_connect(&endpoint)
             .expect("connect daemon local HTTP after ready signal")
+        {
+            atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
+        }
     }
     #[cfg(not(windows))]
     {

@@ -1,4 +1,6 @@
 use std::fs::{self, File, OpenOptions};
+#[cfg(unix)]
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
@@ -9,14 +11,20 @@ use atm_core::caller_context::{CallerContext, CallerContextOverrides, resolve_cl
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_storage::{AgentName, AtmError, AtmErrorCode, TeamName};
 use fs2::FileExt;
+#[cfg(unix)]
+use interprocess::local_socket::Stream as LocalSocketStream;
+#[cfg(unix)]
+use interprocess::local_socket::prelude::*;
 use std::net::TcpStream;
 use std::sync::Mutex;
 
 pub use atm_core::protocol::{CompatibilityPreflight, CompatibilityVerdict, ReleaseVersion};
 
 mod compatibility;
+mod local_transport;
 
 pub use compatibility::{Connection, Unverified, VersionVerified, verify_connection_compatibility};
+pub use local_transport::{LocalDaemonTransport, local_daemon_transport};
 
 /// Upper bound for waiting on a daemon just spawned by the CLI to publish its
 /// local HTTP record and accept its first connection.
@@ -101,6 +109,20 @@ impl DaemonLocalIpcEndpoint {
 impl AsRef<Path> for DaemonLocalIpcEndpoint {
     fn as_ref(&self) -> &Path {
         &self.0
+    }
+}
+
+impl DaemonLocalIpcEndpoint {
+    #[cfg(unix)]
+    fn unix_socket_path(&self) -> Result<PathBuf, AtmError> {
+        self.0.parent().map_or_else(
+            || {
+                Err(AtmError::daemon_unavailable(
+                    "daemon local endpoint record has no runtime directory",
+                ))
+            },
+            |runtime_dir| Ok(runtime_dir.join(atm_core::home::HOST_RUNTIME_SOCKET_FILE)),
+        )
     }
 }
 
@@ -377,8 +399,35 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
     error.message().to_owned()
 }
 
-pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<TcpStream, AtmError> {
-    try_connect_local_http_record(endpoint.as_ref())
+/// A connected same-host daemon stream.
+///
+/// Unix UDS and loopback TCP carry the same HTTP request/response contract;
+/// the variant only records the explicitly selected transport.
+pub enum LocalDaemonConnection {
+    #[cfg(unix)]
+    UnixDomainSocket(LocalSocketStream),
+    TcpLoopback(TcpStream),
+}
+
+pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalDaemonConnection, AtmError> {
+    try_connect_with_transport(endpoint, local_daemon_transport()?)
+}
+
+#[cfg(unix)]
+fn try_connect_unix_socket(
+    endpoint: &DaemonLocalIpcEndpoint,
+) -> Result<LocalSocketStream, AtmError> {
+    let socket_path = endpoint.unix_socket_path()?;
+    let name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)?;
+    LocalSocketStream::connect(name).map_err(|source| {
+        AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to connect to daemon UDS endpoint {}: {source}",
+                socket_path.display(),
+            ),
+            source,
+        )
+    })
 }
 
 fn try_connect_local_http_record(record_path: &Path) -> Result<TcpStream, AtmError> {
@@ -391,23 +440,68 @@ fn try_connect_local_http_record(record_path: &Path) -> Result<TcpStream, AtmErr
             AtmError::daemon_unavailable("local HTTP endpoint record has no loopback endpoint")
         })?;
     TcpStream::connect_timeout(&endpoint, LOCAL_IPC_CONNECT_DEADLINE).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to connect to daemon local HTTP endpoint {endpoint}: {source}"
-        ))
+        AtmError::daemon_unavailable_with_cause(
+            format!("failed to connect to daemon local HTTP endpoint {endpoint}: {source}"),
+            source,
+        )
     })
 }
 
-/// Exchange one canonical request through HTTP over the daemon-owned loopback endpoint.
+/// Exchange one canonical request through the selected same-host HTTP transport.
 ///
-/// This is the retained production local-client path. The request is encoded
-/// once as JSON HTTP and is decoded by the daemon before it reaches
-/// [`atm_core::ApiRouter`].
+/// Unix defaults to the daemon-owned UDS. TCP is used only when explicitly
+/// requested with `ATM_LOCAL_TRANSPORT=tcp`; Windows always uses that path.
 pub fn exchange_request(
     endpoint: &DaemonLocalIpcEndpoint,
     request: &RequestEnvelope,
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
-    let mut stream = try_connect(endpoint)?;
+    exchange_request_with_transport(
+        endpoint,
+        request,
+        request_deadline,
+        local_daemon_transport()?,
+    )
+}
+
+fn exchange_request_with_transport(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+    transport: LocalDaemonTransport,
+) -> Result<ResponseEnvelope, AtmError> {
+    match try_connect_with_transport(endpoint, transport)? {
+        #[cfg(unix)]
+        LocalDaemonConnection::UnixDomainSocket(stream) => {
+            exchange_uds_request(stream, request, request_deadline)
+        }
+        LocalDaemonConnection::TcpLoopback(stream) => {
+            exchange_tcp_request(stream, endpoint, request, request_deadline)
+        }
+    }
+}
+
+fn try_connect_with_transport(
+    endpoint: &DaemonLocalIpcEndpoint,
+    transport: LocalDaemonTransport,
+) -> Result<LocalDaemonConnection, AtmError> {
+    match transport {
+        #[cfg(unix)]
+        LocalDaemonTransport::UnixDomainSocket => {
+            try_connect_unix_socket(endpoint).map(LocalDaemonConnection::UnixDomainSocket)
+        }
+        LocalDaemonTransport::TcpLoopback => {
+            try_connect_local_http_record(endpoint.as_ref()).map(LocalDaemonConnection::TcpLoopback)
+        }
+    }
+}
+
+fn exchange_tcp_request(
+    mut stream: TcpStream,
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
     let response_deadline = request_deadline.saturating_add(LOCAL_IPC_RESPONSE_GRACE);
     let _send_deadline_support = apply_local_ipc_deadline(
         set_stream_write_timeout(&stream, Some(request_deadline)),
@@ -419,6 +513,31 @@ pub fn exchange_request(
     )?;
     write_local_http_request(&mut stream, request, endpoint.as_ref())?;
     read_http_response_with_deadline(stream, request, response_deadline, recv_deadline_support)
+}
+
+#[cfg(unix)]
+fn exchange_uds_request(
+    mut stream: LocalSocketStream,
+    request: &RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let response_deadline = request_deadline.saturating_add(LOCAL_IPC_RESPONSE_GRACE);
+    // UDS timeout support is platform/backend-dependent. Match loopback TCP:
+    // preserve real setup failures, but continue when the backend explicitly
+    // reports that socket timeouts are unsupported.
+    let _send_deadline_support = apply_local_ipc_deadline(
+        stream.set_send_timeout(Some(request_deadline)),
+        "failed to configure daemon UDS write timeout",
+    )?;
+    let _recv_deadline_support = apply_local_ipc_deadline(
+        stream.set_recv_timeout(Some(response_deadline)),
+        "failed to configure daemon UDS read timeout",
+    )?;
+    atm_core::api::write_http_request(&mut stream, request)?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable_with_cause("failed to flush daemon UDS request", source)
+    })?;
+    atm_core::api::read_http_response(&mut stream, request)
 }
 
 fn write_local_http_request(
@@ -442,17 +561,23 @@ fn load_local_http_record(
     record_path: &Path,
 ) -> Result<atm_core::local_http::LocalHttpEndpointRecord, AtmError> {
     let contents = fs::read(record_path).map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to read local HTTP endpoint record {}: {source}",
-            record_path.display()
-        ))
+        AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to read local HTTP endpoint record {}: {source}",
+                record_path.display()
+            ),
+            source,
+        )
     })?;
     let record: atm_core::local_http::LocalHttpEndpointRecord = serde_json::from_slice(&contents)
         .map_err(|source| {
-        AtmError::daemon_unavailable(format!(
-            "failed to parse local HTTP endpoint record {}: {source}",
-            record_path.display()
-        ))
+        AtmError::daemon_unavailable_with_cause(
+            format!(
+                "failed to parse local HTTP endpoint record {}: {source}",
+                record_path.display()
+            ),
+            source,
+        )
     })?;
     record.capability()?;
     let owner_instance_id =
@@ -1007,16 +1132,21 @@ mod tests {
     use atm_storage::{AtmError, AtmErrorCode};
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    use interprocess::local_socket::ListenerOptions;
+    #[cfg(unix)]
+    use interprocess::local_socket::prelude::*;
+
     use super::{
         AUTO_START_PUBLISH_TIMEOUT, BootstrapAutoStartOutcome, BootstrapCommandEvent,
         BootstrapConnectOutcome, BootstrapLaunchGateOutcome, BootstrapTraceReport,
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline, exchange_request,
-        next_auto_start_poll_interval, resolve_daemon_local_ipc_endpoint,
-        resolve_daemon_local_ipc_endpoint_from_home,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
+        apply_local_ipc_deadline, exchange_request_with_transport, next_auto_start_poll_interval,
+        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
     };
     #[cfg(unix)]
-    use super::{FailedAutoStartChild, reap_failed_auto_start};
+    use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
 
     #[derive(Debug, Default)]
     struct RecordingEvents {
@@ -1036,7 +1166,12 @@ mod tests {
 
     fn supervisor(tempdir: &TempDir) -> DaemonSupervisor {
         DaemonSupervisor::new(
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint"),
+            DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE),
+            )
+            .expect("endpoint"),
             DaemonBinaryPath::new(tempdir.path().join("atm-daemon")).expect("daemon path"),
         )
     }
@@ -1114,10 +1249,11 @@ mod tests {
         });
 
         let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
-        let response = exchange_request(
+        let response = exchange_request_with_transport(
             &DaemonLocalIpcEndpoint::new(record_path).expect("endpoint path"),
             &request,
             Duration::from_millis(30),
+            LocalDaemonTransport::TcpLoopback,
         )
         .expect("typed terminal response must outlive the work deadline");
 
@@ -1127,6 +1263,84 @@ mod tests {
                 if error.code() == AtmErrorCode::RemoteDeliveryUnconfirmed
         ));
         server.join().expect("server join");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn uds_and_tcp_modes_share_the_http_response_contract() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let socket_path = tempdir
+            .path()
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
+        let socket_name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+            .expect("UDS name")
+            .into_owned();
+        let listener = ListenerOptions::new()
+            .name(socket_name)
+            .create_sync()
+            .expect("bind UDS listener");
+        let server = std::thread::spawn(move || {
+            let mut stream = listener.accept().expect("accept UDS request");
+            let request = atm_core::api::read_http_request(&mut stream)
+                .expect("read request")
+                .expect("request");
+            assert_eq!(request.path, "/v1/atm/doctor");
+            atm_core::api::write_http_response(
+                &mut stream,
+                &atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                    "same dispatcher response",
+                )),
+            )
+            .expect("write response");
+        });
+
+        let request = atm_core::RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+        let response = exchange_request_with_transport(
+            &DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+            )
+            .expect("endpoint"),
+            &request,
+            Duration::from_secs(1),
+            LocalDaemonTransport::UnixDomainSocket,
+        )
+        .expect("UDS HTTP response");
+
+        assert!(
+            matches!(response, atm_core::ResponseEnvelope::Error(error) if error.is_daemon_unavailable())
+        );
+        server.join().expect("server join");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn uds_connect_failure_keeps_the_socket_cause_in_the_displayed_error() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let socket_path = tempdir
+            .path()
+            .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE);
+        let result = try_connect_with_transport(
+            &DaemonLocalIpcEndpoint::new(
+                tempdir
+                    .path()
+                    .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME),
+            )
+            .expect("endpoint"),
+            LocalDaemonTransport::UnixDomainSocket,
+        );
+        let Err(error) = result else {
+            panic!("no UDS listener exists");
+        };
+        assert!(
+            error.message().contains(&socket_path.display().to_string()),
+            "the displayed error identifies the failed UDS endpoint: {error:?}"
+        );
+        assert!(
+            error.cause().is_some_and(|cause| !cause.is_empty()),
+            "the underlying UDS connection failure remains structured"
+        );
     }
 
     #[test]
@@ -1260,8 +1474,12 @@ mod tests {
     #[test]
     fn launch_gate_rejected_error_uses_daemon_launch_gate_code() {
         let tempdir = TempDir::new().expect("tempdir");
-        let endpoint =
-            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint");
+        let endpoint = DaemonLocalIpcEndpoint::new(
+            tempdir
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_SOCKET_FILE),
+        )
+        .expect("endpoint");
 
         let error = LaunchGateGuard::rejected_error(&endpoint);
         assert_eq!(error.code(), AtmErrorCode::DaemonLaunchGateRejected);

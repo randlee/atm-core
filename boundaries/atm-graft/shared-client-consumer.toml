@@ -73,4 +73,5 @@ notes = [
   "atm-daemon-client is a distinct thin-client crate; it does not share the atm-daemon runtime",
   "session runtime and advisory stream ownership are deferred to U.9 and U.10",
   "AI.15/RBQA-F002: the graft post-send notification channel is loopback TCP plus a per-bind capability token; the 'atm-graft -> interprocess' forbidden_edge blocks any reintroduction of interprocess::local_socket / named-pipe backends inside atm-graft",
+  "AI11/AI14 shared-client transport: interprocess is reachable transitively only through the approved atm-daemon-client facade; atm-graft must never add a direct interprocess Cargo dependency.",
 ]
