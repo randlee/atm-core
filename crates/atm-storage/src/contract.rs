@@ -666,6 +666,7 @@ pub trait OutboundMessageQuery: Send + Sync {
         not_before: IsoTimestamp,
         after: Option<(IsoTimestamp, AtmMessageId)>,
         limit: NonZeroU16,
+        budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
 }
 
