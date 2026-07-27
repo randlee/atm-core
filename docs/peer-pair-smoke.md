@@ -72,7 +72,7 @@ capabilities, or secrets. It has this shape:
     {"id": "requires_ack_reply", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"ack_reply_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}}}},
     {"id": "duplicate_ulid", "expect": "success", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"receiver_visible": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "selected_message_id", "equals": "$message_ulid"}, "single_record_retained": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "match_count", "equals": 1}, "no_repeat_nudge": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "additional_match_count", "equals": 0}, "no_ack_mutation": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}},
     {"id": "unavailable_peer", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"no_prohibited_delivery_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}}},
-    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"rejected_before_routing": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}, "forbidden_daemon_log_entries": ["<configured-routing-attempt-record>"]}},
+    {"id": "untrusted_or_allowlist_rejection", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "send", "..."], "verification": {"assertions": {"rejected_before_routing": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "count", "equals": 0}}, "required_daemon_log_events": [{"action": "request", "outcome": "rejected", "message": "HTTPS peer request was rejected before or during shared API routing", "fields": {"subsystem": "https_transport"}}], "forbidden_daemon_log_events": [{"action": "peer_delivery", "outcome": "write_persisted"}]}},
     {"id": "failed_remote_ack", "expect": "typed_error", "typed_error_code": "<code>", "message_ulid": "<ulid>", "command": ["atm", "ack", "..."], "verification": {"assertions": {"ack_source_unchanged": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.requires_ack", "equals": true}, "no_remote_ack_state": {"command": ["atm", "read", "--message-id", "<ulid>", "--json"], "json_path": "message.acknowledgedAt", "absent": true}}}}
   ]
 }
@@ -91,6 +91,16 @@ an omitted JSON field (for example `message.acknowledgedAt`).
 The runner writes sanitized JSON evidence with transport and semantic results,
 daemon/client versions, trust identity, log window, role, identities, ULID, and
 teardown.
+
+Daemon log assertions use exact structured event selectors against the retained
+JSONL delta. A selector may match top-level `action`, `outcome`, `message`,
+`level`, `service`, or `target` fields and scalar values under `fields`; it is
+not a free-form substring search. The untrusted/allowlist case requires the
+real HTTPS rejection event (`action=request`, `outcome=rejected`,
+`fields.subsystem=https_transport`) to appear after the command. Optional
+`forbidden_daemon_log_events` selectors must not appear. Rotation, truncation,
+malformed JSONL, or a missing required event fails the case and is recorded in
+the evidence with an actionable message.
 
 The runner accepts `launch_command` only with non-empty
 `owned_runtime_paths`. It records the launched PID in its ownership marker,
