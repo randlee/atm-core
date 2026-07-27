@@ -86,7 +86,18 @@ class FeatureSmokeTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"ATM_SMOKE_RUN_ID": "smoke-42"}, clear=False):
                 with mock.patch.object(RUNNER, "ROOT", Path(temp)):
                     with mock.patch.object(RUNNER, "compose") as compose:
-                        report = RUNNER.write_report("localhost", [{"name": "doctor", "status": "PASS", "detail": "ready"}])
+                        report = RUNNER.write_report(
+                            "localhost",
+                            [
+                                {
+                                    "name": "doctor",
+                                    "status": "PASS",
+                                    "detail": "ready",
+                                    "origin": "local.example.test",
+                                    "destination": "local.example.test",
+                                }
+                            ],
+                        )
         self.assertEqual(compose.call_count, 3)
         self.assertEqual(compose.call_args_list[1].args[2], report.with_suffix(".html"))
         self.assertEqual(compose.call_args_list[2].args[2], report.parent / "index.html")
@@ -95,14 +106,79 @@ class FeatureSmokeTests(unittest.TestCase):
         pane = RUNNER.render_feature_pane(
             "localhost",
             [
-                {"name": "doctor", "status": "PASS", "detail": "status: healthy\nreadiness: ready"},
-                {"name": "localhost send/read", "status": "PASS", "detail": "01TEST"},
+                {
+                    "name": "doctor",
+                    "status": "PASS",
+                    "detail": "status: healthy\nreadiness: ready",
+                    "origin": "m4",
+                    "destination": "m4",
+                },
+                {
+                    "name": "localhost send/read",
+                    "status": "PASS",
+                    "detail": "01TEST",
+                    "origin": "m4",
+                    "destination": "m4",
+                },
+                {
+                    "name": "mTLS doctor",
+                    "status": "PASS",
+                    "detail": "HTTP 200",
+                    "origin": "m4",
+                    "destination": "m5",
+                },
             ],
+            "m4",
         )
         self.assertIn("localhost send/read", pane)
-        self.assertIn("Doctor passed", pane)
-        self.assertIn("healthy<br />readiness", pane)
-        self.assertNotIn("<td>doctor</td>", pane)
+        self.assertIn("ONE-COMPUTER TEST — m4", pane)
+        self.assertIn("CROSS-HOST TEST — m4 ↔ m5", pane)
+        self.assertIn("<th>Doctor</th><td>PASS 1/1</td>", pane)
+
+    def test_host_header_reports_advertised_ip_version_and_doctor(self):
+        header = RUNNER.render_host_header(
+            "m4",
+            [
+                {"name": "doctor", "status": "PASS", "detail": "READY · ATM 1.4.0-beta-ai"},
+                {"name": "advertised host", "status": "PASS", "detail": "192.0.2.10"},
+            ],
+        )
+        self.assertIn("Advertised IP</th><td>192.0.2.10", header)
+        self.assertIn("ATM version</th><td>1.4.0-beta-ai", header)
+        self.assertIn("Doctor</th><td>PASS 1/1", header)
+
+    def test_cross_host_section_reports_both_endpoint_preflights(self):
+        cases = [
+            {"name": "doctor", "status": "PASS", "detail": "READY · ATM 1.4.0-beta-ai", "origin": "m4", "destination": "m4"},
+            {"name": "advertised host", "status": "PASS", "detail": "192.0.2.10", "origin": "m4", "destination": "m4"},
+            {"name": "m5 doctor/version", "status": "PASS", "detail": "client=1.4.0-beta-ai, daemon=1.4.0-beta-ai", "origin": "m5", "destination": "m5"},
+            {"name": "m5 advertised host", "status": "PASS", "detail": "192.0.2.20", "origin": "m5", "destination": "m5"},
+            {"name": "mTLS doctor", "status": "PASS", "detail": "HTTP 200", "origin": "m4", "destination": "m5"},
+        ]
+        section = RUNNER.render_cross_host_section("CROSS-HOST TEST — m4 ↔ m5", ["m4", "m5"], cases, [cases[-1]])
+        self.assertIn("IP address used", section)
+        self.assertIn("192.0.2.10", section)
+        self.assertIn("192.0.2.20", section)
+        self.assertEqual(section.count("1.4.0-beta-ai"), 2)
+        self.assertGreaterEqual(section.count("PASS"), 2)
+
+    def test_repeated_cases_show_pass_count_and_first_failure(self):
+        summarized = RUNNER.summarize_cases(
+            [
+                {"origin": "m4", "destination": "m5", "name": "mTLS doctor", "status": "PASS", "detail": "01"},
+                {"origin": "m4", "destination": "m5", "name": "mTLS doctor", "status": "FAIL", "detail": "connection refused"},
+                {"origin": "m4", "destination": "m5", "name": "mTLS doctor", "status": "PASS", "detail": "03"},
+            ]
+        )
+        self.assertEqual(summarized[0]["status"], "FAIL")
+        self.assertEqual(summarized[0]["detail"], "2/3 PASS · connection refused")
+
+    def test_live_repetitions_default_to_ten_and_reject_invalid_values(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(RUNNER.smoke_repetitions(), 10)
+        with mock.patch.dict(os.environ, {"ATM_SMOKE_REPETITIONS": "zero"}, clear=False):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "positive integer"):
+                RUNNER.smoke_repetitions()
 
     def test_artifact_segment_rejects_path_traversal(self):
         with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_SMOKE_RUN_ID"):
@@ -121,6 +197,29 @@ class FeatureSmokeTests(unittest.TestCase):
     def test_message_has_text_requires_exact_body(self):
         self.assertTrue(RUNNER.message_has_text({"text": "exact"}, "exact"))
         self.assertFalse(RUNNER.message_has_text({"text": "different"}, "exact"))
+
+    def test_ack_send_failure_records_only_the_reply_row(self):
+        cases = []
+        sent = {"exit_code": 0, "stdout": '{"message_id":"01NORMAL"}', "stderr": ""}
+        required = {"exit_code": 0, "stdout": '{"message_id":"01REQUIRED"}', "stderr": ""}
+        failed_ack = {"exit_code": 1, "stdout": "", "stderr": "temporary daemon failure"}
+        with mock.patch.object(RUNNER, "command", side_effect=[sent, required, failed_ack]), mock.patch.object(
+            RUNNER,
+            "wait_for_message",
+            side_effect=[
+                {"message_id": "01NORMAL", "text": mock.ANY},
+                {"message_id": "01REQUIRED", "text": mock.ANY, "requires_ack": True},
+            ],
+        ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
+            RUNNER.send_read_ack(cases, "atm", "arch-ctm", "atm-dev", "127.0.0.1", stage="loopback-IP")
+        self.assertEqual(
+            [(case["name"], case["status"]) for case in cases],
+            [
+                ("loopback-IP send/read/content", "PASS"),
+                ("loopback-IP requires-ack delivery/content", "PASS"),
+                ("loopback-IP acknowledgement reply delivery/content", "FAIL"),
+            ],
+        )
 
     def test_doctor_ready_requires_health_readiness_and_matching_pair(self):
         report = {
@@ -142,6 +241,32 @@ class FeatureSmokeTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(RUNNER.SmokeError, "no enabled"):
             RUNNER.advertised_host_from_json({"interfaces": [{"enabled": False, "advertise_host": "old"}]})
+
+    def test_dns_resolution_uses_all_returned_addresses(self):
+        with mock.patch.object(
+            RUNNER.socket,
+            "getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("192.0.2.10", 43101)),
+                (30, 1, 6, "", ("2001:db8::10", 43101, 0, 0)),
+                (2, 1, 6, "", ("192.0.2.10", 43101)),
+            ],
+        ):
+            self.assertEqual(RUNNER.resolve_dns_addresses("peer.example"), ["192.0.2.10", "2001:db8::10"])
+
+    def test_dns_case_requires_the_advertised_ip(self):
+        cases = []
+        RUNNER.add_dns_case(
+            cases,
+            "local DNS resolves m5 peer",
+            "m4",
+            "m5",
+            "m5.example",
+            "192.0.2.20",
+            lambda _hostname: ["2001:db8::20"],
+        )
+        self.assertEqual(cases[0]["status"], "FAIL")
+        self.assertIn("missing advertised IP 192.0.2.20", cases[0]["detail"])
 
     def test_remote_command_supplies_configured_peer_identity(self):
         result = {"exit_code": 0, "stdout": "{}", "stderr": ""}
@@ -186,7 +311,9 @@ class FeatureSmokeTests(unittest.TestCase):
             RUNNER, "command", return_value=result
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
-        ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"):
+        ), mock.patch.object(RUNNER, "advertised_host", return_value="192.0.2.10"), mock.patch.object(
+            RUNNER, "resolve_dns_addresses", return_value=["192.0.2.20"]
+        ), mock.patch.object(RUNNER, "remote_resolve_dns_addresses", return_value=["192.0.2.10"]):
             RUNNER.curl_doctor(
                 cases,
                 "m5",
@@ -196,10 +323,12 @@ class FeatureSmokeTests(unittest.TestCase):
                 "1.4.0-beta-ai",
                 plaintext=False,
             )
-        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS"])
+        self.assertEqual([case["status"] for case in cases], ["PASS", "PASS", "PASS", "PASS", "PASS"])
         curl_calls = [call.args[0] for call in command.call_args_list if call.args[0][0] == "curl"]
-        self.assertEqual(len(curl_calls), 1)
-        self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[0])
+        self.assertEqual(len(curl_calls), 2)
+        self.assertIn("--resolve", curl_calls[0])
+        self.assertNotIn("--resolve", curl_calls[1])
+        self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
 
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}

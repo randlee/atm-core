@@ -16,6 +16,7 @@ from pathlib import Path
 import platform
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -38,6 +39,7 @@ CROSSHOST_ACK = "crosshost-ack"
 CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
 CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
 DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
+DEFAULT_LIVE_REPETITIONS = 10
 
 
 class SmokeError(RuntimeError):
@@ -227,6 +229,47 @@ def certificate_authority(pem: Path) -> str:
     return match.group(1)
 
 
+def resolve_dns_addresses(host: str) -> list[str]:
+    """Return every address the local resolver provides for a peer hostname."""
+    try:
+        records = socket.getaddrinfo(host, 43101, type=socket.SOCK_STREAM)
+    except OSError as error:
+        raise SmokeError(f"DNS resolution for {host} failed: {error}") from error
+    return sorted({record[4][0] for record in records})
+
+
+def remote_resolve_dns_addresses(peer: str, host: str) -> list[str]:
+    """Resolve a hostname through the remote computer's normal resolver."""
+    script = (
+        "import json, socket; "
+        f"print(json.dumps(sorted({{item[4][0] for item in socket.getaddrinfo({host!r}, 43101, type=socket.SOCK_STREAM)}})))"
+    )
+    result = remote_shell(peer, f"python3 -c {shlex.quote(script)}")
+    try:
+        addresses = parse_json(result, f"{peer} DNS resolution for {host}")
+    except SmokeError:
+        raise
+    if not isinstance(addresses, list) or not all(isinstance(address, str) for address in addresses):
+        raise SmokeError(f"{peer} DNS resolution for {host} did not return an address list")
+    return addresses
+
+
+def add_dns_case(
+    cases: list[dict[str, Any]], name: str, origin: str, destination: str, hostname: str, expected_ip: str,
+    resolver: Any,
+) -> None:
+    """Record real OS DNS resolution and require the daemon's advertised IP."""
+    try:
+        addresses = resolver(hostname)
+        passed = expected_ip in addresses
+        detail = f"{hostname} -> {', '.join(addresses)}"
+        if not passed:
+            detail += f"; missing advertised IP {expected_ip}"
+        add_case(cases, name, passed, detail, origin=origin, destination=destination)
+    except SmokeError as error:
+        add_case(cases, name, False, str(error), origin=origin, destination=destination)
+
+
 def curl_doctor(
     cases: list[dict[str, Any]], peer: str, atm: str, remote_atm: str, remote_host: str, expected_version: str,
     *, plaintext: bool,
@@ -277,16 +320,76 @@ def curl_doctor(
             remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
             remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
             remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
-            add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready")
+            add_case(
+                cases,
+                f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor",
+                doctor_ready(remote_report, expected_version),
+                "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready",
+                origin=peer,
+                destination=platform.node(),
+            )
             local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
             if not plaintext:
                 local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
             local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
             local_result = command(local_curl)
             local_report = parse_json(local_result, f"curl doctor to {peer}")
-            add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready")
+            add_case(
+                cases,
+                f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
+                doctor_ready(local_report, expected_version),
+                "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready",
+                origin=platform.node(),
+                destination=peer,
+            )
+            # These checks use each host's ordinary DNS resolver. The mTLS
+            # request below intentionally omits --resolve, proving that the
+            # TCP connection follows DNS rather than the explicit-IP proof.
+            add_dns_case(
+                cases,
+                f"local DNS resolves {peer} peer",
+                platform.node(),
+                peer,
+                remote_authority,
+                remote_host,
+                resolve_dns_addresses,
+            )
+            local_hostname = platform.node()
+            local_advertised_ip = advertised_host(atm)
+            add_dns_case(
+                cases,
+                f"{peer} DNS resolves local peer",
+                peer,
+                platform.node(),
+                local_hostname,
+                local_advertised_ip,
+                lambda hostname: remote_resolve_dns_addresses(peer, hostname),
+            )
+            dns_curl = [
+                "curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET",
+                *headers,
+            ]
+            if not plaintext:
+                dns_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+            dns_curl.extend(["--data", DOCTOR_BODY, remote_url])
+            dns_report = parse_json(command(dns_curl), f"DNS curl doctor to {peer}")
+            add_case(
+                cases,
+                f"local DNS curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
+                doctor_ready(dns_report, expected_version),
+                "HTTP 200 real daemon doctor via DNS" if doctor_ready(dns_report, expected_version) else "doctor response was not healthy/ready",
+                origin=platform.node(),
+                destination=peer,
+            )
     except SmokeError as error:
-        add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} evidence", False, str(error))
+        add_case(
+            cases,
+            f"{peer} curl {'plaintext' if plaintext else 'mTLS'} evidence",
+            False,
+            str(error),
+            origin=platform.node(),
+            destination=peer,
+        )
 
 
 def remote_preflight(
@@ -307,7 +410,7 @@ def remote_preflight(
             if isinstance(doctor, dict)
             else "doctor response was not an object"
         )
-        add_case(cases, f"{peer} doctor/version", ready, detail)
+        add_case(cases, f"{peer} doctor/version", ready, detail, origin=peer, destination=peer)
         if not ready:
             return None
         interfaces = parse_json(
@@ -315,55 +418,175 @@ def remote_preflight(
             f"{peer} peer interface list",
         )
         host = advertised_host_from_json(interfaces)
-        add_case(cases, f"{peer} advertised host", True, host)
+        add_case(cases, f"{peer} advertised host", True, host, origin=peer, destination=peer)
         return host
     except SmokeError as error:
-        add_case(cases, f"{peer} preflight", False, str(error))
+        add_case(cases, f"{peer} preflight", False, str(error), origin=peer, destination=peer)
         return None
 
 
-def add_case(cases: list[dict[str, Any]], name: str, passed: bool, detail: str) -> None:
-    cases.append({"name": name, "status": "PASS" if passed else "FAIL", "detail": detail})
-    print(f"{'PASS' if passed else 'FAIL'} {name}: {detail}", flush=True)
+def add_case(
+    cases: list[dict[str, Any]],
+    name: str,
+    passed: bool,
+    detail: str,
+    *,
+    origin: str | None = None,
+    destination: str | None = None,
+) -> None:
+    """Record one observable check with the host where it started and ended."""
+    local = platform.node()
+    origin = origin or local
+    destination = destination or origin
+    cases.append(
+        {
+            "name": name,
+            "status": "PASS" if passed else "FAIL",
+            "detail": detail,
+            "origin": origin,
+            "destination": destination,
+        }
+    )
+    print(f"{'PASS' if passed else 'FAIL'} {origin} -> {destination} {name}: {detail}", flush=True)
 
 
-def render_feature_pane(feature: str, cases: list[dict[str, Any]]) -> str:
-    """Render exactly the progressive live checks executed by this invocation."""
-    doctor = next((case for case in cases if case["name"] == "doctor"), None)
-    executed = [case for case in cases if case["name"] != "doctor"]
+def render_feature_pane(feature: str, cases: list[dict[str, Any]], host: str) -> str:
+    """Render a short local test table and a short cross-host test table."""
+    local_cases = [case for case in cases if case["origin"] == host and case["destination"] == host]
+    cross_cases = [
+        case
+        for case in cases
+        if case["origin"] != case["destination"] and host in {case["origin"], case["destination"]}
+    ]
+    peer_hosts = list(
+        dict.fromkeys(
+            endpoint
+            for case in cross_cases
+            for endpoint in (case["origin"], case["destination"])
+            if endpoint != host
+        )
+    )
+    header = render_host_header(host, local_cases)
+    local_ladder_cases = [
+        case
+        for case in local_cases
+        if case["name"] != "doctor"
+        and not case["name"].endswith("doctor/version")
+        and not case["name"].endswith("advertised host")
+    ]
+    local_section = render_case_section(f"ONE-COMPUTER TEST — {host}", local_ladder_cases)
+    cross_title = f"CROSS-HOST TEST — {host} ↔ {', '.join(peer_hosts)}" if peer_hosts else "CROSS-HOST TEST"
+    cross_section = render_cross_host_section(cross_title, [host, *peer_hosts], cases, cross_cases)
+    return f"<h1>{escape(host)} — ATM smoke: {escape(feature)}</h1>{header}{local_section}{cross_section}"
+
+
+def render_host_header(host: str, cases: list[dict[str, Any]]) -> str:
+    """Render the compact preflight facts that apply to one computer."""
+    ip_address, version, doctor_detail = host_preflight_facts(host, cases)
+    doctor_passed = doctor_detail.startswith("PASS")
+    return (
+        "<table><tbody>"
+        f"<tr><th>Advertised IP</th><td>{escape(ip_address)}</td></tr>"
+        f"<tr><th>ATM version</th><td>{escape(version)}</td></tr>"
+        f"<tr class=\"{'pass' if doctor_passed else 'fail'}\"><th>Doctor</th><td>{escape(doctor_detail)}</td></tr>"
+        "</tbody></table>"
+    )
+
+
+def host_preflight_facts(host: str, cases: list[dict[str, Any]]) -> tuple[str, str, str]:
+    """Extract one daemon's advertised IP, version, and doctor result."""
+    # Unit-level callers may provide only the preflight facts. Runtime cases
+    # always carry endpoints, but omitted endpoints mean this host's local row.
+    self_cases = [
+        case
+        for case in cases
+        if case.get("origin", host) == host and case.get("destination", host) == host
+    ]
+    doctor_cases = [case for case in self_cases if case["name"] == "doctor" or case["name"].endswith("doctor/version")]
+    doctor = doctor_cases[-1] if doctor_cases else None
+    advertised = next((case for case in reversed(self_cases) if case["name"].endswith("advertised host")), None)
+    ip_address = advertised["detail"] if advertised is not None else "unknown"
+    if doctor is None:
+        return ip_address, "unknown", "NOT RUN"
+    match = re.search(r"(?:ATM |client=)([^,;\s]+)", doctor["detail"])
+    version = match.group(1) if match is not None else "unknown"
+    doctor_passes = sum(case["status"] == "PASS" for case in doctor_cases)
+    doctor_result = (
+        f"PASS {doctor_passes}/{len(doctor_cases)}"
+        if doctor_passes == len(doctor_cases)
+        else f"FAIL {doctor_passes}/{len(doctor_cases)}: {next(case['detail'] for case in doctor_cases if case['status'] != 'PASS')}"
+    )
+    return ip_address, version, doctor_result
+
+
+def render_cross_host_section(
+    title: str,
+    hosts: list[str],
+    all_cases: list[dict[str, Any]],
+    cross_cases: list[dict[str, Any]],
+) -> str:
+    """Show both link endpoints before listing their directional checks."""
+    preflight_rows = ""
+    for endpoint in hosts:
+        ip_address, version, doctor = host_preflight_facts(endpoint, all_cases)
+        preflight_rows += "<tr><td>{host}</td><td>{ip_address}</td><td>{version}</td><td>{doctor}</td></tr>".format(
+            host=escape(endpoint),
+            ip_address=escape(ip_address),
+            version=escape(version),
+            doctor=escape(doctor),
+        )
+    return (
+        f"<h2>{escape(title)}</h2>"
+        "<table><thead><tr><th>Computer</th><th>IP address used</th><th>ATM version</th><th>Doctor</th></tr>"
+        f"</thead><tbody>{preflight_rows}</tbody></table>"
+        + render_case_section("Connection checks", cross_cases)
+    )
+
+
+def render_case_section(title: str, cases: list[dict[str, Any]]) -> str:
+    """Render one concise ladder table; no narrative or duplicate logs."""
+    summarized = summarize_cases(cases)
     rows = "".join(
-        "<tr class=\"{status}\"><td>{marker}</td><td>{name}</td><td>{detail}</td></tr>".format(
+        "<tr class=\"{status}\"><td>{marker}</td><td>{origin}</td><td>{destination}</td><td>{name}</td><td>{detail}</td></tr>".format(
             status="pass" if case["status"] == "PASS" else "fail",
             marker="✓" if case["status"] == "PASS" else "✗",
+            origin=escape(case["origin"]),
+            destination=escape(case["destination"]),
             name=escape(case["name"]),
             detail=escape(case["detail"]),
         )
-        for case in executed
-    )
-    logs = "".join(
-        f"<li><strong>{escape(case['name'])}</strong>: {escape(case['status'])}</li>" for case in executed
-    )
-    failures = [case["name"] for case in executed if case["status"] == "FAIL"]
-    preflight = (
-        f"<h2>Preflight</h2><p class=\"{'pass' if doctor['status'] == 'PASS' else 'fail'}\">"
-        f"<strong>Doctor {'passed' if doctor['status'] == 'PASS' else 'failed'}.</strong><br />"
-        f"{escape(doctor['detail']).replace(chr(10), '<br />')}</p>"
-        if doctor
-        else "<h2>Preflight</h2><p class=\"fail\">Doctor was not executed.</p>"
-    )
-    assessment = (
-        "Investigation required: " + "; ".join(failures)
-        if failures
-        else "No issues found by executed checks."
+        for case in summarized
     )
     return (
-        f"<h1>ATM smoke: {escape(feature)}</h1>"
-        f"{preflight}"
-        f"<table><thead><tr><th>Status</th><th>Test case</th><th>Result / message ID</th></tr>"
+        f"<h2>{escape(title)}</h2>"
+        f"<table><thead><tr><th>Status</th><th>Origin</th><th>Destination</th><th>Ladder step</th><th>Result / message ID</th></tr>"
         f"</thead><tbody>{rows}</tbody></table>"
-        f"<h2>Session log</h2><ul>{logs}</ul>"
-        f"<h2>Assessment</h2><p class=\"assessment\">{escape(assessment)}</p>"
     )
+
+
+def summarize_cases(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse repeated attempts into one visible row without discarding failures."""
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for case in cases:
+        grouped.setdefault((case["origin"], case["destination"], case["name"]), []).append(case)
+    summarized: list[dict[str, Any]] = []
+    for (origin, destination, name), attempts in grouped.items():
+        passed = [case for case in attempts if case["status"] == "PASS"]
+        total = len(attempts)
+        all_passed = len(passed) == total
+        evidence = attempts[-1]["detail"] if all_passed else next(
+            case["detail"] for case in attempts if case["status"] != "PASS"
+        )
+        summarized.append(
+            {
+                "origin": origin,
+                "destination": destination,
+                "name": name,
+                "status": "PASS" if all_passed else "FAIL",
+                "detail": f"{len(passed)}/{total} PASS · {evidence}",
+            }
+        )
+    return summarized
 
 
 def artifact_segment(value: str, label: str) -> str:
@@ -397,23 +620,39 @@ def send_read_ack(
     required = command([atm, "send", target, required_body, "--requires-ack", "--json"])
     try:
         required_id = message_id(parse_json(required, f"ack-required send to {host}"))
-        message = wait_for_message(atm, team, required_id)
-        pending = bool(message and message.get("requires_ack", message.get("requiresAck")) is True)
-        received = pending and message_has_text(message, required_body)
-        add_case(cases, f"{stage} requires-ack delivery/content", received, required_id if received else "pending acknowledgement message or body was not received")
-        if pending:
-            reply_body = f"smoke acknowledgement {stamp}"
-            acknowledgement = command([atm, "ack", "--team", team, required_id, reply_body, "--json"])
-            reply_id = reply_message_id(parse_json(acknowledgement, f"acknowledgement of {required_id}"))
-            reply = wait_for_message(atm, team, reply_id)
-            reply_received = (
-                message_has_text(reply, reply_body)
-                and reply is not None
-                and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == required_id
-            )
-            add_case(cases, f"{stage} acknowledgement reply delivery/content", reply_received, reply_id if reply_received else "acknowledgement reply was not delivered exactly")
     except SmokeError as error:
         add_case(cases, f"{stage} requires-ack delivery/content", False, str(error))
+        return
+    message = wait_for_message(atm, team, required_id)
+    pending = bool(message and message.get("requires_ack", message.get("requiresAck")) is True)
+    received = pending and message_has_text(message, required_body)
+    add_case(
+        cases,
+        f"{stage} requires-ack delivery/content",
+        received,
+        required_id if received else "pending acknowledgement message or body was not received",
+    )
+    if not received:
+        return
+    reply_body = f"smoke acknowledgement {stamp}"
+    acknowledgement = command([atm, "ack", "--team", team, required_id, reply_body, "--json"])
+    try:
+        reply_id = reply_message_id(parse_json(acknowledgement, f"acknowledgement of {required_id}"))
+    except SmokeError as error:
+        add_case(cases, f"{stage} acknowledgement reply delivery/content", False, str(error))
+        return
+    reply = wait_for_message(atm, team, reply_id)
+    reply_received = (
+        message_has_text(reply, reply_body)
+        and reply is not None
+        and reply.get("acknowledgesMessageId", reply.get("acknowledges_message_id")) == required_id
+    )
+    add_case(
+        cases,
+        f"{stage} acknowledgement reply delivery/content",
+        reply_received,
+        reply_id if reply_received else "acknowledgement reply was not delivered exactly",
+    )
 
 
 def crosshost_send(
@@ -436,9 +675,11 @@ def crosshost_send(
             f"{peer} crosshost send/read/content",
             passed,
             sent_id if passed else "remote read did not return the sent ULID and exact body",
+            origin=platform.node(),
+            destination=peer,
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} crosshost send/read/content", False, str(error))
+        add_case(cases, f"{peer} crosshost send/read/content", False, str(error), origin=platform.node(), destination=peer)
     reverse_target = f"{identity}@{team}.{local_host}"
     reverse_body = f"smoke-crosshost-send-reverse-{peer}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     try:
@@ -455,9 +696,11 @@ def crosshost_send(
             f"{peer} reverse crosshost send/read/content",
             passed,
             sent_id if passed else "local read did not return the sent ULID and exact body",
+            origin=peer,
+            destination=platform.node(),
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} reverse crosshost send/read/content", False, str(error))
+        add_case(cases, f"{peer} reverse crosshost send/read/content", False, str(error), origin=peer, destination=platform.node())
 
 
 def crosshost_ack(
@@ -487,6 +730,8 @@ def crosshost_ack(
             f"{peer} crosshost requires-ack delivery/content",
             received_exactly,
             sent_id if received_exactly else "remote read did not return the pending message and exact body",
+            origin=platform.node(),
+            destination=peer,
         )
         if not received_exactly:
             return
@@ -507,9 +752,11 @@ def crosshost_ack(
             f"{peer} crosshost acknowledgement reply",
             passed,
             reply_id if passed else "local read did not return the exact acknowledgement reply",
+            origin=peer,
+            destination=platform.node(),
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} crosshost requires-ack", False, str(error))
+        add_case(cases, f"{peer} crosshost requires-ack", False, str(error), origin=platform.node(), destination=peer)
     reverse_target = f"{identity}@{team}.{local_host}"
     reverse_body = f"smoke-crosshost-ack-reverse-{peer}-{stamp}"
     try:
@@ -527,6 +774,8 @@ def crosshost_ack(
             f"{peer} reverse crosshost requires-ack delivery/content",
             delivered,
             sent_id if delivered else "local read did not return the pending message and exact body",
+            origin=peer,
+            destination=platform.node(),
         )
         if not delivered:
             return
@@ -551,9 +800,11 @@ def crosshost_ack(
             f"{peer} reverse crosshost acknowledgement reply",
             passed,
             reply_id if passed else "remote read did not return the exact acknowledgement reply",
+            origin=platform.node(),
+            destination=peer,
         )
     except SmokeError as error:
-        add_case(cases, f"{peer} reverse crosshost requires-ack", False, str(error))
+        add_case(cases, f"{peer} reverse crosshost requires-ack", False, str(error), origin=peer, destination=platform.node())
 
 
 def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
@@ -568,41 +819,46 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     report = directory / f"{host}-{feature}.json"
     passed = all(case["status"] == "PASS" for case in cases)
     report.write_text(json.dumps({"feature": feature, "status": "PASS" if passed else "FAIL", "cases": cases}, indent=2) + "\n", encoding="utf-8")
-    # Reuse the established AI.21-pre XHTML pane template instead of creating
-    # a second report format for the same live-daemon evidence.
-    pane = report.with_suffix(".xhtml")
-    compose(
-        PANE_TEMPLATE,
-        {
-            "title": f"ATM smoke — {feature}",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "host": host,
-            "body_html": render_feature_pane(feature, cases),
-        },
-        pane,
-    )
+    hosts = list(dict.fromkeys(case["origin"] for case in cases))
+    for destination in (case["destination"] for case in cases):
+        if destination not in hosts:
+            hosts.append(destination)
+    panes: list[tuple[str, Path]] = []
+    for evidence_host in hosts:
+        pane = directory / f"{artifact_segment(evidence_host, 'evidence host')}-{feature}.xhtml"
+        compose(
+            PANE_TEMPLATE,
+            {
+                "title": f"ATM smoke — {evidence_host}",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "host": evidence_host,
+                "body_html": render_feature_pane(feature, cases, evidence_host),
+            },
+            pane,
+        )
+        panes.append((evidence_host, pane))
+    local_pane = next((path for evidence_host, path in panes if evidence_host == host), panes[0][1])
     compose(
         ROOT / "templates" / "smoke-report" / "inbound-peer-frame.html.j2",
         {
             "title": f"ATM smoke — {feature}",
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "pane_src": pane.name,
+            "pane_src": local_pane.name,
         },
         report.with_suffix(".html"),
     )
-    panes = sorted(path for path in directory.glob("*.xhtml") if path.is_file())
     pane_html = "\n".join(
         "<section><h2>{label}</h2><iframe title=\"{title}\" src=\"{source}\"></iframe></section>".format(
-            label=escape(path.name),
-            title=escape(path.stem, quote=True),
+            label=escape(evidence_host),
+            title=escape(f"ATM smoke evidence for {evidence_host}", quote=True),
             source=escape(path.name, quote=True),
         )
-        for path in panes
+        for evidence_host, path in panes
     )
     compose(
         ROOT / "templates" / "smoke-report" / "inbound-peer-review.html.j2",
         {
-            "title": "ATM smoke evidence",
+            "title": "ATM cross-host smoke",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "pane_html": pane_html,
         },
@@ -611,7 +867,19 @@ def write_report(feature: str, cases: list[dict[str, Any]]) -> Path:
     return report
 
 
-def run_live(feature: str, peers: list[str]) -> int:
+def smoke_repetitions() -> int:
+    """Return the required consecutive-attempt count for live smoke evidence."""
+    value = os.environ.get("ATM_SMOKE_REPETITIONS", str(DEFAULT_LIVE_REPETITIONS))
+    try:
+        repetitions = int(value)
+    except ValueError as error:
+        raise SmokeError("ATM_SMOKE_REPETITIONS must be a positive integer") from error
+    if not 1 <= repetitions <= 50:
+        raise SmokeError("ATM_SMOKE_REPETITIONS must be between 1 and 50")
+    return repetitions
+
+
+def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     atm, identity, team = require_environment()
     cases: list[dict[str, Any]] = []
     doctor = command([atm, "doctor", "--json"])
@@ -627,29 +895,21 @@ def run_live(feature: str, peers: list[str]) -> int:
             and daemon_version == expected_version
         )
         detail = (
-            "status: healthy\n"
-            "readiness: ready\n"
-            f"expected version: {expected_version}\n"
-            f"CLI version: {client_version}\n"
-            f"daemon version: {daemon_version}"
+            f"READY · ATM {daemon_version}"
             if healthy
-            else (
-                f"expected version: {expected_version}\n"
-                f"CLI version: {client_version}\n"
-                f"daemon version: {daemon_version}"
-            )
+            else f"expected={expected_version}; cli={client_version}; daemon={daemon_version}"
         )
         add_case(cases, "doctor", healthy, detail)
     except SmokeError as error:
         add_case(cases, "doctor", False, str(error))
     if not all(case["status"] == "PASS" for case in cases):
-        print(f"FAIL evidence: {write_report(feature, cases)}")
-        return 1
+        return cases
     # The first live stage deliberately targets the daemon's advertised
     # physical interface.  It must be an ordinary host-qualified peer send;
     # DNS `localhost` and a direct in-process route would hide that contract.
     try:
         physical_host = advertised_host(atm)
+        add_case(cases, "advertised host", True, physical_host)
         send_read_ack(
             cases,
             atm,
@@ -713,6 +973,19 @@ def run_live(feature: str, peers: list[str]) -> int:
                     remote_host,
                     physical_host,
                 )
+    return cases
+
+
+def run_live(feature: str, peers: list[str]) -> int:
+    """Run each live ladder check repeatedly; one pass cannot hide a flake."""
+    cases: list[dict[str, Any]] = []
+    repetitions = smoke_repetitions()
+    for attempt in range(1, repetitions + 1):
+        print(f"LIVE SMOKE ATTEMPT {attempt}/{repetitions}", flush=True)
+        attempt_cases = run_live_attempt(feature, peers)
+        for case in attempt_cases:
+            case["attempt"] = attempt
+        cases.extend(attempt_cases)
     report = write_report(feature, cases)
     passed = all(case["status"] == "PASS" for case in cases)
     print(f"{'PASS' if passed else 'FAIL'} evidence: {report}")
