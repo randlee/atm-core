@@ -137,13 +137,31 @@ impl PeerDrainCoordinator {
             .map_err(|_| AtmError::daemon_unavailable("peer drain coordinator slot lock poisoned"))
     }
 
+    /// Makes room only by discarding a fully idle slot. Running drains and
+    /// scheduled retries remain live recovery state and are never evicted.
+    fn reserve_slot(
+        slots: &mut BTreeMap<HostName, PeerDrainSlot>,
+        host: &HostName,
+    ) -> Result<(), AtmError> {
+        if slots.contains_key(host) || slots.len() < MAX_PEER_DRAIN_SLOTS {
+            return Ok(());
+        }
+        let idle_host = slots
+            .iter()
+            .find(|(_, slot)| !slot.running && slot.next_attempt_at.is_none())
+            .map(|(host, _)| host.clone());
+        if let Some(idle_host) = idle_host {
+            slots.remove(&idle_host);
+            return Ok(());
+        }
+        Err(AtmError::daemon_unavailable(
+            "peer drain coordinator capacity exhausted",
+        ))
+    }
+
     fn acquire(&self, host: &HostName, deadline: RequestDeadline) -> Result<(), AtmError> {
         let mut slots = self.slots()?;
-        if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(host) {
-            return Err(AtmError::daemon_unavailable(
-                "peer drain coordinator capacity exhausted",
-            ));
-        }
+        Self::reserve_slot(&mut slots, host)?;
         let slot = slots.entry(host.clone()).or_default();
         slot.requested_generation = slot.requested_generation.saturating_add(1);
         while slots.get(host).is_some_and(|slot| slot.running) {
@@ -470,11 +488,7 @@ impl PeerDrainCoordinator {
             }
             let next_attempt_at = retry_timestamp(INITIAL_BACKOFF);
             let mut slots = self.slots()?;
-            if slots.len() >= MAX_PEER_DRAIN_SLOTS && !slots.contains_key(&peer.host) {
-                return Err(AtmError::daemon_unavailable(
-                    "peer drain coordinator capacity exhausted",
-                ));
-            }
+            Self::reserve_slot(&mut slots, &peer.host)?;
             slots.entry(peer.host.clone()).or_default().next_attempt_at =
                 Some(Instant::now() + INITIAL_BACKOFF);
             drop(slots);
@@ -623,14 +637,19 @@ mod tests {
     };
     use atm_core::RequestDeadline;
     use atm_core::error::AtmError;
+    use atm_core::protocol::ResponseEnvelope;
+    use atm_core::send::WriteRequest;
     use atm_core::types::{HostName, IsoTimestamp};
     use atm_storage::{
         HttpsInterface, LocalCertificate, OutboundMessageQuery, PeerConfigStore, PeerSyncPolicy,
         StoredPeerWrite, TrustedPeer,
     };
     use chrono::Utc;
-    use std::sync::{Arc, mpsc};
+    use std::num::NonZeroU16;
+    use std::sync::{Arc, Mutex, mpsc};
     use std::time::{Duration, Instant};
+
+    use crate::https_transport::HttpsMessageTransport;
 
     struct EmptyPeerStore;
 
@@ -679,6 +698,81 @@ mod tests {
             _: Duration,
         ) -> Result<Vec<StoredPeerWrite>, AtmError> {
             Ok(Vec::new())
+        }
+    }
+
+    struct ConfiguredPeerStore {
+        peer: TrustedPeer,
+        policy: PeerSyncPolicy,
+    }
+
+    impl PeerConfigStore for ConfiguredPeerStore {
+        fn list_interfaces(&self) -> Result<Vec<HttpsInterface>, AtmError> {
+            Ok(Vec::new())
+        }
+        fn save_interface(&self, _: &HttpsInterface) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_interface(&self, _: std::net::SocketAddr) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn local_certificate(&self) -> Result<Option<LocalCertificate>, AtmError> {
+            Ok(None)
+        }
+        fn save_local_certificate(&self, _: &LocalCertificate) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn list_trusted_peers(&self) -> Result<Vec<TrustedPeer>, AtmError> {
+            Ok(vec![self.peer.clone()])
+        }
+        fn trusted_peer(&self, host: &HostName) -> Result<Option<TrustedPeer>, AtmError> {
+            Ok((host == &self.peer.host).then(|| self.peer.clone()))
+        }
+        fn save_trusted_peer(&self, _: &TrustedPeer) -> Result<(), AtmError> {
+            Ok(())
+        }
+        fn remove_trusted_peer(&self, _: &HostName) -> Result<bool, AtmError> {
+            Ok(false)
+        }
+        fn peer_sync_policy(&self, _: &HostName) -> Result<PeerSyncPolicy, AtmError> {
+            Ok(self.policy)
+        }
+    }
+
+    #[derive(Default)]
+    struct CapturingOutbound {
+        not_before: Mutex<Vec<IsoTimestamp>>,
+        limits: Mutex<Vec<NonZeroU16>>,
+    }
+
+    impl OutboundMessageQuery for CapturingOutbound {
+        fn page_for_peer(
+            &self,
+            _: &HostName,
+            not_before: IsoTimestamp,
+            _: Option<(IsoTimestamp, atm_core::schema::AtmMessageId)>,
+            limit: NonZeroU16,
+            _: Duration,
+        ) -> Result<Vec<StoredPeerWrite>, AtmError> {
+            self.not_before
+                .lock()
+                .expect("captured cutoff lock")
+                .push(not_before);
+            self.limits.lock().expect("captured limit lock").push(limit);
+            Ok(Vec::new())
+        }
+    }
+
+    struct NeverCalledTransport;
+
+    impl HttpsMessageTransport for NeverCalledTransport {
+        fn deliver(
+            &self,
+            _: WriteRequest,
+            _: &TrustedPeer,
+            _: RequestDeadline,
+        ) -> Result<ResponseEnvelope, AtmError> {
+            panic!("an empty recovery page must not call the peer transport")
         }
     }
 
@@ -816,13 +910,16 @@ mod tests {
     }
 
     #[test]
-    fn coordinator_rejects_a_new_host_once_slot_capacity_is_reached() {
+    fn coordinator_rejects_a_new_host_when_every_slot_has_live_recovery_state() {
         let coordinator = coordinator_for_slots();
         let mut slots = coordinator.slots().expect("slot lock");
         for index in 0..super::MAX_PEER_DRAIN_SLOTS {
             slots.insert(
                 format!("peer-{index}.example.test").parse().expect("host"),
-                PeerDrainSlot::default(),
+                PeerDrainSlot {
+                    next_attempt_at: Some(Instant::now() + Duration::from_secs(60)),
+                    ..PeerDrainSlot::default()
+                },
             );
         }
         drop(slots);
@@ -831,6 +928,86 @@ mod tests {
             coordinator
                 .acquire(&host, RequestDeadline::after(Duration::from_secs(1)))
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn coordinator_evicts_an_idle_slot_when_capacity_is_reached() {
+        let coordinator = coordinator_for_slots();
+        let mut slots = coordinator.slots().expect("slot lock");
+        let evicted: HostName = "idle.example.test".parse().expect("host");
+        slots.insert(evicted.clone(), PeerDrainSlot::default());
+        for index in 1..super::MAX_PEER_DRAIN_SLOTS {
+            slots.insert(
+                format!("scheduled-{index}.example.test")
+                    .parse()
+                    .expect("host"),
+                PeerDrainSlot {
+                    next_attempt_at: Some(Instant::now() + Duration::from_secs(60)),
+                    ..PeerDrainSlot::default()
+                },
+            );
+        }
+        drop(slots);
+
+        let new_host: HostName = "new.example.test".parse().expect("host");
+        coordinator
+            .acquire(&new_host, RequestDeadline::after(Duration::from_secs(1)))
+            .expect("an idle slot must make room for a new peer");
+        let slots = coordinator.slots().expect("slot lock");
+        assert!(slots.contains_key(&new_host));
+        assert!(!slots.contains_key(&evicted));
+        assert_eq!(slots.len(), super::MAX_PEER_DRAIN_SLOTS);
+    }
+
+    #[test]
+    fn recovery_passes_max_message_age_cutoff_to_storage() {
+        let host: HostName = "peer.example.test".parse().expect("host");
+        let max_message_age = Duration::from_secs(60);
+        let outbound = Arc::new(CapturingOutbound::default());
+        let transport: Arc<dyn HttpsMessageTransport> = Arc::new(NeverCalledTransport);
+        let coordinator = PeerDrainCoordinator::new(
+            Arc::new(ConfiguredPeerStore {
+                peer: TrustedPeer {
+                    host: host.clone(),
+                    fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+                    enabled: true,
+                    https_port: NonZeroU16::new(43101).expect("port"),
+                },
+                policy: PeerSyncPolicy {
+                    max_message_age,
+                    max_batch_messages: NonZeroU16::new(1).expect("batch cap"),
+                },
+            }),
+            outbound.clone(),
+            Arc::new(Mutex::new(Some(transport))),
+            Arc::new(|_| {}),
+        );
+
+        let before = Utc::now();
+        assert_eq!(
+            coordinator
+                .drain(&host, RequestDeadline::after(Duration::from_secs(1)))
+                .expect("empty recovery drain"),
+            0
+        );
+        let after = Utc::now();
+        let captured = outbound.not_before.lock().expect("captured cutoff lock");
+        assert_eq!(captured.len(), 1, "one empty page query is sufficient");
+        let cutoff = captured[0].into_inner();
+        let age = chrono::Duration::from_std(max_message_age).expect("bounded age");
+        assert!(
+            cutoff >= before - age && cutoff <= after - age,
+            "storage must receive the actual max_message_age lower bound"
+        );
+        assert_eq!(
+            outbound
+                .limits
+                .lock()
+                .expect("captured limit lock")
+                .as_slice(),
+            &[NonZeroU16::new(1).expect("non-zero")],
+            "reconciliation forwards the configured page cap to storage"
         );
     }
 }
