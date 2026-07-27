@@ -14,8 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/plans/phase-ai/sprint-ai-11-windows-transport.md" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — the doc was corrected to match code, not the reverse. docs/plans/phase-ai/sprint-ai-11-windows-transport.md 'Boundary contract' section (lines 55-69) now reads 'pub enum AuthenticatedIngress { Local, Peer }' (unit variants, matching crates/atm-core/src/api.rs:721-723 exactly) and explicitly states 'The private HTTP adapter maps ApiResponse to status, headers, and a route-specific body. It does not expose a generic HTTP response domain type' -- directly disclaiming the HttpResponse/HttpStatus/HttpHeaders types this finding flagged as missing. LocalCapability now exists at crates/atm-core/src/local_http.rs:23 as a standalone type (used by the capability-file record path, not as an AuthenticatedIngress payload) and AuthenticatedPeer/LocalHttpEndpointRecord as originally specified are gone from the doc too. No remaining doc/code mismatch. Confirmed via direct read of both doc and code, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T05:39:02Z"^^xsd:dateTime ;
   triage:openOn <urn:atm:triage:worktree/pAI-s11/568723c5> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s12/b64e8358> ;
