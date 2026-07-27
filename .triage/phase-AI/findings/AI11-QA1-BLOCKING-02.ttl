@@ -14,8 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — crates/atm-daemon/src/local_tcp_transport.rs now has a #[cfg(windows)] ACL-restriction path (lines 417-456) using DACL_SECURITY_INFORMATION/PROTECTED_DACL_SECURITY_INFORMATION to build an owner-only protected DACL from the current file owner's SID, applied to the capability record alongside the existing #[cfg(unix)] 0o600 restriction (line 406). No longer default-inherited ACLs. Confirmed via direct code read, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-21T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-02/s12/1> ;

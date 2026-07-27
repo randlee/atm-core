@@ -14,8 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "docs/project-plan.md Phase AI table -- check whether AI.12-16 rows are also missing since those sprints have not yet reported completion" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — docs/project-plan.md:978 now has 'AI.11 | route-specific HTTP bodies and Windows loopback-TCP local transport' row; the original 'no AI.11 entry, table jumps AI.7->AI.10' complaint no longer holds. Separate observation, NOT part of this finding's original claim and not blocking its closure: the row's status column still reads 'in progress' though AI.11 has long since merged forward through many later sprints (s27+) -- that staleness is a new, distinct doc-status defect; filing a fresh finding if not already tracked elsewhere is appropriate, but does not reopen this one. Confirmed via direct grep of current file, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-21T12:28:16Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s11/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI11-QA1-BLOCKING-04/pAI-s12/1> ;

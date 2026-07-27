@@ -21,7 +21,8 @@
   triage:openOn <urn:atm:triage:worktree/s20/34392e5c> ;
   triage:promoteTo <urn:atm:triage:worktree/s20/34392e5c> ;
   triage:highestOpenBranch "feature/pAI-s20-hermes-bridge-deployment" ;
-  triage:highestFixedBranch "none" .
+  triage:highestFixedBranch "none" ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- still OPEN, not eligible for close/waive. crates/atm-core/src/delivery_policy.rs:349 resolve_write_recipient_snapshot now calls provenance.is_remote_origin() (crates/atm-core/src/provenance.rs:58, = target_host_qualified && !authenticated_peer) instead of the raw host check, but this is still an independent host-derived routing decision made outside PostWriteRouter::dispatch. crates/atm-daemon/src/runtime_health/peer_delivery_router.rs PostWriteRouter::dispatch (lines 15-52) separately inspects message.address.host() (lines 31-35) to make its own routing decision. Two host-based decision points remain, exactly matching this finding's original complaint; the delivery_policy.rs side was refactored/renamed, not removed. Confirmed via direct code read, not self-report." .
 
 <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-01/s20/1>
   a triage:Occurrence ;

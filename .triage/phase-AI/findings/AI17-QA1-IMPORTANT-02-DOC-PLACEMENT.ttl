@@ -14,8 +14,12 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified at integrate/phase-AI@f3b6a77a — docs/user-documents/identity-and-team.md:66-69 now places the ATM_CHAT_ID sentence inside the guidance bullet list alongside ATM_TEAM/ATM_IDENTITY ('use ATM_CHAT_ID to select the optional ambient chat identity...'), not in a nav-footer paragraph. Confirmed via direct file read, not self-report." ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI17-QA1-IMPORTANT-02-DOC-PLACEMENT/pAI-s17/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s17/5560bf8d> ;

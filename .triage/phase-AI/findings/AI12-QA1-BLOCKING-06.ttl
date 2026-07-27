@@ -65,7 +65,8 @@
   triage:openOn <urn:atm:triage:worktree/s14/ef0e5e2b> ;
   triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
   triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
-  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> .
+  triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified against integrate/phase-AI tip as part of arch-ctm's 27-item legacy close/waive batch (task #1177). crates/atm-core/src/send/post_write_tests.rs (10 #[test] fns) and crates/atm-core/src/send/tests.rs both greped directly -- confirmed still genuinely OPEN, not disproven: no test named/covering 'Ordering' (persistence/mutation-precedes-router-action instrumentation), 'Peer write' (present-host-persists-once-then-calls-peer-transport), 'Inbound peer' (mTLS-delivered write reaches writer without re-forwarding), or 'Ingress parity' (CLI/graft/UDS/TCP/HTTPS fixtures share instrumentation points) exists anywhere in the workspace. duplicate_ulid_with_same_immutable_payload_is_idempotent (send/tests.rs:554) partially covers 'Idempotency' but the replay-returns-existing-record-without-repeating-side-effects half is not confirmed covered. Declining to close; status remains open as recorded." .
 
 <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-06/s11/1>
   a triage:Occurrence ;

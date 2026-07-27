@@ -14,8 +14,12 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): independently re-verified both remediation halves at integrate/phase-AI@f3b6a77a. (1) docs/plans/phase-ai/sprint-ai-10.md line 61-64 now explicitly names the retired artifacts ('the pre-AI.6 local frame transport, the pre-AI.11 Windows named-pipe/AF_UNIX transport') and states 'Unix HTTP/UDS remains required by REQ-CORE-TRANSPORT-001 and ADR-033' -- no longer an unscoped phrase. (2) docs/plans/phase-ai/sprint-ai-14-mac-peer-smoke.md:12 and sprint-ai-15-windows-peer-smoke.md:12 both now carry 'Transport invariant: per REQ-CORE-TRANSPORT-001 and ADR-033, Unix hosts...' restating the matrix inline. Both prescribed doc remediations from this finding's notes are present. Note: the separate code-level dead-UDS-client-reachability defect (AI11-QA5-RBQA-F001/AI14-QA1-RBQA-F001) remains open independently -- this finding was always scoped doc-only per its own notes and is not affected by that." ;
+  triage:dispatchReady false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-10/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-14/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI14-BLOCKING-01/sprint-ai-15/1> ;

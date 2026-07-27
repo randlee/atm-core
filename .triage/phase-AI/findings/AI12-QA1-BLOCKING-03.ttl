@@ -27,7 +27,8 @@
   triage:openOn <urn:atm:triage:worktree/s15/5a7a762f> ;
   triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
   triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
-  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime .
+  triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- still OPEN, not eligible for close/waive. crates/atm-architecture/tests/boundary_enforcement.rs canonical_write_router_has_one_host_routing_decision() (line 308) does scan every .rs file under crates/ via canonical_write_modules()/collect_rust_files(), so delivery_policy.rs is included. But HostRoutingVisitor::visit_expr_method_call's peer-delivery classification is still gated behind is_runtime_dispatcher_source() (used at line 715) and equivalent per-callsite provenance checks -- the same narrow gating this finding originally flagged. This is consistent with AI12-QA1-BLOCKING-01 remaining open (delivery_policy.rs's independent host check at line 349 is a live violation the visitor does not attribute as a second PostWriteRouter-equivalent decision point). Confirmed via direct code read, not self-report." .
 
 <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-03/s12/1>
   a triage:Occurrence ;

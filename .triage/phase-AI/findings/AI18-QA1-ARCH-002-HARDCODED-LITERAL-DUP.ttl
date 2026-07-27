@@ -14,14 +14,19 @@
   triage:sweepScope "crate" ;
   triage:category "QA" ;
   triage:severity "blocking" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "invalid" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-22T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s18/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s19/1> ;
   triage:openOn <urn:atm:triage:worktree/s18/b8f46a1a> ;
   triage:openOn <urn:atm:triage:worktree/s19/2e22b6b4> ;
-  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> .
+  triage:promoteTo <urn:atm:triage:worktree/s19/2e22b6b4> ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- initially declined close, still OPEN: same underlying scripts/test_atm_graft_python.py:43,45,47 duplicate literal occurrence as AI18-QA1-ARCH-001-HARDCODED-LITERAL. Confirmed via direct file read, not self-report." ;
+  triage:closureNote "2026-07-27 (quality-mgr): superseding the correctionNote above, same reasoning as AI18-QA1-ARCH-001-HARDCODED-LITERAL (companion finding, identical root cause). Independently confirmed via .just/lint-config.toml [identities] forbidden_literals that neither 'omega-prime' nor 'hermes' is a configured production-canonical literal, and the enforcing lint (.just/check_test_identity_literals.py) only scans workspace Rust files -- scripts/test_atm_graft_python.py is a Python script outside its scope. Closing as invalid: the 'production-significant' premise does not hold against the actual configured rule, independently confirmed against the lint config and code." .
 
 <urn:atm:triage:occurrence/AI18-QA1-ARCH-002-HARDCODED-LITERAL-DUP/s18/1>
   a triage:Occurrence ;
