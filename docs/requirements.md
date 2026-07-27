@@ -3653,6 +3653,9 @@ mail correctness.
     adapters must not infer local/peer status from socket family or address
   - Unix/Windows parity requires equivalent local HTTP request/response tests:
     UDS plus loopback TCP on Unix and loopback TCP on Windows
+  - Unix clients select UDS by default. `ATM_LOCAL_TRANSPORT=tcp` is the
+    explicit, observable loopback-TCP parity/diagnostic mode; an unavailable
+    UDS endpoint must fail rather than silently falling back to TCP
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit HTTP
   router and injectable typed application handlers.
