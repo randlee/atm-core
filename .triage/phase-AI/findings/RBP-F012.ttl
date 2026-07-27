@@ -64,3 +64,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RBP-F012>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). SharedHttpsTransport type alias (pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;) defined once at crates/atm-daemon/src/https_transport.rs:92, now consumed consistently at all 3 former divergent sites: composition.rs:138, peer_drain_coordinator.rs:100/120, runtime_health.rs:165/176 (plus construction sites at runtime_health.rs:450/974). No leftover unaliased occurrences confirmed by ruthless-boundary-qa workspace sweep. All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

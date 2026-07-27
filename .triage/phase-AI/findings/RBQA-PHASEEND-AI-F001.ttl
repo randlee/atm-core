@@ -52,3 +52,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RBQA-PHASEEND-AI-F001>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). crates/atm-core/src/direct_boundaries.rs deleted entirely; no mod direct_boundaries remains in atm-core/src/lib.rs; workspace-wide sweep (ruthless-boundary-qa, rust-qa-agent, req-qa, arch-qa) confirms zero remaining Rust callers/re-exports. .just/lint_boundaries.py's SCB_CONFIG_BOUNDARY_FILES still lists the retired path as an explicit reintroduction guard, which is intentional defensive tooling, not a leftover leak. All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

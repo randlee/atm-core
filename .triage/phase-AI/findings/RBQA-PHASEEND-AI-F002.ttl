@@ -40,3 +40,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RBQA-PHASEEND-AI-F002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). SCB_CONFIG_GENERIC_HELPER_PATTERNS in .just/lint_boundaries.py (lines 175-180) now targets the real duplicated symbol load_workspace_config in all 4 pattern variants (was previously targeting the nonexistent load_team_config). Exercised by fixture test test_collect_boundary_violations_rejects_scb_config_rule_family in .just/tests/test_lint_boundaries.py. rust-qa-agent additionally confirmed via a live run of .just/lint_boundaries.py against the real repo (boundaries passed). All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

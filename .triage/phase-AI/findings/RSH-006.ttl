@@ -52,3 +52,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RSH-006>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). PEER_SYNC_REQUEST_DEADLINE named constant (pub(crate) const PEER_SYNC_REQUEST_DEADLINE: Duration = Duration::from_secs(5);) defined once at peer_drain_coordinator.rs:29, replacing all 3 former bare-literal occurrences (peer_drain_coordinator.rs:483/528, runtime_health.rs:654). Non-blocking follow-up recorded as RSH-668-001: the new constant lacks a doc-comment rationale for the 5s choice, unlike sibling SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE which documents its bound -- tracked separately, not blocking this closure. All 6 QA-1 reviewers independently confirmed the duplication itself is resolved. CI green 8/8 legs." .

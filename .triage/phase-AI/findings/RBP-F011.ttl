@@ -40,3 +40,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RBP-F011>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #668 (fix/phase-ai-rbp-boundary-cleanup @ de438f19). PeerConfigStore and OutboundMessageQuery (crates/atm-storage/src/contract.rs:625,662) now both bound on sealed::Sealed, matching sibling storage-boundary traits (MessageStore, RosterStore, StorageNotifier, NudgeTemplateOverrideStore). Workspace-wide sweep (ruthless-boundary-qa, rust-qa-agent) confirms every implementor (SqlitePeerConfigStore, SqliteOutboundMessageQuery, atm-runtime/atm-daemon/atm-core test doubles, atm CLI in-memory store) received a matching Sealed impl -- no orphaned impls, compiles clean. All 6 QA-1 reviewers independently confirmed. CI green 8/8 legs." .

@@ -40,3 +40,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/RSH-005>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "quality-mgr (2026-07-27): QA-1 for PR #666 (fix/phase-ai-peer-drain-partial-retry @ 3e16092d) closes this gap. New deterministic test crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:494-647 (reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_rows) with fixture PartialPageFailureThenReceiver (:66-129) covers the mid-page/partial-failure branch of drain()'s pagination/retry loop (peer_drain_coordinator.rs:277, unchanged by this PR) with a genuine >1-message page (max_batch_messages=8, 2 writes queued). Combined with pre-existing multi-page loop-continuation coverage in explicit_peer_sync_resends_one_bounded_immutable_write (peer_reconciliation.rs:258-366), both structurally distinct branches of drain() now have direct test coverage. rust-service-hardening-agent (disposition-only re-check), req-qa, rust-qa-agent (10x + 25x repeated execution, no flakiness), rust-best-practices-agent, and arch-qa all independently confirmed in this round; production code confirmed unchanged via git diff (single file, +225/-0). Note: this record lives on integrate/phase-AI (committed b0510a3e) but was not yet present in the fix/phase-ai-peer-drain-partial-retry worktree, which forked from the parent commit 1ea59d89 before b0510a3e landed -- reviewers correctly identified and traced this to the canonical record rather than treating it as a fabricated citation. Residual (non-blocking, informational, not a new finding): no single test combines a >1-page drain() sequence with a failure occurring on page 2+ rather than page 1; left for a future low-priority follow-up if judged worth the coverage." .

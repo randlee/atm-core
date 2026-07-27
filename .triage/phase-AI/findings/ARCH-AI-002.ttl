@@ -40,3 +40,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/ARCH-AI-002>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #667 (fix/phase-ai-arch-line-ceilings @ 46d2af22) closes this finding. Module extraction of crates/atm-daemon-client/src/http_exchange.rs (new, 134 lines, all pub(crate), wired into the hot local-IPC path via exchange_request_with_transport) plus the pre-existing compatibility.rs/local_transport.rs splits reduced lib.rs's non-test body. Independently re-ran the repo's actual canonical classifier (lint_common.classify_rust_test_scope + is_code_line -- the literal per-file code path .just/check_line_counts.py executes) directly against lib.rs: prod=859, test=459, total=1481 -- under the 1000-line ceiling, matching arch-ctm's cited figure exactly. Confirmed by req-qa, arch-qa, ruthless-boundary-qa (boundary clean, no leaked internals), rust-qa-agent (fmt/clippy/tests clean), rust-best-practices-agent (no dead code from extraction), and quality-mgr direct verification." .

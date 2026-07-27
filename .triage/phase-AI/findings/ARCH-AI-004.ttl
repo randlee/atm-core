@@ -40,3 +40,10 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+<urn:atm:triage:finding/ARCH-AI-004>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #667 (fix/phase-ai-arch-line-ceilings @ 46d2af22). This finding is closed as a metric-definition correction, not a code fix -- crates/atm/src/main.rs is byte-identical to the pre-PR baseline (1148 total lines, unchanged, confirmed by arch-qa, req-qa, and quality-mgr independently). Root cause of the original citation: quality-mgr's own phase-end review cited the TOTAL line count (1148), not the PROD (non-test) metric that RULE-003 actually enforces ('active limits: prod<=1000' per .just/check_line_counts.py's own summary). quality-mgr independently ran the repo's actual canonical classifier (lint_common.classify_rust_test_scope + is_code_line -- the literal per-file code path check_line_counts.py executes) directly against this file: prod=805, test=246 -- UNDER the 1000-line ceiling, matching arch-ctm's cited figure exactly. Two reviewers (arch-qa, req-qa) approximated the non-test count via a naive 'everything before the trailing #[cfg(test)] mod tests block' method and got ~1001, over the ceiling; this approximation is wrong for the same reason as ARCH-AI-003 -- scattered inline #[cfg(test)]-gated blocks earlier in the file are missed by the naive method but correctly excluded by the real classifier. Unlike ARCH-AI-003, this file lives under crates/atm/src/ and so IS within .just/check_line_counts.py's normal <crate_root>/src/ scan root -- no scanner blind-spot concern applies here, only the naive-approximation discrepancy among reviewers, now resolved by direct authoritative execution." .

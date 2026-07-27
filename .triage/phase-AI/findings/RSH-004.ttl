@@ -61,3 +61,10 @@
   triage:path "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:finding/RSH-004>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:correctionNote "quality-mgr (2026-07-27): QA-1 for PR #666 (fix/phase-ai-peer-drain-partial-retry @ 3e16092d) closes residual gap (2). New deterministic test crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:494-647 (reconciliation_retries_a_partial_page_without_losing_or_duplicating_receiver_rows) with fixture PartialPageFailureThenReceiver (:66-129) configures PeerSyncPolicy.max_batch_messages=NonZeroU16::new(8) with 2 canonical writes queued, injects a transport failure after the first page item is delivered to the real receiver dispatcher but before the response is confirmed, and asserts the retry redelivers without duplicating the already-persisted receiver row (recipient_message_count 1 -> 2, delivered.len()==3 with delivered[0].origin_message_id==delivered[1].origin_message_id, no loss/no dup). Independently re-verified by req-qa, rust-service-hardening-agent (disposition-only re-check), rust-qa-agent (10x + 25x repeated execution, no flakiness), rust-best-practices-agent (pass), and arch-qa (pass) in this round; production code (peer_drain_coordinator.rs, runtime_health/peer_authority.rs, runtime_health/peer_delivery_router.rs) confirmed unchanged via git diff (single file, +225/-0). Both gap (1) (moot, already noted) and gap (2) (now closed) are resolved; finding closed." .
