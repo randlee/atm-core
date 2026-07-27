@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 from pathlib import Path
 import unittest
@@ -25,6 +26,24 @@ VERIFY_MESSAGE = [
     "-c",
     "import json; print(json.dumps({'message': {'message_id': '01TEST'}}))",
 ]
+REJECTION_EVENT = {
+    "action": "request",
+    "outcome": "rejected",
+    "message": "HTTPS peer request was rejected before or during shared API routing",
+    "fields": {"subsystem": "https_transport"},
+}
+ROUTING_EVENT = {"action": "peer_delivery", "outcome": "write_persisted"}
+
+
+def encoded_event() -> str:
+    return json.dumps(
+        {
+            "action": "request",
+            "outcome": "rejected",
+            "message": "HTTPS peer request was rejected before or during shared API routing",
+            "fields": {"subsystem": "https_transport", "error_code": "ATM_REJECTED"},
+        }
+    )
 
 
 def public_atm_command(command, _timeout):
@@ -53,7 +72,14 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             config = sample_config(log)
 
             with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
-                with patch.object(RUNNER, "run_command", side_effect=public_atm_command):
+                def command_with_rejection_event(command, timeout):
+                    result = public_atm_command(command, timeout)
+                    if command[1:] == ["reject"]:
+                        with log.open("a", encoding="utf-8") as stream:
+                            stream.write(f"{encoded_event()}\n")
+                    return result
+
+                with patch.object(RUNNER, "run_command", side_effect=command_with_rejection_event):
                     self.assertEqual(RUNNER.execute(config, root / "evidence", 2), 0)
             evidence = (root / "evidence" / "peer-smoke-evidence.json").read_text(
                 encoding="utf-8"
@@ -61,10 +87,10 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
             self.assertIn('"semantic_verification"', evidence)
             self.assertIn('"status": "passed"', evidence)
 
-    def test_rejection_fails_when_new_log_window_shows_delivery(self):
+    def test_required_rejection_event_is_verified_from_structured_log(self):
         with tempfile.TemporaryDirectory() as temp:
             log = Path(temp) / "daemon.log"
-            log.write_text("before\npeer delivery\n", encoding="utf-8")
+            log.write_text(f"before\n{encoded_event()}\n", encoding="utf-8")
             case = {
                 "message_ulid": "01TEST",
                 "verification": {
@@ -75,14 +101,64 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
                             "equals": "$message_ulid",
                         }
                     },
-                    "forbidden_daemon_log_entries": ["peer delivery"],
+                    "required_daemon_log_events": [REJECTION_EVENT],
+                    "forbidden_daemon_log_events": [ROUTING_EVENT],
+                },
+            }
+
+            result = RUNNER.verify_semantics(case, 2, "before\n", str(log))
+
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(result["daemon_log_event_count"], 1)
+
+    def test_synthetic_token_does_not_satisfy_required_rejection_event(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / "daemon.log"
+            log.write_text("before\nlegacy-token\n", encoding="utf-8")
+            case = {
+                "message_ulid": "01TEST",
+                "verification": {
+                    "assertions": {
+                        "receiver_visible": {
+                            "command": VERIFY_MESSAGE,
+                            "json_path": "message.message_id",
+                            "equals": "$message_ulid",
+                        }
+                    },
+                    "required_daemon_log_events": [REJECTION_EVENT],
                 },
             }
 
             result = RUNNER.verify_semantics(case, 2, "before\n", str(log))
 
             self.assertEqual(result["status"], "fail")
-            self.assertIn("forbidden post-rejection", result["failures"][0])
+            self.assertIn("required structured rejection event", result["failures"][-1])
+
+    def test_forbidden_structured_event_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / "daemon.log"
+            log.write_text(
+                f"before\n{encoded_event()}\n{json.dumps(ROUTING_EVENT)}\n",
+                encoding="utf-8",
+            )
+            case = {
+                "message_ulid": "01TEST",
+                "verification": {
+                    "assertions": {
+                        "receiver_visible": {
+                            "command": VERIFY_MESSAGE,
+                            "json_path": "message.message_id",
+                            "equals": "$message_ulid",
+                        }
+                    },
+                    "forbidden_daemon_log_events": [ROUTING_EVENT],
+                },
+            }
+
+            result = RUNNER.verify_semantics(case, 2, "before\n", str(log))
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("forbidden structured event", result["failures"][-1])
 
     def test_rejection_fails_closed_when_daemon_log_rotates(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -98,7 +174,7 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
                             "equals": "$message_ulid",
                         }
                     },
-                    "forbidden_daemon_log_entries": ["peer delivery"],
+                    "required_daemon_log_events": [REJECTION_EVENT],
                 },
             }
 
@@ -106,6 +182,29 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "fail")
             self.assertIn("rotated or truncated", result["failures"][0])
+
+    def test_rejection_fails_closed_when_log_delta_is_not_jsonl(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / "daemon.log"
+            log.write_text("before\nnot a structured event\n", encoding="utf-8")
+            case = {
+                "message_ulid": "01TEST",
+                "verification": {
+                    "assertions": {
+                        "receiver_visible": {
+                            "command": VERIFY_MESSAGE,
+                            "json_path": "message.message_id",
+                            "equals": "$message_ulid",
+                        }
+                    },
+                    "required_daemon_log_events": [REJECTION_EVENT],
+                },
+            }
+
+            result = RUNNER.verify_semantics(case, 2, "before\n", str(log))
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("non-JSON line", result["failures"][0])
 
     def test_validation_rejects_constant_message_assertion(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -117,6 +216,36 @@ class PeerPairSemanticVerificationTests(unittest.TestCase):
 
             with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
                 with self.assertRaisesRegex(RuntimeError, "must bind to `\\$message_ulid`"):
+                    RUNNER.validate(config)
+
+    def test_validation_rejects_legacy_synthetic_log_entry_field(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            log = root / "daemon.log"
+            log.write_text("ready\n", encoding="utf-8")
+            config = sample_config(log)
+            rejection = next(
+                case for case in config["cases"] if case["id"] == "untrusted_or_allowlist_rejection"
+            )
+            rejection["verification"]["forbidden_daemon_log_entries"] = ["legacy-token"]
+
+            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+                with self.assertRaisesRegex(RuntimeError, "was removed"):
+                    RUNNER.validate(config)
+
+    def test_validation_requires_structured_rejection_event(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            log = root / "daemon.log"
+            log.write_text("ready\n", encoding="utf-8")
+            config = sample_config(log)
+            rejection = next(
+                case for case in config["cases"] if case["id"] == "untrusted_or_allowlist_rejection"
+            )
+            del rejection["verification"]["required_daemon_log_events"]
+
+            with patch.object(RUNNER.shutil, "which", return_value=str(Path(__file__).resolve())):
+                with self.assertRaisesRegex(RuntimeError, "requires required_daemon_log_events"):
                     RUNNER.validate(config)
 
     def test_validation_rejects_path_shadow_when_install_root_is_selected(self):
@@ -162,7 +291,8 @@ def sample_config(log: Path):
         if typed_error:
             case["typed_error_code"] = "ATM_REJECTED"
         if case_id == "untrusted_or_allowlist_rejection":
-            case["verification"]["forbidden_daemon_log_entries"] = ["peer delivery"]
+            case["verification"]["required_daemon_log_events"] = [REJECTION_EVENT]
+            case["verification"]["forbidden_daemon_log_events"] = [ROUTING_EVENT]
         cases.append(case)
     return {
         "schema_version": 1,
