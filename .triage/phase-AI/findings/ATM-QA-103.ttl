@@ -15,12 +15,8 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
-  triage:closedBy "arch-ctm" ;
-  triage:dispatchReady false ;
-  triage:closureNote "Resolved in AI27-CIREG-002 reconciliation: finding-level status now matches all fixed occurrences after independent current-tip and CI verification. No code change was required." ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
   triage:triagedAt "2026-07-27T05:35:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-PHASE-END-QA-1 ;
   triage:foundAt "2026-07-27T05:30:00Z"^^xsd:dateTime ;
@@ -32,9 +28,8 @@
   triage:file ".triage/phase-AI/findings/AI27-CIREG-002.ttl" ;
   triage:line 18 ;
   triage:snippet "finding-level status open at line 18 and 74, contradicting occurrence-level fixed markers" ;
-  triage:status "fixed" ;
-  triage:closed true ;
-  triage:closureNote "AI27-CIREG-002 finding-level status was reconciled to fixed after current-tip source inspection, local just lint, and green PR #623 Windows Just lint." ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:occursIn <urn:atm:triage:worktree/integrate_phase_ai_1ea59d89> .
@@ -45,3 +40,20 @@
   triage:branch "integrate/phase-AI" ;
   triage:headSha "1ea59d89" ;
   triage:orderIndex 999 .
+
+# Append-only reconciliation closure. The preceding open blocks preserve the
+# audit trail; this later block is the authoritative last-block-wins state.
+<urn:atm:triage:finding/ATM-QA-103>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:dispatchReady false ;
+  triage:closureNote "Resolved by the append-only AI27-CIREG-002 reconciliation: current-tip source inspection, local just lint, and PR #623's green Windows Just lint establish that the finding-level status and all recorded occurrences are fixed. No code change is required." .
+
+<urn:atm:triage:occurrence/ATM-QA-103/1>
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-27T06:40:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
+  triage:closureNote "Closed by the append-only AI27-CIREG-002 reconciliation after current-tip source inspection, local just lint, and PR #623's green Windows Just lint." .
