@@ -37,6 +37,7 @@ use shared_db::{SharedDb, deserialize_json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[cfg(any(test, feature = "test-support"))]
 #[derive(Debug)]
 pub(crate) struct SqliteWriterLockGuard {
     connection: Connection,
@@ -117,6 +118,7 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
     }
 }
 
+#[cfg(any(test, feature = "test-support"))]
 impl Drop for SqliteWriterLockGuard {
     fn drop(&mut self) {
         let _ = self.connection.execute_batch("ROLLBACK;");
@@ -129,6 +131,7 @@ pub struct TestOnlySqliteWriterLockGuard {
     _guard: SqliteWriterLockGuard,
 }
 
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) fn hold_sqlite_writer_lock(
     path: impl AsRef<Path>,
 ) -> Result<SqliteWriterLockGuard, AtmError> {
