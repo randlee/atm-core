@@ -431,16 +431,35 @@ fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PyAgentAddress, PyNudge, PythonNudgeInjector};
+    use std::fs;
+    use std::sync::Arc;
+
+    use super::{
+        PyAgentAddress, PyGraftSession, PyGraftSessionOptions, PyNudge, PythonNudgeInjector,
+    };
+    use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
     use atm_core::boundary::PostSendHookEvent;
+    use atm_core::error::AtmError;
     use atm_core::types::{AgentName, ChatId, TeamName};
-    use atm_graft::HostNudgeInjector;
-    use pyo3::prelude::Python;
+    use atm_graft::{GraftClient, HostNudgeInjector};
+    use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
+    use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
     const TEST_TEAM: &str = "test-team";
+
+    #[derive(Debug)]
+    struct UnusedDaemonClient;
+
+    impl atm_core::boundary::sealed::Sealed for UnusedDaemonClient {}
+
+    impl DaemonApiClient for UnusedDaemonClient {
+        fn execute(&self, _request: ApiRequest) -> Result<ApiResponse, AtmError> {
+            panic!("the receiver lifecycle must not issue daemon requests")
+        }
+    }
 
     #[test]
     fn typed_address_round_trips_optional_chat_id() {
@@ -475,6 +494,74 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn pyo3_receiver_lifecycle_activates_snapshots_and_closes_real_session() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("temporary lifecycle workspace");
+        let workspace_root = tempdir.path().join("workspace");
+        fs::create_dir_all(&workspace_root).expect("create lifecycle workspace");
+        fs::write(
+            workspace_root.join(".atm.toml"),
+            "[atm.graft]\nenabled = true\n",
+        )
+        .expect("enable graft receiver");
+
+        let caller = PyAgentAddress::new(
+            TEST_SENDER.to_string(),
+            TEST_TEAM.to_string(),
+            Some("1234".to_string()),
+        )
+        .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: std::sync::Mutex::new(Some(GraftClient::from_transport_for_test(Arc::new(
+                UnusedDaemonClient,
+            )))),
+            receiver: std::sync::Mutex::new(None),
+        };
+        let options = PyGraftSessionOptions::new(
+            workspace_root.display().to_string(),
+            TEST_SENDER.to_string(),
+            TEST_TEAM.to_string(),
+        )
+        .expect("receiver options");
+
+        Python::attach(|py| {
+            let session = Py::new(py, session).expect("PyO3 session");
+            let options = Py::new(py, options).expect("PyO3 options");
+            let callback_module = PyModule::from_code(
+                py,
+                c"def callback(_nudge):\n    pass\n",
+                c"receiver_lifecycle_test.py",
+                c"receiver_lifecycle_test",
+            )
+            .expect("callback module");
+            let callback = callback_module
+                .getattr("callback")
+                .expect("callback")
+                .unbind();
+            let session = session.bind(py);
+
+            session
+                .call_method1("activate_receiver", (options, callback))
+                .expect("activate receiver");
+            let snapshot = session.call_method0("snapshot").expect("snapshot");
+            assert_eq!(
+                snapshot
+                    .getattr("state")
+                    .expect("snapshot state")
+                    .extract::<String>()
+                    .expect("snapshot state string"),
+                "listening"
+            );
+            session.call_method0("close").expect("close receiver");
+            let closed_snapshot = session
+                .call_method0("snapshot")
+                .expect_err("closed session must not expose an active receiver");
+            assert!(closed_snapshot.to_string().contains("not active"));
+        });
     }
 
     #[test]
