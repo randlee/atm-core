@@ -31,7 +31,8 @@
   triage:openOn <urn:atm:triage:worktree/s16/1c23ac04> ;
   triage:promoteTo <urn:atm:triage:worktree/s16/1c23ac04> ;
   triage:highestOpenBranch "feature/pAI-s16-offline-reconciliation" ;
-  triage:highestFixedBranch "none" .
+  triage:highestFixedBranch "none" ;
+  triage:correctionNote "2026-07-26 (quality-mgr): independently re-verified at integrate/phase-AI tip against arch-ctm's legacy close/waive batch recommendation -- still OPEN, not eligible for close/waive. crates/atm-core/src/send/mod.rs PreparedWrite::finish (line 282) is now correctly gated -- it is only invoked by PostWriteRouter::dispatch after peer delivery succeeds, per the doc comment at line 200: 'a peer-delivery error therefore leaves it pending.' However, crates/atm-core/src/ack/mod.rs ack_mail_with_runtime (line 175) -- the CLI-facing legacy path exercised by `atm ack` -- still calls crate::send::write_mail_with_runtime directly (line 180), which persists and immediately calls .finish() with no router involvement and no peer-delivery gating. This is exactly the finding's original complaint ('the legacy ack_mail path lacks any router/rollback mechanism'). The router-gated daemon path is fixed; the legacy CLI path is not. Confirmed via direct code read, not self-report." .
 
 <urn:atm:triage:occurrence/AI12-QA1-BLOCKING-05/s11/1>
   a triage:Occurrence ;
