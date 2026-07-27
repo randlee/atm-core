@@ -14,9 +14,13 @@
   triage:severity "Important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-07-25T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-27T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-07-27 (quality-mgr): top-level status was stale relative to the occurrence record. Independently re-verified against integrate/phase-AI@f1ef7cfb: the old global peer_sync_progress Mutex<HashMap<HostName,PeerSyncProgress>> is gone; crates/atm-daemon/src/peer_drain_coordinator.rs::PeerDrainCoordinator now uses per-host slots (Mutex<BTreeMap<HostName, PeerDrainSlot>>). sync_peer() (line 562) calls acquire()/release() (each independently locking/unlocking the slots mutex) with self.drain(peer, deadline) -- the actual network I/O -- running in between, outside the mutex. Regression test crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:259 peer_sync_for_one_peer_does_not_hold_the_progress_map_during_another_delivery confirms cross-peer independence. Confirmed via direct code read, not self-report." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-003/pAI-s24/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s24/c326cbe7> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s24/c326cbe7> .
