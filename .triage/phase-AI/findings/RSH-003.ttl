@@ -27,12 +27,12 @@
 
 <urn:atm:triage:occurrence/RSH-003/pAI-s24/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 716 ;
-  triage:snippet "let mut progress = self.peer_sync_progress.lock().map_err(...)?; ... self.reconcile_peer(...)?;" ;
+  triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
+  triage:line 162 ;
+  triage:snippet "PeerDrainCoordinator acquires/releases per-host slot state before and after drain network I/O" ;
   triage:status "fixed" ;
   triage:closed true ;
-  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — peer_sync (peer_sync.rs) now releases the per-peer progress lock via drop(state) at line 112 before calling reconcile_peer at line 115. Lock scope narrowed from entire network I/O to just cooldown-state read/write. (2026-07-26)" ;
+  triage:closureNote "quality-mgr: verified against integrate/phase-AI head — PeerDrainCoordinator slot acquisition/release is confined to peer_drain_coordinator.rs:162-197 and :277-345; drain network I/O runs outside the slots mutex. Regression coverage: crates/atm-daemon/src/tests/runtime_root/peer_reconciliation.rs:426-535. (2026-07-27)" ;
   triage:branch "feature/pAI-s24-host-qualified-ack-receipt" ;
   triage:headSha "c326cbe7" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s24/c326cbe7> .

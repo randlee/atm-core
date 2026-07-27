@@ -47,15 +47,17 @@ substitutes TCP reachability for message delivery.
    duplicate-ULID idempotence, unavailable-peer, and failed-ack non-mutation
    evidence in this record.
 
-## AI.14 execution record
+## AI.14 execution record (historical / superseded)
 
-AI.14 Role A preflight at `ef0e5e2b` is **BLOCKED before peer traffic**.
-The branch client issues an HTTP `POST` over local UDS, while the branch daemon
-rejects it as a retired framed-protocol request (`unsupported ATM daemon frame
-magic 0x504f5354`). `atm doctor --json` remains healthy because its request
-does not exercise the write path. The sanitized record is
-`artifacts/phase-ai/ai14/local-preflight-failure.json`.
+The AI.14 Role A preflight at `ef0e5e2b` recorded a **historical** branch-state
+failure before peer traffic: the branch client issued an HTTP `POST` over local
+UDS while that branch daemon still rejected the request as retired framed
+protocol (`unsupported ATM daemon frame magic 0x504f5354`). The sanitized record
+is `artifacts/phase-ai/ai14/local-preflight-failure.json`.
 
-This is a local transport compatibility defect, not a two-Mac result. No
-physical-peer case is claimed and AI.14 remains open until the owning prior
-transport sprint restores the compatible local HTTP path.
+That incident is superseded by the current canonical route: the daemon writes
+and delegates from `crates/atm-daemon/src/runtime_health.rs:558-577`, and
+`crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:14-53` owns the
+post-write routing decision. It is not current evidence for a transport
+failure, and it does not claim physical-peer proof. The release blocker remains
+the unsatisfied two-Mac and Mac↔Windows evidence in the rows above.
