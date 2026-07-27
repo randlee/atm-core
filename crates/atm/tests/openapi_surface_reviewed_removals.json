@@ -1,5 +1,5 @@
 {
-  "review": "Reviewed retired OpenAPI endpoints; each removal is absent from the live typed codec.",
+  "review": "Reviewed removals for retired endpoints that have no live canonical router route.",
   "removals": [
     "openapi/paths//team/{teamName}",
     "openapi/paths//teams",

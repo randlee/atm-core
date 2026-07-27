@@ -58,6 +58,10 @@ pub struct DoctorExecutionContext {
     pub identity: Option<AgentName>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<ReleaseVersion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cli_schema_version: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_api_version: Option<crate::protocol::HttpApiVersion>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

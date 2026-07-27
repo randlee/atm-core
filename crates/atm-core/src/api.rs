@@ -21,7 +21,7 @@ use base64::Engine as _;
 
 pub const MAX_HTTP_REQUEST_BODY_BYTES: usize = 1_048_576;
 /// Version of the daemon's HTTP request contract.
-pub const HTTP_API_VERSION: u16 = 1;
+pub const HTTP_API_VERSION: &str = crate::protocol::HTTP_API_VERSION;
 const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 const CLEAR_OUTCOME_HEADER: &str = "X-ATM-Clear-Outcome";
 const MESSAGES_PATH: &str = "/v1/atm/messages";

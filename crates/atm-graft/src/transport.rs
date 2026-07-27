@@ -1,7 +1,9 @@
 use atm_core::api::{ApiRequest, ApiResponse, DaemonApiClient};
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::protocol::{CompatibilityPreflight, RequestEnvelope, ResponseEnvelope};
+use atm_core::protocol::{
+    CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, RequestEnvelope, ResponseEnvelope,
+};
 use atm_daemon_client::{
     DaemonLocalIpcEndpoint, exchange_request as daemon_exchange_request,
     try_connect as daemon_try_connect,
@@ -34,7 +36,8 @@ impl GraftLocalIpcClientTransport {
                 &self.endpoint,
                 CompatibilityPreflight {
                     client_release: atm_daemon_client::ReleaseVersion::current(),
-                    wire_version: 1,
+                    cli_schema_version: CLI_SCHEMA_VERSION,
+                    http_api_version: HttpApiVersion::current(),
                 },
                 SAME_HOST_REQUEST_DEADLINE,
             )?;

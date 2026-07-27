@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use interprocess::local_socket::Name;
 #[cfg(not(windows))]
 use interprocess::local_socket::{GenericFilePath, ToFsName};
-use serde::{Deserialize, Deserializer, Serialize};
+use semver::Version;
+use serde::{Deserialize, Serialize};
 
 use crate::ack::AckOutcome;
 use crate::clear::{ClearOutcome, ClearQuery};
@@ -24,6 +25,7 @@ use crate::send::{SendOutcome, WriteRequest};
 use crate::types::{AgentName, HostName, IsoTimestamp, TeamName};
 
 const DAEMON_SOCKET_FILENAME: &str = "atm-daemon.sock";
+const MAX_VERSION_LENGTH: usize = 256;
 
 /// Shared protocol send-shaped response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,47 +91,16 @@ pub enum PeerSyncDisposition {
     RateLimited,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub const CLI_SCHEMA_VERSION: u16 = 1;
+pub const HTTP_API_VERSION: &str = "1.0.0";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(transparent)]
-pub struct ReleaseVersion(String);
+pub struct ReleaseVersion(Version);
 
 impl ReleaseVersion {
     pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
-        let value = value
-            .as_ref()
-            .trim()
-            .strip_prefix('v')
-            .unwrap_or(value.as_ref().trim());
-        let (core, prerelease) = value.split_once('-').unwrap_or((value, ""));
-        // Cargo package metadata uses `beta.N`, while the project-facing
-        // Phase AI release labels use `beta-N`. Both name the same bounded
-        // prerelease channel and are accepted on the protocol boundary.
-        let beta_sequence = prerelease
-            .strip_prefix("beta-")
-            .or_else(|| prerelease.strip_prefix("beta."));
-        if !prerelease.is_empty()
-            && !beta_sequence.is_some_and(|sequence| {
-                !sequence.is_empty() && sequence.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        {
-            return Err(AtmError::new(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM release version `{value}`"),
-            ));
-        }
-        let mut parts = core.split('.');
-        let valid = (0..3).all(|_| {
-            parts.next().is_some_and(|part| {
-                !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
-            })
-        }) && parts.next().is_none();
-        if !valid {
-            return Err(AtmError::new(
-                AtmErrorCode::ClientDaemonVersionIncompatible,
-                format!("invalid ATM release version `{value}`"),
-            ));
-        }
-        Ok(Self(value.to_string()))
+        parse_semver(value.as_ref(), "ATM release version").map(Self)
     }
 
     pub fn current() -> Self {
@@ -137,36 +108,101 @@ impl ReleaseVersion {
     }
 }
 
-impl<'de> Deserialize<'de> for ReleaseVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(value).map_err(serde::de::Error::custom)
+impl fmt::Display for ReleaseVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.to_string().as_str())
     }
 }
 
-impl fmt::Display for ReleaseVersion {
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct HttpApiVersion(Version);
+
+impl HttpApiVersion {
+    pub fn parse(value: impl AsRef<str>) -> Result<Self, AtmError> {
+        parse_semver(value.as_ref(), "ATM HTTP API version").map(Self)
+    }
+
+    pub fn current() -> Self {
+        Self::parse(HTTP_API_VERSION).expect("HTTP API version must be semver")
+    }
+
+    pub const fn major(&self) -> u64 {
+        self.0.major
+    }
+}
+
+fn parse_semver(value: &str, label: &str) -> Result<Version, AtmError> {
+    let value = value.trim();
+    if value.len() > MAX_VERSION_LENGTH {
+        return Err(AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!("{label} exceeds the {MAX_VERSION_LENGTH}-byte limit"),
+        ));
+    }
+    Version::parse(value).map_err(|_| {
+        AtmError::new(
+            AtmErrorCode::ClientDaemonVersionIncompatible,
+            format!("invalid {label} `{value}`"),
+        )
+    })
+}
+
+impl fmt::Display for HttpApiVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(self.0.to_string().as_str())
+    }
+}
+
+#[cfg(test)]
+mod compatibility_version_tests {
+    use super::{HttpApiVersion, ReleaseVersion};
+
+    #[test]
+    fn release_versions_accept_prereleases_and_reject_non_semver() {
+        assert!(ReleaseVersion::parse("1.3.2-alpha.1").is_ok());
+        assert!(ReleaseVersion::parse("1.3.2-beta.1").is_ok());
+        assert!(ReleaseVersion::parse("1.3").is_err());
+        assert!(ReleaseVersion::parse("1.3.2-").is_err());
+    }
+
+    #[test]
+    fn http_api_version_exposes_independent_major() {
+        let version = HttpApiVersion::parse("1.4.0").expect("HTTP API version");
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.to_string(), "1.4.0");
+        assert!(HttpApiVersion::parse("1.4").is_err());
+    }
+
+    #[test]
+    fn semver_parsing_rejects_oversized_values_before_parser() {
+        let oversized = format!("1.2.3-{}", "a".repeat(super::MAX_VERSION_LENGTH));
+        assert!(ReleaseVersion::parse(&oversized).is_err());
+        assert!(HttpApiVersion::parse(&oversized).is_err());
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CompatibilityPreflight {
     pub client_release: ReleaseVersion,
-    pub wire_version: u16,
+    pub cli_schema_version: u16,
+    pub http_api_version: HttpApiVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CompatibilityVerdict {
     Compatible {
         daemon_release: ReleaseVersion,
+        daemon_schema_version: u16,
+        daemon_http_api_version: HttpApiVersion,
     },
     Incompatible {
         client_release: ReleaseVersion,
         daemon_release: ReleaseVersion,
+        client_schema_version: u16,
+        daemon_schema_version: u16,
+        client_http_api_version: HttpApiVersion,
+        daemon_http_api_version: HttpApiVersion,
         code: AtmErrorCode,
     },
 }
@@ -383,10 +419,10 @@ mod tests {
     use std::path::PathBuf;
 
     use super::{
-        DAEMON_SOCKET_FILENAME, HeartbeatActivity, ReleaseVersion, RequestEnvelope,
-        ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse, daemon_socket_path, daemon_socket_path_from_home,
+        DAEMON_SOCKET_FILENAME, HeartbeatActivity, RequestEnvelope, ResponseEnvelope,
+        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
+        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        daemon_socket_path, daemon_socket_path_from_home,
     };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
@@ -396,30 +432,6 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, ReadSelection, TeamName};
     use serial_test::serial;
     use tempfile::TempDir;
-
-    #[test]
-    fn release_version_accepts_semver_prereleases_and_rejects_non_semver() {
-        assert_eq!(
-            ReleaseVersion::parse("v1.3.2-beta.24")
-                .expect("prerelease version")
-                .to_string(),
-            "1.3.2-beta.24"
-        );
-        assert_eq!(
-            ReleaseVersion::parse("1.3.2-beta.25")
-                .expect("Cargo prerelease version")
-                .to_string(),
-            "1.3.2-beta.25"
-        );
-        assert!(ReleaseVersion::parse("1.3").is_err());
-    }
-
-    #[test]
-    fn release_version_rejects_invalid_wire_deserialization() {
-        let error = serde_json::from_str::<ReleaseVersion>("\"not-semver\"")
-            .expect_err("wire versions must use the same semver validation");
-        assert!(error.to_string().contains("invalid ATM release version"));
-    }
 
     #[test]
     fn heartbeat_request_envelope_round_trips() {
@@ -535,11 +547,7 @@ mod tests {
     #[test]
     #[serial(env)]
     fn daemon_socket_path_rejects_override() {
-        let alternate_socket = std::env::temp_dir().join("alternate.sock");
-        let _env = EnvGuard::set_many([(
-            "ATM_DAEMON_SOCKET",
-            Some(alternate_socket.to_str().expect("temporary path is UTF-8")),
-        )]);
+        let _env = EnvGuard::set_many([("ATM_DAEMON_SOCKET", Some("alternate.sock"))]);
         assert!(daemon_socket_path().is_err());
     }
 

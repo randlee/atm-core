@@ -587,7 +587,7 @@ impl DaemonRequestDispatcher {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
             RequestEnvelope::CompatibilityPreflight(preflight) => Ok(
-                ResponseEnvelope::CompatibilityVerdict(self.compatibility_verdict(preflight)?),
+                ResponseEnvelope::CompatibilityVerdict(Self::compatibility_verdict(preflight)?),
             ),
             RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
                 query,
@@ -663,18 +663,27 @@ impl DaemonRequestDispatcher {
 
 impl DaemonRequestDispatcher {
     fn compatibility_verdict(
-        &self,
         preflight: atm_core::protocol::CompatibilityPreflight,
     ) -> Result<CompatibilityVerdict, AtmError> {
         let daemon_release = ReleaseVersion::current();
-        if preflight.wire_version == atm_core::api::HTTP_API_VERSION
-            && preflight.client_release == daemon_release
+        let daemon_schema_version = atm_core::protocol::CLI_SCHEMA_VERSION;
+        let daemon_http_api_version = atm_core::protocol::HttpApiVersion::current();
+        if preflight.cli_schema_version == daemon_schema_version
+            && preflight.http_api_version.major() == daemon_http_api_version.major()
         {
-            return Ok(CompatibilityVerdict::Compatible { daemon_release });
+            return Ok(CompatibilityVerdict::Compatible {
+                daemon_release,
+                daemon_schema_version,
+                daemon_http_api_version,
+            });
         }
         Ok(CompatibilityVerdict::Incompatible {
             client_release: preflight.client_release,
             daemon_release,
+            client_schema_version: preflight.cli_schema_version,
+            daemon_schema_version,
+            client_http_api_version: preflight.http_api_version,
+            daemon_http_api_version,
             code: AtmErrorCode::ClientDaemonVersionIncompatible,
         })
     }
@@ -834,6 +843,8 @@ impl DaemonRequestDispatcher {
                 "atm_daemon::runtime_health::daemon_context",
             ),
             version: Some(ReleaseVersion::current()),
+            cli_schema_version: Some(atm_core::protocol::CLI_SCHEMA_VERSION),
+            http_api_version: Some(atm_core::protocol::HttpApiVersion::current()),
         });
         finalize_doctor_report(&mut report);
         Ok(report)
@@ -852,8 +863,14 @@ impl ApiRouter for DaemonRequestDispatcher {
                 "daemon API request exceeded its same-host deadline before routing",
             ));
         }
-        let request = request.into_inner();
-        if let RequestEnvelope::Write(write) = &request {
+        let mut request = request.into_inner();
+        if let RequestEnvelope::Write(write) = &mut request {
+            if ingress == AuthenticatedIngress::Local {
+                // The local IPC payload is caller-controlled. Peer provenance is
+                // established only by the HTTPS adapter after authentication.
+                // Strip a local claim before applying the canonical provenance gate.
+                write.authenticated_source_host = None;
+            }
             let write_ingress = match &ingress {
                 AuthenticatedIngress::Local => WriteIngress::Local,
                 AuthenticatedIngress::Peer => WriteIngress::Peer,

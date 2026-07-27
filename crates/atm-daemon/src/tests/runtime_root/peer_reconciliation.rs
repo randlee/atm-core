@@ -25,6 +25,8 @@ impl HttpsMessageTransport for BlockingPeerDelivery {
         Ok(ResponseEnvelope::CompatibilityVerdict(
             atm_core::protocol::CompatibilityVerdict::Compatible {
                 daemon_release: atm_core::protocol::ReleaseVersion::current(),
+                daemon_schema_version: atm_core::protocol::CLI_SCHEMA_VERSION,
+                daemon_http_api_version: atm_core::protocol::HttpApiVersion::current(),
             },
         ))
     }
@@ -106,7 +108,7 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
         .dispatch(RequestEnvelope::Write(Box::new(
             ack.clone().into_write_request(),
         )))
-        .expect_err("failed remote acknowledgement must return the transport error");
+        .expect_err("failed remote acknowledgement must remain unconfirmed");
     assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
     assert_eq!(
         failing

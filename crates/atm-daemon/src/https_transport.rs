@@ -42,6 +42,10 @@ const PLAINTEXT_PEER_SOURCE_HOST_HEADER: &str = "X-ATM-Peer-Source-Host";
 /// Plain HTTP is deliberately available only for an explicit, temporary smoke
 /// run so connectivity can be isolated from certificate configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(
+    dead_code,
+    reason = "the explicit smoke-wire selector is retained for externally driven daemon smoke runs"
+)]
 pub enum PeerWireSecurity {
     MutualTls,
     PlaintextTest,
@@ -150,7 +154,13 @@ pub(crate) struct HttpsTransport {
 #[derive(Debug)]
 enum HttpsTransportMode {
     MutualTls(TlsIdentity),
-    PlaintextTest { source_host: HostName },
+    #[allow(
+        dead_code,
+        reason = "the explicit smoke transport is constructed by externally driven daemon smoke runs"
+    )]
+    PlaintextTest {
+        source_host: HostName,
+    },
 }
 
 impl HttpsTransport {
@@ -160,6 +170,10 @@ impl HttpsTransport {
         })
     }
 
+    #[allow(
+        dead_code,
+        reason = "the explicit smoke transport is constructed by externally driven daemon smoke runs"
+    )]
     pub(crate) fn plaintext_test(source_host: HostName) -> Self {
         Self {
             mode: HttpsTransportMode::PlaintextTest { source_host },
@@ -293,6 +307,10 @@ enum ListenerSecurity {
         config: Arc<ServerConfig>,
         verifier: Arc<PinnedClientVerifier>,
     },
+    #[allow(
+        dead_code,
+        reason = "the explicit smoke listener is constructed by externally driven daemon smoke runs"
+    )]
     PlaintextTest,
 }
 
@@ -319,6 +337,10 @@ impl HttpsListenerSet {
     /// Binds the same HTTP peer ingress without TLS only for an explicitly
     /// configured smoke run. The HTTP decoder and router remain identical to
     /// the authenticated listener; only peer authentication is absent.
+    #[allow(
+        dead_code,
+        reason = "the explicit smoke listener is constructed by externally driven daemon smoke runs"
+    )]
     pub(crate) fn bind_plaintext_test(
         interfaces: &[HttpsInterface],
         router: Arc<dyn ApiRouter + Send + Sync>,
