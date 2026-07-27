@@ -6,6 +6,8 @@
   <string>ai.hermes.atm-graft-@PROFILE@</string>
   <key>ProgramArguments</key>
   <array>
+    <string>@BRIDGE_GATE_COMMAND@</string>
+    <string>@HERMES_GATEWAY_READINESS_COMMAND@</string>
     <string>@BRIDGE_COMMAND@</string>
   </array>
   <key>EnvironmentVariables</key>

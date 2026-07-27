@@ -1,7 +1,7 @@
 ---
 id: AI.20
 title: Hermes Bridge Deployment and Runbook
-status: complete
+status: planned
 branch: feature/pAI-s20-hermes-bridge-deployment
 worktree: ../atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment
 target: integrate/phase-AI
@@ -58,9 +58,11 @@ remain blocked on AI.19 `PASS`.
   mapping.
 
 Every plist sets `ATM_TEAM`, `ATM_IDENTITY`, `ATM_CHAT_ID`, the bridge
-module path, and an explicit profile log path. `KeepAlive` is allowed only for
-the bridge process; it cannot restart or own the daemon. A readiness probe
-must confirm the Hermes gateway is ready before the bridge activates.
+module path, and an explicit profile log path. Its ordered
+`ProgramArguments` are a profile-owned gate executable, a Hermes-gateway
+readiness executable, and the bridge runner. The gate must run the readiness
+executable and `exec` the bridge runner only after zero exit. `KeepAlive` is
+allowed only for the bridge process; it cannot restart or own the daemon.
 
 ## Boundary and Non-Goals
 

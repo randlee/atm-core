@@ -12,9 +12,23 @@ Start with
 and replace every example value in an operator-owned registry. The checked-in
 template is
 [`templates/ai.hermes.atm-graft-PROFILE.plist`](templates/ai.hermes.atm-graft-PROFILE.plist).
-Replace each `@...@` token from one registry row. `@BRIDGE_COMMAND@` is the
-profile-owned Hermes runner that imports `atm_graft_hermes_bridge`; it is not a
-daemon command. The runner uses its ordinary inbound-user-message hook.
+Replace each `@...@` token from one registry row. The three
+`ProgramArguments` tokens are absolute executable paths with this exact
+contract:
+
+```text
+@BRIDGE_GATE_COMMAND@ @HERMES_GATEWAY_READINESS_COMMAND@ @BRIDGE_COMMAND@
+```
+
+`@BRIDGE_GATE_COMMAND@` is a profile-owned wrapper. It must run
+`@HERMES_GATEWAY_READINESS_COMMAND@`; only after that command exits zero may it
+`exec` `@BRIDGE_COMMAND@`. A failed readiness command must leave the bridge
+unstarted and return its nonzero status to launchd, which may retry the same
+gate through `KeepAlive`. This is the required pre-activation readiness gate;
+the active probe below verifies an already-started job and does not replace it.
+`@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
+`atm_graft_hermes_bridge`; it is not a daemon command. The runner uses its
+ordinary inbound-user-message hook.
 
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.
@@ -45,7 +59,9 @@ just verify-hermes-bridge-deployment /operator/hermes-bridge-profiles.tsv --acti
 The active probe verifies every job is independently registered, every graft
 receiver path is available, then performs a controlled `SIGTERM` and
 `launchctl kickstart -k` restart for each profile. It must not run against the
-example registry.
+example registry. Before bootstrap, verify the rendered plist has the ordered
+gate/readiness/bridge `ProgramArguments` contract above; no operator may bypass
+the gate by putting the bridge runner directly in the first argument slot.
 
 ## Restart, logs, and diagnosis
 
