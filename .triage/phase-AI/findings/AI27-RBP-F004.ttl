@@ -12,7 +12,11 @@
   triage:severity "Minor" ;
   triage:repeatable true ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e). Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): PeerDeliveryProjection.statuses (crates/atm-daemon/src/peer_delivery_observability.rs ~line 59) now has a concurrency-rationale comment explaining the lock scope (tiny/bounded map, atomic projection+sequence updates, why Mutex over RwLock). runtime_health.rs now has a shared fn lock_runtime_mutex(mutex, resource) -> Result<MutexGuard, AtmError> helper (line 61) that centralizes the poison-handling map_err pattern, called from all 4 remaining Mutex-lock sites (lines 477, 483, 719, 726) instead of duplicating the boilerplate." ;
   triage:dispatchReady false ;
   triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
@@ -26,15 +30,16 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBP-F004/pAI-s27/6> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
-  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" .
+  triage:highestOpenBranch "none (fixed)" .
 
 <urn:atm:triage:occurrence/AI27-RBP-F004/pAI-s27/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/peer_delivery_observability.rs" ;
   triage:line 54 ;
   triage:snippet "pub(crate) struct PeerDeliveryProjection { statuses: Mutex<BTreeMap<HostName, PeerLinkStatus>> } -- no concurrency-rationale comment" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
@@ -44,8 +49,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 447 ;
   triage:snippet "duplicated mutex poison-handling boilerplate site 1/5" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
@@ -55,8 +61,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 456 ;
   triage:snippet "duplicated mutex poison-handling boilerplate site 2/5" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
@@ -66,8 +73,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 636 ;
   triage:snippet "duplicated mutex poison-handling boilerplate site 3/5" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
@@ -77,8 +85,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 701 ;
   triage:snippet "duplicated mutex poison-handling boilerplate site 4/5" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
@@ -88,8 +97,9 @@
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
   triage:line 794 ;
   triage:snippet "duplicated mutex poison-handling boilerplate site 5/5" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e); see finding-level closureEvidence. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .

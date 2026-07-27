@@ -15,9 +15,13 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e) closed occurrences 8-9. Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): crates/atm-daemon/src/peer_drain_coordinator.rs now has remote_delivery_error_with_cause() which folds the source cause into the wrapped error's cause chain before re-wrapping (drain()/deliver_current() call sites), and decode_page_requests() uses map_err(|source| AtmError::mailbox_read(...).with_cause(source)) -- no remaining bare map_err(|_| ...) discards. Combined with the already-fixed occurrences 1-7 in https_transport.rs, all 9 occurrences are now cause-preserving." ;
   triage:dispatchReady true ;
-  triage:closureNote "PARTIAL -- independently re-verified against real code on fix/ai28-phase-general-cleanup at commit 025bc6c7 (not accepted from self-report). Occurrences 1-7 (all in crates/atm-daemon/src/https_transport.rs: TcpListener::bind:389, set_nonblocking:395, local_addr:398, ServerConnection::new:576/525, apply_deadline set_read_timeout:634/set_write_timeout:637, with_client_auth_cert:745, with_single_cert:762) now all preserve error cause via map_err(|source| ...).with_cause(source); confirmed no remaining bare map_err(|_source| ...) discards anywhere in https_transport.rs. Occurrences 8-9 (crates/atm-daemon/src/peer_drain_coordinator.rs) are NOT part of this branch's baseline -- that file does not exist on fix/ai28-phase-general-cleanup or integrate/phase-AI (only on unmerged feature/pAI-s28-bounded-peer-recovery) and were explicitly out of scope for this PR per AI28-CLEANUP-QA-1. Left open/unevaluated pending arrival on a branch where the file exists. Top-level status intentionally remains open -- do not close as fully fixed while occurrences 8-9 are unresolved. ruthless-boundary-qa (scoped to https_transport.rs against boundaries/atm-daemon/peer-http-adapter.toml) returned PASS: all touched sites remain private/pub(crate), no new pub surface, io_forbidden list untouched -- pure map_err cause-chaining, no boundary crossing. Non-blocking style note: new sites at lines ~276-291/525 use the chained AtmError::daemon_unavailable(msg).with_cause(source) form instead of the existing daemon_unavailable_with_cause(msg, source) convenience constructor already used elsewhere in the same file (10+ call sites); functionally identical, cosmetic only, not filed as a separate finding." ;
+  triage:closureNote "PARTIAL -- independently re-verified against real code on fix/ai28-phase-general-cleanup at commit 025bc6c7 (not accepted from self-report). Occurrences 1-7 (all in crates/atm-daemon/src/https_transport.rs: TcpListener::bind:389, set_nonblocking:395, local_addr:398, ServerConnection::new:576/525, apply_deadline set_read_timeout:634/set_write_timeout:637, with_client_auth_cert:745, with_single_cert:762) now all preserve error cause via map_err(|source| ...).with_cause(source); confirmed no remaining bare map_err(|_source| ...) discards anywhere in https_transport.rs. Occurrences 8-9 (crates/atm-daemon/src/peer_drain_coordinator.rs) are NOT part of this branch's baseline -- that file does not exist on fix/ai28-phase-general-cleanup or integrate/phase-AI (only on unmerged feature/pAI-s28-bounded-peer-recovery) and were explicitly out of scope for this PR per AI28-CLEANUP-QA-1. Left open/unevaluated pending arrival on a branch where the file exists. Top-level status intentionally remains open -- do not close as fully fixed while occurrences 8-9 are unresolved. ruthless-boundary-qa (scoped to https_transport.rs against boundaries/atm-daemon/peer-http-adapter.toml) returned PASS: all touched sites remain private/pub(crate), no new pub surface, io_forbidden list untouched -- pure map_err cause-chaining, no boundary crossing. Non-blocking style note: new sites at lines ~276-291/525 use the chained AtmError::daemon_unavailable(msg).with_cause(source) form instead of the existing daemon_unavailable_with_cause(msg, source) convenience constructor already used elsewhere in the same file (10+ call sites); functionally identical, cosmetic only, not filed as a separate finding. SUPERSEDED 2026-07-26 (quality-mgr): occurrences 8-9 closed by PR #659; see triage:closureEvidence for the current-tip re-verification." ;
   triage:triagedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S8 ;
   triage:foundAt "2026-07-25T16:53:36Z"^^xsd:dateTime ;
@@ -121,8 +125,9 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 292 ;
   triage:snippet "drain()/deliver_current() re-wraps transport error via error.message() dropping cause" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). remote_delivery_error_with_cause() now folds source.cause() into the wrapped error before re-wrap. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
   triage:headSha "b7d8488" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .
@@ -132,8 +137,9 @@
   triage:file "crates/atm-daemon/src/peer_drain_coordinator.rs" ;
   triage:line 327 ;
   triage:snippet "decode_page_requests discards serde_json parse error via map_err(|_|)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e). decode_page_requests now uses map_err(|source| AtmError::mailbox_read(...).with_cause(source)). Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s28-bounded-peer-recovery" ;
   triage:headSha "b7d8488" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s28/b7d8488> .

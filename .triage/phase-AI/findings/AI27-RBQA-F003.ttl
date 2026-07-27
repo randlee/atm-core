@@ -12,7 +12,11 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "file" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-26T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureEvidence "PR #659 (fix/ai27-28-cleanup-2 -> integrate/phase-AI, merge commit cbf2a66e) collapsed peer_delivery_unconfirmed/peer_delivery_terminal_error into one fn peer_delivery_error(...). Re-verified against integrate/phase-AI current tip a6342ba9 (2026-07-26): AI29 refactor commit 25ce6528 ('centralize peer delivery failure projection', merged forward via fdfdfe4b) renamed that unified function to record_peer_delivery_failure -- still one function, one call site at crates/atm-daemon/src/runtime_health/peer_delivery_router.rs:100, no duplicate near-identical variant remains." ;
   triage:dispatchReady false ;
   triage:closureNote "QA-1 gate was 0-Blocking-only; this Minor finding was explicitly deferred to phase-end CLEANUP. See PR #633 verdict comment https://github.com/randlee/atm-core/pull/633#issuecomment-5079255622." ;
   triage:triagedAt "2026-07-25T16:00:00Z"^^xsd:dateTime ;
@@ -21,15 +25,16 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI27-RBQA-F003/pAI-s27/1> ;
   triage:openOn <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
   triage:promoteTo <urn:atm:triage:worktree/pAI-s27/5e91a889> ;
-  triage:highestOpenBranch "feature/pAI-s27-peer-delivery-observability" .
+  triage:highestOpenBranch "none (fixed)" .
 
 <urn:atm:triage:occurrence/AI27-RBQA-F003/pAI-s27/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health/peer_delivery_router.rs" ;
   triage:line 100 ;
   triage:snippet "fn peer_delivery_unconfirmed(...) { ... self.peer_delivery_terminal_error(peer, request_id, message_id, unconfirmed) } -- near-duplicate of peer_delivery_terminal_error at line 114" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closureNote "quality-mgr: fixed by PR #659 (cbf2a66e), unified fn later renamed to record_peer_delivery_failure by AI29 refactor 25ce6528. Re-verified on integrate/phase-AI tip a6342ba9. (2026-07-26)" ;
   triage:branch "feature/pAI-s27-peer-delivery-observability" ;
   triage:headSha "5e91a889" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s27/5e91a889> .
