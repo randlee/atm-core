@@ -50,7 +50,10 @@ pub(crate) trait PostCommitWorkQueue: Send + Sync {
 pub(crate) struct PeerPostCommitWorkQueue {
     coordinator: Arc<dyn PeerDeliveryCoordinator>,
     sender: SyncSender<PostCommitWorkKey>,
-    receiver: Mutex<Option<Receiver<PostCommitWorkKey>>>,
+    // The receiver remains daemon-owned for the queue lifetime.  A worker may
+    // stop and later be restarted; taking ownership of it for the first worker
+    // made that otherwise ordinary recovery path permanently unavailable.
+    receiver: Arc<Mutex<Receiver<PostCommitWorkKey>>>,
     local_nudge_targets: Arc<Mutex<BTreeMap<AtmMessageId, PostCommitNudgeTarget>>>,
     runtime: LocalServiceRuntime,
     home_dir: AtmHomeDir,
@@ -74,7 +77,7 @@ impl PeerPostCommitWorkQueue {
         Self {
             coordinator,
             sender,
-            receiver: Mutex::new(Some(receiver)),
+            receiver: Arc::new(Mutex::new(receiver)),
             local_nudge_targets: Arc::new(Mutex::new(BTreeMap::new())),
             runtime,
             home_dir,
@@ -103,15 +106,8 @@ impl PeerPostCommitWorkQueue {
         if worker.is_some() {
             return Ok(());
         }
-        let receiver = self
-            .receiver
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("post-commit worker receiver lock poisoned"))?
-            .take()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable("post-commit worker cannot restart after shutdown")
-            })?;
         self.stop.store(false, Ordering::SeqCst);
+        let receiver = Arc::clone(&self.receiver);
         let targets = Arc::clone(&self.local_nudge_targets);
         let runtime = self.runtime.clone();
         let home_dir = self.home_dir.clone();
@@ -143,15 +139,31 @@ impl PeerPostCommitWorkQueue {
     }
 
     fn run(
-        receiver: Receiver<PostCommitWorkKey>,
+        receiver: Arc<Mutex<Receiver<PostCommitWorkKey>>>,
         targets: Arc<Mutex<BTreeMap<AtmMessageId, PostCommitNudgeTarget>>>,
         runtime: LocalServiceRuntime,
         home_dir: AtmHomeDir,
         stop: Arc<AtomicBool>,
     ) {
-        while !stop.load(Ordering::SeqCst) {
-            let work = match receiver.recv_timeout(Duration::from_millis(100)) {
+        loop {
+            let received = match receiver.lock() {
+                Ok(receiver) => receiver.recv_timeout(Duration::from_millis(100)),
+                Err(_) => {
+                    tracing::error!(
+                        subsystem = "runtime_health",
+                        action = "post_commit_work_receive",
+                        "post-commit worker receiver lock poisoned"
+                    );
+                    break;
+                }
+            };
+            let work = match received {
                 Ok(work) => work,
+                // Once shutdown begins, drain identifiers already accepted by
+                // the bounded queue before ending the worker.  These are not
+                // durable retry records, so silently abandoning them would
+                // make local nudges disappear at daemon shutdown.
+                Err(RecvTimeoutError::Timeout) if stop.load(Ordering::SeqCst) => break,
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => break,
             };

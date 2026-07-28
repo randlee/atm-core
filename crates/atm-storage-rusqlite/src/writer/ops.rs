@@ -1,27 +1,48 @@
 use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_thread_mode};
-use atm_storage::contract::Message;
+use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
+};
 use atm_storage::error::AtmError;
 use atm_storage::schema::MessageEnvelope;
 use atm_storage::types::IsoTimestamp;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
+use std::sync::Arc;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(Box<Message>),
     /// A related group of immutable records that must either all become
     /// visible or none do.  AI.31 uses this for the ACK reply and the
     /// acknowledged source record.
     UpsertMessages(Vec<Message>),
+    Acknowledge {
+        source: AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+impl std::fmt::Debug for WriteOp {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UpsertMessage(_) => formatter.write_str("UpsertMessage(..)"),
+            Self::UpsertMessages(_) => formatter.write_str("UpsertMessages(..)"),
+            Self::Acknowledge { source, .. } => formatter
+                .debug_struct("Acknowledge")
+                .field("source", source)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum WriteOpResult {
     UpsertMessage { inserted: bool },
     UpsertMessages,
+    Acknowledged(Box<AcknowledgementCommit>),
 }
 
 pub(crate) fn execute(
@@ -40,7 +61,138 @@ pub(crate) fn execute(
             }
             Ok(WriteOpResult::UpsertMessages)
         }
+        WriteOp::Acknowledge { source, builder } => {
+            execute_acknowledgement(source, builder, connection, cache, target)
+        }
     }
+}
+
+fn execute_acknowledgement(
+    source: &AcknowledgementSource,
+    builder: &Arc<dyn AcknowledgementReplyBuilder>,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<WriteOpResult, AtmError> {
+    let source = load_pending_ack_source(source, connection, target)?;
+    let reply = builder.build_reply(&source)?;
+    let mut acknowledged_source = source.clone();
+    acknowledged_source.envelope.read = true;
+    acknowledged_source.envelope.pending_ack_at = None;
+    acknowledged_source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+    let _ = execute_upsert_message(&reply, connection, cache, target)?;
+    let _ = execute_upsert_message(&acknowledged_source, connection, cache, target)?;
+    Ok(WriteOpResult::Acknowledged(Box::new(
+        AcknowledgementCommit {
+            reply,
+            source: acknowledged_source,
+        },
+    )))
+}
+
+fn load_pending_ack_source(
+    source: &AcknowledgementSource,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<Message, AtmError> {
+    let row = connection
+        .query_row(
+            "SELECT mail_messages.message_key, mail_messages.envelope_json,
+                    mail_message_states.read, mail_message_states.pending_ack_at,
+                    mail_message_states.acknowledged_at, mail_message_states.expires_at
+             FROM mail_messages
+             JOIN mail_message_states
+               ON mail_message_states.team = mail_messages.team
+              AND mail_message_states.agent = mail_messages.agent
+              AND mail_message_states.message_key = mail_messages.message_key
+             WHERE mail_messages.team = ?1
+               AND mail_messages.agent = ?2
+               AND mail_messages.message_id = ?3
+               AND mail_message_states.deleted_at IS NULL",
+            params![
+                source.team.as_str(),
+                source.agent.as_str(),
+                source.message_id.to_string()
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|error| {
+            crate::shared_db::sqlite_error(target, "failed to load acknowledgement source", error)
+        })?
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {} was not found in {}@{}",
+                source.message_id, source.agent, source.team
+            ))
+        })?;
+    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
+    let has_successor = connection
+        .query_row(
+            "SELECT 1 FROM mail_messages
+             WHERE team = ?1 AND agent = ?2 AND parent_message_id = ?3
+             LIMIT 1",
+            params![
+                source.team.as_str(),
+                source.agent.as_str(),
+                source.message_id.to_string()
+            ],
+            |_| Ok(()),
+        )
+        .optional()
+        .map_err(|error| {
+            crate::shared_db::sqlite_error(
+                target,
+                "failed to validate acknowledgement terminal source",
+                error,
+            )
+        })?
+        .is_some();
+    if has_successor {
+        return Err(AtmError::validation(format!(
+            "message {} has been updated; acknowledge the current terminal message instead",
+            source.message_id
+        )));
+    }
+    let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(&envelope_json)
+        .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
+    envelope.read = read != 0;
+    envelope.pending_ack_at = parse_timestamp(pending_ack_at, "pending_ack_at")?;
+    envelope.acknowledged_at = parse_timestamp(acknowledged_at, "acknowledged_at")?;
+    envelope.expires_at = parse_timestamp(expires_at, "expires_at")?;
+    if envelope.pending_ack_at.is_none() {
+        let state = if envelope.acknowledged_at.is_some() {
+            "already acknowledged"
+        } else {
+            "not pending acknowledgement"
+        };
+        return Err(AtmError::validation(format!(
+            "message {} is {state}",
+            source.message_id
+        )));
+    }
+    Ok(Message {
+        team: source.team.clone(),
+        agent: source.agent.clone(),
+        message_key: MessageKey::new(message_key)?,
+        envelope,
+    })
+}
+
+fn parse_timestamp(value: Option<String>, field: &str) -> Result<Option<IsoTimestamp>, AtmError> {
+    value
+        .map(|value| value.parse::<IsoTimestamp>())
+        .transpose()
+        .map_err(|_| AtmError::mailbox_read(format!("acknowledgement source {field} is invalid")))
 }
 
 pub(crate) fn validate_upsert_message_request(record: &Message) -> Result<(), AtmError> {
