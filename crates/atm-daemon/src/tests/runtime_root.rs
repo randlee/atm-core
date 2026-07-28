@@ -21,6 +21,7 @@ use tempfile::TempDir;
 
 use crate::https_transport::HttpsMessageTransport;
 mod local_ipc;
+mod peer_failure;
 mod peer_observability;
 mod peer_reconciliation;
 use crate::test_support::{
@@ -131,6 +132,7 @@ struct ConnectionHandlerFailure {
 #[derive(Default)]
 struct RouteFailure {
     attempted: std::sync::Mutex<Vec<WriteRequest>>,
+    attempted_tx: std::sync::Mutex<Option<mpsc::SyncSender<WriteRequest>>>,
 }
 
 #[derive(Default)]
@@ -166,7 +168,15 @@ impl HttpsMessageTransport for RouteFailure {
         _peer: &TrustedPeer,
         _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
-        record_failed_delivery(&self.attempted, request);
+        record_failed_delivery(&self.attempted, request.clone());
+        if let Some(sender) = self
+            .attempted_tx
+            .lock()
+            .expect("peer transport notification lock")
+            .take()
+        {
+            sender.send(request).expect("report failed peer delivery");
+        }
         Err(AtmError::remote_delivery_unconfirmed(
             "intentional route failure",
         ))
@@ -416,73 +426,6 @@ fn host_qualified_write_is_admitted_without_foreground_https_delivery() {
     assert!(
         delivered.is_empty(),
         "the admission path must not open a peer transport before its local response"
-    );
-}
-
-#[test]
-#[serial_test::serial(env)]
-fn unavailable_peer_does_not_relabel_a_committed_local_admission() {
-    install_retained_runtime_factory();
-    let tempdir = TempDir::new().expect("tempdir");
-    let atm_home = tempdir.path().join("atm-home");
-    let workspace_dir = tempdir.path().join("workspace");
-    std::fs::create_dir_all(&atm_home).expect("atm home dir");
-    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
-    let db_path = tempdir.path().join("mail.db");
-    write_team_config(&atm_home, &[]);
-    add_member_via_retained_admin(
-        &db_path,
-        &atm_home,
-        TEST_TEAM,
-        ROLE_TEAM_LEAD,
-        &workspace_dir,
-    );
-    open_sqlite_boundary(&db_path)
-        .expect("sqlite boundary")
-        .peer_config_store()
-        .save_trusted_peer(&TrustedPeer {
-            host: "peer.example.test".parse().expect("peer host"),
-            fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
-            enabled: true,
-            https_port: std::num::NonZeroU16::new(43101).expect("non-zero"),
-        })
-        .expect("save trusted peer");
-
-    let dispatcher =
-        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
-    let transport = Arc::new(RouteFailure::default());
-    dispatcher
-        .install_https_transport(transport.clone())
-        .expect("install failing HTTPS delivery");
-
-    let response = dispatcher
-        .dispatch(RequestEnvelope::Write(Box::new(
-            SendRequest::new(
-                atm_home,
-                workspace_dir,
-                ROLE_TEAM_LEAD.parse().expect("caller"),
-                "remote-agent@remote-team.peer.example.test",
-                TEST_TEAM.parse().expect("team"),
-                SendMessageSource::Inline("peer write".to_string()),
-                None,
-                false,
-                None,
-                false,
-            )
-            .expect("remote write request"),
-        )))
-        .expect("peer unavailability belongs to post-commit recovery, not local admission");
-    assert!(matches!(
-        response,
-        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
-    ));
-    let attempted = transport
-        .attempted
-        .lock()
-        .expect("HTTPS delivery recording lock");
-    assert!(
-        attempted.is_empty(),
-        "a blocked peer transport must not run in the local admission request"
     );
 }
 
@@ -780,6 +723,66 @@ fn dispatcher_send_rejects_self_addressed_message_before_persistence() {
 
     assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
     assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
+}
+
+#[test]
+#[serial_test::serial(env)]
+fn host_qualified_self_addresses_use_the_ordinary_admission_route() {
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    let db_path = tempdir.path().join("mail.db");
+    write_team_config(&atm_home, &[]);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    let peer_store = open_sqlite_boundary(&db_path)
+        .expect("sqlite boundary")
+        .peer_config_store();
+    for host in ["localhost", "127.0.0.1"] {
+        peer_store
+            .save_trusted_peer(&TrustedPeer {
+                host: host.parse().expect("host"),
+                fingerprint: "sha256:test-peer".parse().expect("fingerprint"),
+                enabled: true,
+                https_port: NonZeroU16::new(43101).expect("non-zero"),
+            })
+            .expect("save trusted peer");
+    }
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path);
+
+    for host in ["localhost", "127.0.0.1"] {
+        let address = format!("{ROLE_TEAM_LEAD}@{TEST_TEAM}.{host}");
+        let response = dispatcher
+            .dispatch(RequestEnvelope::Write(Box::new(
+                SendRequest::new(
+                    atm_home.clone(),
+                    workspace_dir.clone(),
+                    ROLE_TEAM_LEAD.parse().expect("caller"),
+                    &address,
+                    TEST_TEAM.parse().expect("team"),
+                    SendMessageSource::Inline(format!("ordinary route {host}")),
+                    None,
+                    false,
+                    None,
+                    false,
+                )
+                .expect("host-qualified request"),
+            )))
+            .expect("host-qualified self address must be admitted");
+        assert!(matches!(
+            response,
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+    }
 }
 
 #[test]

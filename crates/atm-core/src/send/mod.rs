@@ -206,10 +206,12 @@ pub struct PreparedWrite {
     persisted_timestamp: IsoTimestamp,
     post_write_needed: bool,
     same_store_peer_receipt: bool,
+    #[cfg(test)]
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
+#[cfg(test)]
 struct LocalPostWrite {
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
@@ -237,28 +239,8 @@ impl PreparedWrite {
         self.outbound_request.clone()
     }
 
-    /// Emits the local post-write notification after durable persistence.
-    ///
-    /// This is intentionally called only from the daemon's
-    /// `PostWriteRouter::dispatch` local branch.
-    pub fn emit_local_post_write(
-        &mut self,
-        runtime: &LocalServiceRuntime,
-        post_send_emitter: &dyn PostSendHookEmitter,
-    ) {
-        hook::emit_post_send_effects(
-            runtime,
-            &mut self.outcome.warnings,
-            self.post_write.post_send_config.as_ref(),
-            Some(post_send_emitter),
-            &self.post_write.recipient,
-            &self.post_write.delivery_snapshot,
-            &self.post_write.messages,
-        );
-    }
-
     #[cfg(test)]
-    pub(crate) fn emit_local_post_write_for_test<
+    pub(crate) fn emit_post_write_for_test<
         R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
     >(
         &mut self,
@@ -326,6 +308,55 @@ impl PreparedWrite {
     pub fn is_peer_receipt(&self) -> bool {
         has_authenticated_peer_provenance(&self.outbound_request)
     }
+}
+
+/// Executes the local post-write effects from a committed immutable record.
+///
+/// The daemon calls this only from its post-commit worker.  Admission keeps
+/// no prepared payload and never waits for hook, tmux, or graft I/O.
+pub fn emit_persisted_local_post_write(
+    runtime: &LocalServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    message_id: AtmMessageId,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<(), AtmError> {
+    let key = boundary::MessageKey::from(message_id);
+    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
+        return Ok(());
+    };
+    let recipient = ResolvedRecipient {
+        agent: agent.clone(),
+        team: team.clone(),
+    };
+    let delivery_snapshot =
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
+    let logical = crate::delivery_plan::LogicalMessage::new(
+        record.envelope.clone(),
+        record.envelope.requires_ack,
+        record.envelope.acknowledges_message_id.is_some(),
+    )
+    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let mut warnings = Vec::new();
+    hook::emit_post_send_effects(
+        runtime,
+        &mut warnings,
+        None,
+        Some(post_send_emitter),
+        &recipient,
+        &delivery_snapshot,
+        &[logical],
+    );
+    for warning in warnings {
+        tracing::warn!(
+            code = ?warning.code,
+            message_id = %message_id,
+            "post-commit local post-write effect completed with warning: {}",
+            warning.message
+        );
+    }
+    Ok(())
 }
 
 /// Result of sending one ATM mailbox message.
@@ -576,6 +607,7 @@ fn prepare_persisted_write<
     let post_write_needed = persistence.requires_post_write();
     let same_store_peer_receipt =
         persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
+    #[cfg(test)]
     let messages =
         post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
@@ -596,6 +628,7 @@ fn prepare_persisted_write<
         persisted_timestamp: timestamp,
         post_write_needed,
         same_store_peer_receipt,
+        #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
             recipient: context.recipient,
@@ -634,7 +667,7 @@ fn send_mail_with_runtime_impl<
     {
         // Test-only harness: production notification is owned by
         // `PostWriteRouter::dispatch` in atm-daemon.
-        prepared.emit_local_post_write_for_test(runtime, post_send_emitter);
+        prepared.emit_post_write_for_test(runtime, post_send_emitter);
     }
     match prepared.finish_with_runtime(runtime, observability)? {
         WriteOutcome::Sent(outcome) => Ok(outcome),
@@ -760,6 +793,7 @@ fn build_send_delivery_plan(
     ))
 }
 
+#[cfg(test)]
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
@@ -776,6 +810,7 @@ fn post_send_messages_from_persistence(
 
 struct SendExecutionContext {
     command_config: Option<config::AtmConfig>,
+    #[cfg(test)]
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
     canonical_sender: AgentName,
@@ -791,27 +826,16 @@ fn prepare_send_context<
     runtime: &R,
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
-    let command_config = runtime.load_config(&request.current_dir)?;
-    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
-        runtime,
-        &request.caller_team,
-        &request.caller_identity,
-    ) {
-        Ok(config) => (config, Vec::new()),
-        Err(error) => (
-            None,
-            vec![WarningEntry::with_code(
-                error.code(),
-                format!(
-                    "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity,
-                    request.caller_team,
-                    error.message()
-                ),
-                Some(error.message().to_owned()),
-            )],
-        ),
-    };
+    // This is the durable-admission half of the pipeline.  A daemon must not
+    // inspect a caller workspace or hook configuration before replying to a
+    // committed write: those are post-commit worker concerns.  The daemon
+    // runtime already rejects workspace config, but avoiding this call here
+    // makes the no-filesystem-read admission contract structural rather than
+    // dependent on the runtime implementation.
+    let command_config = None;
+    #[cfg(test)]
+    let post_send_config = None;
+    let warnings = Vec::new();
     let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
@@ -843,6 +867,7 @@ fn prepare_send_context<
     );
     Ok(SendExecutionContext {
         command_config,
+        #[cfg(test)]
         post_send_config,
         recipient,
         canonical_sender,

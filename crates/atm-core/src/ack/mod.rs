@@ -225,15 +225,12 @@ pub(crate) fn resolve_acknowledgement_write<
         &actor,
         "Repair or reload the ATM roster before retrying `atm ack`.",
     )?;
-    let source = load_ack_source(
-        runtime,
+    let source_record = runtime.resolve_acknowledgement_source(
         &request.home_dir,
         &team,
         &actor,
         request.message_id,
     )?;
-    let source_record =
-        load_ack_source_record(runtime, &request.home_dir, &team, &actor, &source.row)?;
     ensure_ack_is_pending(request.message_id, &source_record.envelope)?;
     let reply_target = validate_reply_target(runtime, &source_record, &team)?;
     let canonical_request =
@@ -279,9 +276,8 @@ pub(crate) fn resolve_received_acknowledgement_write<
         .team()
         .cloned()
         .unwrap_or_else(|| request.caller_team.clone());
-    let source = load_ack_source(runtime, &request.home_dir, &team, &actor, message_id)?;
     let source_record =
-        load_ack_source_record(runtime, &request.home_dir, &team, &actor, &source.row)?;
+        runtime.resolve_acknowledgement_source(&request.home_dir, &team, &actor, message_id)?;
     ensure_ack_is_pending(message_id, &source_record.envelope)?;
     let reply_target = ReplyTarget::new(actor.clone(), team.clone(), target.host().cloned());
     Ok(ResolvedAcknowledgement {
@@ -377,10 +373,6 @@ fn canonical_ack_write_request(
     })
 }
 
-struct LoadedAckSource {
-    row: boundary::MailStoreMailboxMetadataRow,
-}
-
 fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
     runtime: &R,
     team: &TeamName,
@@ -391,47 +383,6 @@ fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
         return Err(AtmError::agent_not_found(agent, team));
     }
     Ok(())
-}
-
-fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
-    home_dir: &std::path::Path,
-    team: &TeamName,
-    actor: &AgentName,
-    message_id: AtmMessageId,
-) -> Result<LoadedAckSource, AtmError> {
-    let rows = runtime.query_mailbox_metadata_rows(home_dir, team, actor, None)?;
-    let row = rows
-        .iter()
-        .find(|row| row.message_id == Some(message_id))
-        .ok_or_else(|| {
-            AtmError::validation(format!(
-                "message {message_id} was not found in {actor}@{team}"
-            ))
-        })?;
-    if rows
-        .iter()
-        .any(|candidate| candidate.parent_message_id == Some(message_id))
-    {
-        return Err(AtmError::validation(format!(
-            "message {message_id} has been updated; acknowledge the current terminal message instead"
-        )));
-    }
-    Ok(LoadedAckSource { row: row.clone() })
-}
-
-fn load_ack_source_record<R: RetainedMailboxRuntime>(
-    runtime: &R,
-    home_dir: &std::path::Path,
-    team: &TeamName,
-    actor: &AgentName,
-    row: &boundary::MailStoreMailboxMetadataRow,
-) -> Result<boundary::Message, AtmError> {
-    runtime
-        .load_message_record(home_dir, team, actor, &row.message_key)?
-        .ok_or_else(|| {
-            AtmError::validation("acknowledgement source metadata could not be reloaded")
-        })
 }
 
 fn ensure_ack_is_pending(message_id: AtmMessageId, source: &InboxMessage) -> Result<(), AtmError> {

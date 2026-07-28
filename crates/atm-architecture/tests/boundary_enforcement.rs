@@ -400,7 +400,7 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         .find("let Some(host) = message")
         .expect("the generic local/peer routing guard must handle optional hosts");
     let peer_branch = dispatch
-        .find("signal_after_persist")
+        .find("PostCommitWorkKey::PeerDelivery")
         .expect("generic peer routing must signal post-commit work behind the local/peer guard");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
@@ -975,7 +975,6 @@ impl HostRoutingVisitor {
             .iter()
             .filter(|function| {
                 function.calls_delivery
-                    && !function.is_post_write_dispatch
                     && !function.is_post_write_router_helper
                     && function.reconciliation_delivery_calls == 0
             })

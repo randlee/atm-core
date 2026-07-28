@@ -79,6 +79,38 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
 }
 
 pub(crate) trait RetainedMailboxRuntime {
+    /// Resolves the current terminal pending-ack source through the sealed
+    /// mailbox boundary. Callers never enumerate and reload source rows
+    /// themselves.
+    fn resolve_acknowledgement_source(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        message_id: crate::schema::AtmMessageId,
+    ) -> Result<boundary::Message, AtmError> {
+        let rows = self.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
+        let row = rows
+            .iter()
+            .find(|row| row.message_id == Some(message_id))
+            .ok_or_else(|| {
+                AtmError::validation(format!(
+                    "message {message_id} was not found in {agent}@{team}"
+                ))
+            })?;
+        if rows
+            .iter()
+            .any(|row| row.parent_message_id == Some(message_id))
+        {
+            return Err(AtmError::validation(format!(
+                "message {message_id} has been updated; acknowledge the current terminal message instead"
+            )));
+        }
+        self.load_message_record(home_dir, team, agent, &row.message_key)?
+            .ok_or_else(|| {
+                AtmError::validation("acknowledgement source metadata could not be reloaded")
+            })
+    }
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
