@@ -336,7 +336,7 @@ impl GraftSession {
             return inactive_session(client, snapshot, observability);
         }
 
-        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_home(
+        let endpoint_path = atm_core::graft::graft_receiver_record_path_from_root(
             options.workspace_root(),
             options.team(),
             options.agent(),

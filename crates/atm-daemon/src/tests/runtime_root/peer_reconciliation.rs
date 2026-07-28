@@ -215,20 +215,23 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
     dispatcher
         .install_https_transport(failing.clone())
         .expect("install failing transport");
-    let error = dispatcher
+    let admitted = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             ack.clone().into_write_request(),
         )))
-        .expect_err("failed remote acknowledgement must remain unconfirmed");
-    assert_eq!(error.code(), AtmErrorCode::RemoteDeliveryUnconfirmed);
+        .expect("a durable acknowledgement must not wait for remote reply delivery");
+    assert!(matches!(
+        admitted,
+        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
+    ));
     assert_eq!(
         failing
             .attempted
             .lock()
             .expect("attempt recording lock")
             .len(),
-        1,
-        "ack is one shared peer write attempt"
+        0,
+        "the peer transport must not run before the acknowledgement response"
     );
 
     let succeeding = Arc::new(RecordingHttpsDelivery::default());
@@ -237,19 +240,16 @@ fn response_write_failure_keeps_source_pending_until_the_shared_write_retries() 
         .expect("replace test transport");
     let retry = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(ack.into_write_request())))
-        .expect("source remains pending after failed peer acknowledgement");
-    assert!(matches!(
-        retry,
-        ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(_))
-    ));
+        .expect_err("the already-admitted acknowledgement must not create a second reply");
+    assert_eq!(retry.code(), AtmErrorCode::MessageValidationFailed);
     assert_eq!(
         succeeding
             .delivered
             .lock()
             .expect("delivery recording lock")
             .len(),
-        1,
-        "the successful retry follows the same write/router path"
+        0,
+        "a second local request cannot bypass the durable acknowledgement state"
     );
 }
 
@@ -320,8 +320,8 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     ));
     assert_eq!(
         transport.delivered.lock().expect("deliveries").len(),
-        2,
-        "disabled policy never scans or delivers stored writes"
+        0,
+        "admission never delivers writes synchronously when recovery is disabled"
     );
     peer_store
         .save_peer_sync_policy(
@@ -356,12 +356,12 @@ fn explicit_peer_sync_resends_one_bounded_immutable_write() {
     let delivered = transport.delivered.lock().expect("deliveries");
     assert_eq!(
         delivered.len(),
-        4,
-        "two ordinary writes plus both ordered recovery pages are delivered"
+        2,
+        "only the explicit post-commit recovery drain performs peer delivery"
     );
-    assert_eq!(
-        delivered[0].origin_message_id, delivered[2].origin_message_id,
-        "reconciliation reuses the canonical immutable write and its original ULID"
+    assert_ne!(
+        delivered[0].origin_message_id, delivered[1].origin_message_id,
+        "the two independently admitted immutable writes retain distinct ULIDs"
     );
 }
 
@@ -471,7 +471,7 @@ fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
             .expect("peer write"),
         )))
         .expect("initial reconciliation delivery");
-    assert_eq!(recipient_message_count(&receiver_db, "receiver"), 1);
+    assert_eq!(recipient_message_count(&receiver_db, "receiver"), 0);
 
     let sync = source
         .dispatch(RequestEnvelope::PeerSync(PeerSyncRequest {
@@ -481,8 +481,8 @@ fn reconciliation_duplicate_arrival_keeps_receiver_inbox_idempotent() {
     assert!(matches!(sync, ResponseEnvelope::PeerSync(_)));
     assert_eq!(
         *delivery.deliveries.lock().expect("delivery count lock"),
-        2,
-        "the receiver sees the original delivery and its reconciliation duplicate"
+        1,
+        "the explicit post-commit drain performs the first receiver delivery"
     );
     assert_eq!(
         recipient_message_count(&receiver_db, "receiver"),

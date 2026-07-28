@@ -1,6 +1,5 @@
 use atm_core::ack::AckRequest;
 use atm_core::boundary::RosterHarness;
-use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
     GraftPostSendResponse, GraftReceiverListener, graft_receiver_record_path_from_home,
 };
@@ -19,17 +18,28 @@ const TEST_TEAM: &str = "test-team";
 
 fn install_test_roster_with_harness(
     db_path: &std::path::Path,
-    members: &[(&str, RosterHarness, Option<&std::path::Path>)],
+    members: &[(
+        &str,
+        RosterHarness,
+        Option<&std::path::Path>,
+        Option<&std::path::Path>,
+    )],
 ) {
     let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
     let roster_store = assembly.roster_store_arc();
     let team = TEST_TEAM.parse::<TeamName>().expect("team");
     let members = members
         .iter()
-        .map(|(name, harness, home_dir)| {
+        .map(|(name, harness, home_dir, workspace_root)| {
             let mut member = AgentMember::with_name((*name).parse().expect("member"));
             if let Some(home_dir) = home_dir {
                 member.home_dir = home_dir.to_path_buf().into();
+            }
+            if let Some(workspace_root) = workspace_root {
+                member.extra.insert(
+                    "workspace_root".to_string(),
+                    serde_json::Value::String(workspace_root.display().to_string()),
+                );
             }
             let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
                 team.clone(),
@@ -70,6 +80,7 @@ fn graft_warning_dispatcher() -> (
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     let workspace_dir = tempdir.path().join("workspace");
+    let profile_home = tempdir.path().join("recipient-profile");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
     let db_path = tempdir.path().join("mail.db");
@@ -80,10 +91,12 @@ fn graft_warning_dispatcher() -> (
                 ROLE_TEAM_LEAD,
                 RosterHarness::ClaudeCode,
                 Some(workspace_dir.as_path()),
+                None,
             ),
             (
                 "qa-a",
                 RosterHarness::CodexCli,
+                Some(profile_home.as_path()),
                 Some(workspace_dir.as_path()),
             ),
         ],
@@ -104,7 +117,7 @@ fn write_graft_enabled_config(workspace_dir: &std::path::Path) {
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailable() {
+fn dispatcher_send_keeps_post_commit_graft_failure_out_of_admission_response() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let response = dispatcher
@@ -129,17 +142,15 @@ fn dispatcher_send_surfaces_typed_warning_when_graft_receiver_path_is_unavailabl
         ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => outcome,
         other => panic!("expected send response, got {other:?}"),
     };
-    assert_eq!(outcome.warnings.len(), 1);
-    assert_eq!(
-        outcome.warnings[0].code,
-        Some(AtmErrorCode::PostSendGraftUnavailable)
+    assert!(
+        outcome.warnings.is_empty(),
+        "post-commit graft failure must not relabel a successful local admission"
     );
-    assert!(outcome.warnings[0].recovery.is_some());
 }
 
 #[test]
 #[serial_test::serial(env)]
-fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable() {
+fn dispatcher_ack_keeps_post_commit_graft_failure_out_of_admission_response() {
     let (_tempdir, atm_home, workspace_dir, dispatcher) = graft_warning_dispatcher();
 
     let source_response = dispatcher
@@ -183,12 +194,10 @@ fn dispatcher_ack_surfaces_typed_warning_when_graft_reply_target_is_unavailable(
         ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => outcome,
         other => panic!("expected ack response, got {other:?}"),
     };
-    assert_eq!(ack_outcome.warnings.len(), 1);
-    assert_eq!(
-        ack_outcome.warnings[0].code,
-        Some(AtmErrorCode::PostSendGraftUnavailable)
+    assert!(
+        ack_outcome.warnings.is_empty(),
+        "post-commit graft failure must not relabel a successful ACK admission"
     );
-    assert!(ack_outcome.warnings[0].recovery.is_some());
 }
 
 #[test]

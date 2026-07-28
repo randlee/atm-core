@@ -948,7 +948,7 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.30; readiness blocked]
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.31; readiness blocked]
 
 Planning branch: `plan/phase-ai-planning`
 Integration branch: `integrate/phase-AI`
@@ -1007,6 +1007,7 @@ Implementation Branches:
 | `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
 | `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
+| `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | durable local admission before asynchronous peer work |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

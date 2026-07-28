@@ -4,7 +4,9 @@ use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
-use atm_storage::contract::Message;
+use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message,
+};
 use atm_storage::error::AtmError;
 use atm_storage::schema::ThreadMode;
 #[cfg(test)]
@@ -350,6 +352,50 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { .. } => Ok(()),
+            WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
+                Err(AtmError::daemon_unavailable(
+                    "sqlite writer returned the wrong result for message upsert",
+                ))
+            }
+        }
+    }
+
+    pub(crate) fn submit_upsert_messages_atomically(
+        &self,
+        records: Vec<Message>,
+    ) -> Result<(), AtmError> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        for record in &records {
+            validate_upsert_message_request(record)?;
+        }
+        let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
+        match result {
+            WriteOpResult::UpsertMessages => Ok(()),
+            WriteOpResult::UpsertMessage { .. } | WriteOpResult::Acknowledged(_) => {
+                Err(AtmError::daemon_unavailable(
+                    "sqlite writer returned the wrong result for atomic message commit",
+                ))
+            }
+        }
+    }
+
+    pub(crate) fn submit_acknowledgement(
+        &self,
+        source: AcknowledgementSource,
+        builder: std::sync::Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        match self
+            .writer
+            .submit(WriteOp::Acknowledge { source, builder })?
+        {
+            WriteOpResult::Acknowledged(commit) => Ok(*commit),
+            WriteOpResult::UpsertMessage { .. } | WriteOpResult::UpsertMessages => {
+                Err(AtmError::daemon_unavailable(
+                    "sqlite writer returned the wrong result for acknowledgement admission",
+                ))
+            }
         }
     }
 

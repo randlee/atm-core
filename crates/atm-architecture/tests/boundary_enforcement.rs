@@ -176,8 +176,16 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
         "AI.7 requires one canonical write pipeline"
     );
     assert!(
-        send.contains("resolve_acknowledgement_write"),
-        "AI.7 acknowledgement normalization must enter the canonical write pipeline"
+        send.contains("crate::ack::admit_acknowledgement_write"),
+        "AI.31 acknowledgement admission must enter the canonical write pipeline"
+    );
+    assert!(
+        acknowledgement.contains("runtime.acknowledge_message_atomically"),
+        "AI.31 acknowledgement source resolution and paired commit must stay behind the sealed storage boundary"
+    );
+    assert!(
+        !acknowledgement.contains("resolve_acknowledgement_source"),
+        "AI.31 forbids restoring an application-layer acknowledgement source read"
     );
     assert!(
         acknowledgement.contains("crate::send::write_mail_with_runtime("),
@@ -287,6 +295,7 @@ fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
     let adapter = read_source(&root.join("crates/atm-daemon/src/https_transport.rs"));
     let router =
         read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_delivery_router.rs"));
+    let coordinator = read_source(&root.join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
     let authority =
         read_source(&root.join("crates/atm-daemon/src/runtime_health/peer_authority.rs"));
 
@@ -295,8 +304,12 @@ fn ai25_peer_authority_selection_is_not_owned_by_the_https_adapter() {
         "AI.25 forbids recipient authority selection inside the HTTPS adapter"
     );
     assert!(
-        router.contains("peer_authority::resolve_peer_authority"),
-        "AI.25 requires PostWriteRouter to own recipient authority selection"
+        !router.contains("resolve_peer_authority"),
+        "AI.31 forbids the foreground PostWriteRouter from reading peer authority"
+    );
+    assert!(
+        coordinator.contains("resolve_peer_authority"),
+        "AI.31 keeps authority selection in the post-commit peer worker"
     );
     assert!(
         authority.contains("pub(crate) fn resolve_peer_authority"),
@@ -325,8 +338,8 @@ fn canonical_write_router_has_one_host_routing_decision() {
     );
     assert_eq!(
         visitor.peer_delivery_calls(),
-        1,
-        "AI.12 requires exactly one peer delivery call from PostWriteRouter::dispatch"
+        0,
+        "AI.31 forbids peer delivery from PostWriteRouter::dispatch"
     );
     assert_eq!(
         visitor.message_writer_implementations, 1,
@@ -343,7 +356,7 @@ fn canonical_write_router_has_one_host_routing_decision() {
     );
     assert!(
         visitor.violations().is_empty(),
-        "AI.12 permits host routing, local nudge emission, and peer transport only from PostWriteRouter::dispatch: {:?}",
+        "AI.31 permits host routing and work signalling but forbids foreground peer transport: {:?}",
         visitor.violations()
     );
     let daemon = fs::read_to_string(root.join("crates/atm-daemon/src/runtime_health.rs"))
@@ -395,14 +408,11 @@ fn ai23_peer_adapter_never_matches_localhost_or_own_ip() {
         .find("let Some(host) = message")
         .expect("the generic local/peer routing guard must handle optional hosts");
     let peer_branch = dispatch
-        .find("self.deliver_to_peer")
-        .expect("generic peer routing must remain behind the local/peer guard");
-    let _peer_adapter = source
-        .find("resolve_peer_authority(host")
-        .expect("peer authority selection must remain in the generic peer branch");
+        .find("PostCommitWorkKey::PeerDelivery")
+        .expect("generic peer routing must signal post-commit work behind the local/peer guard");
     assert!(
         peer_receipt_guard < peer_branch && host_guard < peer_branch,
-        "localhost and own-IP must be considered by the generic host guard before peer authority selection"
+        "localhost and own-IP must be considered by the generic host guard before post-commit work is signalled"
     );
     for forbidden in ["localhost", "127.0.0.1", "is_loopback", "is_loopback()"] {
         assert!(
@@ -973,7 +983,6 @@ impl HostRoutingVisitor {
             .iter()
             .filter(|function| {
                 function.calls_delivery
-                    && !function.is_post_write_dispatch
                     && !function.is_post_write_router_helper
                     && function.reconciliation_delivery_calls == 0
             })

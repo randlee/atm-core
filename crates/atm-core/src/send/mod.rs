@@ -9,6 +9,7 @@ use tracing::warn;
 
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_execution::{
@@ -42,6 +43,7 @@ pub mod input;
 #[doc(hidden)]
 pub(crate) mod nudge_template;
 mod persistence;
+mod recipient;
 pub(crate) mod summary;
 
 pub(crate) use delivery_persistence::{
@@ -52,7 +54,9 @@ pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
     render_resolved_built_in_nudge,
 };
+#[cfg(test)]
 pub(crate) use persistence::persist_message;
+pub(crate) use recipient::{ResolvedRecipient, resolve_recipient, validate_non_self_recipient};
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -194,22 +198,22 @@ impl WriteOutcome {
     }
 }
 
-/// A durable write awaiting its one post-write action.
+/// A durable write awaiting post-commit notification scheduling.
 ///
-/// The daemon owns the routing choice and invokes either local notification or
-/// peer delivery before calling [`PreparedWrite::finish`].  Keeping the
-/// acknowledgement source mutation here ensures an acknowledgement cannot be
-/// committed when peer delivery fails.
+/// Acknowledgement state completes before any post-commit notification or peer
+/// work.  Delivery is never a prerequisite for an admitted local write.
 pub struct PreparedWrite {
     outcome: SendOutcome,
     outbound_request: WriteRequest,
     persisted_timestamp: IsoTimestamp,
     post_write_needed: bool,
     same_store_peer_receipt: bool,
+    #[cfg(test)]
     post_write: LocalPostWrite,
     acknowledgement: Option<crate::ack::ResolvedAcknowledgement>,
 }
 
+#[cfg(test)]
 struct LocalPostWrite {
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
@@ -237,28 +241,8 @@ impl PreparedWrite {
         self.outbound_request.clone()
     }
 
-    /// Emits the local post-write notification after durable persistence.
-    ///
-    /// This is intentionally called only from the daemon's
-    /// `PostWriteRouter::dispatch` local branch.
-    pub fn emit_local_post_write(
-        &mut self,
-        runtime: &LocalServiceRuntime,
-        post_send_emitter: &dyn PostSendHookEmitter,
-    ) {
-        hook::emit_post_send_effects(
-            runtime,
-            &mut self.outcome.warnings,
-            self.post_write.post_send_config.as_ref(),
-            Some(post_send_emitter),
-            &self.post_write.recipient,
-            &self.post_write.delivery_snapshot,
-            &self.post_write.messages,
-        );
-    }
-
     #[cfg(test)]
-    pub(crate) fn emit_local_post_write_for_test<
+    pub(crate) fn emit_post_write_for_test<
         R: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
     >(
         &mut self,
@@ -276,11 +260,11 @@ impl PreparedWrite {
         );
     }
 
-    /// Completes the canonical write only after the router's selected action
-    /// succeeded.  For acknowledgements this is where source state becomes
-    /// acknowledged; a peer-delivery error therefore leaves it pending.
+    /// Completes the canonical write before post-commit work is scheduled.
+    /// For acknowledgements this records the source transition before the
+    /// caller receives its local admission response.
     pub fn finish(
-        self,
+        &mut self,
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
@@ -288,18 +272,18 @@ impl PreparedWrite {
     }
 
     fn finish_with_runtime<R>(
-        self,
+        &mut self,
         runtime: &R,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError>
     where
         R: RetainedMailboxRuntime,
     {
-        match self.acknowledgement {
+        match self.acknowledgement.take() {
             Some(acknowledgement) => acknowledgement
-                .finish(runtime, observability, self.outcome)
+                .finish(runtime, observability, self.outcome.clone())
                 .map(WriteOutcome::Acknowledged),
-            None => Ok(WriteOutcome::Sent(self.outcome)),
+            None => Ok(WriteOutcome::Sent(self.outcome.clone())),
         }
     }
 
@@ -326,6 +310,55 @@ impl PreparedWrite {
     pub fn is_peer_receipt(&self) -> bool {
         has_authenticated_peer_provenance(&self.outbound_request)
     }
+}
+
+/// Executes the local post-write effects from a committed immutable record.
+///
+/// The daemon calls this only from its post-commit worker.  Admission keeps
+/// no prepared payload and never waits for hook, tmux, or graft I/O.
+pub fn emit_persisted_local_post_write(
+    runtime: &LocalServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    message_id: AtmMessageId,
+    post_send_emitter: &dyn PostSendHookEmitter,
+) -> Result<(), AtmError> {
+    let key = boundary::MessageKey::from(message_id);
+    let Some(record) = runtime.load_message_record(home_dir, team, agent, &key)? else {
+        return Ok(());
+    };
+    let recipient = ResolvedRecipient {
+        agent: agent.clone(),
+        team: team.clone(),
+    };
+    let delivery_snapshot =
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
+    let logical = crate::delivery_plan::LogicalMessage::new(
+        record.envelope.clone(),
+        record.envelope.requires_ack,
+        record.envelope.acknowledges_message_id.is_some(),
+    )
+    .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+    let mut warnings = Vec::new();
+    hook::emit_post_send_effects(
+        runtime,
+        &mut warnings,
+        None,
+        Some(post_send_emitter),
+        &recipient,
+        &delivery_snapshot,
+        &[logical],
+    );
+    for warning in warnings {
+        tracing::warn!(
+            code = ?warning.code,
+            message_id = %message_id,
+            "post-commit local post-write effect completed with warning: {}",
+            warning.message
+        );
+    }
+    Ok(())
 }
 
 /// Result of sending one ATM mailbox message.
@@ -452,7 +485,7 @@ pub fn write_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
-    let prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
     prepared.finish(runtime, observability)
 }
 
@@ -495,7 +528,7 @@ fn write_mail_with_runtime_impl<
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<PreparedWrite, AtmError> {
-    let provenance = validate_write_provenance(
+    validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
             target_host: request.to.as_ref().and_then(|address| address.host()),
@@ -512,27 +545,73 @@ fn write_mail_with_runtime_impl<
         }
         return prepare_persisted_write(request, observability, runtime, None);
     }
-    if request.to.is_some() && provenance.is_authenticated_peer() {
-        let acknowledgement = crate::ack::resolve_received_acknowledgement_write(request, runtime)?;
-        return prepare_persisted_write(
-            acknowledgement.request(),
-            observability,
-            runtime,
-            Some(acknowledgement),
-        );
-    }
-    if request.to.is_some() {
-        return Err(AtmError::validation(
-            "acknowledgement write must not include a client-supplied destination",
-        ));
-    }
-    let acknowledgement = crate::ack::resolve_acknowledgement_write(request, runtime)?;
-    prepare_persisted_write(
-        acknowledgement.request(),
+    let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+fn prepare_atomic_acknowledgement_write<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    acknowledgement: crate::ack::AtomicAcknowledgementWrite,
+    observability: &dyn ObservabilityPort,
+    _runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    let source_task_id = acknowledgement.acknowledgement.source_task_id();
+    let reply = acknowledgement.reply;
+    let recipient = ResolvedRecipient {
+        team: reply.team.clone(),
+        agent: reply.agent.clone(),
+    };
+    let outcome = SendOutcome {
+        action: CommandAction::Send,
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
+        sender: reply.envelope.from.clone(),
+        outcome: SendCommandOutcome::Sent,
+        message_id: reply.envelope.message_id.ok_or_else(|| {
+            AtmError::mailbox_write("atomic acknowledgement reply is missing its message ID")
+        })?,
+        requires_ack: false,
+        task_id: source_task_id.clone(),
+        summary: reply.envelope.summary.clone(),
+        message: Some(reply.envelope.text.clone()),
+        warnings: Vec::new(),
+        dry_run: false,
+    };
+    emit_send_command_event(
         observability,
-        runtime,
-        Some(acknowledgement),
-    )
+        SendCommandOutcome::Sent.as_str(),
+        &outcome,
+        source_task_id,
+        &reply.envelope.from,
+    );
+    #[cfg(test)]
+    let post_write = {
+        let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+            _runtime,
+            &recipient.team,
+            &recipient.agent,
+        )?;
+        let logical =
+            crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
+                .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+        LocalPostWrite {
+            post_send_config: None,
+            recipient,
+            delivery_snapshot,
+            messages: vec![logical],
+        }
+    };
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: acknowledgement.canonical_request,
+        persisted_timestamp: reply.envelope.timestamp,
+        post_write_needed: true,
+        same_store_peer_receipt: false,
+        #[cfg(test)]
+        post_write,
+        acknowledgement: Some(acknowledgement.acknowledgement),
+    })
 }
 
 fn prepare_persisted_write<
@@ -555,6 +634,7 @@ fn prepare_persisted_write<
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
+    let acknowledgement_source_update = None;
     let persistence = persist_send_message(
         runtime,
         &request,
@@ -565,6 +645,7 @@ fn prepare_persisted_write<
         timestamp,
         requires_ack,
         task_id.clone(),
+        acknowledgement_source_update,
     )?;
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row, but the ordinary post-write route still emits
@@ -572,6 +653,7 @@ fn prepare_persisted_write<
     let post_write_needed = persistence.requires_post_write();
     let same_store_peer_receipt =
         persistence.duplicate_disposition == DuplicateWriteDisposition::SameStorePeerReceipt;
+    #[cfg(test)]
     let messages =
         post_send_messages_from_persistence(&persistence, requires_ack, acknowledgement.is_some())?;
     let outcome = finalize_send_outcome(
@@ -592,6 +674,7 @@ fn prepare_persisted_write<
         persisted_timestamp: timestamp,
         post_write_needed,
         same_store_peer_receipt,
+        #[cfg(test)]
         post_write: LocalPostWrite {
             post_send_config: context.post_send_config,
             recipient: context.recipient,
@@ -630,7 +713,7 @@ fn send_mail_with_runtime_impl<
     {
         // Test-only harness: production notification is owned by
         // `PostWriteRouter::dispatch` in atm-daemon.
-        prepared.emit_local_post_write_for_test(runtime, post_send_emitter);
+        prepared.emit_post_write_for_test(runtime, post_send_emitter);
     }
     match prepared.finish_with_runtime(runtime, observability)? {
         WriteOutcome::Sent(outcome) => Ok(outcome),
@@ -756,6 +839,7 @@ fn build_send_delivery_plan(
     ))
 }
 
+#[cfg(test)]
 fn post_send_messages_from_persistence(
     persistence: &DeliveryPersistenceResult,
     requires_ack: bool,
@@ -772,6 +856,7 @@ fn post_send_messages_from_persistence(
 
 struct SendExecutionContext {
     command_config: Option<config::AtmConfig>,
+    #[cfg(test)]
     post_send_config: Option<config::AtmConfig>,
     recipient: ResolvedRecipient,
     canonical_sender: AgentName,
@@ -787,27 +872,16 @@ fn prepare_send_context<
     runtime: &R,
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
-    let command_config = runtime.load_config(&request.current_dir)?;
-    let (post_send_config, warnings) = match hook::load_post_send_config_for_sender(
-        runtime,
-        &request.caller_team,
-        &request.caller_identity,
-    ) {
-        Ok(config) => (config, Vec::new()),
-        Err(error) => (
-            None,
-            vec![WarningEntry::with_code(
-                error.code(),
-                format!(
-                    "warning: post-send hook config lookup failed for {}@{}: {}.",
-                    request.caller_identity,
-                    request.caller_team,
-                    error.message()
-                ),
-                Some(error.message().to_owned()),
-            )],
-        ),
-    };
+    // This is the durable-admission half of the pipeline.  A daemon must not
+    // inspect a caller workspace or hook configuration before replying to a
+    // committed write: those are post-commit worker concerns.  The daemon
+    // runtime already rejects workspace config, but avoiding this call here
+    // makes the no-filesystem-read admission contract structural rather than
+    // dependent on the runtime implementation.
+    let command_config = None;
+    #[cfg(test)]
+    let post_send_config = None;
+    let warnings = Vec::new();
     let canonical_sender = request.caller_identity.clone();
     let target = request.to.as_ref().ok_or_else(|| {
         AtmError::validation("write request destination must be resolved before persistence")
@@ -839,6 +913,7 @@ fn prepare_send_context<
     );
     Ok(SendExecutionContext {
         command_config,
+        #[cfg(test)]
         post_send_config,
         recipient,
         canonical_sender,
@@ -863,6 +938,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     timestamp: IsoTimestamp,
     requires_ack: bool,
     task_id: Option<TaskId>,
+    acknowledgement_source_update: Option<boundary::Message>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let mut envelope = build_send_envelope(
         request,
@@ -891,7 +967,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         })?;
         set_peer_outbound_write(&mut envelope, host, request_json);
     }
-    persist_message(
+    persistence::persist_message_with_ack_update(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
@@ -908,6 +984,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                     .and_then(|destination| destination.host())
                     .map(|destination_host| (source_host, destination_host))
             }),
+        acknowledgement_source_update,
     )
 }
 
@@ -976,146 +1053,6 @@ fn emit_send_command_event(
     }) {
         warn!(%error, command = "send", action = "send", "failed to emit send command event");
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolvedRecipient {
-    pub(crate) agent: AgentName,
-    pub(crate) team: TeamName,
-}
-
-pub(crate) fn validate_non_self_recipient(
-    sender: &AgentName,
-    sender_team: &TeamName,
-    recipient: &ResolvedRecipient,
-    target: &AgentAddress,
-    provenance: ValidatedWriteProvenance,
-) -> Result<(), AtmError> {
-    let same_identity = sender
-        .as_str()
-        .eq_ignore_ascii_case(recipient.agent.as_str())
-        && sender_team
-            .as_str()
-            .eq_ignore_ascii_case(recipient.team.as_str());
-    if same_identity && target.host().is_none() && !provenance.is_authenticated_peer() {
-        return Err(AtmError::self_addressed_send_invalid(format!(
-            "self-addressed messages are invalid ATM input: '{sender}@{sender_team}' may not send to itself"
-        )));
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod self_address_tests {
-    use super::{ResolvedRecipient, validate_non_self_recipient};
-    use crate::address::AgentAddress;
-    use crate::error_codes::AtmErrorCode;
-    use crate::provenance::{WriteIngress, WriteProvenance, validate_write_provenance};
-    use crate::types::{AgentName, TeamName};
-
-    #[test]
-    fn validate_non_self_recipient_rejects_case_variant_self_target() {
-        let provenance = validate_write_provenance(
-            WriteIngress::Canonical,
-            WriteProvenance {
-                target_host: None,
-                authenticated_source_host: None,
-                origin_message_id: false,
-                origin_timestamp: false,
-            },
-        )
-        .expect("local provenance");
-        let error = validate_non_self_recipient(
-            &AgentName::from_validated("Sender-A"),
-            &TeamName::from_validated("Test-Team"),
-            &ResolvedRecipient {
-                agent: AgentName::from_validated("sender-a"),
-                team: TeamName::from_validated("test-team"),
-            },
-            &"sender-a@test-team"
-                .parse::<AgentAddress>()
-                .expect("target"),
-            provenance,
-        )
-        .expect_err("case-variant self target must be rejected");
-
-        assert_eq!(error.code(), AtmErrorCode::SelfAddressedSendInvalid);
-    }
-
-    #[test]
-    fn validate_non_self_recipient_allows_host_qualified_self_target() {
-        let target = "sender-a@test-team.127.0.0.1"
-            .parse::<AgentAddress>()
-            .expect("host-qualified target");
-        let provenance = validate_write_provenance(
-            WriteIngress::Canonical,
-            WriteProvenance {
-                target_host: target.host(),
-                authenticated_source_host: None,
-                origin_message_id: false,
-                origin_timestamp: false,
-            },
-        )
-        .expect("host-qualified origin provenance");
-        validate_non_self_recipient(
-            &AgentName::from_validated("sender-a"),
-            &TeamName::from_validated("test-team"),
-            &ResolvedRecipient {
-                agent: AgentName::from_validated("sender-a"),
-                team: TeamName::from_validated("test-team"),
-            },
-            &target,
-            provenance,
-        )
-        .expect("host-qualified self target must use the ordinary peer route");
-    }
-
-    #[test]
-    fn validate_non_self_recipient_allows_authenticated_peer_after_target_normalization() {
-        let target = "sender-a@test-team"
-            .parse::<AgentAddress>()
-            .expect("normalized target");
-        let peer_host = "peer.example.test".parse().expect("peer host");
-        let provenance = validate_write_provenance(
-            WriteIngress::Canonical,
-            WriteProvenance {
-                target_host: target.host(),
-                authenticated_source_host: Some(&peer_host),
-                origin_message_id: true,
-                origin_timestamp: true,
-            },
-        )
-        .expect("authenticated peer provenance");
-        validate_non_self_recipient(
-            &AgentName::from_validated("sender-a"),
-            &TeamName::from_validated("test-team"),
-            &ResolvedRecipient {
-                agent: AgentName::from_validated("sender-a"),
-                team: TeamName::from_validated("test-team"),
-            },
-            &target,
-            provenance,
-        )
-        .expect("authenticated peer receipt must not become a local self-send");
-    }
-}
-
-fn resolve_recipient(
-    target_address: &AgentAddress,
-    caller_team: &TeamName,
-    config: Option<&config::AtmConfig>,
-) -> Result<ResolvedRecipient, AtmError> {
-    // `AgentAddress` has already validated the explicit team segment. Never
-    // parse it again and silently substitute the caller team on failure.
-    let team = target_address
-        .team()
-        .cloned()
-        .unwrap_or_else(|| caller_team.clone());
-
-    Ok(ResolvedRecipient {
-        agent: config::aliases::resolve_agent_name(target_address.agent(), config)?,
-        team,
-    })
 }
 
 fn resolve_message_body(

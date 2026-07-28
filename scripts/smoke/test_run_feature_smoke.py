@@ -85,6 +85,13 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertNotIn("must-not-appear", result["stdout"])
         self.assertNotIn("must-not-appear", result["stderr"])
 
+    def test_command_preserves_a_large_doctor_json_response_for_parsing(self):
+        payload = __import__("json").dumps({"roster": "x" * 9_000})
+        completed = mock.Mock(returncode=0, stdout=payload, stderr="")
+        with mock.patch("smoke_common.subprocess.run", return_value=completed):
+            result = RUNNER.command(["atm", "doctor", "--json"])
+        self.assertEqual(RUNNER.parse_json(result, "doctor")["roster"], "x" * 9_000)
+
     def test_remote_hosts_are_rejected_for_localhost_feature(self):
         with mock.patch.object(RUNNER.sys, "argv", ["smoke", "localhost", "m5"]):
             with self.assertRaisesRegex(RUNNER.SmokeError, "only valid"):
