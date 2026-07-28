@@ -138,3 +138,39 @@ linked above, not by the live receive path.
 
 This is an integration reference, not a sprint status record or AI.21 evidence
 claim.
+
+## Full smoke test
+
+The bridge unit tests validate source-to-chat mapping and duplicate suppression.
+For a live end-to-end check of every PyO3 session operation, first build the
+binding in the Hermes Python environment:
+
+```sh
+maturin develop --manifest-path crates/atm-graft-python/Cargo.toml
+```
+
+Then run the smoke test as the receiving Hermes profile. It uses the registered
+`hendrix` member as the sender, so both identities must be present in the same
+team roster:
+
+```sh
+ATM_IDENTITY=skillrx ATM_TEAM=hermes \
+  python scripts/phase-ai/run-hermes-graft-smoke.py \
+  --sender hendrix \
+  --workspace-root /Users/randlee/Documents/github/synaptic-canvas-dolt \
+  --chat-id 8991600178
+```
+
+The test covers:
+
+- `PyAgentAddress` and `PyGraftSessionOptions` construction and validation;
+- `PyGraftSession` activation, duplicate activation rejection, snapshot, and
+  close lifecycle;
+- daemon-backed `send`, `read`, and `acknowledge` operations;
+- typed `PyNudge` callback delivery with source, body, and message ID checks;
+- typed `PyMessage` read projections and acknowledgement reply; and
+- post-close fail-closed behavior.
+
+The receiver endpoint must be published while the test runs. If the test
+reports `ATM_POST_SEND_GRAFT_UNAVAILABLE`, inspect the gateway hook and the
+profile's `.atm/graft/<team>/<agent>.json` endpoint before rerunning QA.
