@@ -8,7 +8,7 @@ trait = "PostWriteRouter"
 
 [implementation]
 type = "DaemonRequestDispatcher"
-module = "atm_daemon::runtime_health"
+module = "atm_daemon::runtime_health::peer_delivery_router"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 

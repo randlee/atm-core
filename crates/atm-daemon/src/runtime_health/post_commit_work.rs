@@ -1,6 +1,7 @@
 //! Identifier-only work that runs after local SQLite admission.
 
 use std::collections::BTreeMap;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
@@ -167,15 +168,23 @@ impl PeerPostCommitWorkQueue {
             let graft_port: Arc<dyn boundary::GraftPostSendPort + Send + Sync> =
                 Arc::new(DaemonGraftPostSendPort::new(runtime.clone()));
             let emitter = crate::post_send_emitter::DaemonPostSendHookEmitter::new(graft_port);
-            if let Err(error) = atm_core::send::emit_persisted_local_post_write(
-                &runtime,
-                home_dir.as_path(),
-                &target.team,
-                &target.agent,
-                message_id,
-                &emitter,
-            ) {
-                tracing::warn!(subsystem = "runtime_health", action = "post_commit_local_nudge", %message_id, %error, "post-commit local notification failed after admission");
+            match catch_unwind(AssertUnwindSafe(|| {
+                atm_core::send::emit_persisted_local_post_write(
+                    &runtime,
+                    home_dir.as_path(),
+                    &target.team,
+                    &target.agent,
+                    message_id,
+                    &emitter,
+                )
+            })) {
+                Ok(Err(error)) => {
+                    tracing::warn!(subsystem = "runtime_health", action = "post_commit_local_nudge", %message_id, %error, "post-commit local notification failed after admission")
+                }
+                Err(_) => {
+                    tracing::error!(subsystem = "runtime_health", action = "post_commit_local_nudge", %message_id, "post-commit local notification panicked; worker isolated the failure and remains available")
+                }
+                Ok(Ok(())) => {}
             }
         }
     }
@@ -194,11 +203,11 @@ impl PostCommitWorkQueue for PeerPostCommitWorkQueue {
                 Ok(()) => {}
                 Err(TrySendError::Full(_)) => {
                     self.remove_local_nudge_target(message_id);
-                    tracing::warn!(subsystem = "runtime_health", action = "post_commit_work_signal", work = "local_nudge", %message_id, "post-commit queue is full; retained message remains available for later reconciliation")
+                    tracing::warn!(subsystem = "runtime_health", action = "post_commit_work_signal", work = "local_nudge", %message_id, "post-commit queue is full; local nudge was not emitted and must be retried by the caller or operator")
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     self.remove_local_nudge_target(message_id);
-                    tracing::warn!(subsystem = "runtime_health", action = "post_commit_work_signal", work = "local_nudge", %message_id, "post-commit worker is unavailable; retained message remains available for later reconciliation")
+                    tracing::warn!(subsystem = "runtime_health", action = "post_commit_work_signal", work = "local_nudge", %message_id, "post-commit worker is unavailable; local nudge was not emitted and must be retried by the caller or operator")
                 }
             },
         }
