@@ -1018,6 +1018,43 @@ fn self_addressed_task_send_is_rejected_before_persistence() {
 
 #[test]
 #[serial_test::serial(env)]
+fn plain_file_task_envelope_requires_ack_without_explicit_task_id() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    let task_file = tempdir.path().join("task-envelope.xml");
+    fs::write(
+        &task_file,
+        "<atm-task id=\"AI-ACK-1\"><description>ack immediately</description></atm-task>",
+    )
+    .expect("task envelope fixture");
+    let mut request = send_request(tempdir.path());
+    request.message_source = SendMessageSource::File {
+        path: task_file,
+        message: None,
+    };
+    request.requires_ack = false;
+    request.task_id = None;
+
+    let outcome = super::send_mail_with_runtime_impl(request, &observability, &runtime, None)
+        .expect("plain file task envelope send succeeds");
+
+    assert!(outcome.requires_ack);
+    assert!(outcome.task_id.is_none());
+    let records = runtime
+        .persisted_records
+        .lock()
+        .expect("records lock")
+        .clone();
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert!(record.envelope.requires_ack);
+    assert!(record.envelope.pending_ack_at.is_some());
+    assert!(record.envelope.task_id.is_none());
+}
+
+#[test]
+#[serial_test::serial(env)]
 fn self_addressed_dry_run_is_rejected_before_reporting_success() {
     let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
     let observability = RecordingObservability::default();
