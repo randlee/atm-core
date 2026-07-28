@@ -48,6 +48,7 @@ dependencies = [
  "tempfile",
  "toml",
  "tracing",
+ "tracing-subscriber",
  "ulid",
  "windows-sys 0.59.0",
 ]
