@@ -12,6 +12,18 @@ implement an alternate acknowledgement path. It forwards a canonical nudge
 body to the host's ordinary inbound-user-message callable exactly once for a
 message ID retained in its bounded in-memory duplicate set.
 
+## Adapter contract tests
+
+`just test-hermes-graft-bridge` builds the Maturin extension in an isolated
+virtual environment and runs both `test_hermes_bridge.py` and
+`test_hermes_adapter.py`. The latter imports the checked-in, dependency-free
+Hermes gateway contract shim at
+`crates/atm-graft-python/tests/hermes_gateway_shim` so the adapter contract is
+actually exercised in CI. To run the same tests against a Hermes checkout,
+set `HERMES_SRC` to its repository root; it must contain
+`gateway/platforms/base.py`. The shim is only a test harness and is not used
+by the installed plugin.
+
 ## Typed callback
 
 The callback receives `PyNudge` from AI.18. It uses only these typed values:
