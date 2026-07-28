@@ -99,7 +99,7 @@ class HermesBridgeTests(unittest.TestCase):
         self.assertNotEqual(key, "discord:hendrix:1234@hermes")
 
     def test_malformed_source_fails_closed(self) -> None:
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(atm_graft.AtmGraftError):
             atm_graft.PyAgentAddress("hendrix:bad", "hermes", "1234")
 
     def test_duplicate_nudge_does_not_create_a_second_hermes_turn(self) -> None:
