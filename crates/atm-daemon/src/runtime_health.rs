@@ -11,7 +11,7 @@ use atm_core::{
     error::{AtmError, AtmErrorCode},
     graft::{
         GraftPostSendRequest, GraftPostSendResponse, deliver_graft_post_send,
-        graft_receiver_record_path_from_home,
+        graft_receiver_record_path_from_root,
     },
     list::list_mail,
     process::process_is_alive,
@@ -22,7 +22,7 @@ use atm_core::{
     },
     provenance::{WriteIngress, WriteProvenance, validate_write_provenance},
     read::{peek_mail_with_runtime, read_mail_with_runtime},
-    schema::canonical_home_dir,
+    schema::canonical_graft_root,
     send::{PreparedWrite, WriteOutcome, WriteRequest, prepare_write_with_runtime},
 };
 
@@ -98,14 +98,14 @@ impl boundary::GraftPostSendPort for DaemonGraftPostSendPort {
                 "recipient is missing from the authoritative ATM roster",
             ));
         };
-        let recipient_home_dir = canonical_home_dir(&member.metadata_json).ok_or_else(|| {
+        let recipient_root = canonical_graft_root(&member.metadata_json).ok_or_else(|| {
             graft_recipient_unavailable_error(
                 event,
-                "recipient has no authoritative home_dir for graft post-send delivery",
+                "recipient has no authoritative graft root for post-send delivery",
             )
         })?;
-        let record_path = graft_receiver_record_path_from_home(
-            recipient_home_dir.as_path(),
+        let record_path = graft_receiver_record_path_from_root(
+            recipient_root.as_path(),
             &target.recipient_team,
             &target.recipient,
         );

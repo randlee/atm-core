@@ -56,6 +56,20 @@ The gateway environment supplies:
 - `ATM_HOME` — the ATM home/workspace root; and
 - the Hermes-side chat ID, such as the Telegram chat ID.
 
+The ATM roster must also identify the workspace root where the gateway's graft
+endpoint is published. If the gateway profile's `ATM_HOME` differs from its
+workspace, set the durable roster metadata explicitly:
+
+```sh
+ATM_TEAM=hermes ATM_IDENTITY=hendrix \
+  atm teams update-member hermes skillrx \
+  --workspace-root /path/to/skillrx/workspace
+```
+
+The daemon uses this `workspace_root` metadata (falling back to `home_dir` for
+older roster rows), so it resolves the same endpoint path that the Python
+publisher writes.
+
 The workspace must contain a discovered `.atm.toml`. Graft activation is
 configuration-gated: without that file the session remains `inactive`, even
 though graft is enabled by default. A minimal configuration is enough:

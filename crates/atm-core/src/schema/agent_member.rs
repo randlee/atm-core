@@ -7,6 +7,10 @@ use crate::types::{AgentId, AgentName, ModelName, PaneId};
 pub use atm_storage::contract::AgentType;
 
 pub const HOME_DIR_METADATA_KEY: &str = "home_dir";
+/// Optional host workspace root used by graft receivers. When present it is
+/// the canonical root for the receiver endpoint; `home_dir` remains the
+/// compatibility fallback for roster members that predate this field.
+pub const WORKSPACE_ROOT_METADATA_KEY: &str = "workspace_root";
 #[deprecated(note = "Phase AD obsolete: derived compatibility field only")]
 pub const LEGACY_CWD_METADATA_KEY: &str = "cwd";
 
@@ -44,6 +48,11 @@ impl From<HomeDirPath> for PathBuf {
 
 pub fn canonical_home_dir(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
     metadata_home_dir(metadata_json, HOME_DIR_METADATA_KEY)
+}
+
+pub fn canonical_graft_root(metadata_json: &Map<String, Value>) -> Option<HomeDirPath> {
+    metadata_home_dir(metadata_json, WORKSPACE_ROOT_METADATA_KEY)
+        .or_else(|| canonical_home_dir(metadata_json))
 }
 
 #[allow(
@@ -122,8 +131,8 @@ mod tests {
     use serde_json::{Map, Value};
 
     use super::{
-        AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, canonical_home_dir,
-        compatible_home_dir,
+        AgentMember, AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY,
+        canonical_graft_root, canonical_home_dir, compatible_home_dir,
     };
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
@@ -217,6 +226,27 @@ mod tests {
                 .as_ref()
                 .map(HomeDirPath::as_path),
             Some(Path::new("/repo/home"))
+        );
+    }
+
+    #[test]
+    fn canonical_graft_root_prefers_workspace_root_over_profile_home() {
+        let metadata = Map::from_iter([
+            (
+                HOME_DIR_METADATA_KEY.to_string(),
+                Value::from("/profile/home"),
+            ),
+            (
+                WORKSPACE_ROOT_METADATA_KEY.to_string(),
+                Value::from("/workspace/root"),
+            ),
+        ]);
+
+        assert_eq!(
+            canonical_graft_root(&metadata)
+                .as_ref()
+                .map(HomeDirPath::as_path),
+            Some(Path::new("/workspace/root"))
         );
     }
 
