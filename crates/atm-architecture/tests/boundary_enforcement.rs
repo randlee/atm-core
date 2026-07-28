@@ -62,6 +62,23 @@ const AI11_RETIRED_WINDOWS_TRANSPORT_DEPENDENCIES: &[&str] = &[
 ];
 
 #[test]
+fn ai32_peer_scheduler_cannot_restore_retired_ordering_constructs() {
+    let source =
+        read_source(&workspace_root().join("crates/atm-daemon/src/peer_drain_coordinator.rs"));
+    let code = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for retired in ["PeerDrainSlot", "Condvar", "generation", "cursor"] {
+        assert!(
+            !code.contains(retired),
+            "AI.32 bounded independent jobs must not restore retired `{retired}` scheduler state"
+        );
+    }
+}
+
+#[test]
 fn daemon_must_not_read_caller_workspace_config() {
     let root = workspace_root();
     let composition = read_source(&root.join("crates/atm-daemon/src/composition.rs"));
