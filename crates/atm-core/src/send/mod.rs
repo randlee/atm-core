@@ -624,7 +624,15 @@ fn prepare_persisted_write<
 ) -> Result<PreparedWrite, AtmError> {
     let context = prepare_send_context(runtime, &request)?;
     let task_id = request.task_id.clone();
-    let requires_ack = request.requires_ack || task_id.is_some();
+    // Team-lead dispatches XML task envelopes through `atm send --file`.
+    // Those messages render an immediate-ack instruction, so admission must
+    // create the matching durable pending-ack state even without --task-id.
+    let requires_ack = request.requires_ack
+        || task_id.is_some()
+        || matches!(
+            &request.message_source,
+            SendMessageSource::File { path, .. } if file_policy::is_task_envelope(path)
+        );
     let body = resolve_message_body(
         &request.message_source,
         &request.current_dir,
