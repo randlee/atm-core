@@ -6,7 +6,12 @@ import re
 import subprocess
 from typing import Any
 
-MAX_CAPTURE = 8192
+# Smoke control responses (notably `atm doctor --json`) include a full roster
+# and can legitimately exceed 8 KiB.  Truncating a JSON response before its
+# caller parses it converted a healthy daemon into a false smoke failure.
+# Keep one bounded-but-complete control-plane response instead; callers still
+# redact it before persisting evidence.
+MAX_CAPTURE = 1_048_576
 SECRET = re.compile(r"(?i)(-----BEGIN[^-]+-----|(?:token|secret|password|capability|private[_-]?key)\s*[=:]\s*[^\s,]+)")
 
 
