@@ -47,6 +47,20 @@ Hermes event loop. Duplicate message IDs are suppressed by the bridge. The
 body is then handled by Hermes's ordinary inbound-user-message path, so no
 manual `atm read` turn is required.
 
+For messages that require an explicit ATM acknowledgement, pass the optional
+`requires_ack` argument and acknowledge the returned message after reading it:
+
+```python
+sender_session.send(receiver, "please confirm", requires_ack=True)
+message = next(
+    message for message in receiver_session.read() if message.body == "please confirm"
+)
+receiver_session.acknowledge(message.message_id, "confirmed")
+```
+
+The default remains `False`, so existing `send(to, body)` callers retain the
+non-acknowledgement semantics.
+
 ## Required setup
 
 The gateway environment supplies:
