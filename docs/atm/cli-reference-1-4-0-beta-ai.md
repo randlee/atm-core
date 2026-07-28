@@ -438,11 +438,11 @@ List teams or run one team-administration subcommand
 | `<team>` |  | yes |  |
 | `<member>` |  | yes |  |
 | `--home-dir` |  | no |  |
+| `--workspace-root` |  | no | Canonical workspace root used for graft receiver endpoint resolution |
 | `--harness` |  | no |  |
 | `--agent-type` |  | no |  |
 | `--model` |  | no |  |
 | `--pane-id` |  | no | tmux pane id in '%<number>' form or a bare numeric pane id |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
 

@@ -467,7 +467,7 @@ mod tests {
         TeamNudgeTemplateOverrideRow,
     };
     use crate::error_codes::AtmErrorCode;
-    use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig};
+    use crate::schema::{HOME_DIR_METADATA_KEY, TeamConfig, WORKSPACE_ROOT_METADATA_KEY};
     use crate::test_support::{
         EnvGuard, ROLE_TEAM_LEAD, TEST_ARCH_CTM, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM,
     };
@@ -912,6 +912,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: Some(PathBuf::from("/repo/workspace").into()),
                 harness: Some(RosterHarness::CodexCli),
                 agent_type: Some(crate::schema::AgentType::from("worker".to_string())),
                 model: Some(crate::types::ModelName::new("gpt-5").expect("model")),
@@ -933,6 +934,10 @@ mod tests {
         assert_eq!(
             member.metadata_json.get(HOME_DIR_METADATA_KEY),
             Some(&serde_json::json!("/repo/worktree"))
+        );
+        assert_eq!(
+            member.metadata_json.get(WORKSPACE_ROOT_METADATA_KEY),
+            Some(&serde_json::json!("/repo/workspace"))
         );
 
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
@@ -967,6 +972,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(ROLE_TEAM_LEAD.parse().expect("member")),
                 home_dir: None,
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -983,6 +989,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_ARCH_CTM.parse().expect("member")),
                 home_dir: None,
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1028,6 +1035,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1055,6 +1063,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_RECIPIENT.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,
@@ -1082,6 +1091,7 @@ mod tests {
                 team: TEST_TEAM.parse().expect("team"),
                 member: MemberName(TEST_SENDER.parse().expect("member")),
                 home_dir: Some(PathBuf::from("/repo/worktree").into()),
+                workspace_root: None,
                 harness: None,
                 agent_type: None,
                 model: None,

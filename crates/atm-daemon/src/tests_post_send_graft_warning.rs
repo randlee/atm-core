@@ -18,17 +18,28 @@ const TEST_TEAM: &str = "test-team";
 
 fn install_test_roster_with_harness(
     db_path: &std::path::Path,
-    members: &[(&str, RosterHarness, Option<&std::path::Path>)],
+    members: &[(
+        &str,
+        RosterHarness,
+        Option<&std::path::Path>,
+        Option<&std::path::Path>,
+    )],
 ) {
     let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
     let roster_store = assembly.roster_store_arc();
     let team = TEST_TEAM.parse::<TeamName>().expect("team");
     let members = members
         .iter()
-        .map(|(name, harness, home_dir)| {
+        .map(|(name, harness, home_dir, workspace_root)| {
             let mut member = AgentMember::with_name((*name).parse().expect("member"));
             if let Some(home_dir) = home_dir {
                 member.home_dir = home_dir.to_path_buf().into();
+            }
+            if let Some(workspace_root) = workspace_root {
+                member.extra.insert(
+                    "workspace_root".to_string(),
+                    serde_json::Value::String(workspace_root.display().to_string()),
+                );
             }
             let mut record = atm_core::boundary::roster_member_record_from_claude_code_member(
                 team.clone(),
@@ -69,6 +80,7 @@ fn graft_warning_dispatcher() -> (
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     let workspace_dir = tempdir.path().join("workspace");
+    let profile_home = tempdir.path().join("recipient-profile");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
     let db_path = tempdir.path().join("mail.db");
@@ -79,10 +91,12 @@ fn graft_warning_dispatcher() -> (
                 ROLE_TEAM_LEAD,
                 RosterHarness::ClaudeCode,
                 Some(workspace_dir.as_path()),
+                None,
             ),
             (
                 "qa-a",
                 RosterHarness::CodexCli,
+                Some(profile_home.as_path()),
                 Some(workspace_dir.as_path()),
             ),
         ],
