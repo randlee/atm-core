@@ -12,11 +12,16 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(Box<Message>),
+    /// A related group of immutable records that must either all become
+    /// visible or none do.  AI.31 uses this for the ACK reply and the
+    /// acknowledged source record.
+    UpsertMessages(Vec<Message>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WriteOpResult {
     UpsertMessage { inserted: bool },
+    UpsertMessages,
 }
 
 pub(crate) fn execute(
@@ -28,6 +33,12 @@ pub(crate) fn execute(
     match op {
         WriteOp::UpsertMessage(request) => {
             execute_upsert_message(request, connection, cache, target)
+        }
+        WriteOp::UpsertMessages(records) => {
+            for record in records {
+                let _ = execute_upsert_message(record, connection, cache, target)?;
+            }
+            Ok(WriteOpResult::UpsertMessages)
         }
     }
 }

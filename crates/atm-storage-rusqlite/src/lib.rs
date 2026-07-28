@@ -296,6 +296,10 @@ impl MessageStore for SqliteMessageStore {
         self.db.submit_upsert_message(message.clone())
     }
 
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
+        self.db.submit_upsert_messages_atomically(messages.to_vec())
+    }
+
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
         let record = self.db.with_connection(|connection| {
             let loaded = connection
@@ -833,6 +837,34 @@ mod tests {
                 .load_message(&original.message_key)
                 .expect("load after delete")
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_commits_related_messages_through_one_writer_operation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let reply = message("atm:ack-reply", "reply");
+        let mut source = message("atm:ack-source", "source");
+        source.envelope.read = true;
+        source.envelope.pending_ack_at = None;
+        source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+
+        store
+            .save_messages_atomically(&[reply.clone(), source.clone()])
+            .expect("commit acknowledgement reply and source together");
+
+        assert_eq!(
+            store.load_message(&reply.message_key).expect("load reply"),
+            Some(reply),
+            "the immutable acknowledgement reply is durable"
+        );
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(source),
+            "the acknowledged source state is durable in the same commit"
         );
     }
 

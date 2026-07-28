@@ -193,7 +193,6 @@ pub fn ack_mail_with_runtime(
 /// then executed by the one canonical write pipeline shared with `atm send`.
 pub(crate) struct ResolvedAcknowledgement {
     canonical_request: SendRequest,
-    source: LoadedAckSource,
     source_record: boundary::Message,
     actor: AgentName,
     team: TeamName,
@@ -241,7 +240,6 @@ pub(crate) fn resolve_acknowledgement_write<
         canonical_ack_write_request(&request, &actor, &team, &reply_target, &source_record)?;
     Ok(ResolvedAcknowledgement {
         canonical_request,
-        source,
         source_record,
         actor,
         team,
@@ -288,7 +286,6 @@ pub(crate) fn resolve_received_acknowledgement_write<
     let reply_target = ReplyTarget::new(actor.clone(), team.clone(), target.host().cloned());
     Ok(ResolvedAcknowledgement {
         canonical_request: request,
-        source,
         source_record,
         actor,
         team,
@@ -303,22 +300,25 @@ impl ResolvedAcknowledgement {
         self.canonical_request.clone()
     }
 
+    /// Builds the acknowledged source replacement that is committed in the
+    /// same SQLite writer transaction as the immutable acknowledgement reply.
+    pub(crate) fn source_update(&self) -> boundary::Message {
+        let timestamp = IsoTimestamp::now();
+        let mut source = self.source_record.clone();
+        source.envelope.read = true;
+        source.envelope.pending_ack_at = None;
+        source.envelope.acknowledged_at = Some(timestamp);
+        source
+    }
+
     /// Receiver-side acknowledgement mutation occurs only after the canonical
     /// write succeeded. A failed write leaves the source pending.
     pub(crate) fn finish<R: RetainedMailboxRuntime>(
         self,
-        runtime: &R,
+        _runtime: &R,
         observability: &dyn ObservabilityPort,
         send_outcome: SendOutcome,
     ) -> Result<AckOutcome, AtmError> {
-        mark_source_acknowledged(
-            runtime,
-            &self.team,
-            &self.actor,
-            self.source.row.message_key,
-            self.source_record.envelope.expires_at,
-        )?;
-
         let outcome = AckOutcome {
             action: CommandAction::Ack,
             team: self.team.clone(),
@@ -379,28 +379,6 @@ fn canonical_ack_write_request(
 
 struct LoadedAckSource {
     row: boundary::MailStoreMailboxMetadataRow,
-}
-
-fn mark_source_acknowledged<R: RetainedMailboxRuntime>(
-    runtime: &R,
-    team: &TeamName,
-    actor: &AgentName,
-    message_key: boundary::MessageKey,
-    expires_at: Option<IsoTimestamp>,
-) -> Result<(), AtmError> {
-    let timestamp = IsoTimestamp::now();
-    runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: actor.clone(),
-        actor: actor.clone(),
-        message_key,
-        read: true,
-        pending_ack_at: None,
-        acknowledged_at: Some(timestamp),
-        expires_at,
-        deleted_at: None,
-        updated_at: Some(timestamp),
-    })
 }
 
 fn ensure_roster_member_exists<R: RetainedServiceRuntime>(

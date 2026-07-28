@@ -350,6 +350,28 @@ impl SharedDb {
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
             WriteOpResult::UpsertMessage { .. } => Ok(()),
+            WriteOpResult::UpsertMessages => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for message upsert",
+            )),
+        }
+    }
+
+    pub(crate) fn submit_upsert_messages_atomically(
+        &self,
+        records: Vec<Message>,
+    ) -> Result<(), AtmError> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        for record in &records {
+            validate_upsert_message_request(record)?;
+        }
+        let result = self.writer.submit(WriteOp::UpsertMessages(records))?;
+        match result {
+            WriteOpResult::UpsertMessages => Ok(()),
+            WriteOpResult::UpsertMessage { .. } => Err(AtmError::daemon_unavailable(
+                "sqlite writer returned the wrong result for atomic message commit",
+            )),
         }
     }
 

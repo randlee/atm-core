@@ -457,6 +457,11 @@ pub struct RosterChangedEvent {
 
 pub trait MessageStore: sealed::Sealed + Send + Sync {
     fn save_message(&self, message: &Message) -> Result<(), AtmError>;
+    /// Commits related immutable mailbox records as one durable unit.
+    ///
+    /// AI.31 uses this for an acknowledgement reply plus the acknowledged
+    /// source record; adapters must not expose a partially committed pair.
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError>;
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError>;
     fn list_messages(&self, query: &MessageQuery) -> Result<Vec<Message>, AtmError>;
     fn delete_message(&self, key: &MessageKey) -> Result<(), AtmError>;
@@ -751,6 +756,10 @@ mod tests {
 
     impl MessageStore for DummyStore {
         fn save_message(&self, _message: &Message) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn save_messages_atomically(&self, _messages: &[Message]) -> Result<(), AtmError> {
             Ok(())
         }
 

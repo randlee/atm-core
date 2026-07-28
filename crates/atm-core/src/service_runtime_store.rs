@@ -94,6 +94,15 @@ pub(crate) trait RetainedMailboxRuntime {
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::Message>, AtmError>;
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        for record in records {
+            self.persist_message_record(record)?;
+        }
+        Ok(())
+    }
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
 }
 
@@ -142,6 +151,22 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             message_key: record.message_key,
             envelope: record.envelope,
         })
+    }
+
+    fn persist_message_records_atomically(
+        &self,
+        records: Vec<boundary::Message>,
+    ) -> Result<(), AtmError> {
+        let records = records
+            .into_iter()
+            .map(|record| SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .collect::<Vec<_>>();
+        self.message_store.save_messages_atomically(&records)
     }
 
     fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {

@@ -9,6 +9,7 @@ use tracing::warn;
 
 use crate::ack::AckOutcome;
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::boundary::PostSendHookEmitter;
 use crate::config;
 use crate::delivery_execution::{
@@ -52,6 +53,7 @@ pub use nudge_template::{
     default_template, qualified_sender_identity as qualified_nudge_sender_identity,
     render_resolved_built_in_nudge,
 };
+#[cfg(test)]
 pub(crate) use persistence::persist_message;
 
 pub(super) const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -553,6 +555,9 @@ fn prepare_persisted_write<
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
+    let acknowledgement_source_update = acknowledgement
+        .as_ref()
+        .map(crate::ack::ResolvedAcknowledgement::source_update);
     let persistence = persist_send_message(
         runtime,
         &request,
@@ -563,6 +568,7 @@ fn prepare_persisted_write<
         timestamp,
         requires_ack,
         task_id.clone(),
+        acknowledgement_source_update,
     )?;
     // A same-host HTTPS receipt deliberately reuses the origin ULID. Storage
     // skips its duplicate row, but the ordinary post-write route still emits
@@ -861,6 +867,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     timestamp: IsoTimestamp,
     requires_ack: bool,
     task_id: Option<TaskId>,
+    acknowledgement_source_update: Option<boundary::Message>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     let mut envelope = build_send_envelope(
         request,
@@ -889,7 +896,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         })?;
         set_peer_outbound_write(&mut envelope, host, request_json);
     }
-    persist_message(
+    persistence::persist_message_with_ack_update(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
@@ -906,6 +913,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                     .and_then(|destination| destination.host())
                     .map(|destination_host| (source_host, destination_host))
             }),
+        acknowledgement_source_update,
     )
 }
 
