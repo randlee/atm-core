@@ -229,7 +229,21 @@ impl PeerDrainCoordinator {
             .into_iter()
             .find(|stored| stored.message_id == job.message_id)
         else {
-            return Ok(EligiblePeerWrite::Missing);
+            let budget = deadline.remaining().ok_or_else(|| {
+                AtmError::remote_delivery_unconfirmed(
+                    "peer delivery deadline elapsed before direct storage lookup",
+                )
+            })?;
+            let Some(stored) = self
+                .outbound
+                .find_for_peer(&job.peer, job.message_id, budget)?
+            else {
+                return Ok(EligiblePeerWrite::Missing);
+            };
+            if stored.created_at < not_before {
+                return Ok(EligiblePeerWrite::Expired);
+            }
+            return Ok(EligiblePeerWrite::Ready(Box::new(decode_request(stored)?)));
         };
         if stored.created_at < not_before {
             return Ok(EligiblePeerWrite::Expired);
@@ -276,6 +290,7 @@ impl PeerDrainCoordinator {
 
     fn run(self: Arc<Self>, receiver: Receiver<PeerWork>) {
         while let Ok(work) = receiver.recv() {
+            Self::reap_finished_workers(&self.job_workers);
             let PeerWork::Job(job) = work else { break };
             let coordinator = Arc::clone(&self);
             let handle = std::thread::spawn(move || {
@@ -303,6 +318,41 @@ impl PeerDrainCoordinator {
         }
         while let Ok(PeerWork::Job(job)) = receiver.try_recv() {
             Self::release_job(&self.state, &job);
+        }
+    }
+
+    fn reap_finished_workers(job_workers: &Mutex<Vec<JoinHandle<()>>>) {
+        let finished = {
+            let Ok(mut workers) = job_workers.lock() else {
+                tracing::warn!(
+                    subsystem = "peer_drain",
+                    action = "reap_workers",
+                    outcome = "lock_poisoned",
+                    "peer delivery worker reaping skipped because worker list is poisoned"
+                );
+                return;
+            };
+            let mut active = Vec::with_capacity(workers.len());
+            let mut finished = Vec::new();
+            for handle in std::mem::take(&mut *workers) {
+                if handle.is_finished() {
+                    finished.push(handle);
+                } else {
+                    active.push(handle);
+                }
+            }
+            *workers = active;
+            finished
+        };
+        for handle in finished {
+            if handle.join().is_err() {
+                tracing::error!(
+                    subsystem = "peer_drain",
+                    action = "reap_workers",
+                    outcome = "worker_panicked",
+                    "peer delivery job panicked after its cleanup wrapper"
+                );
+            }
         }
     }
 }
@@ -455,7 +505,7 @@ fn decode_request(stored: StoredPeerWrite) -> Result<WriteRequest, AtmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Barrier};
+    use std::sync::{Arc, Barrier, Mutex, mpsc};
 
     fn job(peer: &str) -> PeerJob {
         PeerJob {
@@ -582,6 +632,29 @@ mod tests {
         assert!(
             state.try_take(&acknowledgement),
             "an acknowledgement reply has a distinct ULID and must not be coalesced with its send"
+        );
+    }
+
+    #[test]
+    fn reaps_finished_job_workers_during_normal_dispatch() {
+        let (completed_tx, completed_rx) = mpsc::channel();
+        let workers = Mutex::new(vec![std::thread::spawn(move || {
+            completed_tx.send(()).expect("report completion");
+        })]);
+        completed_rx.recv().expect("worker completed");
+        for _ in 0..100 {
+            if workers.lock().expect("workers lock")[0].is_finished() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(workers.lock().expect("workers lock")[0].is_finished());
+
+        PeerDrainCoordinator::reap_finished_workers(&workers);
+
+        assert!(
+            workers.lock().expect("workers lock").is_empty(),
+            "completed worker handles must not accumulate until daemon shutdown"
         );
     }
 }
