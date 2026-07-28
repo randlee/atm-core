@@ -33,6 +33,18 @@ ordinary inbound-user-message hook.
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.
 
+Before starting the bridge, ensure the Hermes workspace contains a discovered
+`.atm.toml`. Graft activation is configuration-gated: when no file is found,
+the session remains `inactive` even though graft is enabled by default. A
+minimal workspace configuration is sufficient:
+
+```toml
+[atm]
+```
+
+To disable graft explicitly, use `[atm.graft] enabled = false`; otherwise the
+presence of `[atm]` keeps the default enabled behavior.
+
 ## Install and status
 
 For a rendered profile `example`:
