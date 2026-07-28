@@ -86,7 +86,20 @@ pub fn graft_receiver_record_path_from_home(
     team: &TeamName,
     agent: &AgentName,
 ) -> PathBuf {
-    home_dir
+    graft_receiver_record_path_from_root(home_dir, team, agent)
+}
+
+/// Absolute path of a loopback endpoint record under the canonical graft root.
+///
+/// The root is intentionally supplied by the caller so publishers and daemon
+/// resolvers share exactly the same path construction once roster metadata has
+/// selected the recipient's authoritative workspace root.
+pub fn graft_receiver_record_path_from_root(
+    graft_root: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> PathBuf {
+    graft_root
         .join(".atm")
         .join("graft")
         .join(team.as_str())

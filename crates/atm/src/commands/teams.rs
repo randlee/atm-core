@@ -76,6 +76,9 @@ struct UpdateMemberCommand {
     #[arg(long)]
     home_dir: Option<PathBuf>,
 
+    #[arg(long = "workspace-root")]
+    workspace_root: Option<PathBuf>,
+
     #[arg(long)]
     harness: Option<String>,
 
@@ -319,6 +322,7 @@ impl UpdateMemberCommand {
             &self.team,
             &self.member,
             self.home_dir,
+            self.workspace_root,
             self.harness,
             self.agent_type,
             self.model,
@@ -421,6 +425,7 @@ mod tests {
                 team: TEST_TEAM.to_string(),
                 member: TEST_SENDER.to_string(),
                 home_dir: Some(home_dir),
+                workspace_root: None,
                 harness: Some("codex-cli".to_string()),
                 agent_type: Some("worker".to_string()),
                 model: Some("gpt-5".to_string()),
@@ -722,6 +727,7 @@ mod tests {
             team: TEST_TEAM.to_string(),
             member: TEST_SENDER.to_string(),
             home_dir: Some(member_home_dir.clone()),
+            workspace_root: None,
             harness: Some("codex-cli".to_string()),
             agent_type: Some("worker".to_string()),
             model: Some("gpt-5".to_string()),
