@@ -7,7 +7,7 @@ use serde_json::json;
 use crate::boundary::{RosterEntry, RosterHarness, RosterMemberKind, RosterStore};
 use crate::error::AtmError;
 use crate::home;
-use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath};
+use crate::schema::{AgentType, HOME_DIR_METADATA_KEY, HomeDirPath, WORKSPACE_ROOT_METADATA_KEY};
 use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 use super::{filesystem, projection};
@@ -67,6 +67,7 @@ pub struct UpdateMemberRequest {
     pub team: TeamName,
     pub member: MemberName,
     pub home_dir: Option<HomeDirPath>,
+    pub workspace_root: Option<HomeDirPath>,
     pub harness: Option<RosterHarness>,
     pub agent_type: Option<AgentType>,
     pub model: Option<ModelName>,
@@ -84,6 +85,7 @@ impl UpdateMemberRequest {
         team: &str,
         member: &str,
         home_dir: Option<PathBuf>,
+        workspace_root: Option<PathBuf>,
         harness: Option<String>,
         agent_type: Option<String>,
         model: Option<String>,
@@ -95,6 +97,7 @@ impl UpdateMemberRequest {
             team: team.parse()?,
             member: MemberName(member.parse()?),
             home_dir: home_dir.map(Into::into),
+            workspace_root: workspace_root.map(Into::into),
             harness: harness.map(parse_roster_harness).transpose()?,
             agent_type: agent_type.map(parse_agent_type).transpose()?,
             model: model.map(ModelName::new).transpose()?,
@@ -376,6 +379,12 @@ fn apply_member_metadata_update(member: &mut RosterEntry, request: &UpdateMember
         member.metadata_json.insert(
             HOME_DIR_METADATA_KEY.to_string(),
             json!(home_dir.as_ref().display().to_string()),
+        );
+    }
+    if let Some(workspace_root) = &request.workspace_root {
+        member.metadata_json.insert(
+            WORKSPACE_ROOT_METADATA_KEY.to_string(),
+            json!(workspace_root.as_ref().display().to_string()),
         );
     }
     if let Some(harness) = request.harness {

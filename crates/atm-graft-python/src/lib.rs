@@ -327,7 +327,8 @@ impl PyGraftSession {
         })
     }
 
-    fn send(&self, to: PyAgentAddress, body: String) -> PyResult<()> {
+    #[pyo3(signature = (to, body, requires_ack=false))]
+    fn send(&self, to: PyAgentAddress, body: String, requires_ack: bool) -> PyResult<()> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let request = SendRequest::new(
             home_dir,
@@ -337,7 +338,7 @@ impl PyGraftSession {
             self.caller.team().cloned().expect("validated caller team"),
             SendMessageSource::Inline(body),
             None,
-            false,
+            requires_ack,
             None,
             false,
         )
