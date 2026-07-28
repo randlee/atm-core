@@ -95,7 +95,26 @@ fn load_pending_ack_source(
     connection: &Connection,
     target: &SharedDbTarget,
 ) -> Result<Message, AtmError> {
-    let row = connection
+    let row = load_acknowledgement_source_row(source, connection, target)?;
+    reject_acknowledgement_source_with_successor(source, connection, target)?;
+    decode_pending_acknowledgement_source(source, row)
+}
+
+type AcknowledgementSourceRow = (
+    String,
+    String,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+fn load_acknowledgement_source_row(
+    source: &AcknowledgementSource,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<AcknowledgementSourceRow, AtmError> {
+    connection
         .query_row(
             "SELECT mail_messages.message_key, mail_messages.envelope_json,
                     mail_message_states.read, mail_message_states.pending_ack_at,
@@ -134,8 +153,14 @@ fn load_pending_ack_source(
                 "message {} was not found in {}@{}",
                 source.message_id, source.agent, source.team
             ))
-        })?;
-    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
+        })
+}
+
+fn reject_acknowledgement_source_with_successor(
+    source: &AcknowledgementSource,
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     let has_successor = connection
         .query_row(
             "SELECT 1 FROM mail_messages
@@ -163,6 +188,14 @@ fn load_pending_ack_source(
             source.message_id
         )));
     }
+    Ok(())
+}
+
+fn decode_pending_acknowledgement_source(
+    source: &AcknowledgementSource,
+    row: AcknowledgementSourceRow,
+) -> Result<Message, AtmError> {
+    let (message_key, envelope_json, read, pending_ack_at, acknowledged_at, expires_at) = row;
     let mut envelope = serde_json::from_str::<atm_storage::schema::MessageEnvelope>(&envelope_json)
         .map_err(|_| AtmError::mailbox_read("failed to decode acknowledgement source envelope"))?;
     envelope.read = read != 0;

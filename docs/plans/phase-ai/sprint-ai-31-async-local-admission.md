@@ -55,10 +55,10 @@ smaller request path, not a more patient client.
    one `write_persisted` event, one non-blocking work signal, and the existing
    `SendResponseEnvelope::{Sent,Acknowledged}` response. Do not add a
    remote-success response variant.
-   `crates/atm-daemon/src/runtime_health.rs` constructs one immutable
-   `AdmissionRuntimeView` from existing configuration/roster/trust data; the
-   existing runtime-reload path atomically swaps that view. The view is a
-   lookup cache, not another persistence store or delivery state machine.
+   `crates/atm-daemon/src/runtime_health.rs` is the sole production
+   construction and reload-swap site for the immutable `AdmissionRuntimeView`;
+   it builds the view from existing configuration/roster/trust data. The view
+   is a lookup cache, not another persistence store or delivery state machine.
 3. Replace the foreground coordinator trait method with a signal-only seam in
    `crates/atm-daemon/src/peer_drain_coordinator.rs`:
 
