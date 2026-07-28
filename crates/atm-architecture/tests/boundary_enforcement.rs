@@ -176,8 +176,16 @@ fn acknowledgement_cannot_restore_a_second_write_pipeline() {
         "AI.7 requires one canonical write pipeline"
     );
     assert!(
-        send.contains("resolve_acknowledgement_write"),
-        "AI.7 acknowledgement normalization must enter the canonical write pipeline"
+        send.contains("crate::ack::admit_acknowledgement_write"),
+        "AI.31 acknowledgement admission must enter the canonical write pipeline"
+    );
+    assert!(
+        acknowledgement.contains("runtime.acknowledge_message_atomically"),
+        "AI.31 acknowledgement source resolution and paired commit must stay behind the sealed storage boundary"
+    );
+    assert!(
+        !acknowledgement.contains("resolve_acknowledgement_source"),
+        "AI.31 forbids restoring an application-layer acknowledgement source read"
     );
     assert!(
         acknowledgement.contains("crate::send::write_mail_with_runtime("),

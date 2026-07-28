@@ -23,7 +23,8 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
+    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -298,6 +299,14 @@ impl MessageStore for SqliteMessageStore {
 
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
         self.db.submit_upsert_messages_atomically(messages.to_vec())
+    }
+
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.db.submit_acknowledgement(source.clone(), builder)
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -624,8 +633,8 @@ mod tests {
     use super::SqliteStorageBackend;
     use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
-        AgentType, Message, MessageKey, MessageQuery, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
+        MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
@@ -633,6 +642,7 @@ mod tests {
     use rusqlite::params;
     use serde_json::{Map, json};
     use std::num::NonZeroU16;
+    use std::sync::Arc;
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -865,6 +875,70 @@ mod tests {
                 .expect("load source"),
             Some(source),
             "the acknowledged source state is durable in the same commit"
+        );
+    }
+
+    #[test]
+    fn sqlite_acknowledgement_resolves_source_and_commits_pair_in_one_writer_operation() {
+        struct ReplyBuilder;
+
+        impl AcknowledgementReplyBuilder for ReplyBuilder {
+            fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+                let source_id = source
+                    .envelope
+                    .message_id
+                    .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
+                let mut reply = source.clone();
+                let reply_id = AtmMessageId::new();
+                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+                reply.envelope.message_id = Some(reply_id);
+                reply.envelope.text = "acknowledged".to_string();
+                reply.envelope.read = false;
+                reply.envelope.requires_ack = false;
+                reply.envelope.pending_ack_at = None;
+                reply.envelope.acknowledged_at = None;
+                reply.envelope.acknowledges_message_id = Some(source_id);
+                reply.envelope.parent_message_id = Some(source_id);
+                Ok(reply)
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
+        source.envelope.message_id = Some(source_id);
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&source).expect("save pending source");
+
+        let committed = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder),
+            )
+            .expect("atomic acknowledgement");
+
+        assert!(committed.source.envelope.read);
+        assert!(committed.source.envelope.pending_ack_at.is_none());
+        assert!(committed.source.envelope.acknowledged_at.is_some());
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(committed.source),
+            "the source transition is durable with the reply"
+        );
+        assert_eq!(
+            store
+                .load_message(&committed.reply.message_key)
+                .expect("load reply"),
+            Some(committed.reply),
+            "the reply derived from the transaction-loaded source is durable"
         );
     }
 

@@ -426,6 +426,14 @@ mod tests {
     }
 
     impl RetainedMailboxRuntime for ListRuntime {
+        fn acknowledge_message_atomically(
+            &self,
+            _source: &atm_storage::contract::AcknowledgementSource,
+            _builder: std::sync::Arc<dyn atm_storage::contract::AcknowledgementReplyBuilder>,
+        ) -> Result<atm_storage::contract::AcknowledgementCommit, AtmError> {
+            unreachable!("list roster-truth tests do not admit acknowledgements")
+        }
+
         fn query_mailbox_metadata_rows(
             &self,
             _home_dir: &Path,

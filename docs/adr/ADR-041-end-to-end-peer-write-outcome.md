@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-041 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
 | Relates to | ADR-032, ADR-034, ADR-035, Phase AI.26–AI.31 |
 

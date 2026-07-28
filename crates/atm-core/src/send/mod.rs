@@ -526,7 +526,7 @@ fn write_mail_with_runtime_impl<
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<PreparedWrite, AtmError> {
-    let provenance = validate_write_provenance(
+    validate_write_provenance(
         WriteIngress::Canonical,
         WriteProvenance {
             target_host: request.to.as_ref().and_then(|address| address.host()),
@@ -543,27 +543,73 @@ fn write_mail_with_runtime_impl<
         }
         return prepare_persisted_write(request, observability, runtime, None);
     }
-    if request.to.is_some() && provenance.is_authenticated_peer() {
-        let acknowledgement = crate::ack::resolve_received_acknowledgement_write(request, runtime)?;
-        return prepare_persisted_write(
-            acknowledgement.request(),
-            observability,
-            runtime,
-            Some(acknowledgement),
-        );
-    }
-    if request.to.is_some() {
-        return Err(AtmError::validation(
-            "acknowledgement write must not include a client-supplied destination",
-        ));
-    }
-    let acknowledgement = crate::ack::resolve_acknowledgement_write(request, runtime)?;
-    prepare_persisted_write(
-        acknowledgement.request(),
+    let acknowledgement = crate::ack::admit_acknowledgement_write(request, runtime)?;
+    prepare_atomic_acknowledgement_write(acknowledgement, observability, runtime)
+}
+
+fn prepare_atomic_acknowledgement_write<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    acknowledgement: crate::ack::AtomicAcknowledgementWrite,
+    observability: &dyn ObservabilityPort,
+    _runtime: &R,
+) -> Result<PreparedWrite, AtmError> {
+    let source_task_id = acknowledgement.acknowledgement.source_task_id();
+    let reply = acknowledgement.reply;
+    let recipient = ResolvedRecipient {
+        team: reply.team.clone(),
+        agent: reply.agent.clone(),
+    };
+    let outcome = SendOutcome {
+        action: CommandAction::Send,
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
+        sender: reply.envelope.from.clone(),
+        outcome: SendCommandOutcome::Sent,
+        message_id: reply.envelope.message_id.ok_or_else(|| {
+            AtmError::mailbox_write("atomic acknowledgement reply is missing its message ID")
+        })?,
+        requires_ack: false,
+        task_id: source_task_id.clone(),
+        summary: reply.envelope.summary.clone(),
+        message: Some(reply.envelope.text.clone()),
+        warnings: Vec::new(),
+        dry_run: false,
+    };
+    emit_send_command_event(
         observability,
-        runtime,
-        Some(acknowledgement),
-    )
+        SendCommandOutcome::Sent.as_str(),
+        &outcome,
+        source_task_id,
+        &reply.envelope.from,
+    );
+    #[cfg(test)]
+    let post_write = {
+        let delivery_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+            _runtime,
+            &recipient.team,
+            &recipient.agent,
+        )?;
+        let logical =
+            crate::delivery_plan::LogicalMessage::new(reply.envelope.clone(), false, true)
+                .map_err(|error| AtmError::mailbox_read(error.to_string()))?;
+        LocalPostWrite {
+            post_send_config: None,
+            recipient,
+            delivery_snapshot,
+            messages: vec![logical],
+        }
+    };
+    Ok(PreparedWrite {
+        outcome,
+        outbound_request: acknowledgement.canonical_request,
+        persisted_timestamp: reply.envelope.timestamp,
+        post_write_needed: true,
+        same_store_peer_receipt: false,
+        #[cfg(test)]
+        post_write,
+        acknowledgement: Some(acknowledgement.acknowledgement),
+    })
 }
 
 fn prepare_persisted_write<
@@ -586,9 +632,7 @@ fn prepare_persisted_write<
     let summary = summary::build_summary(&body, request.summary_override.clone());
     let message_id = request.origin_message_id.unwrap_or_default();
     let timestamp = request.origin_timestamp.unwrap_or_else(IsoTimestamp::now);
-    let acknowledgement_source_update = acknowledgement
-        .as_ref()
-        .map(crate::ack::ResolvedAcknowledgement::source_update);
+    let acknowledgement_source_update = None;
     let persistence = persist_send_message(
         runtime,
         &request,

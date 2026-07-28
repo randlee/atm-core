@@ -4,6 +4,11 @@
 )]
 
 use std::path::Path;
+use std::sync::Arc;
+
+use atm_storage::contract::{
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource,
+};
 #[cfg(any(test, feature = "test-utils"))]
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -79,38 +84,15 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
 }
 
 pub(crate) trait RetainedMailboxRuntime {
-    /// Resolves the current terminal pending-ack source through the sealed
-    /// mailbox boundary. Callers never enumerate and reload source rows
-    /// themselves.
-    fn resolve_acknowledgement_source(
+    /// The one sealed acknowledgement-admission operation. Implementations
+    /// must resolve the pending source and commit the reply/source pair as one
+    /// transaction; application callers cannot compose a source read with a
+    /// later write.
+    fn acknowledge_message_atomically(
         &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        message_id: crate::schema::AtmMessageId,
-    ) -> Result<boundary::Message, AtmError> {
-        let rows = self.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
-        let row = rows
-            .iter()
-            .find(|row| row.message_id == Some(message_id))
-            .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "message {message_id} was not found in {agent}@{team}"
-                ))
-            })?;
-        if rows
-            .iter()
-            .any(|row| row.parent_message_id == Some(message_id))
-        {
-            return Err(AtmError::validation(format!(
-                "message {message_id} has been updated; acknowledge the current terminal message instead"
-            )));
-        }
-        self.load_message_record(home_dir, team, agent, &row.message_key)?
-            .ok_or_else(|| {
-                AtmError::validation("acknowledgement source metadata could not be reloaded")
-            })
-    }
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError>;
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
@@ -139,6 +121,15 @@ pub(crate) trait RetainedMailboxRuntime {
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.message_store
+            .acknowledge_message_atomically(source, builder)
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         _home_dir: &Path,
