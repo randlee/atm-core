@@ -29,6 +29,10 @@ class HermesAdapterContractTests(unittest.TestCase):
         ):
             self.assertTrue(callable(getattr(AtmGraftAdapter, name)))
 
+    def test_adapter_implements_gateway_entry_points(self) -> None:
+        for name in ("connect", "disconnect", "send", "get_chat_info"):
+            self.assertTrue(callable(getattr(AtmGraftAdapter, name)))
+
     def test_lifecycle_and_send_signatures_match_gateway(self) -> None:
         connect = inspect.signature(AtmGraftAdapter.connect)
         send = inspect.signature(AtmGraftAdapter.send)
