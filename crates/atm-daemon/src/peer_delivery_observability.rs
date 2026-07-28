@@ -21,8 +21,6 @@ pub(crate) enum PeerDeliveryEventKind {
     PeerDeliveryUnconfirmed,
     PeerRecoveryScheduled,
     PeerRecoveryAttempt,
-    PeerRecoveryConfirmed,
-    PeerRecoveryUnconfirmed,
 }
 
 impl PeerDeliveryEventKind {
@@ -33,8 +31,6 @@ impl PeerDeliveryEventKind {
             Self::PeerDeliveryUnconfirmed => "peer_delivery_unconfirmed",
             Self::PeerRecoveryScheduled => "peer_recovery_scheduled",
             Self::PeerRecoveryAttempt => "peer_recovery_attempt",
-            Self::PeerRecoveryConfirmed => "peer_recovery_confirmed",
-            Self::PeerRecoveryUnconfirmed => "peer_recovery_unconfirmed",
         }
     }
 }
@@ -180,16 +176,14 @@ fn emit_retained_event(observability: &SubsystemObservability, event: &PeerDeliv
 fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) {
     match event.kind {
         PeerDeliveryEventKind::WritePersisted => {}
-        PeerDeliveryEventKind::PeerDeliveryConfirmed
-        | PeerDeliveryEventKind::PeerRecoveryConfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryConfirmed => {
             status.quality = PeerLinkQuality::Healthy;
             status.last_success_at = Some(IsoTimestamp::now());
             status.last_error_code = None;
             status.next_attempt_at = None;
             status.drain = PeerDrainState::Idle;
         }
-        PeerDeliveryEventKind::PeerDeliveryUnconfirmed
-        | PeerDeliveryEventKind::PeerRecoveryUnconfirmed => {
+        PeerDeliveryEventKind::PeerDeliveryUnconfirmed => {
             status.quality = peer_link_quality_for_error(event.error_code);
             status.last_failure_at = Some(IsoTimestamp::now());
             status.last_error_code = event.error_code;

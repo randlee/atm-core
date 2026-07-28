@@ -377,7 +377,10 @@ impl PeerDrainCoordinator {
 
     fn finish_drain(&self, host: &HostName, delivered: u16) -> Result<u16, AtmError> {
         self.record(
-            PeerDeliveryEventKind::PeerRecoveryConfirmed,
+            // A worker scan is the only component that can establish a peer
+            // HTTP acceptance outcome.  Keep that fact distinct from the
+            // earlier `write_persisted` admission event.
+            PeerDeliveryEventKind::PeerDeliveryConfirmed,
             host.clone(),
             None,
             Some(u32::from(delivered)),
@@ -395,7 +398,9 @@ impl PeerDrainCoordinator {
             retry_timestamp(delay)
         };
         self.record(
-            PeerDeliveryEventKind::PeerRecoveryUnconfirmed,
+            // The immutable local admission already succeeded. This event is
+            // exclusively the later, uncertain peer-delivery outcome.
+            PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
             host.clone(),
             Some(&error),
             None,
