@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add `atm teams remove-member` for authorized local roster removal
 - `DAEMON-PREAG-RESET-1`: reset the daemon to a local-IPC-only singleton by
   deleting the entire cross-host/peer-transport subsystem (`peer_transport`,
   `claude_compat`, `boundary_adapters`, `direct_boundaries`, the

@@ -111,6 +111,42 @@ pub struct UpdateMemberOutcome {
     pub member: AgentName,
 }
 
+/// Parameters for removing one member from a team roster.
+///
+/// Removal is authorized using the caller identity and team, matching the
+/// authorization contract of `update-member`.
+#[derive(Debug, Clone)]
+pub struct RemoveMemberRequest {
+    pub caller_identity: AgentName,
+    pub caller_team: TeamName,
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
+impl RemoveMemberRequest {
+    pub fn new(
+        caller_identity: AgentName,
+        caller_team: TeamName,
+        team: &str,
+        member: &str,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            caller_identity,
+            caller_team,
+            team: team.parse()?,
+            member: member.parse()?,
+        })
+    }
+}
+
+/// Result of removing one member from a team roster.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct RemoveMemberOutcome {
+    pub action: &'static str,
+    pub team: TeamName,
+    pub member: AgentName,
+}
+
 struct MemberAddContext {
     existing_roster: Vec<RosterEntry>,
 }
@@ -174,6 +210,30 @@ pub fn update_member_with_roster_store(
     })
 }
 
+/// Remove one member record from a team roster.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the caller does not belong to the target team,
+/// the target team or member is missing, or loading/persisting the roster
+/// fails. It never removes inbox data.
+pub fn remove_member_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    request: RemoveMemberRequest,
+) -> Result<RemoveMemberOutcome, AtmError> {
+    validate_remove_member_caller(roster_store, &request)?;
+    let mut existing_roster = projection::load_team_roster(roster_store, &request.team)?;
+    ensure_member_present(&existing_roster, &request.team, &request.member)?;
+    existing_roster.retain(|entry| entry.agent_name != request.member);
+    roster_store.replace_roster(&request.team, &existing_roster)?;
+
+    Ok(RemoveMemberOutcome {
+        action: "remove-member",
+        team: request.team,
+        member: request.member,
+    })
+}
+
 pub(crate) const MAX_MEMBER_METADATA_FIELD_LEN: usize = 256;
 
 fn load_member_add_context(
@@ -206,18 +266,65 @@ fn validate_update_member_caller(
     roster_store: &dyn RosterStore,
     request: &UpdateMemberRequest,
 ) -> Result<(), AtmError> {
-    if request.caller_team != request.team {
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "update-member",
+    )
+}
+
+fn ensure_member_present(
+    existing_roster: &[RosterEntry],
+    team: &TeamName,
+    member: &AgentName,
+) -> Result<(), AtmError> {
+    if !existing_roster
+        .iter()
+        .any(|existing_member| existing_member.agent_name == *member)
+    {
+        return Err(AtmError::member_not_found(member.as_str(), team.as_str()));
+    }
+    Ok(())
+}
+
+fn validate_remove_member_caller(
+    roster_store: &dyn RosterStore,
+    request: &RemoveMemberRequest,
+) -> Result<(), AtmError> {
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "remove-member",
+    )
+}
+
+/// Require a caller from the team that the mutation targets.
+///
+/// Keeping this in one helper makes `update-member` and `remove-member`
+/// enforce the same membership gate while retaining action-specific errors.
+fn validate_member_mutation_caller(
+    roster_store: &dyn RosterStore,
+    caller_identity: &AgentName,
+    caller_team: &TeamName,
+    target_team: &TeamName,
+    action: &str,
+) -> Result<(), AtmError> {
+    if caller_team != target_team {
         return Err(AtmError::validation(format!(
-            "caller team '{}' does not match update-member target team '{}'",
-            request.caller_team, request.team
+            "caller team '{}' does not match {action} target team '{target_team}'",
+            caller_team,
         )));
     }
 
-    let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
+    let caller_entry = roster_store.query_membership(target_team, caller_identity)?;
     if caller_entry.is_none() {
         return Err(AtmError::member_not_found(
-            request.caller_identity.as_str(),
-            request.team.as_str(),
+            caller_identity.as_str(),
+            target_team.as_str(),
         ));
     }
 

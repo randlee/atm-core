@@ -13,8 +13,8 @@ use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, ClearNudgeTemplateOverrideOutcome,
-    DisableNudgeTemplateOverrideOutcome, MembersList, RestoreOutcome, RestorePlan,
-    SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
+    DisableNudgeTemplateOverrideOutcome, MembersList, RemoveMemberOutcome, RestoreOutcome,
+    RestorePlan, SetNudgeTemplateOverrideOutcome, TeamsList, UpdateMemberOutcome,
 };
 
 /// Print one send result in human-readable or JSON form.
@@ -557,6 +557,16 @@ pub fn print_update_member_result(outcome: &UpdateMemberOutcome, json: bool) -> 
         println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!("Updated member {} in {}", outcome.member, outcome.team);
+    }
+    Ok(())
+}
+
+/// Print one remove-member result in human-readable or JSON form.
+pub fn print_remove_member_result(outcome: &RemoveMemberOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!("Removed member {} from {}", outcome.member, outcome.team);
     }
     Ok(())
 }
