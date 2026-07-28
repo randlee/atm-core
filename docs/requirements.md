@@ -2129,6 +2129,9 @@ JSON output must include:
 `update-member` JSON output must additionally include:
 - `member`
 
+`remove-member` JSON output must additionally include:
+- `member`
+
 `backup` JSON output must additionally include:
 - `backup_path`
 

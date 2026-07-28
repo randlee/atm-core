@@ -1132,6 +1132,61 @@ mod tests {
     }
 
     #[test]
+    fn remove_member_allows_self_removal() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, TEST_SENDER),
+                roster_member(TEST_TEAM, TEST_RECIPIENT),
+            ],
+        );
+
+        remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect("self removal");
+
+        let roster = roster_store
+            .load_roster(&TEST_TEAM.parse().expect("team"))
+            .expect("load roster");
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].agent_name.as_str(), TEST_RECIPIENT);
+    }
+
+    #[test]
+    fn remove_member_allows_removing_last_member() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+
+        remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_SENDER,
+            )
+            .expect("request"),
+        )
+        .expect("last-member removal");
+
+        assert!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster")
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn remove_member_rejects_missing_member_without_mutation() {
         let roster_store = RecordingRosterStore::default();
         let initial = vec![roster_member(TEST_TEAM, TEST_SENDER)];
@@ -1178,6 +1233,34 @@ mod tests {
 
         assert_eq!(error.code(), AtmErrorCode::MessageValidationFailed);
         assert!(error.message().contains("caller team"));
+        assert_eq!(
+            roster_store
+                .load_roster(&TEST_TEAM.parse().expect("team"))
+                .expect("load roster"),
+            initial
+        );
+    }
+
+    #[test]
+    fn remove_member_rejects_same_team_missing_caller_before_mutation() {
+        let roster_store = RecordingRosterStore::default();
+        let initial = vec![roster_member(TEST_TEAM, TEST_RECIPIENT)];
+        roster_store.seed_team(TEST_TEAM, initial.clone());
+
+        let error = remove_member_with_roster_store(
+            &roster_store,
+            RemoveMemberRequest::new(
+                TEST_SENDER.parse().expect("caller"),
+                TEST_TEAM.parse().expect("caller team"),
+                TEST_TEAM,
+                TEST_RECIPIENT,
+            )
+            .expect("request"),
+        )
+        .expect_err("missing caller");
+
+        assert_eq!(error.code(), AtmErrorCode::MemberNotFound);
+        assert!(error.message().contains(TEST_SENDER));
         assert_eq!(
             roster_store
                 .load_roster(&TEST_TEAM.parse().expect("team"))
