@@ -71,6 +71,16 @@ pub(crate) fn is_retryable_peer_error(error: &AtmError) -> bool {
     )
 }
 
+/// The coordinator's truthful bounded-drain result.  Local admission never
+/// observes this value: it is used only by an explicit reconciliation request
+/// after the durable message has already been admitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PeerSyncOutcome {
+    Confirmed { delivered: u16 },
+    Unconfirmed { code: AtmErrorCode },
+    Expired { code: AtmErrorCode },
+}
+
 fn remote_delivery_error_with_cause(error: AtmError) -> AtmError {
     let detail = error.detail().to_owned();
     let source = error
@@ -86,7 +96,11 @@ pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
     /// and cannot turn a successful local admission into a failure.
     fn signal_after_persist(&self, peer: HostName);
 
-    fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError>;
+    fn sync_peer(
+        &self,
+        peer: &HostName,
+        deadline: RequestDeadline,
+    ) -> Result<PeerSyncOutcome, AtmError>;
 
     fn start(&self) -> Result<(), AtmError>;
 
@@ -527,7 +541,11 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
         self.slots.1.notify_all();
     }
 
-    fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
+    fn sync_peer(
+        &self,
+        peer: &HostName,
+        deadline: RequestDeadline,
+    ) -> Result<PeerSyncOutcome, AtmError> {
         if self
             .peers
             .peer_sync_policy(peer)?
@@ -535,12 +553,20 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
             .max_message_age
             .is_zero()
         {
-            return Ok(0);
+            return Ok(PeerSyncOutcome::Confirmed { delivered: 0 });
         }
-        self.acquire(peer, deadline)?;
+        if let Err(error) = self.acquire(peer, deadline) {
+            return Ok(PeerSyncOutcome::Expired { code: error.code() });
+        }
         let result = self.drain(peer, deadline);
         self.release(peer)?;
-        result
+        match result {
+            Ok(delivered) => Ok(PeerSyncOutcome::Confirmed { delivered }),
+            Err(error) if deadline.remaining().is_none() => {
+                Ok(PeerSyncOutcome::Expired { code: error.code() })
+            }
+            Err(error) => Ok(PeerSyncOutcome::Unconfirmed { code: error.code() }),
+        }
     }
 
     fn start(&self) -> Result<(), AtmError> {
