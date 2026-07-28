@@ -119,6 +119,8 @@ fn roster_harness_from_metadata(value: &str) -> Option<RosterHarness> {
         "codex-cli" => Some(RosterHarness::CodexCli),
         "gemini-cli" => Some(RosterHarness::GeminiCli),
         "opencode" => Some(RosterHarness::Opencode),
+        "hermes" => Some(RosterHarness::Hermes),
+        "python-graft" => Some(RosterHarness::PythonGraft),
         _ => None,
     }
 }

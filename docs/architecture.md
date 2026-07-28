@@ -2570,6 +2570,12 @@ Minimum canonical roster-member durable fields:
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
 
+The canonical harness values are `claude-code`, `codex-cli`, `gemini-cli`,
+`opencode`, `hermes`, and `python-graft`. `hermes` is the named Hermes Python
+gateway integration; `python-graft` is the generic value for any Python host
+that receives messages through the `atm-graft` interface. Both Python graft
+harnesses use the non-Claude delivery path and do not require a tmux pane.
+
 `pid` is not part of the canonical roster-member durable schema. It remains
 transient daemon-owned runtime state only.
 
