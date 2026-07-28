@@ -1,7 +1,7 @@
 ---
 id: AI.18
 title: atm-graft Python Bindings
-status: planned
+status: complete
 branch: feature/pAI-s18-graft-python-bindings
 worktree: ../atm-core-worktrees/feature/pAI-s18-graft-python-bindings
 target: integrate/phase-AI
