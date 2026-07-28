@@ -19,6 +19,7 @@ pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,
     PeerDeliveryUnconfirmed,
+    #[allow(dead_code)]
     PeerRecoveryScheduled,
     PeerRecoveryAttempt,
 }

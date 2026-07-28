@@ -720,12 +720,12 @@ impl<'ast> Visit<'ast> for HostRoutingVisitor {
                     .get(index)
                     .is_some_and(|function| function.name == "reconcile_peer")
             }))
-            || (method == "deliver_page"
+            || (method == "deliver"
                 && self.is_peer_drain_coordinator_source()
                 && self.current_function.is_some_and(|index| {
                     self.functions
                         .get(index)
-                        .is_some_and(|function| function.name == "drain")
+                        .is_some_and(|function| function.name == "deliver_one")
                 }));
         let peer_delivery = reconciliation_delivery
             || method == "deliver_to_peer"

@@ -74,19 +74,6 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
         peer: &TrustedPeer,
         deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError>;
-
-    fn deliver_page(
-        &self,
-        requests: &[WriteRequest],
-        peer: &TrustedPeer,
-        deadline: RequestDeadline,
-    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
-        requests
-            .iter()
-            .cloned()
-            .map(|request| self.deliver(request, peer, deadline))
-            .collect()
-    }
 }
 
 pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;
@@ -192,20 +179,6 @@ impl HttpsMessageTransport for HttpsTransport {
     ) -> Result<ResponseEnvelope, AtmError> {
         self.open_connection(peer, deadline)?
             .deliver(request, deadline)
-    }
-
-    fn deliver_page(
-        &self,
-        requests: &[WriteRequest],
-        peer: &TrustedPeer,
-        deadline: RequestDeadline,
-    ) -> Result<Vec<ResponseEnvelope>, AtmError> {
-        let mut connection = self.open_connection(peer, deadline)?;
-        requests
-            .iter()
-            .cloned()
-            .map(|request| connection.deliver(request, deadline))
-            .collect()
     }
 }
 
