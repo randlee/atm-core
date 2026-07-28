@@ -68,6 +68,14 @@ enum PeerWork {
     Stop,
 }
 
+/// Result of one isolated peer-delivery job.  The wrapper below owns the
+/// cleanup invariant: whichever result the delivery closure produces, its
+/// `(peer, message_id)` admission slot is released before this is observed.
+enum JobDeliveryResult {
+    Completed(Result<(), AtmError>),
+    Panicked,
+}
+
 #[derive(Default)]
 struct JobState {
     in_flight: BTreeSet<PeerJob>,
@@ -177,6 +185,18 @@ impl PeerDrainCoordinator {
         state.release(job);
     }
 
+    fn run_job<F>(state: &Mutex<JobState>, job: &PeerJob, deliver: F) -> JobDeliveryResult
+    where
+        F: FnOnce() -> Result<(), AtmError>,
+    {
+        let result = catch_unwind(AssertUnwindSafe(deliver));
+        Self::release_job(state, job);
+        match result {
+            Ok(result) => JobDeliveryResult::Completed(result),
+            Err(_) => JobDeliveryResult::Panicked,
+        }
+    }
+
     fn eligible_request(
         &self,
         job: &PeerJob,
@@ -259,15 +279,14 @@ impl PeerDrainCoordinator {
             let PeerWork::Job(job) = work else { break };
             let coordinator = Arc::clone(&self);
             let handle = std::thread::spawn(move || {
-                let result = catch_unwind(AssertUnwindSafe(|| coordinator.deliver_one(&job)));
-                match result {
-                    Ok(Ok(())) => {}
-                    Ok(Err(error)) => coordinator.record(
+                match Self::run_job(&coordinator.state, &job, || coordinator.deliver_one(&job)) {
+                    JobDeliveryResult::Completed(Ok(())) => {}
+                    JobDeliveryResult::Completed(Err(error)) => coordinator.record(
                         PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
                         &job,
                         Some(&error),
                     ),
-                    Err(_) => {
+                    JobDeliveryResult::Panicked => {
                         let error = AtmError::daemon_unavailable("peer delivery job panicked");
                         coordinator.record(
                             PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
@@ -277,7 +296,6 @@ impl PeerDrainCoordinator {
                         tracing::error!(subsystem = "peer_drain", action = "deliver", peer = %job.peer, message_id = %job.message_id, "peer delivery job panicked; slot released");
                     }
                 }
-                Self::release_job(&coordinator.state, &job);
             });
             if let Ok(mut workers) = self.job_workers.lock() {
                 workers.push(handle);
@@ -437,6 +455,7 @@ fn decode_request(stored: StoredPeerWrite) -> Result<WriteRequest, AtmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier};
 
     fn job(peer: &str) -> PeerJob {
         PeerJob {
@@ -469,6 +488,100 @@ mod tests {
         assert!(
             state.try_take(&first),
             "completed work may be rediscovered idempotently"
+        );
+    }
+
+    #[test]
+    fn panicking_job_releases_its_slot_before_the_worker_reports_failure() {
+        let state = Arc::new(Mutex::new(JobState::default()));
+        let job = job("peer.example.test");
+        assert!(state.lock().expect("state").try_take(&job));
+        let worker_state = Arc::clone(&state);
+        let worker_job = job.clone();
+
+        let result = std::thread::spawn(move || {
+            PeerDrainCoordinator::run_job(&worker_state, &worker_job, || -> Result<(), AtmError> {
+                panic!("injected delivery panic")
+            })
+        })
+        .join()
+        .expect("panic is contained by the per-job worker wrapper");
+        assert!(matches!(result, JobDeliveryResult::Panicked));
+
+        let state = state.lock().expect("state");
+        assert!(
+            !state.in_flight.contains(&job),
+            "a panicking worker must release its message ULID admission slot"
+        );
+        assert!(
+            !state.active_by_host.contains_key(&job.peer),
+            "a panicking worker must release its peer capacity slot"
+        );
+    }
+
+    #[test]
+    fn global_cap_rejects_only_excess_work_and_allows_admission_after_release() {
+        let mut state = JobState::default();
+        let admitted = (0..MAX_ACTIVE_PEER_JOBS)
+            .map(|index| {
+                let job = job(&format!("peer-{index}.example.test"));
+                assert!(state.try_take(&job));
+                job
+            })
+            .collect::<Vec<_>>();
+        let waiting = job("next.example.test");
+        assert!(
+            !state.try_take(&waiting),
+            "the global cap must reject excess work without a blocking wait"
+        );
+
+        state.release(&admitted[0]);
+        assert!(
+            state.try_take(&waiting),
+            "releasing one completed job immediately admits independently persisted work"
+        );
+    }
+
+    #[test]
+    fn concurrent_distinct_writes_keep_distinct_ulid_admission_slots() {
+        const WRITERS: usize = 32;
+        let state = Arc::new(Mutex::new(JobState::default()));
+        let barrier = Arc::new(Barrier::new(WRITERS));
+        let workers = (0..WRITERS)
+            .map(|index| {
+                let state = Arc::clone(&state);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let job = job(&format!("peer-{index}.example.test"));
+                    barrier.wait();
+                    state.lock().expect("state").try_take(&job)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            workers
+                .into_iter()
+                .all(|worker| worker.join().expect("writer thread")),
+            "concurrent distinct persisted writes must not coalesce"
+        );
+        assert_eq!(
+            state.lock().expect("state").in_flight.len(),
+            WRITERS,
+            "every distinct ULID receives its own admission slot"
+        );
+    }
+
+    #[test]
+    fn send_and_acknowledgement_have_distinct_delivery_ulids() {
+        let mut state = JobState::default();
+        let send = job("peer.example.test");
+        let acknowledgement = job("peer.example.test");
+        assert_ne!(send.message_id, acknowledgement.message_id);
+        assert!(state.try_take(&send));
+        assert!(
+            state.try_take(&acknowledgement),
+            "an acknowledgement reply has a distinct ULID and must not be coalesced with its send"
         );
     }
 }

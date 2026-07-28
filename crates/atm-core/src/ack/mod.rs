@@ -607,7 +607,10 @@ mod tests {
 
     use serde_json::Map;
 
-    use super::{AckRequest, ReplyTarget, canonical_ack_write_request, reply_target_host};
+    use super::{
+        AckRequest, ReplyTarget, build_atomic_acknowledgement, canonical_ack_write_request,
+        reply_target_host,
+    };
     use crate::boundary::{Message, MessageKey};
     use crate::schema::{
         AckIntentFields, AtmMessageId, InboxMessage, authenticated_source_host,
@@ -673,7 +676,7 @@ mod tests {
             &source,
         )
         .expect("canonical ack write");
-        assert_eq!(write.to.expect("destination").host(), Some(&host));
+        assert_eq!(write.to.as_ref().expect("destination").host(), Some(&host));
         assert_eq!(write.acknowledges_message_id, Some(message_id));
         assert_eq!(
             write.caller_chat_id.as_ref().map(ChatId::as_str),
@@ -682,6 +685,31 @@ mod tests {
         assert_eq!(
             target.to_string(),
             "remote-agent@remote-team.peer.example.test"
+        );
+
+        let acknowledged = build_atomic_acknowledgement(
+            write,
+            request.caller_identity.clone(),
+            request.caller_team.clone(),
+            target,
+            request.reply_body.clone(),
+            message_id,
+            None,
+        )
+        .expect("acknowledgement write");
+        let acknowledgement_id = acknowledged
+            .reply
+            .envelope
+            .message_id
+            .expect("acknowledgement ULID");
+        assert_ne!(
+            acknowledgement_id, message_id,
+            "the acknowledgement is a new immutable write, not a replay of its send"
+        );
+        assert_eq!(
+            acknowledged.reply.envelope.acknowledges_message_id,
+            Some(message_id),
+            "the acknowledgement response keeps the exact send ULID it causally acknowledges"
         );
     }
 

@@ -70,10 +70,17 @@ fn ai32_peer_scheduler_cannot_restore_retired_ordering_constructs() {
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n");
-    for retired in ["PeerDrainSlot", "Condvar", "generation", "cursor"] {
+    for retired in [
+        "PeerDrainSlot",
+        "Condvar",
+        "generation",
+        "cursor",
+        "recv_timeout(",
+        concat!("thread::", "sleep("),
+    ] {
         assert!(
             !code.contains(retired),
-            "AI.32 bounded independent jobs must not restore retired `{retired}` scheduler state"
+            "AI.32 bounded independent jobs must not restore retired `{retired}` scheduler state or fixed polling"
         );
     }
 }
