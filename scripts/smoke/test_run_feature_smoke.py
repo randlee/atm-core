@@ -21,6 +21,8 @@ def load_runner():
 
 
 RUNNER = load_runner()
+TEST_SENDER = "test-agent"
+TEST_TEAM = "test-team"
 
 
 class FeatureSmokeTests(unittest.TestCase):
@@ -75,6 +77,13 @@ class FeatureSmokeTests(unittest.TestCase):
         with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(metadata), "stderr": ""}):
             with self.assertRaisesRegex(RUNNER.SmokeError, "shared"):
                 RUNNER.branch_version()
+
+    def test_command_redacts_captured_secret_output(self):
+        completed = mock.Mock(returncode=1, stdout="token=must-not-appear", stderr="private_key=must-not-appear")
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+            result = RUNNER.command(["atm", "doctor"])
+        self.assertNotIn("must-not-appear", result["stdout"])
+        self.assertNotIn("must-not-appear", result["stderr"])
 
     def test_remote_hosts_are_rejected_for_localhost_feature(self):
         with mock.patch.object(RUNNER.sys, "argv", ["smoke", "localhost", "m5"]):
@@ -211,7 +220,7 @@ class FeatureSmokeTests(unittest.TestCase):
                 {"message_id": "01REQUIRED", "text": mock.ANY, "requires_ack": True},
             ],
         ), mock.patch.object(RUNNER, "message_has_text", return_value=True):
-            RUNNER.send_read_ack(cases, "atm", "arch-ctm", "atm-dev", "127.0.0.1", stage="loopback-IP")
+            RUNNER.send_read_ack(cases, "atm", TEST_SENDER, TEST_TEAM, "127.0.0.1", stage="loopback-IP")
         self.assertEqual(
             [(case["name"], case["status"]) for case in cases],
             [
@@ -378,6 +387,7 @@ class FeatureSmokeTests(unittest.TestCase):
         }
         remote_ack = {"reply_disposition": {"kind": "sent", "reply_message_id": "01REPLY"}}
         cases = []
+        remote_ack_teams = []
 
         class Clock:
             @staticmethod
@@ -398,6 +408,7 @@ class FeatureSmokeTests(unittest.TestCase):
                     }
                 }
             elif args[0] == "ack":
+                remote_ack_teams.append(args[args.index("--team") + 1])
                 response = remote_ack
             else:
                 response = sent
@@ -435,6 +446,7 @@ class FeatureSmokeTests(unittest.TestCase):
             )
         self.assertEqual([case["status"] for case in cases], ["PASS", "PASS", "PASS", "PASS"])
         self.assertEqual(cases[1]["detail"], "01REPLY")
+        self.assertEqual(remote_ack_teams, ["peer-team"])
 
 
 if __name__ == "__main__":
