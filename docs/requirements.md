@@ -2188,8 +2188,8 @@ follow-up without depending on daemon-only or hook-only state.
     startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
-  the invoking member only
+  such as `home_dir`, type, harness, model, or pane id, and may overlay
+  `live_cwd` for the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -2209,6 +2209,8 @@ JSON output must include:
 
 Each member object must expose at least:
 - `name`
+- `harness`: the persisted roster harness using its stable kebab-case spelling
+  (for example `hermes` or `python-graft`)
 - persisted local member metadata when present
 
 ## 14. `atm help` (Phase Y additive CLI feature)

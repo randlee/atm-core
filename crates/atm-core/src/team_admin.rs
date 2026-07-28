@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::boundary::{
-    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterStore,
+    BuiltInNudgeTemplateKind, NudgeTemplateOverrideStore, RosterEntry, RosterHarness, RosterStore,
     TeamNudgeTemplateOverrideMode,
 };
 use crate::error::AtmError;
@@ -52,6 +52,7 @@ pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
     pub agent_type: String,
+    pub harness: RosterHarness,
     pub model: ModelName,
     pub joined_at: Option<u64>,
     pub tmux_pane_id: Option<PaneId>,
@@ -787,6 +788,12 @@ mod tests {
         assert_eq!(members.team.as_str(), TEST_TEAM);
         assert_eq!(members.members.len(), 1);
         assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
+        assert_eq!(members.members[0].harness, RosterHarness::ClaudeCode);
+        assert_eq!(
+            serde_json::to_value(&members).expect("serialize members")["members"][0]["harness"],
+            serde_json::json!("claude-code")
+        );
+        assert_eq!(RosterHarness::PythonGraft.to_string(), "python-graft");
         assert_eq!(members.members[0].tmux_pane_id.as_deref(), Some("%9"));
         assert_eq!(
             members.members[0].home_dir.as_ref(),

@@ -143,6 +143,10 @@ Follow new ATM log records as they arrive
 
 List the current member roster for one ATM team
 
+JSON member objects include the persisted `harness` using the stable
+kebab-case spelling (`claude-code`, `codex-cli`, `gemini-cli`, `opencode`,
+`hermes`, or `python-graft`). Human-readable rows display the same value.
+
 | Flag | Short | Required | Description |
 |------|-------|----------|-------------|
 | `--team` |  | no |  |
@@ -445,4 +449,3 @@ List teams or run one team-administration subcommand
 | `--pane-id` |  | no | tmux pane id in '%<number>' form or a bare numeric pane id |
 | `--json` |  | no |  |
 | `--stderr-logs` |  | no | Route retained observability console logs to stderr |
-
