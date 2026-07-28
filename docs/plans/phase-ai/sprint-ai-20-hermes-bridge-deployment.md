@@ -1,7 +1,7 @@
 ---
 id: AI.20
 title: Hermes Bridge Deployment and Runbook
-status: planned
+status: complete
 branch: feature/pAI-s20-hermes-bridge-deployment
 worktree: ../atm-core-worktrees/feature/pAI-s20-hermes-bridge-deployment
 target: integrate/phase-AI

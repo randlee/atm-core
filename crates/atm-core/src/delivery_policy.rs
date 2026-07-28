@@ -41,9 +41,11 @@ impl DeliveryHarnessPath {
     pub(crate) fn from_roster_harness(harness: RosterHarness) -> Self {
         match harness {
             RosterHarness::ClaudeCode => Self::ClaudeCode,
-            RosterHarness::CodexCli | RosterHarness::GeminiCli | RosterHarness::Opencode => {
-                Self::NonClaude
-            }
+            RosterHarness::CodexCli
+            | RosterHarness::GeminiCli
+            | RosterHarness::Opencode
+            | RosterHarness::Hermes
+            | RosterHarness::PythonGraft => Self::NonClaude,
         }
     }
 }
@@ -81,7 +83,11 @@ impl DeliveryRecipientSnapshot {
                 == Some("tmux");
         let graft_post_send = matches!(
             member.harness,
-            RosterHarness::CodexCli | RosterHarness::GeminiCli | RosterHarness::Opencode
+            RosterHarness::CodexCli
+                | RosterHarness::GeminiCli
+                | RosterHarness::Opencode
+                | RosterHarness::Hermes
+                | RosterHarness::PythonGraft
         ) && !local_tmux_post_send;
         Self {
             agent: member.agent_name,
@@ -627,7 +633,12 @@ mod tests {
     use crate::schema::ThreadMode;
     use crate::service_runtime::RetainedServiceRuntime;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
-    use crate::{boundary::RosterEntry, config::AtmConfig};
+    use crate::{
+        boundary::{RosterEntry, RosterHarness, RosterMemberKind},
+        config::AtmConfig,
+    };
+    use atm_storage::contract::AgentType;
+    use serde_json::Map;
     use std::path::{Path, PathBuf};
 
     struct MissingRosterRuntime;
@@ -735,6 +746,25 @@ mod tests {
                 "delivery_policy.new_message.delivered",
             ]
         );
+    }
+
+    #[test]
+    fn python_graft_harnesses_use_graft_delivery_without_tmux() {
+        for harness in [RosterHarness::Hermes, RosterHarness::PythonGraft] {
+            let entry = RosterEntry {
+                team_name: "team-a".parse().expect("team"),
+                agent_name: "python-agent".parse().expect("agent"),
+                member_kind: RosterMemberKind::Permanent,
+                harness,
+                agent_type: AgentType::Worker,
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            };
+            let snapshot = DeliveryRecipientSnapshot::from_roster(entry);
+            assert_eq!(snapshot.harness, DeliveryHarnessPath::NonClaude);
+            assert!(snapshot.graft_post_send);
+        }
     }
 
     #[test]

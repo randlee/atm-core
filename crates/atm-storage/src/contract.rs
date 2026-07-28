@@ -342,6 +342,8 @@ pub enum RosterHarness {
     CodexCli,
     GeminiCli,
     Opencode,
+    Hermes,
+    PythonGraft,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

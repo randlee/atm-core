@@ -47,5 +47,10 @@ personal-machine profiles.
   a nudge for a message unavailable to a normal read.
 - Hermes remains an external host integration. Its process supervision and
   chat namespace are not daemon responsibilities.
+- The canonical roster distinguishes `hermes` from `python-graft`: the former
+  names the Hermes gateway adapter, while the latter is available to any
+  Python host built on the `atm-graft` interface. Both values select the
+  non-Claude graft delivery path and allow post-send nudges without a tmux
+  pane.
 - AI.19 consumes the complete AI.18 Python host surface and remains a
   Python-only adapter; it does not add Rust wrapper code.
