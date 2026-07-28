@@ -533,11 +533,7 @@ trait MessageWriter: Send + Sync {
 }
 
 pub(super) trait PostWriteRouter: Send + Sync {
-    fn dispatch(
-        &self,
-        message: &mut MessageRecord,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError>;
+    fn dispatch(&self, message: &mut MessageRecord) -> Result<(), AtmError>;
 }
 
 impl DaemonRequestDispatcher {
@@ -549,26 +545,26 @@ impl DaemonRequestDispatcher {
     fn dispatch_with_deadline(
         &self,
         request: RequestEnvelope,
-        deadline: RequestDeadline,
+        _deadline: RequestDeadline,
     ) -> Result<ResponseEnvelope, AtmError> {
         match request {
-            RequestEnvelope::Write(request) => self.route_write(*request, deadline),
+            RequestEnvelope::Write(request) => self.route_write(*request),
             request => self.dispatch_non_write(request),
         }
     }
 
-    fn route_write(
-        &self,
-        request: WriteRequest,
-        deadline: RequestDeadline,
-    ) -> Result<ResponseEnvelope, AtmError> {
+    fn route_write(&self, request: WriteRequest) -> Result<ResponseEnvelope, AtmError> {
         let mut message = MessageWriter::write(self, request)?;
-        if message.prepared.requires_post_write_route() {
-            PostWriteRouter::dispatch(self, &mut message, deadline)?;
-        }
+        let requires_post_commit_signal = message.prepared.requires_post_write_route();
+        // Admission is complete before any post-commit work is even signalled.
+        // In particular, an acknowledgement's source transition completes here,
+        // before the peer worker can observe or deliver the reply.
         let outcome = message
             .prepared
             .finish(&self.service_runtime, self.observability.as_ref())?;
+        if requires_post_commit_signal {
+            PostWriteRouter::dispatch(self, &mut message)?;
+        }
         Ok(match outcome {
             WriteOutcome::Sent(outcome) => {
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome))

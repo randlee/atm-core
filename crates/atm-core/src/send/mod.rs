@@ -194,12 +194,10 @@ impl WriteOutcome {
     }
 }
 
-/// A durable write awaiting its one post-write action.
+/// A durable write awaiting post-commit notification scheduling.
 ///
-/// The daemon owns the routing choice and invokes either local notification or
-/// peer delivery before calling [`PreparedWrite::finish`].  Keeping the
-/// acknowledgement source mutation here ensures an acknowledgement cannot be
-/// committed when peer delivery fails.
+/// Acknowledgement state completes before any post-commit notification or peer
+/// work.  Delivery is never a prerequisite for an admitted local write.
 pub struct PreparedWrite {
     outcome: SendOutcome,
     outbound_request: WriteRequest,
@@ -276,11 +274,11 @@ impl PreparedWrite {
         );
     }
 
-    /// Completes the canonical write only after the router's selected action
-    /// succeeded.  For acknowledgements this is where source state becomes
-    /// acknowledged; a peer-delivery error therefore leaves it pending.
+    /// Completes the canonical write before post-commit work is scheduled.
+    /// For acknowledgements this records the source transition before the
+    /// caller receives its local admission response.
     pub fn finish(
-        self,
+        &mut self,
         runtime: &LocalServiceRuntime,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError> {
@@ -288,18 +286,18 @@ impl PreparedWrite {
     }
 
     fn finish_with_runtime<R>(
-        self,
+        &mut self,
         runtime: &R,
         observability: &dyn ObservabilityPort,
     ) -> Result<WriteOutcome, AtmError>
     where
         R: RetainedMailboxRuntime,
     {
-        match self.acknowledgement {
+        match self.acknowledgement.take() {
             Some(acknowledgement) => acknowledgement
-                .finish(runtime, observability, self.outcome)
+                .finish(runtime, observability, self.outcome.clone())
                 .map(WriteOutcome::Acknowledged),
-            None => Ok(WriteOutcome::Sent(self.outcome)),
+            None => Ok(WriteOutcome::Sent(self.outcome.clone())),
         }
     }
 
@@ -452,7 +450,7 @@ pub fn write_mail_with_runtime(
     observability: &dyn ObservabilityPort,
     runtime: &LocalServiceRuntime,
 ) -> Result<WriteOutcome, AtmError> {
-    let prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
+    let mut prepared = write_mail_with_runtime_impl(request, observability, runtime)?;
     prepared.finish(runtime, observability)
 }
 

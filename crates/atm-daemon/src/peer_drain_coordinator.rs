@@ -81,11 +81,10 @@ fn remote_delivery_error_with_cause(error: AtmError) -> AtmError {
 }
 
 pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
-    fn deliver_after_persist(
-        &self,
-        request: &WriteRequest,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError>;
+    /// Records a best-effort, identifier-only wake-up after a durable origin
+    /// write has committed.  It must never perform storage or transport work,
+    /// and cannot turn a successful local admission into a failure.
+    fn signal_after_persist(&self, peer: HostName);
 
     fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError>;
 
@@ -412,39 +411,6 @@ impl PeerDrainCoordinator {
         Err(error)
     }
 
-    fn deliver_current(
-        &self,
-        request: &WriteRequest,
-        host: &HostName,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let peer = self.configured_peer(host)?;
-        let transport = self
-            .transport
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("HTTPS peer transport slot lock poisoned"))?
-            .clone()
-            .ok_or_else(|| {
-                AtmError::remote_delivery_unconfirmed(
-                    "HTTPS peer transport is not enabled in this daemon",
-                )
-            })?;
-        match transport.deliver(request.clone(), &peer, deadline) {
-            Ok(ResponseEnvelope::Error(error)) => Err(error),
-            Ok(_) => {
-                self.record(
-                    PeerDeliveryEventKind::PeerDeliveryConfirmed,
-                    host.clone(),
-                    None,
-                    Some(1),
-                    None,
-                );
-                Ok(())
-            }
-            Err(error) => Err(error),
-        }
-    }
-
     fn worker_coordinator(&self) -> Self {
         Self {
             peers: Arc::clone(&self.peers),
@@ -524,54 +490,36 @@ impl PeerDrainCoordinator {
                     )
                 })
             };
-            drop(slots);
             if let Some(host) = due {
+                drop(slots);
                 let _ = self.drain(&host, RequestDeadline::after(PEER_SYNC_REQUEST_DEADLINE));
                 if let Err(error) = self.release(&host) {
                     tracing::error!(subsystem = "peer_drain", action = "release", %error, "peer drain slot release failed");
                 }
                 continue;
             }
-            std::thread::park_timeout(Duration::from_millis(250));
+            // A post-commit signal wakes this worker immediately; the bounded
+            // timeout still makes scheduled retry deadlines and shutdown
+            // progress without retaining any message-level work state.
+            let _ = self.slots.1.wait_timeout(slots, Duration::from_millis(250));
         }
     }
 }
 
 impl PeerDeliveryCoordinator for PeerDrainCoordinator {
-    fn deliver_after_persist(
-        &self,
-        request: &WriteRequest,
-        deadline: RequestDeadline,
-    ) -> Result<(), AtmError> {
-        let host = request
-            .to
-            .as_ref()
-            .and_then(|address| address.host())
-            .ok_or_else(|| {
-                AtmError::validation("peer delivery coordinator requires a host-qualified write")
-            })?
-            .clone();
-        if self
-            .peers
-            .peer_sync_policy(&host)?
-            .validate()?
-            .max_message_age
-            .is_zero()
-        {
-            return self.deliver_current(request, &host, deadline);
+    fn signal_after_persist(&self, host: HostName) {
+        let Ok(mut slots) = self.slots() else {
+            tracing::error!(subsystem = "peer_drain", action = "signal_after_persist", peer = %host, "peer drain slot lock poisoned; durable write remains available for recovery");
+            return;
+        };
+        if let Err(error) = Self::reserve_slot(&mut slots, &host) {
+            tracing::warn!(subsystem = "peer_drain", action = "signal_after_persist", peer = %host, %error, "peer drain signal coalesced under bounded scheduler pressure; durable write remains available for recovery");
+            return;
         }
-        self.acquire(&host, deadline)?;
-        let result = self.drain(&host, deadline);
-        self.release(&host)?;
-        result.map(|count| {
-            self.record(
-                PeerDeliveryEventKind::PeerDeliveryConfirmed,
-                host,
-                None,
-                Some(u32::from(count)),
-                None,
-            );
-        })
+        let slot = slots.entry(host).or_default();
+        slot.requested_generation = slot.requested_generation.saturating_add(1);
+        slot.next_attempt_at = Some(Instant::now());
+        self.slots.1.notify_all();
     }
 
     fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline) -> Result<u16, AtmError> {
@@ -633,8 +581,8 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
 #[cfg(test)]
 mod tests {
     use super::{
-        INITIAL_BACKOFF, MAX_BACKOFF, PeerDrainCoordinator, PeerDrainSlot, is_retryable_peer_error,
-        retry_timestamp, schedule_retry,
+        INITIAL_BACKOFF, MAX_BACKOFF, PeerDeliveryCoordinator, PeerDrainCoordinator, PeerDrainSlot,
+        is_retryable_peer_error, retry_timestamp, schedule_retry,
     };
     use atm_core::RequestDeadline;
     use atm_core::error::AtmError;
@@ -820,6 +768,21 @@ mod tests {
         assert_ne!(slot.requested_generation, slot.observed_generation);
         slot.observed_generation = slot.requested_generation;
         assert_eq!(slot.requested_generation, slot.observed_generation);
+    }
+
+    #[test]
+    fn post_persist_signal_only_coalesces_an_immediate_memory_wakeup() {
+        let coordinator = coordinator_for_slots();
+        let host: HostName = "peer.example.test".parse().expect("host");
+
+        coordinator.signal_after_persist(host.clone());
+        coordinator.signal_after_persist(host.clone());
+
+        let slots = coordinator.slots().expect("slot lock");
+        let slot = slots.get(&host).expect("scheduled host");
+        assert_eq!(slot.requested_generation, 2);
+        assert!(slot.next_attempt_at.is_some());
+        assert!(!slot.running, "admission must not run peer work inline");
     }
 
     #[test]

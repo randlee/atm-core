@@ -118,7 +118,7 @@ fn peer_link_status_json_round_trip_exposes_no_authority_secrets() {
 
 #[test]
 #[serial_test::serial(env)]
-fn connection_handler_failure_preserves_daemon_unavailable() {
+fn connection_handler_failure_is_not_a_local_admission_failure() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -151,7 +151,7 @@ fn connection_handler_failure_preserves_daemon_unavailable() {
         .install_https_transport(Arc::new(ConnectionHandlerFailure::default()))
         .expect("install unavailable HTTPS delivery");
 
-    let error = dispatcher
+    let response = dispatcher
         .dispatch(RequestEnvelope::Write(Box::new(
             SendRequest::new(
                 atm_home,
@@ -167,15 +167,17 @@ fn connection_handler_failure_preserves_daemon_unavailable() {
             )
             .expect("remote write request"),
         )))
-        .expect_err("local transport failure must be returned unchanged");
-
-    assert_eq!(error.code(), AtmErrorCode::DaemonUnavailable);
+        .expect("a durable local write must not wait for the peer connection handler");
+    assert!(matches!(
+        response,
+        ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+    ));
     let status = dispatcher
         .peer_link_statuses()
         .pop()
         .expect("configured peer delivery status");
     assert_eq!(
-        status.last_error_code,
-        Some(AtmErrorCode::DaemonUnavailable)
+        status.last_error_code, None,
+        "no peer handler ran on the admission path"
     );
 }
