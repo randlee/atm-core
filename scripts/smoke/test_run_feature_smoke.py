@@ -323,8 +323,9 @@ class FeatureSmokeTests(unittest.TestCase):
                 {"exit_code": 0, "stdout": "/private/var/folders/atm-smoke-certs-123\n", "stderr": ""},
                 result,
                 result,
+                {"exit_code": 0, "stdout": "", "stderr": ""},
             ],
-        ), mock.patch.object(
+        ) as remote_shell, mock.patch.object(
             RUNNER, "command", return_value=result
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
@@ -347,6 +348,11 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertNotIn("--resolve", curl_calls[1])
         self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
         self.assertTrue(all("/tmp/atm-smoke-" not in " ".join(call) for call in curl_calls))
+        cleanup_script = remote_shell.call_args_list[-1].args[1]
+        self.assertIn("rm -f", cleanup_script)
+        self.assertIn("local-public.pem", cleanup_script)
+        self.assertIn("peer-public.pem", cleanup_script)
+        self.assertIn("rmdir", cleanup_script)
 
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}

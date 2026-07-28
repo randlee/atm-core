@@ -8,6 +8,7 @@ CLI environment: ``ATM_IDENTITY`` and ``ATM_TEAM``.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import escape
 import json
@@ -177,6 +178,35 @@ def remote_shell(peer: str, script: str, timeout: float = 20.0) -> dict[str, Any
     return command(["ssh", peer, f"sh -lc {shlex.quote(script)}"], timeout=timeout)
 
 
+@contextmanager
+def remote_certificate_workspace(peer: str):
+    """Yield a unique remote certificate workspace and remove only its files."""
+    created = remote_shell(peer, "mktemp -d")
+    if created["exit_code"] != 0:
+        raise SmokeError(f"{peer} could not create a temporary certificate directory: {created['stderr'].strip()}")
+    workspace = created["stdout"].strip()
+    if not workspace:
+        raise SmokeError(f"{peer} returned no temporary certificate directory")
+
+    completed = False
+    try:
+        yield workspace
+        completed = True
+    finally:
+        local_public = f"{workspace}/local-public.pem"
+        peer_public = f"{workspace}/peer-public.pem"
+        cleanup = remote_shell(
+            peer,
+            "rm -f "
+            f"{shlex.quote(local_public)} {shlex.quote(peer_public)} "
+            f"&& rmdir {shlex.quote(workspace)}",
+        )
+        if completed and cleanup["exit_code"] != 0:
+            raise SmokeError(
+                f"{peer} could not remove temporary certificate workspace: {cleanup['stderr'].strip()}"
+            )
+
+
 def certificate_bundle(atm: str) -> str:
     certificate = parse_json(command([atm, "peer", "certificate", "show", "--json"]), "peer certificate show")
     bundle = certificate.get("private_key_ref") if isinstance(certificate, dict) else None
@@ -262,57 +292,38 @@ def curl_doctor(
             local_export = command(["openssl", "x509", "-in", local_bundle, "-out", str(local_public)])
             if local_export["exit_code"] != 0:
                 raise SmokeError(f"could not export local public certificate: {local_export['stderr'].strip()}")
-            remote_temp = remote_shell(peer, "mktemp -d")
-            if remote_temp["exit_code"] != 0:
-                raise SmokeError(f"{peer} could not create a temporary certificate directory: {remote_temp['stderr'].strip()}")
-            remote_tempdir = remote_temp["stdout"].strip()
-            if not remote_tempdir:
-                raise SmokeError(f"{peer} returned no temporary certificate directory")
-            remote_local_ca = f"{remote_tempdir}/local-public.pem"
-            remote_public_path = f"{remote_tempdir}/peer-public.pem"
-            export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
-            if export_remote["exit_code"] != 0:
-                raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
-            copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_ca}"])
-            if copied_local["exit_code"] != 0:
-                raise SmokeError(f"could not copy local public certificate to {peer}: {copied_local['stderr'].strip()}")
-            copied_remote = command(["scp", f"{peer}:{remote_public_path}", str(remote_public)])
-            if copied_remote["exit_code"] != 0:
-                raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
-            local_authority = certificate_authority(local_public)
-            remote_authority = certificate_authority(remote_public)
-            scheme = "http" if plaintext else "https"
-            local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
-            remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
-            headers = ["-H", "Content-Type: application/json"]
-            remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
-            if not plaintext:
-                remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
-            remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
-            remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
-            remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
-            add_case(
-                cases,
-                f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor",
-                doctor_ready(remote_report, expected_version),
-                "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready",
-                origin=peer,
-                destination=platform.node(),
-            )
-            local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
-            if not plaintext:
-                local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
-            local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
-            local_result = command(local_curl)
-            local_report = parse_json(local_result, f"curl doctor to {peer}")
-            add_case(
-                cases,
-                f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor",
-                doctor_ready(local_report, expected_version),
-                "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready",
-                origin=platform.node(),
-                destination=peer,
-            )
+            with remote_certificate_workspace(peer) as remote_tempdir:
+                remote_local_ca = f"{remote_tempdir}/local-public.pem"
+                remote_public_path = f"{remote_tempdir}/peer-public.pem"
+                export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
+                if export_remote["exit_code"] != 0:
+                    raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
+                copied_local = command(["scp", str(local_public), f"{peer}:{remote_local_ca}"])
+                if copied_local["exit_code"] != 0:
+                    raise SmokeError(f"could not copy local public certificate to {peer}: {copied_local['stderr'].strip()}")
+                copied_remote = command(["scp", f"{peer}:{remote_public_path}", str(remote_public)])
+                if copied_remote["exit_code"] != 0:
+                    raise SmokeError(f"could not copy {peer} public certificate: {copied_remote['stderr'].strip()}")
+                local_authority = certificate_authority(local_public)
+                remote_authority = certificate_authority(remote_public)
+                scheme = "http" if plaintext else "https"
+                local_url = f"{scheme}://{local_authority}:43101/v1/atm/doctor"
+                remote_url = f"{scheme}://{remote_authority}:43101/v1/atm/doctor"
+                headers = ["-H", "Content-Type: application/json"]
+                remote_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
+                if not plaintext:
+                    remote_curl.extend(["--cert", remote_bundle, "--cacert", remote_local_ca])
+                remote_curl.extend(["--resolve", f"{local_authority}:43101:{advertised_host(atm)}", "--data", DOCTOR_BODY, local_url])
+                remote_result = remote_shell(peer, " ".join(shlex.quote(value) for value in remote_curl))
+                remote_report = parse_json(remote_result, f"{peer} curl doctor to local")
+                add_case(cases, f"{peer} curl {'plaintext' if plaintext else 'mTLS'} to local doctor", doctor_ready(remote_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(remote_report, expected_version) else "doctor response was not healthy/ready", origin=peer, destination=platform.node())
+                local_curl = ["curl", "--silent", "--show-error", "--fail", "--connect-timeout", "2", "--max-time", "5", "-X", "GET", *headers]
+                if not plaintext:
+                    local_curl.extend(["--cert", local_bundle, "--cacert", str(remote_public)])
+                local_curl.extend(["--resolve", f"{remote_authority}:43101:{remote_host}", "--data", DOCTOR_BODY, remote_url])
+                local_result = command(local_curl)
+                local_report = parse_json(local_result, f"curl doctor to {peer}")
+                add_case(cases, f"local curl {'plaintext' if plaintext else 'mTLS'} to {peer} doctor", doctor_ready(local_report, expected_version), "HTTP 200 real daemon doctor" if doctor_ready(local_report, expected_version) else "doctor response was not healthy/ready", origin=platform.node(), destination=peer)
             # These checks use each host's ordinary DNS resolver. The mTLS
             # request below intentionally omits --resolve, proving that the
             # TCP connection follows DNS rather than the explicit-IP proof.
