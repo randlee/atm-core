@@ -1,20 +1,12 @@
----
-id: TEAMS-RM.02
-title: Add `atm teams remove-member` CLI Subcommand
-status: planned
-branch: TBD - implementation happens on a new feature worktree, not this planning worktree
-worktree: TBD - execution worktree not assigned (see Execution Note)
-target: integrate/phase-<current-active-phase>, per project-plan.md branch flow (not `develop` directly)
----
-
 # Sprint 02 — Add `atm teams remove-member` CLI Subcommand
 
 ```yaml
 plan_type: sprint_plan
 phase: teams-remove-member
 sprint: TEAMS-RM.02
-worktree: planning/localhost-fix-remove-member (planning only)
+worktree: planning/localhost-fix-remove-member (planning only); implementation worktree assigned separately
 branch: feature/atm-teams-remove-member (implementation)
+target: develop
 status: planned
 estimated_scope: one CLI subcommand, roster mutation, requirements, generated surface docs, and focused tests
 ```
@@ -27,6 +19,11 @@ changes. Implementation must happen on a **separate feature worktree**
 branched from `develop` via `sc-git-worktree` (e.g.
 `feature/teams-remove-member`), per `CLAUDE.md`'s branch-management rules.
 This planning worktree must not be used to implement or commit code.
+
+The predecessor for the caller-context and roster-repair contract is
+[`AD.9 Update-Member CLI And Roster Repair Path`](../phase-AD/sprint-AD9.md).
+This follow-up lands directly to `develop`; it is not a Phase AI integration
+sprint.
 
 ## Goal
 
@@ -81,6 +78,9 @@ mutation path.
 - The implementation worktree is created from the documented integration flow.
 - Existing `add-member`, `update-member`, and CLI-surface baseline tests are
   available as the behavioral and generated-output references.
+- [AD.9 Update-Member CLI And Roster Repair Path](../phase-AD/sprint-AD9.md)
+  is the predecessor for caller-context authorization and the shared roster
+  mutation path.
 
 ## Hard Dependencies
 
