@@ -264,7 +264,9 @@ class AtmGraftAdapter(_hermes_types()[1]):
 
         source = SessionSource(
             platform=Platform.ATM if hasattr(Platform, "ATM") else Platform.LOCAL,
-            chat_id=self._chat_id or "atm",
+            # Preserve the canonical graft chat key so Hermes replies route
+            # back through ``send`` to the originating ATM address/chat.
+            chat_id=chat_key,
             chat_type="dm",
             user_id=chat_key,
         )

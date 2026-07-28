@@ -68,6 +68,25 @@ class HermesAdapterContractTests(unittest.TestCase):
                 else:
                     os.environ["ATM_WORKSPACE_ROOT"] = previous
 
+    def test_dispatch_nudge_preserves_canonical_chat_key_for_replies(self) -> None:
+        observed = []
+
+        async def handle(event) -> None:
+            observed.append((event.source.chat_id, event.source.user_id, event.text))
+
+        adapter = AtmGraftAdapter(None)
+        adapter.set_message_handler(handle)
+        chat_key = "atm:Cipher-311d:8991600178@atm-dev"
+
+        # Run the async dispatch without requiring a live daemon or gateway.
+        import asyncio
+
+        asyncio.run(adapter._dispatch_nudge(chat_key, "reply-route-check"))
+        self.assertEqual(
+            observed,
+            [(chat_key, chat_key, "reply-route-check")],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
