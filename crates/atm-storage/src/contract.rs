@@ -713,6 +713,18 @@ pub trait OutboundMessageQuery: sealed::Sealed + Send + Sync {
         limit: NonZeroU16,
         budget: std::time::Duration,
     ) -> Result<Vec<StoredPeerWrite>, AtmError>;
+
+    /// Load one immutable peer-directed write by its canonical identity.
+    ///
+    /// The peer-drain coordinator uses this only after its bounded
+    /// reconciliation page does not contain a newly persisted job. It is a
+    /// direct eligibility lookup, not a cursor or delivery-state mutation.
+    fn find_for_peer(
+        &self,
+        peer: &HostName,
+        message_id: AtmMessageId,
+        budget: std::time::Duration,
+    ) -> Result<Option<StoredPeerWrite>, AtmError>;
 }
 
 mod duration_seconds {
