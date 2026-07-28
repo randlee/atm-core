@@ -211,6 +211,12 @@ pub fn update_member_with_roster_store(
 }
 
 /// Remove one member record from a team roster.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the caller does not belong to the target team,
+/// the target team or member is missing, or loading/persisting the roster
+/// fails. It never removes inbox data.
 pub fn remove_member_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     request: RemoveMemberRequest,
@@ -260,22 +266,13 @@ fn validate_update_member_caller(
     roster_store: &dyn RosterStore,
     request: &UpdateMemberRequest,
 ) -> Result<(), AtmError> {
-    if request.caller_team != request.team {
-        return Err(AtmError::validation(format!(
-            "caller team '{}' does not match update-member target team '{}'",
-            request.caller_team, request.team
-        )));
-    }
-
-    let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
-    if caller_entry.is_none() {
-        return Err(AtmError::member_not_found(
-            request.caller_identity.as_str(),
-            request.team.as_str(),
-        ));
-    }
-
-    Ok(())
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "update-member",
+    )
 }
 
 fn ensure_member_present(
@@ -296,18 +293,38 @@ fn validate_remove_member_caller(
     roster_store: &dyn RosterStore,
     request: &RemoveMemberRequest,
 ) -> Result<(), AtmError> {
-    if request.caller_team != request.team {
+    validate_member_mutation_caller(
+        roster_store,
+        &request.caller_identity,
+        &request.caller_team,
+        &request.team,
+        "remove-member",
+    )
+}
+
+/// Require a caller from the team that the mutation targets.
+///
+/// Keeping this in one helper makes `update-member` and `remove-member`
+/// enforce the same membership gate while retaining action-specific errors.
+fn validate_member_mutation_caller(
+    roster_store: &dyn RosterStore,
+    caller_identity: &AgentName,
+    caller_team: &TeamName,
+    target_team: &TeamName,
+    action: &str,
+) -> Result<(), AtmError> {
+    if caller_team != target_team {
         return Err(AtmError::validation(format!(
-            "caller team '{}' does not match remove-member target team '{}'",
-            request.caller_team, request.team
+            "caller team '{}' does not match {action} target team '{target_team}'",
+            caller_team,
         )));
     }
 
-    let caller_entry = roster_store.query_membership(&request.team, &request.caller_identity)?;
+    let caller_entry = roster_store.query_membership(target_team, caller_identity)?;
     if caller_entry.is_none() {
         return Err(AtmError::member_not_found(
-            request.caller_identity.as_str(),
-            request.team.as_str(),
+            caller_identity.as_str(),
+            target_team.as_str(),
         ));
     }
 
