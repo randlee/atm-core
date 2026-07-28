@@ -958,6 +958,12 @@ hardening cleanup is in progress on follow-up branches. This implementation
 status does not close the phase: [`docs/plans/phase-ai/readiness.md`](./plans/phase-ai/readiness.md)
 still blocks release pending physical two-Mac and Mac↔Windows peer evidence.
 
+The retained local roster-repair follow-up is planned in
+[`docs/plans/teams-remove-member/sprint-02.md`](./plans/teams-remove-member/sprint-02.md).
+It adds the narrowly scoped `atm teams remove-member` command on its own
+feature branch; it is not cross-host transport work and does not alter the
+Phase AI readiness gate.
+
 AI.1 (`feature/pAI-1-daemon-preag-reset`, PR #592) is the reviewed deletion
 baseline. It retains only the local-IPC singleton while deleting peer transport,
 replay/store support, and retired boundary adapters. It supersedes the abandoned
