@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "atm-graft"
-version = "1.4.0-beta-ai.31"
+version = "1.4.0-beta-ai.32"
 requires-python = ">=3.9"
 
 [tool.maturin]

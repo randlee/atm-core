@@ -205,8 +205,8 @@ impl PeerPostCommitWorkQueue {
 impl PostCommitWorkQueue for PeerPostCommitWorkQueue {
     fn signal(&self, work: PostCommitWorkKey) {
         match work {
-            PostCommitWorkKey::PeerDelivery { peer, .. } => {
-                self.coordinator.signal_after_persist(peer)
+            PostCommitWorkKey::PeerDelivery { peer, message_id } => {
+                self.coordinator.signal_after_persist(peer, message_id)
             }
             PostCommitWorkKey::LocalNudge(message_id) => match self
                 .sender
