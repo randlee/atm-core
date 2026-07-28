@@ -29,7 +29,13 @@ from feature_smoke_report import (
     render_host_header,
     summarize_cases,
 )
-from run_inbound_peer_smoke import PANE_TEMPLATE, SmokeError, compose, sanitize
+from run_inbound_peer_smoke import PANE_TEMPLATE, compose
+from smoke_common import (
+    SmokeError,
+    advertised_host_from_value as advertised_host_from_json,
+    command_result as command,
+    message_id_from_value as message_id,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,19 +52,6 @@ CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
 CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
 DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
 DEFAULT_LIVE_REPETITIONS = 10
-
-
-def command(argv: list[str], timeout: float = 15.0) -> dict[str, Any]:
-    try:
-        completed = subprocess.run(argv, text=True, capture_output=True, check=False, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        return {"argv": argv, "exit_code": None, "stdout": "", "stderr": sanitize(str(error))}
-    return {
-        "argv": argv,
-        "exit_code": completed.returncode,
-        "stdout": sanitize(completed.stdout),
-        "stderr": sanitize(completed.stderr),
-    }
 
 
 def require_environment() -> tuple[str, str, str]:
@@ -89,25 +82,6 @@ def branch_version() -> str:
     if len(versions) != 1 or not isinstance(next(iter(versions)), str):
         raise SmokeError("cargo metadata did not expose one shared atm/atm-daemon version")
     return next(iter(versions))
-
-
-def message_id(value: Any) -> str:
-    if isinstance(value, dict):
-        for key in ("message_id", "messageId"):
-            if isinstance(value.get(key), str) and value[key]:
-                return value[key]
-        for child in value.values():
-            try:
-                return message_id(child)
-            except SmokeError:
-                continue
-    if isinstance(value, list):
-        for child in value:
-            try:
-                return message_id(child)
-            except SmokeError:
-                continue
-    raise SmokeError("send JSON did not contain a message ID")
 
 
 def selected_message(value: Any, expected: str) -> dict[str, Any] | None:
@@ -162,21 +136,6 @@ def advertised_host(atm: str) -> str:
         return override
     interfaces = parse_json(command([atm, "peer", "interface", "list", "--json"]), "peer interface list")
     return advertised_host_from_json(interfaces)
-
-
-def advertised_host_from_json(interfaces: Any) -> str:
-    """Extract an enabled advertised host from the public interface response."""
-    stack = [interfaces]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, dict):
-            host = current.get("advertise_host", current.get("advertised_host"))
-            if current.get("enabled") is not False and isinstance(host, str) and host:
-                return host
-            stack.extend(current.values())
-        elif isinstance(current, list):
-            stack.extend(current)
-    raise SmokeError("peer interface list JSON has no enabled advertised host")
 
 
 def doctor_ready(report: Any, expected_version: str) -> bool:
@@ -303,9 +262,14 @@ def curl_doctor(
             local_export = command(["openssl", "x509", "-in", local_bundle, "-out", str(local_public)])
             if local_export["exit_code"] != 0:
                 raise SmokeError(f"could not export local public certificate: {local_export['stderr'].strip()}")
-            remote_id = artifact_segment(f"{platform.node()}-{peer}", "curl peer label")
-            remote_local_ca = f"/tmp/atm-smoke-{remote_id}-local.pem"
-            remote_public_path = f"/tmp/atm-smoke-{remote_id}-peer.pem"
+            remote_temp = remote_shell(peer, "mktemp -d")
+            if remote_temp["exit_code"] != 0:
+                raise SmokeError(f"{peer} could not create a temporary certificate directory: {remote_temp['stderr'].strip()}")
+            remote_tempdir = remote_temp["stdout"].strip()
+            if not remote_tempdir:
+                raise SmokeError(f"{peer} returned no temporary certificate directory")
+            remote_local_ca = f"{remote_tempdir}/local-public.pem"
+            remote_public_path = f"{remote_tempdir}/peer-public.pem"
             export_remote = remote_shell(peer, f"openssl x509 -in {shlex.quote(remote_bundle)} -out {shlex.quote(remote_public_path)}")
             if export_remote["exit_code"] != 0:
                 raise SmokeError(f"{peer} could not export public certificate: {export_remote['stderr'].strip()}")
@@ -754,18 +718,12 @@ def run_live_attempt(feature: str, peers: list[str]) -> list[dict[str, Any]]:
     try:
         report = parse_json(doctor, "doctor")
         expected_version = branch_version()
-        client_version = report.get("client_context", {}).get("version")
         daemon_version = report.get("daemon_context", {}).get("version")
-        healthy = (
-            report.get("summary", {}).get("status") == "healthy"
-            and report.get("runtime_status", {}).get("readiness") == "ready"
-            and client_version == expected_version
-            and daemon_version == expected_version
-        )
+        healthy = doctor_ready(report, expected_version)
         detail = (
             f"READY · ATM {daemon_version}"
             if healthy
-            else f"expected={expected_version}; cli={client_version}; daemon={daemon_version}"
+            else f"expected={expected_version}; cli={report.get('client_context', {}).get('version')}; daemon={daemon_version}"
         )
         add_case(cases, "doctor", healthy, detail)
     except SmokeError as error:

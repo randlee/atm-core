@@ -80,7 +80,7 @@ class FeatureSmokeTests(unittest.TestCase):
 
     def test_command_redacts_captured_secret_output(self):
         completed = mock.Mock(returncode=1, stdout="token=must-not-appear", stderr="private_key=must-not-appear")
-        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed):
+        with mock.patch("smoke_common.subprocess.run", return_value=completed):
             result = RUNNER.command(["atm", "doctor"])
         self.assertNotIn("must-not-appear", result["stdout"])
         self.assertNotIn("must-not-appear", result["stderr"])
@@ -316,7 +316,15 @@ class FeatureSmokeTests(unittest.TestCase):
                 "stdout": __import__("json").dumps({"private_key_ref": "/tmp/remote-bundle.pem"}),
                 "stderr": "",
             },
-        ), mock.patch.object(RUNNER, "remote_shell", side_effect=[result, result]), mock.patch.object(
+        ), mock.patch.object(
+            RUNNER,
+            "remote_shell",
+            side_effect=[
+                {"exit_code": 0, "stdout": "/private/var/folders/atm-smoke-certs-123\n", "stderr": ""},
+                result,
+                result,
+            ],
+        ), mock.patch.object(
             RUNNER, "command", return_value=result
         ) as command, mock.patch.object(
             RUNNER, "certificate_authority", side_effect=["local.example.test", "remote.example.test"]
@@ -338,6 +346,7 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertIn("--resolve", curl_calls[0])
         self.assertNotIn("--resolve", curl_calls[1])
         self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
+        self.assertTrue(all("/tmp/atm-smoke-" not in " ".join(call) for call in curl_calls))
 
     def test_crosshost_send_requires_remote_exact_ulid_and_body(self):
         sent = {"message_id": "01SEND"}
