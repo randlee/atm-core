@@ -418,8 +418,11 @@ fn parse_roster_harness(value: String) -> Result<RosterHarness, AtmError> {
         "codex-cli" => Ok(RosterHarness::CodexCli),
         "gemini-cli" => Ok(RosterHarness::GeminiCli),
         "opencode" => Ok(RosterHarness::Opencode),
+        "hermes" => Ok(RosterHarness::Hermes),
+        "python-graft" => Ok(RosterHarness::PythonGraft),
         _ => Err(AtmError::validation(
-            "harness must be one of: claude-code, codex-cli, gemini-cli, opencode".to_string(),
+            "harness must be one of: claude-code, codex-cli, gemini-cli, opencode, hermes, python-graft"
+                .to_string(),
         )),
     }
 }

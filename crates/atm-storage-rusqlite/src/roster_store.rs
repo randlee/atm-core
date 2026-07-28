@@ -243,6 +243,8 @@ fn parse_harness(raw: &str) -> Result<RosterHarness, AtmError> {
         "codex-cli" => Ok(RosterHarness::CodexCli),
         "gemini-cli" => Ok(RosterHarness::GeminiCli),
         "opencode" => Ok(RosterHarness::Opencode),
+        "hermes" => Ok(RosterHarness::Hermes),
+        "python-graft" => Ok(RosterHarness::PythonGraft),
         other => Err(AtmError::validation(format!(
             "failed to parse canonical team-roster harness `{other}`"
         ))),
@@ -262,6 +264,8 @@ fn roster_harness_value(harness: RosterHarness) -> &'static str {
         RosterHarness::CodexCli => "codex-cli",
         RosterHarness::GeminiCli => "gemini-cli",
         RosterHarness::Opencode => "opencode",
+        RosterHarness::Hermes => "hermes",
+        RosterHarness::PythonGraft => "python-graft",
     }
 }
 
@@ -272,6 +276,51 @@ mod tests {
     use atm_storage::IsoTimestamp;
 
     const TEST_WORKER: &str = "worker";
+
+    #[test]
+    fn save_and_load_support_python_graft_harnesses() {
+        let store = SqliteStorageBackend::in_memory_for_test()
+            .expect("backend")
+            .roster_store;
+        let team: TeamName = "team-a".parse().expect("team");
+        let roster = RosterSnapshot {
+            team_name: team.clone(),
+            members: vec![
+                RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "hermes-agent".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::Hermes,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                },
+                RosterMember {
+                    team_name: team.clone(),
+                    agent_name: "python-agent".parse().expect("agent"),
+                    member_kind: RosterMemberKind::Permanent,
+                    harness: RosterHarness::PythonGraft,
+                    agent_type: AgentType::Worker,
+                    model: ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                },
+            ],
+            refreshed_at: None,
+        };
+
+        store.save_roster(&roster).expect("save roster");
+        let loaded = store.load_roster(&team).expect("load roster");
+        assert_eq!(
+            loaded
+                .members
+                .iter()
+                .map(|member| member.harness)
+                .collect::<Vec<_>>(),
+            vec![RosterHarness::Hermes, RosterHarness::PythonGraft]
+        );
+    }
 
     #[test]
     fn save_roster_rejects_mismatched_team_names() {

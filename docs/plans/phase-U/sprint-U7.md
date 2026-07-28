@@ -123,6 +123,8 @@ Required shape for every sub-task:
      - `codex-cli`
      - `gemini-cli`
      - `opencode`
+     - `hermes`
+     - `python-graft`
    Required tests:
    - roster lifecycle tests for ephemeral-member removal consequences
    - harness serialization/validation tests
