@@ -161,6 +161,27 @@ current adapter, module, manifest, timeout/retry, or replay behavior. The
 current daemon API contract is the HTTP/OpenAPI surface documented in
 [`http-api.md`](./http-api.md).
 
+## Phase AI post-commit admission boundary
+
+AI.31--AI.33 tighten the split between canonical admission and peer work:
+
+- `runtime_health` and `PostWriteRouter` may persist one canonical request,
+  choose exactly one local-nudge or peer-delivery work key, and signal the
+  daemon-private bounded queue. They must not perform peer-store scans, DNS,
+  socket/TLS, HTTP delivery, hooks, or nudge execution before the local
+  response.
+- `peer_drain_coordinator` is the sole daemon-private owner of post-commit
+  peer jobs. Its visible seam is crate-private and returns typed
+  `PeerDeliveryOutcome`, not HTTP status integers or concrete transport types.
+- the coordinator accesses canonical records only through `atm-storage`
+  traits and receives an immutable runtime-view snapshot from composition; it
+  must not introduce daemon-specific persistence traits or concrete SQLite
+  values.
+- `crates/atm-architecture/tests/boundary_enforcement.rs` and the relevant
+  `boundaries/atm-daemon/*.toml` records must fail closed if the first boundary
+  grows direct peer transport/store work or the second boundary grows durable
+  queue/receipt/retry state.
+
 ## LifecycleControlSourceAdapter
 
 Canonical machine-readable boundary source:
