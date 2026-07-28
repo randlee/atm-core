@@ -9,6 +9,16 @@ target: integrate/phase-<current-active-phase>, per project-plan.md branch flow 
 
 # Sprint 02 — Add `atm teams remove-member` CLI Subcommand
 
+```yaml
+plan_type: sprint_plan
+phase: teams-remove-member
+sprint: TEAMS-RM.02
+worktree: planning/localhost-fix-remove-member (planning only)
+branch: feature/atm-teams-remove-member (implementation)
+status: planned
+estimated_scope: one CLI subcommand, roster mutation, requirements, generated surface docs, and focused tests
+```
+
 ## Execution Note
 
 This document is a planning artifact only, produced from the
@@ -26,7 +36,13 @@ symmetry, error handling, and output conventions, so the retained `atm
 teams` roster-repair surface supports both inserting and deleting a roster
 entry through the same reviewed pattern.
 
-## Governing Requirements Gap (must be resolved by this sprint)
+## Scope Summary
+
+Add the retained roster-repair command and its documentation without changing
+the `RosterStore` boundary or deleting any inbox data. The implementation
+branch is separate from this planning worktree.
+
+## Governing Requirements
 
 `docs/requirements.md` section 12.2 ("Retained Surface") currently states
 the retained `teams` surface is `add-member`, `update-member`, `backup`,
@@ -46,6 +62,26 @@ Do not implement the CLI/storage change without this requirements update —
 that would leave the requirements doc and the shipped surface out of sync,
 which is a structural (Blocking) finding under this repo's QA conventions.
 
+## Governing ADRs
+
+No ADR change is required. This sprint consumes the existing retained CLI and
+SQLite roster ownership decisions; it must not introduce a second roster
+mutation path.
+
+## Governing Boundaries
+
+- `RosterStore` remains the sole roster persistence boundary.
+- CLI parsing and presentation remain in `crates/atm`; roster authorization
+  and mutation remain in `atm-core/team_admin`.
+- The command must use `load_roster` and `replace_roster`; no direct SQLite,
+  filesystem, or inbox deletion path is permitted.
+
+## Prerequisites
+
+- The implementation worktree is created from the documented integration flow.
+- Existing `add-member`, `update-member`, and CLI-surface baseline tests are
+  available as the behavioral and generated-output references.
+
 ## Hard Dependencies
 
 - `docs/requirements.md` §12 (`atm teams`) — must be updated as part of this
@@ -59,6 +95,28 @@ which is a structural (Blocking) finding under this repo's QA conventions.
 - `crates/atm/tests/cli_surface_baseline.json` — diff-gate baseline that
   must be regenerated in the same commit that adds the new subcommand
   surface (see Required Validation).
+
+## Non-Goals
+
+- Deleting the former member's inbox or data.
+- A confirmation or `--force` workflow for self-removal or last-member removal.
+- Restoring historical orchestration commands or changing `RosterStore`.
+
+## Sub-Tasks
+
+1. Update `REQ-P-TEAMS-001` and its retained-surface/required-behavior text.
+   Add focused requirement tests/checks where the existing documentation gate
+   expects them.
+2. Add the core request, authorization, deterministic roster removal, outcome,
+   and tests using the existing `RosterStore` mutation path.
+3. Add CLI parsing, dispatch, human/JSON output, generated CLI documentation,
+   and the additive CLI-surface baseline update.
+
+## Split Recommendation
+
+Keep the requirements, core mutation, CLI wiring, generated CLI artifacts, and
+tests in one implementation PR: they form one externally visible command and
+its only safe closure proof.
 
 ## Exact Targets
 
@@ -377,6 +435,11 @@ This sprint does **not**:
   and a non-zero exit, without mutating the roster.
 - Removing from a non-existent team fails the same way `add-member` does
   today, without creating any new team state.
+- Removing the last member is allowed, leaves an empty roster, and does not
+  delete the team directory or any inbox data; a focused test proves it.
+- A caller may remove its own roster entry when it is a member of the target
+  team; this succeeds through the ordinary authorization and mutation path,
+  and a focused test proves it. No confirmation/force policy is added here.
 - A caller whose `caller_team` does not match the target team, or who is
   not present in the target team's roster, is rejected by
   `validate_remove_member_caller` before any roster mutation occurs — the
@@ -405,6 +468,21 @@ This sprint does **not**:
 - `rg -n 'RemoveMember|remove_member_with_roster_store|validate_remove_member_caller' crates/atm-core/src/team_admin/member_mutation.rs crates/atm/src/commands/teams.rs crates/atm/src/output.rs`
 - `! rg -n '"atm-dev"' crates/atm/src/commands/teams.rs`
 - `git diff --check`
+
+## Required Document Updates
+
+- `docs/requirements.md` §12 retained surface and required behavior.
+- `docs/atm/cli-reference-<version>.md` and the CLI-surface baseline generated
+  by the repository's existing toolchain.
+- `CHANGELOG.md` under `Unreleased`.
+
+## Risks And Watchouts
+
+- Self-removal and last-member removal are intentionally allowed only because
+  this sprint explicitly preserves the current no-minimum-member invariant;
+  do not silently add a new policy while implementing the command.
+- The requirements change, generated CLI artifacts, and implementation must
+  land together. Omitting any one leaves the shipped CLI surface inconsistent.
 
 ## References
 
