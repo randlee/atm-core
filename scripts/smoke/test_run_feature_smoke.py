@@ -347,7 +347,8 @@ class FeatureSmokeTests(unittest.TestCase):
         self.assertIn("--resolve", curl_calls[0])
         self.assertNotIn("--resolve", curl_calls[1])
         self.assertIn("https://remote.example.test:43101/v1/atm/doctor", curl_calls[1])
-        self.assertTrue(all("/tmp/atm-smoke-" not in " ".join(call) for call in curl_calls))
+        local_ca_path = curl_calls[0][curl_calls[0].index("--cacert") + 1]
+        self.assertEqual(Path(local_ca_path).name, "remote-public.pem")
         cleanup_script = remote_shell.call_args_list[-1].args[1]
         self.assertIn("rm -f", cleanup_script)
         self.assertIn("local-public.pem", cleanup_script)
