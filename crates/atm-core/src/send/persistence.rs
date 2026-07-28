@@ -18,6 +18,7 @@ use super::{
     DeliveryPersistenceResult, DuplicateWriteDisposition, WarningEntry, prepare_threaded_message,
 };
 
+#[cfg(test)]
 pub(crate) fn persist_message(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
@@ -26,6 +27,32 @@ pub(crate) fn persist_message(
     envelope: &InboxMessage,
     require_existing_inbox: bool,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DeliveryPersistenceResult, AtmError> {
+    persist_message_with_ack_update(
+        runtime,
+        home_dir,
+        recipient,
+        inbox_path,
+        envelope,
+        require_existing_inbox,
+        same_store_peer_receipt,
+        None,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the acknowledgement source replacement is part of the one durable admission commit"
+)]
+pub(crate) fn persist_message_with_ack_update(
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
+    home_dir: &Path,
+    recipient: &DeliveryRecipientSnapshot,
+    inbox_path: &Path,
+    envelope: &InboxMessage,
+    require_existing_inbox: bool,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+    acknowledgement_source_update: Option<boundary::Message>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
         return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
@@ -43,6 +70,7 @@ pub(crate) fn persist_message(
         &recipient.agent,
         &prepared,
         same_store_peer_receipt,
+        acknowledgement_source_update,
     ) {
         Ok(DuplicateWriteDisposition::NotDuplicate) => {
             Ok(DeliveryPersistenceResult::persisted(prepared))
@@ -164,6 +192,7 @@ fn mirror_message_to_store(
     agent: &AgentName,
     envelope: &InboxMessage,
     same_store_peer_receipt: Option<(&HostName, &HostName)>,
+    acknowledgement_source_update: Option<boundary::Message>,
 ) -> Result<DuplicateWriteDisposition, AtmError> {
     let Some(message_id) = envelope.message_id else {
         return Ok(DuplicateWriteDisposition::NotDuplicate);
@@ -205,24 +234,17 @@ fn mirror_message_to_store(
             "message {message_id} already exists for {agent}@{team} with different immutable data"
         )));
     }
-    runtime.persist_message_record(boundary::Message {
+    let record = boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
         message_key: message_key.clone(),
         envelope: envelope.clone(),
-    })?;
-    runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: agent.clone(),
-        actor: agent.clone(),
-        message_key,
-        read: envelope.read,
-        pending_ack_at: envelope.pending_ack_at,
-        acknowledged_at: envelope.acknowledged_at,
-        expires_at: envelope.expires_at,
-        deleted_at: None,
-        updated_at: Some(IsoTimestamp::now()),
-    })?;
+    };
+    if let Some(source_update) = acknowledgement_source_update {
+        runtime.persist_message_records_atomically(vec![record, source_update])?;
+    } else {
+        runtime.persist_message_record(record)?;
+    }
     Ok(DuplicateWriteDisposition::NotDuplicate)
 }
 

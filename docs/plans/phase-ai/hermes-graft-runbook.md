@@ -45,6 +45,33 @@ minimal workspace configuration is sufficient:
 To disable graft explicitly, use `[atm.graft] enabled = false`; otherwise the
 presence of `[atm]` keeps the default enabled behavior.
 
+## Reconcile the graft workspace root
+
+The bridge publishes its receiver record under the workspace root passed to
+`PyGraftSessionOptions`, while the daemon resolves that location from the
+recipient's durable roster metadata. After a profile is first registered, or
+whenever its checkout/worktree moves, update the roster before restarting the
+bridge:
+
+```sh
+ATM_TEAM=hermes ATM_IDENTITY=hendrix \
+  atm teams update-member hermes skillrx \
+  --workspace-root /path/to/skillrx/workspace
+```
+
+Run this repair for every profile whose live graft session uses a different
+workspace root than its stored `home_dir`; repeat it after a worktree move,
+profile migration, or launch-registry change. Verify the durable value with
+`atm members --json` and confirm the member's `extra.workspace_root` matches the
+path supplied to `PyGraftSessionOptions`. The daemon logs the selected root
+source (`workspace_root` or the compatibility `home_dir` fallback) at debug
+level, making stale metadata visible without guessing which branch resolved.
+
+Automatic roster mutation during graft activation is intentionally not used:
+the graft library does not own team-admin storage or operator authorization.
+The explicit update keeps that boundary auditable and prevents a bridge from
+silently changing durable team configuration.
+
 ## Install and status
 
 For a rendered profile `example`:

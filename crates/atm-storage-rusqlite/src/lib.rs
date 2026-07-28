@@ -23,7 +23,8 @@ pub use crate::observability::{
     SqliteObservabilityOutcome,
 };
 use atm_storage::contract::{
-    Message, MessageKey, MessageQuery, MessageStore, PeerConfigStore, RosterStore,
+    AcknowledgementCommit, AcknowledgementReplyBuilder, AcknowledgementSource, Message, MessageKey,
+    MessageQuery, MessageStore, PeerConfigStore, RosterStore,
 };
 #[cfg(test)]
 use atm_storage::schema::ThreadMode;
@@ -113,7 +114,43 @@ impl OutboundMessageQuery for SqliteOutboundMessageQuery {
                     })
                     .map_err(|error| self.db.error("failed to read outbound peer message", error))?
                 })
-                .collect()
+            .collect()
+        })
+    }
+
+    fn find_for_peer(
+        &self,
+        peer: &HostName,
+        message_id: AtmMessageId,
+        budget: std::time::Duration,
+    ) -> Result<Option<StoredPeerWrite>, AtmError> {
+        self.db.with_connection_budget(budget, |connection| {
+            connection
+                .query_row(
+                    "SELECT message_at, json_extract(envelope_json, '$.peerOutbound.request')
+                     FROM mail_messages
+                     WHERE json_extract(envelope_json, '$.peerOutbound.host') = ?1
+                       AND message_key = ?2",
+                    params![peer.as_str(), format!("atm:{message_id}")],
+                    |row| {
+                        Ok(StoredPeerWrite {
+                            created_at: row.get::<_, String>(0)?.parse().map_err(|_source| {
+                                rusqlite::Error::FromSqlConversionFailure(
+                                    0,
+                                    rusqlite::types::Type::Text,
+                                    "stored peer write timestamp is invalid".into(),
+                                )
+                            })?,
+                            message_id,
+                            request_json: row.get(1)?,
+                        })
+                    },
+                )
+                .optional()
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load outbound peer message by identity", error)
+                })
         })
     }
 }
@@ -294,6 +331,18 @@ impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
         self.db.submit_upsert_message(message.clone())
+    }
+
+    fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
+        self.db.submit_upsert_messages_atomically(messages.to_vec())
+    }
+
+    fn acknowledge_message_atomically(
+        &self,
+        source: &AcknowledgementSource,
+        builder: Arc<dyn AcknowledgementReplyBuilder>,
+    ) -> Result<AcknowledgementCommit, AtmError> {
+        self.db.submit_acknowledgement(source.clone(), builder)
     }
 
     fn load_message(&self, key: &MessageKey) -> Result<Option<Message>, AtmError> {
@@ -620,8 +669,8 @@ mod tests {
     use super::SqliteStorageBackend;
     use atm_storage::StoredPeerWrite;
     use atm_storage::contract::{
-        AgentType, Message, MessageKey, MessageQuery, RosterHarness, RosterMember,
-        RosterMemberKind, RosterSnapshot,
+        AcknowledgementReplyBuilder, AcknowledgementSource, AgentType, Message, MessageKey,
+        MessageQuery, RosterHarness, RosterMember, RosterMemberKind, RosterSnapshot,
     };
     use atm_storage::schema::{AtmMessageId, MessageEnvelope};
     use atm_storage::types::{AgentName, HostName, IsoTimestamp, ModelName, TeamName};
@@ -629,6 +678,7 @@ mod tests {
     use rusqlite::params;
     use serde_json::{Map, json};
     use std::num::NonZeroU16;
+    use std::sync::Arc;
 
     fn team() -> TeamName {
         "test-team".parse().expect("team")
@@ -787,6 +837,56 @@ mod tests {
     }
 
     #[test]
+    fn find_for_peer_returns_a_write_outside_a_bounded_reconciliation_page() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let target: HostName = "peer.example.test".parse().expect("target host");
+        let timestamp = IsoTimestamp::now();
+        let first = AtmMessageId::new();
+        let target_id = AtmMessageId::new();
+        let store = backend.message_store();
+        for (message_id, request, created_at) in [
+            (
+                first,
+                "first",
+                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(1)),
+            ),
+            (target_id, "target", timestamp),
+        ] {
+            store
+                .save_message(&peer_outbound_message(
+                    &format!("atm:{message_id}"),
+                    target.as_str(),
+                    request,
+                    created_at,
+                ))
+                .expect("save peer write");
+        }
+
+        let first_page = backend
+            .outbound_message_query()
+            .page_for_peer(
+                &target,
+                IsoTimestamp::from_datetime(timestamp.into_inner() - Duration::seconds(2)),
+                None,
+                NonZeroU16::new(1).expect("nonzero limit"),
+                std::time::Duration::from_secs(1),
+            )
+            .expect("bounded first page");
+        assert_eq!(first_page.len(), 1);
+        assert_ne!(
+            first_page[0].message_id, target_id,
+            "the direct lookup must cover a write omitted by the bounded page"
+        );
+        let stored = backend
+            .outbound_message_query()
+            .find_for_peer(&target, target_id, std::time::Duration::from_secs(1))
+            .expect("direct lookup")
+            .expect("target remains discoverable outside the first page");
+        assert_eq!(stored.message_id, target_id);
+        assert_eq!(stored.request_json, "target");
+    }
+
+    #[test]
     fn page_for_peer_rejects_an_expired_budget_before_opening_a_reader() {
         let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
         let target: HostName = "peer.example.test".parse().expect("target host");
@@ -833,6 +933,98 @@ mod tests {
                 .load_message(&original.message_key)
                 .expect("load after delete")
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_commits_related_messages_through_one_writer_operation() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let reply = message("atm:ack-reply", "reply");
+        let mut source = message("atm:ack-source", "source");
+        source.envelope.read = true;
+        source.envelope.pending_ack_at = None;
+        source.envelope.acknowledged_at = Some(IsoTimestamp::now());
+
+        store
+            .save_messages_atomically(&[reply.clone(), source.clone()])
+            .expect("commit acknowledgement reply and source together");
+
+        assert_eq!(
+            store.load_message(&reply.message_key).expect("load reply"),
+            Some(reply),
+            "the immutable acknowledgement reply is durable"
+        );
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(source),
+            "the acknowledged source state is durable in the same commit"
+        );
+    }
+
+    #[test]
+    fn sqlite_acknowledgement_resolves_source_and_commits_pair_in_one_writer_operation() {
+        struct ReplyBuilder;
+
+        impl AcknowledgementReplyBuilder for ReplyBuilder {
+            fn build_reply(&self, source: &Message) -> Result<Message, atm_storage::AtmError> {
+                let source_id = source
+                    .envelope
+                    .message_id
+                    .ok_or_else(|| atm_storage::AtmError::validation("test source has no id"))?;
+                let mut reply = source.clone();
+                let reply_id = AtmMessageId::new();
+                reply.message_key = MessageKey::new(format!("atm:{reply_id}"))?;
+                reply.envelope.message_id = Some(reply_id);
+                reply.envelope.text = "acknowledged".to_string();
+                reply.envelope.read = false;
+                reply.envelope.requires_ack = false;
+                reply.envelope.pending_ack_at = None;
+                reply.envelope.acknowledged_at = None;
+                reply.envelope.acknowledges_message_id = Some(source_id);
+                reply.envelope.parent_message_id = Some(source_id);
+                Ok(reply)
+            }
+        }
+
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let source_id = AtmMessageId::new();
+        let mut source = message(&format!("atm:{source_id}"), "needs acknowledgement");
+        source.envelope.message_id = Some(source_id);
+        source.envelope.requires_ack = true;
+        source.envelope.pending_ack_at = Some(IsoTimestamp::now());
+        store.save_message(&source).expect("save pending source");
+
+        let committed = store
+            .acknowledge_message_atomically(
+                &AcknowledgementSource {
+                    team: source.team.clone(),
+                    agent: source.agent.clone(),
+                    message_id: source_id,
+                },
+                Arc::new(ReplyBuilder),
+            )
+            .expect("atomic acknowledgement");
+
+        assert!(committed.source.envelope.read);
+        assert!(committed.source.envelope.pending_ack_at.is_none());
+        assert!(committed.source.envelope.acknowledged_at.is_some());
+        assert_eq!(
+            store
+                .load_message(&source.message_key)
+                .expect("load source"),
+            Some(committed.source),
+            "the source transition is durable with the reply"
+        );
+        assert_eq!(
+            store
+                .load_message(&committed.reply.message_key)
+                .expect("load reply"),
+            Some(committed.reply),
+            "the reply derived from the transaction-loaded source is durable"
         );
     }
 

@@ -3,18 +3,23 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-041 |
-| Status | Proposed |
+| Status | Accepted |
 | Scope | Repository-wide |
-| Relates to | ADR-032, ADR-034, ADR-035, Phase AI.26–AI.27 |
+| Relates to | ADR-032, ADR-034, ADR-035, Phase AI.26–AI.31 |
 
 ## Decision
 
 Every daemon request owns one absolute `RequestDeadline` for local admission.
-The SQLite transaction that persists the immutable origin record is the only
-synchronous operation before the local response. Background delivery has one
-separate absolute 10-second worker budget: signalling, peer DNS, connection, TLS, and
-remote receipt cannot delay or be cancelled by the completed local response.
-The immutable origin record is the worker's only durable input.
+The SQLite admission transaction is the sole synchronous post-validation
+operation before the local response. For an acknowledgement it inserts the
+immutable reply and conditionally transitions its source in that same
+transaction. A daemon-owned, reloadable in-memory admission view supplies
+only already-loaded routing data; the response path never reads a caller
+workspace, post-send hook configuration, peer policy, or outbound page.
+Background delivery and local nudge work use identifier-only non-durable
+signals with separate worker budgets. DNS, connection, TLS, hook/graft I/O,
+and remote receipt cannot delay or be cancelled by the completed local
+response. The immutable origin record is the worker's only durable input.
 
 For a remote write, local persistence is not delivery success. The only
 successful remote result is a verified HTTP response from the peer after its

@@ -47,6 +47,20 @@ Hermes event loop. Duplicate message IDs are suppressed by the bridge. The
 body is then handled by Hermes's ordinary inbound-user-message path, so no
 manual `atm read` turn is required.
 
+For messages that require an explicit ATM acknowledgement, pass the optional
+`requires_ack` argument and acknowledge the returned message after reading it:
+
+```python
+sender_session.send(receiver, "please confirm", requires_ack=True)
+message = next(
+    message for message in receiver_session.read() if message.body == "please confirm"
+)
+receiver_session.acknowledge(message.message_id, "confirmed")
+```
+
+The default remains `False`, so existing `send(to, body)` callers retain the
+non-acknowledgement semantics.
+
 ## Required setup
 
 The gateway environment supplies:
@@ -55,6 +69,20 @@ The gateway environment supplies:
 - `ATM_TEAM` — the ATM team name;
 - `ATM_HOME` — the ATM home/workspace root; and
 - the Hermes-side chat ID, such as the Telegram chat ID.
+
+The ATM roster must also identify the workspace root where the gateway's graft
+endpoint is published. If the gateway profile's `ATM_HOME` differs from its
+workspace, set the durable roster metadata explicitly:
+
+```sh
+ATM_TEAM=hermes ATM_IDENTITY=hendrix \
+  atm teams update-member hermes skillrx \
+  --workspace-root /path/to/skillrx/workspace
+```
+
+The daemon uses this `workspace_root` metadata (falling back to `home_dir` for
+older roster rows), so it resolves the same endpoint path that the Python
+publisher writes.
 
 The workspace must contain a discovered `.atm.toml`. Graft activation is
 configuration-gated: without that file the session remains `inactive`, even
