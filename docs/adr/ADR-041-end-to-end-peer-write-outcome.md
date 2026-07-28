@@ -11,8 +11,8 @@
 
 Every daemon request owns one absolute `RequestDeadline` for local admission.
 The SQLite transaction that persists the immutable origin record is the only
-synchronous operation before the local response. Background delivery has a
-separate bounded worker budget: signalling, peer DNS, connection, TLS, and
+synchronous operation before the local response. Background delivery has one
+separate absolute 10-second worker budget: signalling, peer DNS, connection, TLS, and
 remote receipt cannot delay or be cancelled by the completed local response.
 The immutable origin record is the worker's only durable input.
 
@@ -36,6 +36,10 @@ Observability names outcomes precisely:
 - `peer_delivery_confirmed` requires the peer HTTP acceptance response; and
 - `peer_delivery_unconfirmed` records deadline/disconnect/failure with the
   message ULID and typed error code.
+- `peer_delivery_expired` records that an unconfirmed immutable record aged
+  out of the explicitly enabled reconciliation window. It is a terminal
+  observability outcome, not a delivery receipt or a change to the earlier
+  local admission response.
 
 No event may label local persistence as `sent` or remote delivery.
 

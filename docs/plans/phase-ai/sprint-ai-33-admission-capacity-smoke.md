@@ -4,6 +4,7 @@ status: proposed
 branch: feature/pAI-s33-admission-capacity-smoke
 target: integrate/phase-AI
 depends_on: AI.31, AI.32
+requires_merged_pr: PR #675 (keeper smoke runner on develop)
 ---
 
 # AI.33 — admission capacity and smoke evidence
@@ -21,7 +22,9 @@ The 1,000/s gate is a design-simplification gate, not a timeout-tuning
 exercise. Before raising a timeout, adding a retry, adding a queue depth, or
 adding a worker, implementation must remove work from the admission path:
 peer scans, DNS, socket/TLS work, remote response waits, duplicate delivery,
-acknowledgement, and nudge work belong after the SQLite response. If the gate
+peer acknowledgement delivery, and nudge work belong after the SQLite
+response. The ACK reply's source resolution, reply insertion, and source
+transition remain the one admission SQLite transaction. If the gate
 fails, record the measured path and remove or relocate the unnecessary
 foreground step; do not mask it with a longer deadline, retry loop, or larger
 buffer.
@@ -48,7 +51,7 @@ not a license to add profiling state to production delivery.
    accepted count, response count, latency summary, failures, daemon PID,
    `ATM_HOME`, and release/doctor data; report PASS only when every interval
    meets the requirement.
-4. Extend the keeper smoke runner from PR #675,
+4. **After PR #675 merges to `develop`,** extend its keeper smoke runner,
    `scripts/smoke/run_feature_smoke.py`, rather than creating another shell
    runner. Default each positive ladder row to ten consecutive attempts. Its
    generated combined HTML report has:

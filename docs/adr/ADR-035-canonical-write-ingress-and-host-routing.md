@@ -18,16 +18,18 @@ cross-host-specific mailbox, acknowledgement, or nudge branch.
 
 Routing is decided exactly once by the post-write event router:
 
-- an empty destination host selects local nudge delivery;
-- every validated present destination host selects the HTTPS transport adapter,
+- an empty destination host selects a local-nudge work key; and
+- every validated present destination host selects a peer-delivery work key,
   including `localhost` and this daemon's advertised or bound IP address.
 
 For a remote destination, the local write records the sender's immutable
-outbound message before this decision; the remote daemon performs the
-recipient-side write when it receives the same `WriteRequest`. A failed HTTPS
-attempt does not add local delivery state, a remote recipient row, a receipt,
-or a retry queue. It returns one transport error; a repeated write reuses the
-same immutable message ULID.
+outbound message before this decision; the router signals the bounded
+post-commit scheduler and returns the local admission response. The worker,
+not the router, invokes HTTPS; the remote daemon performs the recipient-side
+write when it receives the same `WriteRequest`. A failed HTTPS attempt does
+not add local delivery state, a remote recipient row, a receipt, or a retry
+queue. It records a typed asynchronous unconfirmed outcome; a repeated
+canonical write reuses the same immutable message ULID.
 
 The source host is durable message provenance. The destination host is an
 origin-side routing selector consumed before an authenticated peer ingress is
@@ -70,7 +72,10 @@ second routing or acknowledgement path.
 - No separate ack sender, ack transport, or sender-side ack state mutation.
 - No second routing decision in CLI, graft, HTTP, TLS, storage, or nudge code.
 - No cross-host-specific persistence or inbound nudge handler.
-- No host inspection before persistence or outside `PostWriteRouter`.
+- No host inspection before persistence or outside `PostWriteRouter`. The
+  router may read only its immutable daemon-owned runtime view; it must not
+  read a configuration/policy store, query outbound records, or invoke DNS,
+  socket, TLS, hook, nudge, or peer transport code.
 - No socket-family or socket-address inference of local versus peer ingress.
 
 Architecture checks must reject these shapes structurally, not merely by a

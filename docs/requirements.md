@@ -3819,18 +3819,24 @@ mail correctness.
   Required behavior:
   - no replay store, outbox, retry queue, deferred receipt, remote
     acknowledgement state, or duplicate-delivery subsystem may exist
-  - an unavailable peer returns one normal transport error for the attempted
-    write; retry is an ordinary repeat of the immutable message identity
+  - after local admission, an unavailable peer records the typed asynchronous
+    `peer_delivery_unconfirmed` outcome for the attempted immutable write; it
+    does not relabel the already-returned local admission response as a
+    transport error. A later ordinary canonical attempt reuses that identity
   - duplicate arrival is idempotent at storage by the existing message ULID;
     an identical already-delivered remote duplicate has no side effect, while
     the narrow same-host retained-origin receipt defined by
     `REQ-CORE-TRANSPORT-002` logs its skipped write and continues the ordinary
     inbound recipient nudge without a second database write
-  - the only exception is REQ-CORE-TRANSPORT-003A's bounded, user-selected
-    reconciliation scan; it creates no delivery state
+  - the only exception is REQ-CORE-TRANSPORT-003B's bounded, user-selected
+    reconciliation scheduler; it creates no delivery state. Its transient work
+    keys are execution coordination, not a retry queue: they contain no
+    payload, result, receipt, attempt history, or durable checkpoint
 
-- `REQ-CORE-TRANSPORT-003A` Bounded peer reconciliation may re-send canonical
-  immutable records after a peer reconnects without adding delivery state.
+- `REQ-CORE-TRANSPORT-003A` **Historical; superseded by
+  `REQ-CORE-TRANSPORT-003B`.** It records the AI.28 ordered-coordinator
+  contract and is not an active implementation requirement. AI.31--AI.32
+  must implement only `REQ-CORE-TRANSPORT-003B`.
 
   Required behavior:
   - durable backend-neutral `PeerSyncPolicy.max_message_age` and
@@ -3883,16 +3889,23 @@ mail correctness.
   capacity limits for transport/store/health operations.
 
   Required behavior:
-  - every request has one absolute `RequestDeadline`; local HTTP, router,
-    dispatcher, post-write router, and HTTPS consume only its remaining budget
-  - no peer connect, TLS, request, or response leg may create a longer
-    independent deadline below dispatcher scope
+  - every local admission request has one absolute `RequestDeadline`; local
+    HTTP, router, dispatcher, validation, SQLite transaction, post-commit
+    signal, and response consume only its remaining budget
+  - after the admission response, a peer worker has one separate absolute
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` for its full DNS/connect/TLS/request/
+    response attempt. Neither admission nor worker code may create nested or
+    extended per-leg deadlines
   - SQLite `busy_timeout`: `5000ms`
   - ingest batch processing slice: `2s`
   - doctor health query deadline: `3s`
   - max concurrent accepts: `64`
   - max per-connection inflight requests: `32`
   - ingest queue depth: `1024`
+  - post-commit work queue depth: `256`; global active peer jobs: `64`; active
+    peer jobs per host: `8`. These are load/file-descriptor bounds, not FIFO
+    controls; saturation coalesces a host rescan signal and never blocks or
+    drops a committed admission
   - SQLite handle budget: `1..=4`
   - live status-cache cap: `4096`
   - saturation behavior must fail with typed errors or structured degradation,
@@ -3936,14 +3949,17 @@ mail correctness.
     is the only synchronous operation on the admission-response path. Once it
     commits, the daemon returns the typed local admission response; peer-job
     signalling, DNS, connection, TLS, remote receipt, duplicate handling,
-    acknowledgement, and nudge work run asynchronously
-  - admission validation uses request data plus the daemon-owned reloadable
-    runtime view. It performs no per-request config-file read, peer-config or
-    policy store read, outbound-page read, DNS lookup, socket/TLS operation,
-    hook, or nudge before responding. An acknowledgement resolves its source,
-    inserts its immutable reply, and conditionally marks the source
-    acknowledged within one SQLite transaction; it has no application-layer
-    source read before that transaction
+    acknowledgement source resolution/mutation and the acknowledgement reply
+    insertion are the one atomic SQLite transaction; peer delivery, duplicate
+    handling, nudge, and hook work run asynchronously
+  - pre-persistence admission validation uses only request syntax, provenance,
+    and identity rules. The sole post-persistence `PostWriteRouter` remains
+    the owner of local-versus-host-qualified routing and consults a
+    daemon-owned reloadable runtime view, never a per-request config-file,
+    peer-config/policy store, outbound-page, DNS, socket/TLS, hook, or nudge.
+    An acknowledgement resolves its source, inserts its immutable reply, and
+    conditionally marks the source acknowledged within one SQLite transaction;
+    it has no application-layer source read before that transaction
   - the response proves only local admission. Remote acceptance remains the
     separate asynchronous outcome defined by `REQ-CORE-TRANSPORT-005A`; a
     local admission response must never claim remote delivery
@@ -3988,12 +4004,21 @@ mail correctness.
     another message's delivery
   - first recovery attempt is no earlier than 60 seconds; later failures use
     exponential backoff capped at 15 minutes
+  - each individual peer job consumes the one
+    `PEER_DELIVERY_WORKER_DEADLINE = 10s` defined by
+    `REQ-CORE-TRANSPORT-005`; the scheduler never extends it with per-leg
+    timeouts
   - recovery submits original ULIDs through normal HTTPS; no ping, outbox,
     cursor, receipt, payload cache, per-message attempt state, or alternate
     write route is allowed
   - empty window, policy disable, or peer revoke stops scheduling
-  - retained events distinguish scheduled, attempted, confirmed, and
-    unconfirmed recovery without body or certificate material
+  - retained events use stable typed codes and distinguish
+    `peer_delivery_scheduled`, `peer_delivery_attempted`,
+    `peer_delivery_confirmed`, `peer_delivery_unconfirmed`, and terminal
+    `peer_delivery_expired` (eligible record aged beyond the configured
+    window), without body or certificate material. `peer_delivery_expired`
+    is observability only: it creates no durable delivery state and cannot
+    change the prior local admission result
   - doctor exposes a bounded, secret-free per-host link projection: quality,
     last success/failure, last typed error, next attempt, drain state, and
     bounded candidate count. It is observability only, not durable delivery

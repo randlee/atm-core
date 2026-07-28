@@ -538,6 +538,9 @@ Accepted daemon-private partitions:
 - `request_runtime`
   - owns per-connection request execution, request-work tracking, request
     deadlines, and response emission
+  - performs only request validation, one canonical storage transaction, one
+    post-commit work signal, and response emission; it must not scan peer
+    records, wait on peer work, or perform DNS/socket/TLS/HTTP/hook/nudge work
 - `runtime_status`
   - owns the live status cache, cache-cap semantics, roster hydration,
     reload-time runtime-view assembly, and doctor-health projection into
@@ -548,9 +551,10 @@ Accepted daemon-private partitions:
   - owns HTTP(S) socket/TLS adaptation only; it cannot persist, queue, retry,
     route, or nudge
 - `peer_recovery`
-  - owns ADR-038's one non-durable per-host coordinator lease, bounded
+  - owns ADR-038's bounded non-durable independent peer jobs,
     canonical-record query handoff, backoff, and status-event emission; it
-    cannot own a message, payload, cursor, receipt, or storage implementation
+    cannot own a message payload, cursor, receipt, attempt history, or storage
+    implementation, and it makes no same-peer FIFO/stream promise
 
 Historical-only retired partitions:
 - `watch_runtime`
@@ -690,6 +694,10 @@ Required caps:
 - max concurrent accepted connections: `64`
 - max per-connection inflight requests: `32`
 - ingest queue depth: `1024`
+- post-commit work queue depth: `256`
+- active peer jobs: `64` globally and `8` per host
+- peer job deadline: one absolute `10s` DNS-through-response budget; no
+  independent per-leg deadline
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 

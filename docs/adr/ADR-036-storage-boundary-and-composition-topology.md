@@ -31,6 +31,15 @@ and the bounded peer/direction/age query required by ADR-038. These are
 backend-neutral query methods, not SQLite tables or a daemon-owned persistence
 trait. Transport adapters receive canonical records only through those traits.
 
+The acknowledgement admission operation is one existing sealed,
+backend-neutral storage/runtime contract: it resolves source data, inserts the
+canonical acknowledgement, and conditionally transitions the source in one
+transaction. It returns typed domain outcomes, never SQLite rows or a
+daemon-feature-specific persistence trait. `atm-daemon` composition may
+publish an immutable admission runtime-view snapshot assembled from
+backend-neutral configuration/roster/trust DTOs, but that view is a read-only
+cache and cannot own durable delivery state or concrete backend types.
+
 ## Consequences
 
 The prior runtime indirection is not a justification for SQLite-backed daemon

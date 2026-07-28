@@ -5,7 +5,7 @@
 | ID | ADR-038 |
 | Status | Proposed |
 | Scope | Repository-wide |
-| Relates to | ADR-034, ADR-035, ADR-036, ADR-041, Phase AI.28 |
+| Relates to | ADR-034, ADR-035, ADR-036, ADR-041, Phase AI.28, AI.31--AI.33 |
 
 ## Decision
 
@@ -28,7 +28,8 @@ peer and newer than `now - max_message_age`, then submits unchanged records to
 `PeerHttpTransport` as independent jobs.
 
 Each scheduler scan pages eligible records through the storage trait and
-enqueues ordinary `WriteRequest` jobs. Global and per-host bounds limit
+enqueues ordinary `WriteRequest` jobs. The queue has a depth of 256, with at
+most 64 active jobs globally and 8 per host; global and per-host bounds limit
 concurrent jobs; an in-flight ULID may be coalesced. The scheduler makes no
 delivery-order promise across independent messages, does not require a stream,
 and does not define a durable cursor. It holds only transient host/message-ID
@@ -44,7 +45,9 @@ background work and returns; foreground admission never waits for another
 message, DNS, connection, TLS, or peer receipt. A remote outcome is recorded
 asynchronously and remains distinct from local admission under ADR-041.
 
-After a delivery failure, the coordinator schedules the same host no earlier
+Each job has the one absolute 10-second worker deadline from
+`REQ-CORE-TRANSPORT-005`, spanning DNS through response. After a delivery
+failure, the coordinator schedules the same host no earlier
 than 60 seconds, then with exponential backoff capped at 15 minutes while
 eligible records remain. Restart waits the same minimum before an eligible
 attempt. Explicit one-shot sync uses the same scheduler and ordinary endpoint.
@@ -64,4 +67,6 @@ age. It provides a small recovery window after Wi-Fi/VPN connectivity returns wi
 creating a second write path or transport state machine. It never changes the
 message ID or immutable payload, and it cannot synthesize delivery success.
 Its retained events distinguish a scheduled/attempted scan from peer HTTP
-acceptance.
+acceptance. A record that remains unconfirmed until it ages beyond the enabled
+window emits the terminal typed `peer_delivery_expired` event; this is an
+observability outcome, never a receipt or delivery-state record.

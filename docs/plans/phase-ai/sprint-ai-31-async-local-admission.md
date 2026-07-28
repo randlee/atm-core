@@ -62,10 +62,16 @@ smaller request path, not a more patient client.
    `crates/atm-daemon/src/peer_drain_coordinator.rs`:
 
    ```rust
-   trait PeerDeliveryCoordinator: Send + Sync {
+   pub(crate) trait PeerDeliveryCoordinator: Send + Sync {
        fn signal_after_persist(&self, peer: HostName);
        fn sync_peer(&self, peer: &HostName, deadline: RequestDeadline)
-           -> Result<u16, AtmError>;
+           -> Result<PeerSyncOutcome, AtmError>;
+   }
+
+   enum PeerSyncOutcome {
+       Confirmed,
+       Unconfirmed { code: PeerDeliveryErrorCode },
+       Expired { code: PeerDeliveryErrorCode },
    }
    ```
 
@@ -92,8 +98,9 @@ smaller request path, not a more patient client.
 4. In `runtime_health/peer_delivery_router.rs`, replace
    `deliver_to_peer(..., deadline, ...)` with one post-commit
    `signal_after_persist(peer)` call for every host-qualified origin write.
-   Local/no-host nudge handling stays unchanged. No special localhost or
-   self-IP route is permitted.
+   Empty-host routing likewise emits only `LocalNudge(message_id)` work; the
+   worker performs its existing nudge/hook behavior after the response. No
+   special localhost or self-IP route is permitted.
 5. Move `ResolvedAcknowledgement::finish` into the same SQLite transaction as
    the acknowledgement record. An ACK admission response therefore proves both
    writes committed; peer delivery of the reply remains post-commit work.
@@ -109,6 +116,12 @@ smaller request path, not a more patient client.
 7. Update `ADR-038`, `ADR-041`, and the requirements to state that the local
    request deadline ends at admission response and never owns background peer
    work.
+8. Extend the daemon boundary TOML record and
+   `crates/atm-architecture/tests/boundary_enforcement.rs`: the admission
+   files may signal `PostCommitWorkQueue` but must reject direct
+   `PeerHttpTransport`/delivery, peer-store scans, DNS/socket/TLS, hooks, and
+   nudge calls. The scheduler must reject concrete SQLite imports and durable
+   payload/receipt/retry state.
 
 ## Paths to delete
 
