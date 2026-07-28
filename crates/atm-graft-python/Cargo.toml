@@ -1,6 +1,6 @@
 [package]
 name = "atm-graft-python"
-version.workspace = true
+version = "1.4.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
