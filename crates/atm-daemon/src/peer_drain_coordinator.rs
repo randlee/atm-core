@@ -7,6 +7,7 @@
 //! retry history, FIFO promise, or stream abstraction.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
@@ -56,10 +57,51 @@ struct PeerJob {
     message_id: AtmMessageId,
 }
 
+enum EligiblePeerWrite {
+    Missing,
+    Expired,
+    Ready(Box<WriteRequest>),
+}
+
+enum PeerWork {
+    Job(Box<PeerJob>),
+    Stop,
+}
+
 #[derive(Default)]
 struct JobState {
     in_flight: BTreeSet<PeerJob>,
     active_by_host: BTreeMap<HostName, usize>,
+}
+
+impl JobState {
+    fn try_take(&mut self, job: &PeerJob) -> bool {
+        if self.in_flight.len() >= MAX_ACTIVE_PEER_JOBS
+            || self
+                .active_by_host
+                .get(&job.peer)
+                .copied()
+                .unwrap_or_default()
+                >= MAX_ACTIVE_PEER_JOBS_PER_HOST
+        {
+            return false;
+        }
+        if self.in_flight.insert(job.clone()) {
+            *self.active_by_host.entry(job.peer.clone()).or_default() += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn release(&mut self, job: &PeerJob) {
+        self.in_flight.remove(job);
+        let count = self.active_by_host.entry(job.peer.clone()).or_default();
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            self.active_by_host.remove(&job.peer);
+        }
+    }
 }
 
 /// The only daemon owner of peer delivery scheduling.  It has identifiers and
@@ -69,11 +111,11 @@ pub(crate) struct PeerDrainCoordinator {
     outbound: Arc<dyn OutboundMessageQuery + Send + Sync>,
     transport: SharedHttpsTransport,
     record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
-    sender: SyncSender<PeerJob>,
-    receiver: Mutex<Option<Receiver<PeerJob>>>,
+    sender: Mutex<Option<SyncSender<PeerWork>>>,
     state: Arc<Mutex<JobState>>,
     stop: Arc<AtomicBool>,
     worker: Mutex<Option<JoinHandle<()>>>,
+    job_workers: Arc<Mutex<Vec<JoinHandle<()>>>>,
 }
 
 impl PeerDrainCoordinator {
@@ -83,17 +125,16 @@ impl PeerDrainCoordinator {
         transport: SharedHttpsTransport,
         record: Arc<dyn Fn(PeerDeliveryEvent) + Send + Sync>,
     ) -> Self {
-        let (sender, receiver) = mpsc::sync_channel(POST_COMMIT_QUEUE_DEPTH);
         Self {
             peers,
             outbound,
             transport,
             record,
-            sender,
-            receiver: Mutex::new(Some(receiver)),
+            sender: Mutex::new(None),
             state: Arc::new(Mutex::new(JobState::default())),
             stop: Arc::new(AtomicBool::new(false)),
             worker: Mutex::new(None),
+            job_workers: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -110,46 +151,40 @@ impl PeerDrainCoordinator {
     }
 
     fn take_job(&self, job: &PeerJob) -> bool {
-        let Ok(mut state) = self.state.lock() else {
-            return false;
+        let mut state = match self.state.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                tracing::warn!(
+                    subsystem = "peer_drain",
+                    action = "take_job",
+                    outcome = "lock_poisoned",
+                    "peer delivery job admission skipped because coordinator state is poisoned"
+                );
+                return false;
+            }
         };
-        if state.in_flight.len() >= MAX_ACTIVE_PEER_JOBS
-            || state
-                .active_by_host
-                .get(&job.peer)
-                .copied()
-                .unwrap_or_default()
-                >= MAX_ACTIVE_PEER_JOBS_PER_HOST
-        {
-            return false;
-        }
-        if state.in_flight.insert(job.clone()) {
-            *state.active_by_host.entry(job.peer.clone()).or_default() += 1;
-            true
-        } else {
-            false
-        }
+        state.try_take(job)
     }
 
     fn release_job(state: &Mutex<JobState>, job: &PeerJob) {
-        if let Ok(mut state) = state.lock() {
-            state.in_flight.remove(job);
-            let count = state.active_by_host.entry(job.peer.clone()).or_default();
-            *count = count.saturating_sub(1);
-            if *count == 0 {
-                state.active_by_host.remove(&job.peer);
+        let mut state = match state.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                tracing::warn!(subsystem = "peer_drain", action = "release_job", outcome = "lock_poisoned", peer = %job.peer, message_id = %job.message_id, "peer delivery job cleanup could not release its coordinator slot");
+                return;
             }
-        }
+        };
+        state.release(job);
     }
 
     fn eligible_request(
         &self,
         job: &PeerJob,
         deadline: RequestDeadline,
-    ) -> Result<Option<WriteRequest>, AtmError> {
+    ) -> Result<EligiblePeerWrite, AtmError> {
         let policy = self.peers.peer_sync_policy(&job.peer)?.validate()?;
         if policy.max_message_age.is_zero() {
-            return Ok(None);
+            return Ok(EligiblePeerWrite::Missing);
         }
         let not_before = IsoTimestamp::from_datetime(
             chrono::Utc::now()
@@ -164,22 +199,39 @@ impl PeerDrainCoordinator {
         })?;
         let page = self.outbound.page_for_peer(
             &job.peer,
-            not_before,
+            IsoTimestamp::from_datetime(chrono::DateTime::<chrono::Utc>::UNIX_EPOCH),
             None,
-            policy.max_batch_messages,
+            std::num::NonZeroU16::new(atm_storage::MAX_PEER_SYNC_BATCH_MESSAGES)
+                .expect("hard peer sync cap is non-zero"),
             budget,
         )?;
-        page.into_iter()
+        let Some(stored) = page
+            .into_iter()
             .find(|stored| stored.message_id == job.message_id)
-            .map(decode_request)
-            .transpose()
+        else {
+            return Ok(EligiblePeerWrite::Missing);
+        };
+        if stored.created_at < not_before {
+            return Ok(EligiblePeerWrite::Expired);
+        }
+        Ok(EligiblePeerWrite::Ready(Box::new(decode_request(stored)?)))
     }
 
     fn deliver_one(&self, job: &PeerJob) -> Result<(), AtmError> {
         let deadline = RequestDeadline::after(PEER_DELIVERY_WORKER_DEADLINE);
         self.record(PeerDeliveryEventKind::PeerRecoveryAttempt, job, None);
-        let Some(request) = self.eligible_request(job, deadline)? else {
-            return Ok(());
+        let request = match self.eligible_request(job, deadline)? {
+            EligiblePeerWrite::Missing => return Ok(()),
+            EligiblePeerWrite::Expired => {
+                let error = AtmError::remote_delivery_unconfirmed("peer delivery window expired");
+                self.record(
+                    PeerDeliveryEventKind::PeerDeliveryExpired,
+                    job,
+                    Some(&error),
+                );
+                return Ok(());
+            }
+            EligiblePeerWrite::Ready(request) => *request,
         };
         let peer: TrustedPeer =
             resolve_peer_authority(&job.peer, &self.peers.list_trusted_peers()?)?;
@@ -202,23 +254,37 @@ impl PeerDrainCoordinator {
         }
     }
 
-    fn run(self: Arc<Self>, receiver: Receiver<PeerJob>) {
-        while !self.stop.load(Ordering::SeqCst) {
-            let Ok(job) = receiver.recv_timeout(Duration::from_millis(100)) else {
-                continue;
-            };
+    fn run(self: Arc<Self>, receiver: Receiver<PeerWork>) {
+        while let Ok(work) = receiver.recv() {
+            let PeerWork::Job(job) = work else { break };
             let coordinator = Arc::clone(&self);
-            std::thread::spawn(move || {
-                let result = coordinator.deliver_one(&job);
-                if let Err(error) = result {
-                    coordinator.record(
+            let handle = std::thread::spawn(move || {
+                let result = catch_unwind(AssertUnwindSafe(|| coordinator.deliver_one(&job)));
+                match result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(error)) => coordinator.record(
                         PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
                         &job,
                         Some(&error),
-                    );
+                    ),
+                    Err(_) => {
+                        let error = AtmError::daemon_unavailable("peer delivery job panicked");
+                        coordinator.record(
+                            PeerDeliveryEventKind::PeerDeliveryUnconfirmed,
+                            &job,
+                            Some(&error),
+                        );
+                        tracing::error!(subsystem = "peer_drain", action = "deliver", peer = %job.peer, message_id = %job.message_id, "peer delivery job panicked; slot released");
+                    }
                 }
                 Self::release_job(&coordinator.state, &job);
             });
+            if let Ok(mut workers) = self.job_workers.lock() {
+                workers.push(handle);
+            }
+        }
+        while let Ok(PeerWork::Job(job)) = receiver.try_recv() {
+            Self::release_job(&self.state, &job);
         }
     }
 }
@@ -229,7 +295,21 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
         if !self.take_job(&job) {
             return;
         }
-        if let Err(error) = self.sender.try_send(job.clone()) {
+        let sender = match self.sender.lock() {
+            Ok(sender) => sender.clone(),
+            Err(_) => None,
+        };
+        let Some(sender) = sender else {
+            Self::release_job(&self.state, &job);
+            tracing::warn!(
+                subsystem = "peer_drain",
+                action = "signal",
+                outcome = "worker_unavailable",
+                "peer delivery worker is not running"
+            );
+            return;
+        };
+        if let Err(error) = sender.try_send(PeerWork::Job(Box::new(job.clone()))) {
             Self::release_job(&self.state, &job);
             if !matches!(error, TrySendError::Full(_)) {
                 tracing::warn!(
@@ -286,16 +366,10 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("peer delivery lifecycle lock poisoned"))?;
         if worker.is_none() {
-            let receiver = self
-                .receiver
-                .lock()
-                .map_err(|_| AtmError::daemon_unavailable("peer delivery receiver lock poisoned"))?
-                .take()
-                .ok_or_else(|| {
-                    AtmError::daemon_unavailable(
-                        "peer delivery worker cannot restart after shutdown",
-                    )
-                })?;
+            let (sender, receiver) = mpsc::sync_channel(POST_COMMIT_QUEUE_DEPTH);
+            *self.sender.lock().map_err(|_| {
+                AtmError::daemon_unavailable("peer delivery sender lock poisoned")
+            })? = Some(sender);
             self.stop.store(false, Ordering::SeqCst);
             // A small dispatcher only accepts identifiers; each worker is independently bounded by state.
             let coordinator = Arc::new(Self {
@@ -303,11 +377,11 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
                 outbound: Arc::clone(&self.outbound),
                 transport: Arc::clone(&self.transport),
                 record: Arc::clone(&self.record),
-                sender: self.sender.clone(),
-                receiver: Mutex::new(None),
+                sender: Mutex::new(None),
                 state: Arc::clone(&self.state),
                 stop: Arc::clone(&self.stop),
                 worker: Mutex::new(None),
+                job_workers: Arc::clone(&self.job_workers),
             });
             *worker = Some(
                 std::thread::Builder::new()
@@ -323,6 +397,14 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
 
     fn stop(&self) -> Result<(), AtmError> {
         self.stop.store(true, Ordering::SeqCst);
+        let sender = self
+            .sender
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("peer delivery sender lock poisoned"))?
+            .take();
+        if let Some(sender) = sender {
+            let _ = sender.send(PeerWork::Stop);
+        }
         if let Some(worker) = self
             .worker
             .lock()
@@ -333,6 +415,15 @@ impl PeerDeliveryCoordinator for PeerDrainCoordinator {
                 AtmError::daemon_unavailable("peer delivery worker panicked during shutdown")
             })?;
         }
+        let workers =
+            std::mem::take(&mut *self.job_workers.lock().map_err(|_| {
+                AtmError::daemon_unavailable("peer delivery job worker lock poisoned")
+            })?);
+        for worker in workers {
+            worker.join().map_err(|_| {
+                AtmError::daemon_unavailable("peer delivery job panicked during shutdown")
+            })?;
+        }
         Ok(())
     }
 }
@@ -341,4 +432,43 @@ fn decode_request(stored: StoredPeerWrite) -> Result<WriteRequest, AtmError> {
     serde_json::from_str(&stored.request_json).map_err(|source| {
         AtmError::mailbox_read("stored immutable peer outbound write is invalid").with_cause(source)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn job(peer: &str) -> PeerJob {
+        PeerJob {
+            peer: peer.parse().expect("peer"),
+            message_id: AtmMessageId::new(),
+        }
+    }
+
+    #[test]
+    fn job_state_coalesces_duplicates_and_enforces_per_host_capacity() {
+        let mut state = JobState::default();
+        let first = job("peer.example.test");
+        assert!(state.try_take(&first));
+        assert!(
+            !state.try_take(&first),
+            "same ULID is coalesced while in flight"
+        );
+        for _ in 1..MAX_ACTIVE_PEER_JOBS_PER_HOST {
+            assert!(state.try_take(&job("peer.example.test")));
+        }
+        assert!(
+            !state.try_take(&job("peer.example.test")),
+            "per-host cap blocks only worker starts"
+        );
+        assert!(
+            state.try_take(&job("other.example.test")),
+            "a stalled host cannot consume another host's slot"
+        );
+        state.release(&first);
+        assert!(
+            state.try_take(&first),
+            "completed work may be rediscovered idempotently"
+        );
+    }
 }

@@ -17,7 +17,7 @@ roots = ["atm_daemon::composition::compose_runtime"]
 
 [ownership]
 io_owns = ["post_commit_peer_drain", "bounded_peer_recovery"]
-io_forbidden = ["receipt", "delivery_state"]
+io_forbidden = ["sqlite", "receipt", "delivery_state", "retry_state", "cursor"]
 
 [dependencies]
 allowed_dependents = []
@@ -43,4 +43,4 @@ review_gates = ["not_on_admission_path", "no_payload_queue"]
 
 [status]
 state = "active"
-notes = ["AI.31: peer drains execute only after local SQLite admission and response construction."]
+notes = ["AI.32: peer jobs execute only after local SQLite admission and response construction; the scheduler stores identifiers and concurrency counters only."]

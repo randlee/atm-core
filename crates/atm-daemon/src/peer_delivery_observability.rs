@@ -19,6 +19,7 @@ pub(crate) enum PeerDeliveryEventKind {
     WritePersisted,
     PeerDeliveryConfirmed,
     PeerDeliveryUnconfirmed,
+    PeerDeliveryExpired,
     #[allow(dead_code)]
     PeerRecoveryScheduled,
     PeerRecoveryAttempt,
@@ -30,6 +31,7 @@ impl PeerDeliveryEventKind {
             Self::WritePersisted => "write_persisted",
             Self::PeerDeliveryConfirmed => "peer_delivery_confirmed",
             Self::PeerDeliveryUnconfirmed => "peer_delivery_unconfirmed",
+            Self::PeerDeliveryExpired => "peer_delivery_expired",
             Self::PeerRecoveryScheduled => "peer_recovery_scheduled",
             Self::PeerRecoveryAttempt => "peer_recovery_attempt",
         }
@@ -189,6 +191,13 @@ fn apply_event_to_status(status: &mut PeerLinkStatus, event: PeerDeliveryEvent) 
             status.last_failure_at = Some(IsoTimestamp::now());
             status.last_error_code = event.error_code;
             status.next_attempt_at = event.next_attempt_at;
+            status.drain = PeerDrainState::Idle;
+        }
+        PeerDeliveryEventKind::PeerDeliveryExpired => {
+            status.quality = PeerLinkQuality::Degraded;
+            status.last_failure_at = Some(IsoTimestamp::now());
+            status.last_error_code = event.error_code;
+            status.next_attempt_at = None;
             status.drain = PeerDrainState::Idle;
         }
         PeerDeliveryEventKind::PeerRecoveryScheduled => {
