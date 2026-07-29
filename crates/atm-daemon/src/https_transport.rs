@@ -1658,9 +1658,8 @@ mod tests {
                     .expect("slot")
             })
             .collect();
-        assert_eq!(
+        assert!(
             registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(),
-            true,
             "the connection cap is enforced before a worker is spawned"
         );
         drop(reservations);
