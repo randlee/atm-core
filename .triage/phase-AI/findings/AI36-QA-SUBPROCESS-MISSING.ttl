@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-29T07:45:35Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S16 ;
@@ -29,8 +29,10 @@
   triage:file "crates/atm-core/tests/graft_receiver_ownership.rs" ;
   triage:line 18 ;
   triage:snippet "#[ignore = \"orchestrated by scripts/test_atm_graft_python.py\"] fn child_owner_exits_without_drop()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "2b505b868b3cc38ad2e3d06508e443050b72c195" ;
   triage:occursIn <urn:atm:triage:worktree/ai36-qa-repair/2b505b86> .
@@ -40,8 +42,10 @@
   triage:file "crates/atm-core/tests/graft_receiver_ownership.rs" ;
   triage:line 27 ;
   triage:snippet "#[ignore = \"orchestrated by scripts/test_atm_graft_python.py\"] fn parent_reclaims_child_owner_lock()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "2b505b868b3cc38ad2e3d06508e443050b72c195" ;
   triage:occursIn <urn:atm:triage:worktree/ai36-qa-repair/2b505b86> .
