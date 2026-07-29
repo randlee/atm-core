@@ -6,17 +6,15 @@
 
 ## Scope
 
-`atm_graft_hermes_bridge.HermesGraftBridge` is the ATM-core reference adapter
-for one Hermes profile. It creates one existing `PyGraftSession`, activates
-that session with one `PyGraftSessionOptions`, and gives the existing graft
-receiver one Python nudge callback.
-
-The adapter does not open a socket, write ATM data, retain mail, retry a
-delivery, or implement an alternate acknowledgement path. It forwards a
-canonical nudge body to the configured profile's non-interrupting steer
-callable exactly once for a message ID retained in its bounded in-memory
-duplicate set. ADR-043 and AI.36–AI.38 supersede the earlier ordinary
-inbound-user-message handoff.
+`atm_graft_hermes_bridge.HermesGraftBridge` stays the generic ATM-core bridge:
+it creates one `PyGraftSession`, activates one receiver, de-duplicates typed
+nudges by bounded message-ID memory, and invokes its supplied callback. It
+does not know Hermes steer semantics. AI.38 creates the separate
+`atm_graft_hermes_adapter.py` artifact and its `HermesSteerPort`; that adapter
+owns forwarding a live nudge or recovery notice to the configured profile's
+non-interrupting steer callable. Neither layer opens an ATM socket directly,
+writes/retains mail, retries delivery, or implements an alternate
+acknowledgement path.
 
 ## Typed callback
 
