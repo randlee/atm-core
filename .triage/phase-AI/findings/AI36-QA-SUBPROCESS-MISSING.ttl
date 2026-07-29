@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI36-QA-SUBPROCESS-MISSING>
+  a triage:Finding ;
+  triage:findingId "AI36-QA-SUBPROCESS-MISSING" ;
+  triage:title "AI.36 required cross-platform subprocess reclaim test is absent" ;
+  triage:description "crates/atm-core/src/graft.rs test module (lines 568-806) lacks the sprint doc's required cross-platform subprocess reclaim test: a short-lived child process acquires ReceiverOwnershipGuard and exits without close/Drop; a parent process subsequently reclaims the same guard on macOS, Linux, and Windows (docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md sub-task 2 required tests, line 127-128). This test is the sole evidence for Acceptance Criterion 3 ('A dead owner is reclaimable without manual filesystem cleanup') and for the Required Validation step 'Run the ownership subprocess tests on macOS, Linux, and Windows CI' (sprint doc line 175). No such test exists in the reviewed diff." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test_coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge true ;
+  triage:note "Sole evidence for AI.36 Acceptance Criterion 3 and the cross-platform CI validation step; must be fixed before merge to develop. Remediation: add an integration test spawning a real child process via std::process::Command that acquires ReceiverOwnershipGuard and exits without Drop; assert parent reclaims; wire into all 3 CI legs." ;
+  triage:foundIn triage:AI36-QA-1 ;
+  triage:foundAt "2026-07-29T04:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI36-QA-SUBPROCESS-MISSING/graft-test-module> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
+  triage:highestOpenBranch "integrate/phase-ai-31-33" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI36-QA-SUBPROCESS-MISSING/graft-test-module>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 806 ;
+  triage:snippet "test module (568-806) covers concurrent-activation, cleanup-generation-mismatch, and cross-identity concurrency, but no subprocess-based short-lived-owner reclaim test exists." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "phase-AI/integrate-phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:orderIndex 1 .
