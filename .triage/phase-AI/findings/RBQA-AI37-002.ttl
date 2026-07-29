@@ -15,8 +15,10 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:blockingCurrentMerge false ;
   triage:note "Remediation: extract a shared build_read_query() helper on PyGraftSession used by both read() and mailbox_work_counts() to eliminate the duplicated 14-arg ReadQuery::new(...) construction." ;
@@ -34,8 +36,10 @@
   triage:file "crates/atm-graft-python/src/lib.rs" ;
   triage:line 351 ;
   triage:snippet "fn read(&self) -> PyResult<Vec<PyMessage>> { ... let query = ReadQuery::new( ... 14 args ... ) ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
@@ -45,8 +49,10 @@
   triage:file "crates/atm-graft-python/src/lib.rs" ;
   triage:line 393 ;
   triage:snippet "fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> { ... let query = ReadQuery::new( ... 14 args, same shape as read() ... ) ... }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
