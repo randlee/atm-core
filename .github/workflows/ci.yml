@@ -126,6 +126,11 @@ jobs:
           toolchain: "1.94.1"
           components: clippy, rustfmt
 
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -170,6 +175,9 @@ jobs:
         env:
           ATM_TEST_RECV_TIMEOUT_SECS: "60"
         run: cargo test -p atm-daemon --verbose
+
+      - name: Run graft receiver crash/reclaim proof
+        run: python scripts/graft_receiver_reclaim.py
 
       - name: Run isolated shared-host singleton smoke
         if: ${{ always() }}

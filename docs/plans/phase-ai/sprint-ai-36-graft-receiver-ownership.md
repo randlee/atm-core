@@ -2,7 +2,7 @@
 title: AI.36 graft receiver ownership
 status: complete
 branch: feature/pAI-s36-graft-receiver-ownership
-target: integrate/phase-ai-31-33
+target: integrate/phase-AI
 depends_on: AI.35
 ---
 
@@ -166,7 +166,7 @@ model deserves its own closure.
 ## Required Validation
 
 ```text
-cargo test -p atm-core graft -- --nocapture
+cargo test -p agent-team-mail-core graft -- --nocapture
 cargo test -p atm-graft -- --nocapture
 cargo test -p atm-graft-python -- --nocapture
 just lint
