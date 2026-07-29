@@ -2188,8 +2188,8 @@ follow-up without depending on daemon-only or hook-only state.
     startup logs; never durable roster metadata
 - never use bare `cwd` when `launch_cwd` or `live_cwd` is the real meaning
 - expose currently persisted member metadata that ATM already knows durably,
-  such as `home_dir`, type, model, or pane id, and may overlay `live_cwd` for
-  the invoking member only
+  such as `home_dir`, type, harness, model, or pane id, and may overlay
+  `live_cwd` for the invoking member only
 - not persist `live_cwd` or `launch_cwd` as canonical member roster metadata
 - remain useful without daemon or hook state
 
@@ -2209,6 +2209,8 @@ JSON output must include:
 
 Each member object must expose at least:
 - `name`
+- `harness`: the persisted roster harness using its stable kebab-case spelling
+  (for example `hermes` or `python-graft`)
 - persisted local member metadata when present
 
 ## 14. `atm help` (Phase Y additive CLI feature)
@@ -4070,6 +4072,26 @@ mail correctness.
   - native agent/plugin delivery and notification uses the daemon API only
   - thin-client surfaces such as graft align to the shared daemon/API contract
     rather than to a mailbox-JSON transport
+
+- `REQ-CORE-GRAFT-001` Graft is a thin embedded daemon client and bounded
+  host-wake transport, not a second mailbox or host conversation subsystem.
+
+  Required behavior:
+  - graft `send`, `read`, and `ack` use the normal daemon API and durable ATM
+    mailbox; graft has no direct SQLite, mailbox-file, or durable nudge queue
+  - a graft receiver has one explicit live owner per canonical receiver
+    identity; competing live activation fails without replacing the current
+    endpoint, and process death permits safe reclaim
+  - a host session identifier such as ADR-037 `ChatId` is preserved as an
+    opaque profile/session binding, never parsed into a second ATM transport
+    or conversation manager
+  - a host integration must deliver a nudge through its documented safe
+    between-tool-call mechanism. A Hermes integration uses non-interrupting
+    steer delivery, not normal user-message ingress
+  - after host restart/reconnect, a host integration may issue one bounded
+    advisory wake-up derived from durable unread/pending-ack counts. It must
+    not replay mail, mutate mail, create a retry loop, or persist recovery
+    state outside the ATM mailbox
 
 - `REQ-CORE-COMPAT-003` Post-send behavior must use one direct post-persist
   emitter seam.

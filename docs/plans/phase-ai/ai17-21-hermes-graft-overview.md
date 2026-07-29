@@ -39,6 +39,9 @@ AI.17–AI.21 consume these Phase AI decisions unchanged:
    and routes it to the corresponding isolated Hermes chat.
 3. Deliver graft nudges to Hermes as in-process events, using the canonical
    message identity in the payload rather than a custom `X-Session-ID` header.
+   AI.36–AI.38 amend the host handoff to use the configured profile's
+   non-interrupting steer path and add restart recovery; they do not alter the
+   ATM message identity or daemon API.
 4. Deploy one supervised bridge per Hermes profile and prove the documented
    multi-turn user stories.
 
