@@ -9,12 +9,12 @@ use std::time::Duration;
 use std::sync::mpsc::TrySendError;
 
 use atm_core::GraftConfig;
-use atm_core::types::ChatId;
 use atm_core::boundary::PostSendHookEvent;
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::graft::{
     GRAFT_RECEIVER_ACCEPT_POLL_INTERVAL, GraftPostSendResponse, GraftReceiverListener,
 };
+use atm_core::types::ChatId;
 
 use crate::nudge_sink::GraftNudgeSink;
 use crate::{
@@ -430,7 +430,31 @@ pub(crate) fn run_graft_receiver_loop(ctx: GraftReceiverLoopContext) -> Result<(
     let injector = BoundedHostNudgeInjector::spawn(Arc::clone(&ctx.injector));
     let result = (|| {
         let listener =
-            GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone())?;
+            match GraftReceiverListener::bind(&ctx.endpoint_path, ctx.owner_chat_id.clone()) {
+                Ok(listener) => {
+                    let snapshot = read_snapshot(&ctx.snapshot)?;
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "activate_receiver_owner",
+                        "ok",
+                    );
+                    listener
+                }
+                Err(error) => {
+                    let snapshot = read_snapshot(&ctx.snapshot)?;
+                    let outcome = if error.code() == AtmErrorCode::GraftReceiverAlreadyActive {
+                        "conflict"
+                    } else {
+                        "error"
+                    };
+                    ctx.observability.receiver_ownership(
+                        &snapshot,
+                        "activate_receiver_owner",
+                        outcome,
+                    );
+                    return Err(error);
+                }
+            };
         if let Some(ready_tx) = ctx.ready_tx.as_ref() {
             signal_ready_sender(ready_tx)?;
         }

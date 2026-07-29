@@ -209,7 +209,8 @@ fn dispatcher_send_delivers_direct_graft_nudge_without_warning() {
     let recipient_agent = "qa-a".parse::<AgentName>().expect("agent");
     let receiver_path =
         graft_receiver_record_path_from_home(&workspace_dir, &recipient_team, &recipient_agent);
-    let listener = GraftReceiverListener::bind(&receiver_path, None).expect("bind fake graft receiver");
+    let listener =
+        GraftReceiverListener::bind(&receiver_path, None).expect("bind fake graft receiver");
     let (event_tx, event_rx) = std::sync::mpsc::sync_channel(1);
     let receiver_thread = std::thread::spawn(move || {
         let mut stream = loop {

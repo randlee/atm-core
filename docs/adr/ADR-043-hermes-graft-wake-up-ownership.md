@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-043 |
-| Status | Proposed |
+| Status | Accepted — AI.36 receiver ownership implemented |
 | Scope | `atm-graft`, Python binding, and Hermes reference adapter |
 | Relates to | ADR-037, ADR-039, ADR-033 |
 
@@ -77,6 +77,9 @@ to make the one-profile path reliable.
 
 ## Follow-up work
 
-- AI.36: singleton receiver ownership and generation-safe endpoint removal.
+- AI.36: complete — `GraftReceiverListener` holds an OS-backed exclusive
+  lock, publishes a random generation plus optional `ChatId`, and uses
+  generation-checked cleanup. Coverage includes typed live-owner conflict,
+  stale-record replacement, and concurrent distinct identities.
 - AI.37: one delayed durable-work summary after profile recovery.
 - AI.38: Hermes steer injection and end-to-end non-interruption evidence.

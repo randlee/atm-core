@@ -1,6 +1,6 @@
 ---
 title: AI.36 graft receiver ownership
-status: proposed
+status: complete
 branch: feature/pAI-s36-graft-receiver-ownership
 target: integrate/phase-ai-31-33
 depends_on: AI.35
@@ -14,7 +14,7 @@ phase: AI
 sprint: AI.36
 worktree: feature/pAI-s36-graft-receiver-ownership
 branch: feature/pAI-s36-graft-receiver-ownership
-status: proposed
+status: complete
 estimated_scope: small cross-platform Rust lifecycle change
 ```
 

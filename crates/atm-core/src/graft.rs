@@ -13,9 +13,9 @@ use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use fs2::FileExt;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use fs2::FileExt;
 use ulid::Ulid;
 
 use crate::ack::{AckOutcome, AckRequest};
@@ -182,19 +182,34 @@ impl ReceiverOwnershipGuard {
             .create(true)
             .read(true)
             .write(true)
+            .truncate(false)
             .open(&lock_path)
-            .map_err(|source| AtmError::daemon_unavailable_with_cause(
-                format!("failed to open graft receiver ownership lock at {}", lock_path.display()),
-                source,
-            ))?;
+            .map_err(|source| {
+                AtmError::daemon_unavailable_with_cause(
+                    format!(
+                        "failed to open graft receiver ownership lock at {}",
+                        lock_path.display()
+                    ),
+                    source,
+                )
+            })?;
         match lock_file.try_lock_exclusive() {
-            Ok(()) => Ok(Self { lock_file }),
-            Err(source) if is_lock_contention(&source) => Err(AtmError::new(
-                AtmErrorCode::GraftReceiverAlreadyActive,
-                graft_receiver_identity(record_path),
-            )),
+            Ok(()) => {
+                tracing::info!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "acquired", "graft receiver ownership acquired");
+                Ok(Self { lock_file })
+            }
+            Err(source) if is_lock_contention(&source) => {
+                tracing::warn!(record_path = %record_path.display(), action = "receiver_ownership", outcome = "conflict", "graft receiver ownership already active");
+                Err(AtmError::new(
+                    AtmErrorCode::GraftReceiverAlreadyActive,
+                    graft_receiver_identity(record_path),
+                ))
+            }
             Err(source) => Err(AtmError::daemon_unavailable_with_cause(
-                format!("failed to acquire graft receiver ownership lock at {}", lock_path.display()),
+                format!(
+                    "failed to acquire graft receiver ownership lock at {}",
+                    lock_path.display()
+                ),
                 source,
             )),
         }
@@ -350,6 +365,9 @@ impl Drop for GraftReceiverListener {
             && record.owner_generation == self.owner_generation
         {
             let _ = fs::remove_file(&self.record_path);
+            tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_cleanup", outcome = "removed", "graft receiver removed its owned endpoint record");
+        } else {
+            tracing::info!(record_path = %self.record_path.display(), action = "receiver_record_cleanup", outcome = "retained", "graft receiver retained successor or malformed endpoint record");
         }
     }
 }
@@ -440,9 +458,19 @@ fn is_lock_contention(error: &std::io::Error) -> bool {
 }
 
 fn graft_receiver_identity(record_path: &Path) -> String {
-    let agent = record_path.file_stem().and_then(|value| value.to_str()).unwrap_or("unknown-agent");
-    let team = record_path.parent().and_then(Path::file_name).and_then(|value| value.to_str()).unwrap_or("unknown-team");
-    format!("receiver already active for {agent}@{team} ({})", record_path.display())
+    let agent = record_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("unknown-agent");
+    let team = record_path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|value| value.to_str())
+        .unwrap_or("unknown-team");
+    format!(
+        "receiver already active for {agent}@{team} ({})",
+        record_path.display()
+    )
 }
 
 /// Restrict the endpoint record to the owner on Unix.
@@ -491,12 +519,17 @@ fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecor
             ),
         )
     })?;
-    serde_json::from_slice(&bytes).map_err(|_source| {
-        AtmError::validation(format!(
-            "failed to decode graft receiver endpoint record at {}",
-            record_path.display()
-        ))
-    })
+    let record: GraftReceiverEndpointRecord =
+        serde_json::from_slice(&bytes).map_err(|_source| {
+            AtmError::validation(format!(
+                "failed to decode graft receiver endpoint record at {}",
+                record_path.display()
+            ))
+        })?;
+    // Decode fail-closed: old schemas and malformed generations are never
+    // returned as an apparently usable receiver record.
+    record.endpoint()?;
+    Ok(record)
 }
 
 /// Open unary client surface for embedded ATM consumers.
@@ -674,6 +707,13 @@ mod tests {
 
     #[test]
     fn receiver_record_rejects_old_schema_and_malformed_generation() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let record_path = graft_receiver_record_path_from_home(
+            tempdir.path(),
+            &TeamName::from_validated(TEST_TEAM),
+            &AgentName::from_validated(TEST_QA),
+        );
+        super::prepare_receiver_record_parent(&record_path).expect("record parent");
         let old = GraftReceiverEndpointRecord {
             schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION - 1,
             owner_generation: ulid::Ulid::new().to_string(),
@@ -681,13 +721,15 @@ mod tests {
             loopback: "127.0.0.1:7".parse().expect("address"),
             capability_base64url: "capability".to_string(),
         };
-        assert!(old.endpoint().is_err());
+        write_receiver_record(&record_path, &old).expect("write old record");
+        assert!(read_receiver_record(&record_path).is_err());
         let malformed = GraftReceiverEndpointRecord {
             schema_version: GRAFT_RECEIVER_RECORD_SCHEMA_VERSION,
             owner_generation: "not-a-ulid".to_string(),
             ..old
         };
-        assert!(malformed.endpoint().is_err());
+        write_receiver_record(&record_path, &malformed).expect("write malformed record");
+        assert!(read_receiver_record(&record_path).is_err());
     }
 
     #[test]
@@ -697,13 +739,17 @@ mod tests {
         let agent = AgentName::from_validated(TEST_QA);
         let record_path = graft_receiver_record_path_from_home(tempdir.path(), &team, &agent);
         let chat_id = "chat-1".parse::<ChatId>().expect("chat id");
-        let first = GraftReceiverListener::bind(&record_path, Some(chat_id.clone())).expect("first");
+        let first =
+            GraftReceiverListener::bind(&record_path, Some(chat_id.clone())).expect("first");
         let before = fs::read(&record_path).expect("record bytes");
         let error = match GraftReceiverListener::bind(&record_path, Some(chat_id)) {
             Ok(_) => panic!("second live owner must fail"),
             Err(error) => error,
         };
-        assert_eq!(error.code(), crate::error::AtmErrorCode::GraftReceiverAlreadyActive);
+        assert_eq!(
+            error.code(),
+            crate::error::AtmErrorCode::GraftReceiverAlreadyActive
+        );
         assert!(error.message().contains(TEST_QA));
         assert_eq!(fs::read(&record_path).expect("record bytes"), before);
         let record = read_receiver_record(&record_path).expect("record");
@@ -728,7 +774,9 @@ mod tests {
         write_receiver_record(&record_path, &successor).expect("publish successor");
         drop(listener);
         assert_eq!(
-            read_receiver_record(&record_path).expect("successor remains").owner_generation,
+            read_receiver_record(&record_path)
+                .expect("successor remains")
+                .owner_generation,
             successor.owner_generation
         );
     }
@@ -749,6 +797,9 @@ mod tests {
         );
         let first = GraftReceiverListener::bind(&first_path, None).expect("first");
         let second = GraftReceiverListener::bind(&second_path, None).expect("second");
-        assert_ne!(first.local_addr().expect("first addr"), second.local_addr().expect("second addr"));
+        assert_ne!(
+            first.local_addr().expect("first addr"),
+            second.local_addr().expect("second addr")
+        );
     }
 }

@@ -83,6 +83,15 @@ pub trait GraftObservability: Send + Sync {
 
     fn session_error(&self, _snapshot: &SessionSnapshot, _action: &'static str, _error: &AtmError) {
     }
+
+    /// Records receiver-ownership lifecycle without exposing endpoint capability material.
+    fn receiver_ownership(
+        &self,
+        _snapshot: &SessionSnapshot,
+        _action: &'static str,
+        _outcome: &'static str,
+    ) {
+    }
 }
 
 /// No-op graft observability adapter.
