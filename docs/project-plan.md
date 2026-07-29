@@ -1008,7 +1008,13 @@ Implementation Branches:
 | `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
 | `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | durable local admission before asynchronous peer work |
+| `AI.32` | `in_progress` | `feature/ai32-independent-peer-jobs` | bounded independent peer delivery jobs |
+| `AI.33` | `proposed` | `feature/pAI-s33-admission-capacity-smoke` | admission capacity and smoke evidence |
+| `AI.34` | `in_progress` | `fix/hermes-nudge-endpoint-mismatch` | Hermes graft nudge-endpoint reconciliation |
+| `AI.35` | `in_progress` | `feature/pAI-s35-graft-root-fallback-observability` | graft-root fallback observability |
 | `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | OS-backed singleton graft receiver ownership with generation-safe record cleanup |
+| `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | one ten-second daemon-count recovery summary with no graft queue or mailbox mutation |
+| `AI.38` | `proposed` | `feature/pAI-s38-hermes-steer-nudge-delivery` | non-interrupting Hermes steer nudge delivery |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

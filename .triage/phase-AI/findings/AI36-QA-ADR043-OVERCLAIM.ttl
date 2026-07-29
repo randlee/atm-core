@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-29T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI36-QA-2 ;
@@ -28,8 +28,10 @@
   triage:file "docs/adr/ADR-043-hermes-graft-wake-up-ownership.md" ;
   triage:line 83 ;
   triage:snippet "and a real child-process crash/reclaim proof on every supported platform." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:30:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "2b505b868b3cc38ad2e3d06508e443050b72c195" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/ai36-qa-repair> .

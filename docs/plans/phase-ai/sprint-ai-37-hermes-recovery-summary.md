@@ -1,6 +1,6 @@
 ---
 title: AI.37 Hermes graft recovery summary
-status: proposed
+status: complete
 branch: feature/pAI-s37-hermes-recovery-summary
 target: integrate/phase-ai-31-33
 depends_on: AI.36
@@ -14,7 +14,7 @@ phase: AI
 sprint: AI.37
 worktree: feature/pAI-s37-hermes-recovery-summary
 branch: feature/pAI-s37-hermes-recovery-summary
-status: proposed
+status: complete
 estimated_scope: small Rust/Python recovery contract
 ```
 
@@ -74,7 +74,7 @@ Hermes's steer API.
 
 Development work:
 
-1. First commit sets all releasable assemblies to `1.4.0-beta-ai.37`.
+1. First commit sets all releasable assemblies to `1.4.0-beta.37`.
 2. Reuse `ReadQuery` with its existing non-mutating classified read and
    `ReadOutcome.bucket_counts`; do not add a new mailbox API or query source.
 3. Add an explicit graft method and Python projection that exposes only:

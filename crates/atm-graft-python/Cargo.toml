@@ -1,6 +1,6 @@
 [package]
 name = "atm-graft-python"
-version = "1.4.0-beta-ai.36"
+version = "1.4.0-beta-ai.37"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -17,9 +17,11 @@ crate-type = ["cdylib", "rlib"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.36" }
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.36" }
+atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.37" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.37" }
 pyo3 = "0.29"
 
 [dev-dependencies]
-atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.36", features = ["test-support"] }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.37", features = ["test-utils"] }
+atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.37", features = ["test-support"] }
+tempfile = "3"

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use ::atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
-    SessionSnapshot,
+    MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
@@ -55,8 +55,9 @@ fn atm_error(error: AtmError) -> PyErr {
 fn python_callback_error(error: PyErr) -> AtmError {
     AtmError::new(
         AtmErrorCode::InternalError,
-        format!("Python graft nudge callback failed: {error}"),
+        "Python graft nudge callback failed",
     )
+    .with_cause(error.to_string())
 }
 
 #[pyclass(from_py_object)]
@@ -114,7 +115,7 @@ impl PyGraftSessionOptions {
         if self.workspace_root.trim().is_empty() {
             return Err(PyValueError::new_err("workspace_root must not be blank"));
         }
-        Ok(GraftSessionOptions::for_current_process(
+        Ok(GraftSessionOptions::new(
             &self.workspace_root,
             self.team.parse::<TeamName>().map_err(atm_error)?,
             self.agent.parse::<AgentName>().map_err(atm_error)?,
@@ -255,6 +256,25 @@ pub struct PyGraftSessionSnapshot {
     state: String,
 }
 
+/// Python count-only projection of durable mailbox work for recovery notices.
+#[pyclass(from_py_object)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PyMailboxWorkCounts {
+    #[pyo3(get)]
+    unread: usize,
+    #[pyo3(get)]
+    pending_ack: usize,
+}
+
+impl From<MailboxWorkCounts> for PyMailboxWorkCounts {
+    fn from(counts: MailboxWorkCounts) -> Self {
+        Self {
+            unread: counts.unread,
+            pending_ack: counts.pending_ack,
+        }
+    }
+}
+
 impl From<SessionSnapshot> for PyGraftSessionSnapshot {
     fn from(snapshot: SessionSnapshot) -> Self {
         let state = match snapshot.state {
@@ -295,6 +315,8 @@ impl HostNudgeInjector for PythonNudgeInjector {
 #[pyclass(skip_from_py_object)]
 pub struct PyGraftSession {
     caller: AgentAddress,
+    // PyO3 methods can cross the GIL from multiple Python threads; these
+    // mutable lifecycle handles therefore need real synchronization.
     client: Mutex<Option<GraftClient>>,
     receiver: Mutex<Option<GraftSession>>,
 }
@@ -313,6 +335,28 @@ impl PyGraftSession {
             atm_home().map_err(atm_error)?,
             command_invocation_dir().map_err(atm_error)?,
         ))
+    }
+
+    fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        ReadQuery::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            None,
+            self.caller.team().cloned().expect("validated caller team"),
+            ReadSelection::All,
+            false,
+            seen_state_update,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .map_err(atm_error)
+        .map(|query| query.with_caller_chat_id(self.caller.chat_id().cloned()))
     }
 }
 
@@ -349,26 +393,16 @@ impl PyGraftSession {
     }
 
     fn read(&self) -> PyResult<Vec<PyMessage>> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let query = ReadQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            self.caller.team().cloned().expect("validated caller team"),
-            ReadSelection::All,
-            false,
-            true,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id().cloned());
+        let query = self.build_read_query(true)?;
         PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
+    }
+
+    fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
+        let query = self.build_read_query(false)?;
+        self.client()?
+            .mailbox_work_counts(query)
+            .map(PyMailboxWorkCounts::from)
+            .map_err(atm_error)
     }
 
     fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()> {
@@ -455,19 +489,27 @@ fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMessage>()?;
     m.add_class::<PyNudge>()?;
     m.add_class::<PyGraftSessionSnapshot>()?;
+    m.add_class::<PyMailboxWorkCounts>()?;
     m.add_class::<PyGraftSession>()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AtmGraftError, PyAgentAddress, PyNudge, PythonNudgeInjector, atm_error};
+    use super::{
+        AtmGraftError, PyAgentAddress, PyGraftSession, PyGraftSessionOptions, PyMailboxWorkCounts,
+        PyNudge, PythonNudgeInjector, atm_error,
+    };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
+    use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, TeamName};
-    use atm_graft::HostNudgeInjector;
-    use pyo3::prelude::Python;
+    use atm_graft::{GraftClient, HostNudgeInjector, MailboxWorkCounts};
+    use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
+    use std::fs;
+    use std::sync::{Arc, Mutex};
+    use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
@@ -506,6 +548,37 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn mailbox_work_counts_exposes_only_integer_count_fields_to_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let counts = PyMailboxWorkCounts::from(MailboxWorkCounts {
+                unread: 2,
+                pending_ack: 3,
+            });
+            let object = Py::new(py, counts).expect("python count object");
+            let object = object.bind(py);
+
+            assert_eq!(
+                object
+                    .getattr("unread")
+                    .expect("unread")
+                    .extract::<usize>()
+                    .unwrap(),
+                2
+            );
+            assert_eq!(
+                object
+                    .getattr("pending_ack")
+                    .expect("pending ack")
+                    .extract::<usize>()
+                    .unwrap(),
+                3
+            );
+            assert!(object.getattr("body").is_err());
+        });
     }
 
     #[test]
@@ -603,6 +676,12 @@ mod tests {
                 .inject_nudge(&event)
                 .expect_err("callback failure must propagate");
             assert_eq!(error.code(), atm_core::error::AtmErrorCode::InternalError);
+            assert!(
+                error
+                    .cause()
+                    .expect("Python callback cause must be retained")
+                    .contains("callback failed")
+            );
         });
     }
 
@@ -668,6 +747,58 @@ mod tests {
                     .expect("string code"),
                 "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE"
             );
+        });
+    }
+
+    #[test]
+    fn python_session_rejects_a_second_receiver_activation() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("tempdir");
+        fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[graft]\nenabled = true\n",
+        )
+        .expect("graft config");
+        let caller = PyAgentAddress::new(
+            TEST_RECIPIENT.to_string(),
+            TEST_TEAM.to_string(),
+            Some("42".to_string()),
+        )
+        .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_transport_for_test(Arc::new(
+                FakeClientTransport::new(Box::new(|_| {
+                    panic!("receiver activation must not call the daemon transport")
+                })),
+            )))),
+            receiver: Mutex::new(None),
+        };
+        let options = PyGraftSessionOptions {
+            workspace_root: tempdir.path().display().to_string(),
+            agent: TEST_RECIPIENT.to_string(),
+            team: TEST_TEAM.to_string(),
+        };
+
+        Python::attach(|py| {
+            let callback = PyModule::from_code(
+                py,
+                c"def callback(_nudge):\n    return None\n",
+                c"receiver_activation_test.py",
+                c"receiver_activation_test",
+            )
+            .expect("callback module")
+            .getattr("callback")
+            .expect("callback")
+            .unbind();
+            session
+                .activate_receiver(options.clone(), callback.clone_ref(py))
+                .expect("first receiver activation");
+            let error = session
+                .activate_receiver(options, callback)
+                .expect_err("second activation must be rejected at the Python API boundary");
+            assert!(error.is_instance_of::<pyo3::exceptions::PyRuntimeError>(py));
+            assert!(error.to_string().contains("already active"));
         });
     }
 }
