@@ -68,13 +68,14 @@ class HermesAdapterContractTests(unittest.TestCase):
                 else:
                     os.environ["ATM_WORKSPACE_ROOT"] = previous
 
-    def test_dispatch_nudge_preserves_canonical_chat_key_for_replies(self) -> None:
+    def test_dispatch_nudge_targets_configured_telegram_session(self) -> None:
         observed = []
 
         async def handle(event) -> None:
             observed.append((event.source.chat_id, event.source.user_id, event.text))
 
         adapter = AtmGraftAdapter(None)
+        adapter._chat_id = "8991600178"
         adapter.set_message_handler(handle)
         chat_key = "atm:Cipher-311d:8991600178@atm-dev"
 
@@ -84,7 +85,7 @@ class HermesAdapterContractTests(unittest.TestCase):
         asyncio.run(adapter._dispatch_nudge(chat_key, "reply-route-check"))
         self.assertEqual(
             observed,
-            [(chat_key, chat_key, "reply-route-check")],
+            [("8991600178", "8991600178", "reply-route-check")],
         )
 
 

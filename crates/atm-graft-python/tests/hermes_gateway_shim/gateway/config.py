@@ -5,4 +5,4 @@ from enum import Enum
 
 class Platform(Enum):
     LOCAL = "local"
-
+    TELEGRAM = "telegram"
