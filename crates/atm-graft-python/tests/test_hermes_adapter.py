@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 import sys
+import threading
 import unittest
 
 ADAPTER_ROOT = Path(__file__).resolve().parents[1] / "python"
@@ -44,6 +45,18 @@ class RecordingSteerPort:
             raise self.failure
 
 
+class NoNormalMessageFallbackPort(RecordingSteerPort):
+    """A host sentinel: any accidental normal ingress use fails this test."""
+
+    def __init__(self, failure: Exception | None = None) -> None:
+        super().__init__(failure)
+        self.normal_message_handler_called = False
+
+    async def normal_message_handler(self, _text: str) -> None:
+        self.normal_message_handler_called = True
+        raise AssertionError("normal ingress must never be called")
+
+
 class HermesAdapterContractTests(unittest.TestCase):
     def test_live_nudge_uses_configured_session_and_preserves_source_as_attribution(self) -> None:
         async def scenario() -> None:
@@ -71,7 +84,7 @@ class HermesAdapterContractTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_duplicate_ulid_generates_one_steer_and_distinct_ids_generate_two(self) -> None:
+    def test_adapter_leaves_live_ulid_deduplication_to_the_bridge(self) -> None:
         async def scenario() -> None:
             port = RecordingSteerPort()
             adapter = AtmGraftAdapter(chat_id="host-session", steer_port=port)
@@ -80,7 +93,31 @@ class HermesAdapterContractTests(unittest.TestCase):
             await adapter.deliver_live_nudge(first)
             await adapter.deliver_live_nudge(FakeNudge("01KX1TEST00000000000000004", "sender@team", "two"))
 
-            self.assertEqual(port.calls, [("host-session", "one"), ("host-session", "two")])
+            self.assertEqual(
+                port.calls,
+                [("host-session", "one"), ("host-session", "one"), ("host-session", "two")],
+            )
+            self.assertFalse(hasattr(adapter, "_recent_message_ids"))
+
+        asyncio.run(scenario())
+
+    def test_source_attribution_is_bounded_without_creating_a_session_registry(self) -> None:
+        async def scenario() -> None:
+            port = RecordingSteerPort()
+            adapter = AtmGraftAdapter(
+                chat_id="host-session",
+                steer_port=port,
+                attribution_limit=1,
+            )
+            first = FakeNudge("01KX1TEST00000000000000009", "sender:one@team", "one")
+            second = FakeNudge("01KX1TEST00000000000000010", "sender:two@team", "two")
+
+            await adapter.deliver_live_nudge(first)
+            await adapter.deliver_live_nudge(second)
+
+            self.assertIsNone(adapter.attribution_for(first.message_id))
+            self.assertEqual(adapter.attribution_for(second.message_id).source, "sender:two@team")
+            self.assertFalse(hasattr(adapter, "sessions"))
 
         asyncio.run(scenario())
 
@@ -101,24 +138,19 @@ class HermesAdapterContractTests(unittest.TestCase):
             adapter.live_nudge_callback(FakeNudge("01KX1TEST00000000000000007", "sender@team", "live"))
             adapter.recovery_summary_callback(FakeRecoveryNotice("recovery"))
             await asyncio.sleep(0)
+            await asyncio.sleep(0)
             self.assertEqual(port.calls, [("host-session", "live"), ("host-session", "recovery")])
 
         asyncio.run(scenario())
 
     def test_steer_failure_is_structured_visible_and_has_no_normal_message_fallback(self) -> None:
         async def scenario() -> None:
-            port = RecordingSteerPort(RuntimeError("gateway unavailable"))
+            port = NoNormalMessageFallbackPort(RuntimeError("gateway unavailable"))
             adapter = AtmGraftAdapter(chat_id="host-session", steer_port=port)
-            normal_message_handler_called = False
-
-            def normal_message_handler() -> None:
-                nonlocal normal_message_handler_called
-                normal_message_handler_called = True
-                raise AssertionError("normal ingress must never be called")
 
             with self.assertRaisesRegex(HermesSteerFailure, "steer_error"):
                 await adapter.deliver_live_nudge(FakeNudge("01KX1TEST00000000000000005", "sender@team", "wake"))
-            self.assertFalse(normal_message_handler_called)
+            self.assertFalse(port.normal_message_handler_called)
             self.assertEqual(adapter.last_failure.code, "steer_error")
             self.assertEqual(port.calls, [("host-session", "wake")])
             self.assertEqual(
@@ -126,8 +158,22 @@ class HermesAdapterContractTests(unittest.TestCase):
                 "sender@team",
                 "source attribution survives a visible failed attempt",
             )
-            self.assertNotIn("01KX1TEST00000000000000005", adapter._recent_message_ids)
-            self.assertTrue(callable(normal_message_handler))
+            self.assertTrue(callable(port.normal_message_handler))
+
+        asyncio.run(scenario())
+
+    def test_blank_live_nudge_body_fails_before_the_steer_port(self) -> None:
+        async def scenario() -> None:
+            port = RecordingSteerPort()
+            adapter = AtmGraftAdapter(chat_id="host-session", steer_port=port)
+
+            with self.assertRaisesRegex(HermesSteerFailure, "invalid_text"):
+                await adapter.deliver_live_nudge(
+                    FakeNudge("01KX1TEST00000000000000011", "sender@team", " ")
+                )
+
+            self.assertEqual(port.calls, [])
+            self.assertEqual(adapter.last_failure.code, "invalid_text")
 
         asyncio.run(scenario())
 
@@ -147,6 +193,28 @@ class HermesAdapterContractTests(unittest.TestCase):
 
             with self.assertRaisesRegex(HermesSteerFailure, "rejected"):
                 await HermesRpcSteerPort(rejected).steer(chat_id="host-session", text="wake")
+
+            with self.assertRaisesRegex(HermesSteerFailure, "invalid_text"):
+                await HermesRpcSteerPort(request).steer(chat_id="host-session", text=" ")
+
+        asyncio.run(scenario())
+
+    def test_callback_schedules_on_connected_loop_from_a_foreign_thread(self) -> None:
+        async def scenario() -> None:
+            port = RecordingSteerPort()
+            adapter = AtmGraftAdapter(chat_id="host-session", steer_port=port)
+            await adapter.connect()
+
+            worker = threading.Thread(
+                target=adapter.live_nudge_callback,
+                args=(FakeNudge("01KX1TEST00000000000000008", "sender@team", "threaded"),),
+            )
+            worker.start()
+            worker.join()
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+
+            self.assertEqual(port.calls, [("host-session", "threaded")])
 
         asyncio.run(scenario())
 

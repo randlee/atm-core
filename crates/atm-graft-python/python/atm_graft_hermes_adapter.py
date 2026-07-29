@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import asyncio
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from dataclasses import dataclass
 import logging
 from typing import Any, Protocol, runtime_checkable
@@ -37,6 +37,14 @@ class RecoveryNotice(Protocol):
 
     def render(self) -> str:
         """Render the concise durable-mail summary."""
+
+
+class LiveNudge(Protocol):
+    """The typed graft nudge shape consumed by this host adapter."""
+
+    message_id: object
+    source: object
+    body: object
 
 
 @dataclass(frozen=True)
@@ -61,6 +69,10 @@ class HermesRpcSteerPort:
         self._request = request
 
     async def steer(self, *, chat_id: str, text: str) -> None:
+        if not chat_id.strip():
+            raise HermesSteerFailure("invalid_chat_id", chat_id, "session_id is blank")
+        if not text.strip():
+            raise HermesSteerFailure("invalid_text", chat_id, "steer text is blank")
         response = await self._request(
             "session.steer", {"session_id": chat_id, "text": text}
         )
@@ -95,16 +107,15 @@ class AtmGraftAdapter:
         *,
         chat_id: str,
         steer_port: HermesSteerPort,
-        recent_message_limit: int = 1_024,
+        attribution_limit: int = 1_024,
     ) -> None:
         if not chat_id.strip():
             raise ValueError("ATM_CHAT_ID is required for Hermes steer delivery")
-        if recent_message_limit < 1:
-            raise ValueError("recent_message_limit must be positive")
+        if attribution_limit < 1:
+            raise ValueError("attribution_limit must be positive")
         self._chat_id = chat_id
         self._steer_port = steer_port
-        self._recent_message_limit = recent_message_limit
-        self._recent_message_ids: OrderedDict[str, None] = OrderedDict()
+        self._attribution_limit = attribution_limit
         self._attribution: OrderedDict[str, HermesNudgeAttribution] = OrderedDict()
         self._loop: asyncio.AbstractEventLoop | None = None
         self.last_failure: HermesSteerFailure | None = None
@@ -117,7 +128,7 @@ class AtmGraftAdapter:
         self._loop = asyncio.get_running_loop()
         LOGGER.info("hermes_steer_profile_connected chat_id=%s", self._chat_id)
 
-    def live_nudge_callback(self, nudge: Any) -> None:
+    def live_nudge_callback(self, nudge: LiveNudge) -> None:
         """Bridge callback that queues live delivery on the configured host loop."""
 
         self._schedule(self.deliver_live_nudge(nudge))
@@ -127,15 +138,12 @@ class AtmGraftAdapter:
 
         self._schedule(self.deliver_recovery_summary(notice))
 
-    async def deliver_live_nudge(self, nudge: Any) -> None:
+    async def deliver_live_nudge(self, nudge: LiveNudge) -> None:
         """Deliver one typed nudge without creating a normal Hermes message."""
 
         message_id = str(nudge.message_id)
-        if message_id in self._recent_message_ids:
-            return
         self._remember_attribution(message_id, str(nudge.source))
         await self._inject_steer(str(nudge.body))
-        self._remember_delivery(message_id)
 
     async def deliver_recovery_summary(self, notice: RecoveryNotice) -> None:
         """Deliver AI.37's count-only recovery wake-up through the same port."""
@@ -146,6 +154,8 @@ class AtmGraftAdapter:
         """Perform the only Hermes host action allowed to this adapter."""
 
         try:
+            if not text.strip():
+                raise HermesSteerFailure("invalid_text", self._chat_id, "steer text is blank")
             await self._steer_port.steer(chat_id=self._chat_id, text=text)
         except HermesSteerFailure as failure:
             self.last_failure = failure
@@ -165,21 +175,24 @@ class AtmGraftAdapter:
     def _remember_attribution(self, message_id: str, source: str) -> None:
         self._attribution[message_id] = HermesNudgeAttribution(message_id, source)
         self._attribution.move_to_end(message_id)
-        while len(self._attribution) > self._recent_message_limit:
+        while len(self._attribution) > self._attribution_limit:
             self._attribution.popitem(last=False)
 
-    def _remember_delivery(self, message_id: str) -> None:
-        self._recent_message_ids[message_id] = None
-        self._recent_message_ids.move_to_end(message_id)
-        while len(self._recent_message_ids) > self._recent_message_limit:
-            self._recent_message_ids.popitem(last=False)
-
-    def _schedule(self, delivery: Awaitable[None]) -> None:
-        if self._loop is None:
+    def _schedule(self, delivery: Coroutine[Any, Any, None]) -> None:
+        loop = self._loop
+        if loop is None:
             delivery.close()
             raise HermesSteerFailure("not_connected", self._chat_id, "connect before bridge delivery")
-        task = self._loop.create_task(delivery)
-        task.add_done_callback(self._report_scheduled_failure)
+
+        def create_task() -> None:
+            task = loop.create_task(delivery)
+            task.add_done_callback(self._report_scheduled_failure)
+
+        try:
+            loop.call_soon_threadsafe(create_task)
+        except RuntimeError as exc:
+            delivery.close()
+            raise HermesSteerFailure("loop_unavailable", self._chat_id, str(exc)) from exc
 
     def _report_scheduled_failure(self, task: asyncio.Task[None]) -> None:
         try:
