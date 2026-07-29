@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/INTEGRATE-PAI3133-CIRED-001>
+  a triage:Finding ;
+  triage:findingId "INTEGRATE-PAI3133-CIRED-001" ;
+  triage:title "Pre-existing clippy::bool_assert_comparison on integrate/phase-ai-31-33 base branch" ;
+  triage:description "crates/atm-daemon/src/https_transport.rs around line 1661 has assert_eq!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(), true, ...) which trips clippy::bool_assert_comparison. This is pre-existing on integrate/phase-ai-31-33 itself (confirmed present at HEAD f4ee2de3), not introduced by AI.36 or AI.37 diffs." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci-lint" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T08:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S7 ;
+  triage:foundAt "2026-07-29T08:09:03Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/PAI3133-CIRED-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/PAI3133-CIRED-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1661 ;
+  triage:snippet "assert_eq!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(), true, \"the connection cap is enforced\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "f4ee2de3393067d2ac28e072f42cae613765f056" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ai-31-33/f4ee2de3> .
+
+<urn:atm:triage:worktree/integrate-ai-31-33/f4ee2de3>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "f4ee2de3393067d2ac28e072f42cae613765f056" ;
+  triage:orderIndex 0 .
