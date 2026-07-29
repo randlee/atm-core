@@ -16,7 +16,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
 TESTS = CRATE / "tests"
 PYTHON_SOURCE = CRATE / "python"
-HERMES_TEST_SHIM = TESTS / "hermes_gateway_shim"
+
+
+def bridge_test_environment(venv_dir: Path, python: Path) -> dict[str, str]:
+    """Build the isolated environment for checked-in steer-boundary tests."""
+
+    return {
+        **os.environ,
+        "VIRTUAL_ENV": str(venv_dir),
+        "PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}",
+        "PYTHONPATH": str(PYTHON_SOURCE),
+    }
 
 
 def main() -> None:
@@ -27,28 +37,7 @@ def main() -> None:
         maturin = shutil.which("maturin")
         if maturin is None:
             raise RuntimeError("maturin is required for the Hermes graft bridge test")
-        # The adapter contract test imports Hermes' gateway modules.  CI does
-        # not check out Hermes, so use the checked-in contract shim by default;
-        # operators can point HERMES_SRC at a real Hermes checkout to exercise
-        # the exact downstream classes instead.
-        hermes_src = os.environ.get("HERMES_SRC")
-        if hermes_src:
-            hermes_root = Path(hermes_src).expanduser().resolve()
-            if not (hermes_root / "gateway" / "platforms" / "base.py").is_file():
-                raise RuntimeError(
-                    "HERMES_SRC must point to a Hermes checkout containing "
-                    "gateway/platforms/base.py"
-                )
-            gateway_source = hermes_root
-        else:
-            gateway_source = HERMES_TEST_SHIM
-
-        env = {
-            **os.environ,
-            "VIRTUAL_ENV": str(venv_dir),
-            "PATH": f"{python.parent}{os.pathsep}{os.environ['PATH']}",
-            "PYTHONPATH": os.pathsep.join((str(gateway_source), str(PYTHON_SOURCE))),
-        }
+        env = bridge_test_environment(venv_dir, python)
         subprocess.run(
             [maturin, "develop", "--manifest-path", str(CRATE / "Cargo.toml")],
             check=True,
