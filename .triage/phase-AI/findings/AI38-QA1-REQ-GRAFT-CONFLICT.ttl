@@ -35,7 +35,7 @@
   triage:line 4076 ;
   triage:snippet "REQ-CORE-GRAFT-001 Graft is a thin embedded daemon client and bounded host-wake transport, not a second mailbox or host conversation subsystem." ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "current" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/current> .
@@ -46,7 +46,7 @@
   triage:line 190 ;
   triage:snippet "historical REQ-CORE-GRAFT-001 is retired by the Phase U graft restack. Any earlier graft-specific contract intent is superseded by REQ-CORE-TRANSPORT-001, REQ-CORE-TRANSPORT-002" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "current" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/current> .
@@ -57,7 +57,7 @@
   triage:line 38 ;
   triage:snippet "- REQ-CORE-GRAFT-001 (listed as Governing Requirement)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "current" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/current> .
@@ -68,7 +68,7 @@
   triage:line 38 ;
   triage:snippet "- REQ-CORE-GRAFT-001 (listed as Governing Requirement)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "current" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/current> .
@@ -79,7 +79,7 @@
   triage:line 44 ;
   triage:snippet "- REQ-CORE-GRAFT-001 (listed as Governing Requirement)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "develop" ;
   triage:headSha "current" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/current> .

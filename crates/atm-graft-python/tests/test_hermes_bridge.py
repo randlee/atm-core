@@ -71,7 +71,7 @@ class FakeLoop:
 class HermesBridgeTests(unittest.TestCase):
     def make_bridge(
         self,
-        delivered: list[tuple[str, str]],
+        delivered: list[atm_graft.PyNudge],
         limit: int = 1_024,
         *,
         session: FakeGraftSession | None = None,
@@ -81,16 +81,16 @@ class HermesBridgeTests(unittest.TestCase):
         bridge = HermesGraftBridge.__new__(HermesGraftBridge)
         bridge._session = session or FakeGraftSession()
         bridge._receiver_options = object()
-        bridge._inject_user_message = lambda chat, body: delivered.append((chat, body))
+        bridge._deliver_to_host = delivered.append
         bridge._recent_message_limit = limit
         bridge._recent_message_ids = OrderedDict()
         bridge._recovery_hook = recovery_hook
-        bridge._loop = loop
+        bridge._loop = loop or FakeLoop()
         bridge._recovery_timer = None
         return bridge
 
     def test_start_registers_one_graft_receiver_callback(self) -> None:
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered)
 
         bridge.start()
@@ -98,39 +98,52 @@ class HermesBridgeTests(unittest.TestCase):
         session = bridge._session
         self.assertEqual(session.activation_count, 1)
         self.assertTrue(callable(session.callback))
+        self.assertEqual(len(bridge._loop.calls), 1)
+        self.assertEqual(bridge._loop.calls[0][0], 10.0)
+
+    def test_recovery_inventory_runs_without_a_hook_and_reports_missing_delivery(self) -> None:
+        loop = FakeLoop()
+        bridge = self.make_bridge([], loop=loop)
+
+        with self.assertLogs("atm_graft_hermes_bridge", level="ERROR") as logs:
+            bridge.start()
+            loop.calls[0][1].callback()
+
+        self.assertEqual(bridge._session.count_calls, 1)
+        self.assertIn("graft_recovery_hook_missing", "\n".join(logs.output))
 
     def test_write_is_durable_before_hermes_observes_nudge(self) -> None:
         persisted_ids = {"01KX1TEST00000000000000000"}
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered)
         incoming = nudge("01KX1TEST00000000000000000")
 
-        def inject(chat: str, body: str) -> None:
+        def inject(received: atm_graft.PyNudge) -> None:
             self.assertIn(incoming.message_id, persisted_ids)
-            delivered.append((chat, body))
+            delivered.append(received)
 
-        bridge._inject_user_message = inject
+        bridge._deliver_to_host = inject
         bridge._deliver_nudge(incoming)
 
-        self.assertEqual(delivered, [("atm:hendrix:1234@hermes", "body")])
+        self.assertEqual(delivered, [incoming])
 
     def test_three_nudges_from_one_qualified_source_use_one_chat(self) -> None:
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered)
         for index in range(3):
             bridge._deliver_nudge(nudge(f"01KX1TEST0000000000000000{index}", body=f"body-{index}"))
 
-        self.assertEqual({chat for chat, _body in delivered}, {"atm:hendrix:1234@hermes"})
+        self.assertEqual({str(item.source) for item in delivered}, {"hendrix:1234@hermes"})
 
     def test_two_chat_ids_are_isolated(self) -> None:
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered)
         bridge._deliver_nudge(nudge("01KX1TEST00000000000000001", "1234", "one"))
         bridge._deliver_nudge(nudge("01KX1TEST00000000000000002", "5678", "two"))
 
         self.assertEqual(
-            [chat for chat, _body in delivered],
-            ["atm:hendrix:1234@hermes", "atm:hendrix:5678@hermes"],
+            [str(item.source) for item in delivered],
+            ["hendrix:1234@hermes", "hendrix:5678@hermes"],
         )
 
     def test_atm_namespace_cannot_collide_with_non_atm_chats(self) -> None:
@@ -143,14 +156,14 @@ class HermesBridgeTests(unittest.TestCase):
             atm_graft.PyAgentAddress("hendrix:bad", "hermes", "1234")
 
     def test_duplicate_nudge_does_not_create_a_second_hermes_turn(self) -> None:
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered)
         incoming = nudge("01KX1TEST00000000000000000")
 
         bridge._deliver_nudge(incoming)
         bridge._deliver_nudge(incoming)
 
-        self.assertEqual(delivered, [("atm:hendrix:1234@hermes", "body")])
+        self.assertEqual(delivered, [incoming])
 
     def test_recovery_notice_renders_exact_count_only_text(self) -> None:
         self.assertEqual(
@@ -240,13 +253,14 @@ class HermesBridgeTests(unittest.TestCase):
     def test_live_nudge_does_not_change_recovery_window(self) -> None:
         loop = FakeLoop()
         notices = []
-        delivered: list[tuple[str, str]] = []
+        delivered: list[atm_graft.PyNudge] = []
         bridge = self.make_bridge(delivered, loop=loop, recovery_hook=notices.append)
 
         bridge.start()
         timer = loop.calls[0][1]
         bridge._deliver_nudge(nudge("01KX1TEST00000000000000000"))
-        self.assertEqual(delivered, [("atm:hendrix:1234@hermes", "body")])
+        self.assertEqual([item.message_id for item in delivered], ["01KX1TEST00000000000000000"])
+        self.assertEqual([item.body for item in delivered], ["body"])
         self.assertFalse(timer.cancelled)
         self.assertEqual(len(loop.calls), 1)
 

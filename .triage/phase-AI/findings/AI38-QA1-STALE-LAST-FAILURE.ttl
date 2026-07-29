@@ -31,7 +31,9 @@
   triage:line 162 ;
   triage:snippet "Missing reset of self.last_failure to None after successful steer" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .

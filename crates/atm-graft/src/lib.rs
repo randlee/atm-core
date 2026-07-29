@@ -513,8 +513,8 @@ fn spawn_graft_receive_loop(
         .map_err(spawn_receive_loop_error)
 }
 
-fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError {
-    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to spawn graft receive loop").with_cause(source)
 }
 
 impl Drop for GraftSession {

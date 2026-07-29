@@ -33,7 +33,7 @@
   triage:line 347 ;
   triage:snippet "self.caller.team().cloned().expect(\"validated caller team\")," ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a" ;
   triage:occursIn <urn:atm:triage:worktree/S38/ce666b2a> .
@@ -44,7 +44,7 @@
   triage:line 382 ;
   triage:snippet "self.caller.team().cloned().expect(\"validated caller team\")," ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a" ;
   triage:occursIn <urn:atm:triage:worktree/S38/ce666b2a> .
@@ -55,7 +55,7 @@
   triage:line 415 ;
   triage:snippet "caller_team: self.caller.team().cloned().expect(\"validated caller team\")," ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a" ;
   triage:occursIn <urn:atm:triage:worktree/S38/ce666b2a> .

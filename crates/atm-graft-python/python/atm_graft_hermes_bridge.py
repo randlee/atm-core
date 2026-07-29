@@ -1,9 +1,8 @@
-"""Reference bridge from canonical ATM graft nudges to Hermes user input.
+"""Reference bridge from canonical ATM graft nudges to a host callback.
 
 This module is deliberately transport-free. ``atm_graft`` owns the daemon
-client and receiver lifecycle; Hermes owns its ordinary inbound-user-message
-path. The bridge only maps a typed source to an isolated chat and forwards the
-nudge body once.
+client and receiver lifecycle. The bridge forwards each typed nudge once to
+its host callback; the host owns its safe-boundary delivery semantics.
 """
 
 from __future__ import annotations
@@ -37,17 +36,17 @@ class HermesGraftBridge:
         self,
         caller: atm_graft.PyAgentAddress,
         receiver_options: atm_graft.PyGraftSessionOptions,
-        inject_user_message: Callable[[str, str], None],
+        deliver_nudge: Callable[[atm_graft.PyNudge], None],
         *,
         recent_message_limit: int = 1_024,
-        recovery_hook: Callable[[MailboxRecoveryNotice], None] | None = None,
+        recovery_hook: Callable[[MailboxRecoveryNotice], None],
         loop: object | None = None,
     ) -> None:
         if recent_message_limit < 1:
             raise ValueError("recent_message_limit must be positive")
         self._session = atm_graft.PyGraftSession(caller)
         self._receiver_options = receiver_options
-        self._inject_user_message = inject_user_message
+        self._deliver_to_host = deliver_nudge
         self._recent_message_limit = recent_message_limit
         self._recent_message_ids: OrderedDict[str, None] = OrderedDict()
         self._recovery_hook = recovery_hook
@@ -58,14 +57,13 @@ class HermesGraftBridge:
         """Activate the one existing graft receiver for this Hermes profile."""
 
         self._session.activate_receiver(self._receiver_options, self._deliver_nudge)
-        if self._recovery_hook is not None:
-            loop = self._loop
-            if loop is None:
-                import asyncio
-                loop = asyncio.get_running_loop()
-            self._cancel_recovery_timer()
-            self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)
-            LOGGER.info("graft_recovery_scheduled delay_seconds=%s", RECOVERY_DELAY_SECONDS)
+        loop = self._loop
+        if loop is None:
+            import asyncio
+            loop = asyncio.get_running_loop()
+        self._cancel_recovery_timer()
+        self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)
+        LOGGER.info("graft_recovery_scheduled delay_seconds=%s", RECOVERY_DELAY_SECONDS)
 
     def snapshot(self) -> atm_graft.PyGraftSessionSnapshot:
         """Return the existing graft receiver snapshot."""
@@ -101,7 +99,10 @@ class HermesGraftBridge:
             notice.unread,
             notice.pending_ack,
         )
-        if self._recovery_hook is not None and (notice.unread or notice.pending_ack):
+        if notice.unread or notice.pending_ack:
+            if self._recovery_hook is None:
+                LOGGER.error("graft_recovery_hook_missing")
+                return
             self._recovery_hook(notice)
             LOGGER.info("graft_recovery_summary_emitted")
         else:
@@ -112,12 +113,10 @@ class HermesGraftBridge:
         if message_id in self._recent_message_ids:
             return
 
-        chat_key = f"atm:{nudge.source}"
-        self._recent_message_ids[message_id] = None
         try:
-            self._inject_user_message(chat_key, nudge.body)
+            self._deliver_to_host(nudge)
         except Exception:
-            self._recent_message_ids.pop(message_id, None)
             raise
+        self._recent_message_ids[message_id] = None
         while len(self._recent_message_ids) > self._recent_message_limit:
             self._recent_message_ids.popitem(last=False)

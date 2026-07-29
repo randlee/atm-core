@@ -87,5 +87,7 @@ to make the one-profile path reliable.
   buckets, while the generic bridge schedules one cancellable ten-second
   recovery callback. The callback has no message body, replay, persistence,
   acknowledgement, or retry behavior.
-- AI.38: planned — Hermes steer injection and end-to-end non-interruption
-  evidence.
+- AI.38: complete — live and delayed recovery wakes both use the injected
+  `session.steer` port for the configured `ATM_CHAT_ID`. The checked-in
+  fixture proves accepted text appears only after a safe tool boundary, with
+  no normal inbound-message call, interruption, or mailbox mutation.

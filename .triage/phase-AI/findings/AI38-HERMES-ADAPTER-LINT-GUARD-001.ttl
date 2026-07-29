@@ -35,8 +35,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
   triage:headSha "1c7b9f0f0d5801c9dbfee60fd4f386bbf96e57a7" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s36/1c7b9f0> .
@@ -46,8 +46,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "4dba21c191ea89180983ef4a0362d206f3fed6c3" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s37/4dba21c> .
@@ -57,8 +57,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "66c832cb488dde0d672797b050c925e920907df8" ;
   triage:occursIn <urn:atm:triage:worktree/ai36-qa/66c832c> .
@@ -68,8 +68,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "testing/hermes-smoke-testing" ;
   triage:headSha "61e65d31aba35c289274571deef0b446888b386f" ;
   triage:occursIn <urn:atm:triage:worktree/smoke/61e65d3> .
@@ -79,8 +79,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/hermes-integration-continued" ;
   triage:headSha "e83ac3bd37485e098b7ac3ceeb2cd807a9913d91" ;
   triage:occursIn <urn:atm:triage:worktree/integration/e83ac3b> .
@@ -90,8 +90,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 299 ;
   triage:snippet "internal=False," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "5c6add7bdd9ba40c2089e260b3a985477672a977" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/5c6add7> .

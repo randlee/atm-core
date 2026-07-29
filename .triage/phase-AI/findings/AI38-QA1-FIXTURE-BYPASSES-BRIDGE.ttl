@@ -34,7 +34,9 @@
   triage:line 66 ;
   triage:snippet "await self.adapter.connect()" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -45,7 +47,9 @@
   triage:line 68 ;
   triage:snippet "await self.adapter.deliver_live_nudge(FixtureNudge(...))" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -56,7 +60,9 @@
   triage:line 76 ;
   triage:snippet "await self.adapter.connect()" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -67,7 +73,9 @@
   triage:line 79 ;
   triage:snippet "await self.adapter.deliver_recovery_summary(notice)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
