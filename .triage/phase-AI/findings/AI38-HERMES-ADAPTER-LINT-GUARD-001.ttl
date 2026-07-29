@@ -26,7 +26,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI38-HERMES-ADAPTER-LINT-GUARD-001/smoke-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI38-HERMES-ADAPTER-LINT-GUARD-001/integration-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI38-HERMES-ADAPTER-LINT-GUARD-001/integrate-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-29T19:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AI38-HERMES-ADAPTER-LINT-GUARD-001/s36-1>
   a triage:Occurrence ;
