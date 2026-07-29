@@ -46,6 +46,12 @@ to make the one-profile path reliable.
    profile's `ChatId` for validation/observability but does not add multi-chat
    routing, fan-out, or a second endpoint namespace. A future multi-channel
    feature must explicitly revise this ADR.
+6. A live steer injection failure while the receiver remains listening is
+   logged and surfaced to the host, but has no in-session retry, periodic
+   poll, normal-message fallback, or graft queue. The accepted recovery path
+   for this first release is a subsequent profile restart/reconnect, which
+   produces the one ten-second durable-mail summary. This residual is explicit
+   rather than hidden by an unbounded background mechanism.
 
 ## Consequences
 
@@ -55,6 +61,8 @@ to make the one-profile path reliable.
   its normal ATM skills to inspect/ack durable mail.
 - The implementation adds a small count projection over the existing daemon
   read contract; it adds no daemon session, mailbox table, queue, or protocol.
+- An in-session steer failure remains operator-observable residual risk until a
+  separately approved bounded recovery design exists.
 
 ## Alternatives considered
 

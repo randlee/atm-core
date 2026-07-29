@@ -1,5 +1,9 @@
 # Hermes Graft Adapter Contract
 
+> **Status:** AI.38 target contract. The current checked-in bridge is generic
+> `inject_user_message` callback plumbing; it does not yet contain the new
+> `atm_graft_hermes_adapter.py` artifact or a Hermes steer implementation.
+
 ## Scope
 
 `atm_graft_hermes_bridge.HermesGraftBridge` is the ATM-core reference adapter
@@ -41,8 +45,9 @@ and is not a nudge queue or replay.
 
 ## Downstream handoff
 
-Hermes maintainers copy or package this adapter in the Hermes repository,
-connect its narrow `HermesSteerPort` to Hermes's supported non-interrupting
-steer API, and validate it in that repository's normal review and test
-process. This ATM-core sprint changes no external checkout and does not make
-downstream Hermes merge status a closure gate.
+AI.38 supplies a checked-in `HermesSteerFixture` and
+`scripts/phase-ai/run-hermes-steer-smoke.py` as its merge-gating reference
+proof. Hermes maintainers may additionally copy or package the adapter in the
+Hermes repository and connect its narrow `HermesSteerPort` to the supported
+steer API. That downstream production merge is useful operational evidence but
+is not a closure gate for the ATM-core sprint.

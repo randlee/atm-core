@@ -15,7 +15,7 @@ sprint: AI.38
 worktree: feature/pAI-s38-hermes-steer-nudge-delivery
 branch: feature/pAI-s38-hermes-steer-nudge-delivery
 status: proposed
-estimated_scope: focused Python host-adapter replacement plus live evidence
+estimated_scope: focused new Python host adapter plus checked-in reference evidence
 ```
 
 ## Goal
@@ -27,10 +27,14 @@ interruption.
 
 ## Scope Summary
 
-This replaces the current `MessageEvent(..., internal=False)` normal inbound
-dispatch in `atm_graft_hermes_adapter.py`. It does not create a Hermes
-conversation manager, a multi-channel registry, another ATM transport, or an
-ATM message read/ack workflow.
+This sprint creates the currently absent
+`crates/atm-graft-python/python/atm_graft_hermes_adapter.py` and the narrow
+`HermesSteerPort` dispatch it consumes. The existing checked-in
+`atm_graft_hermes_bridge.py` remains a generic typed callback bridge. The
+`MessageEvent` normal-ingress pattern is an external Hermes pattern that this
+new adapter must not adopt. This sprint does not create a Hermes conversation
+manager, a multi-channel registry, another ATM transport, or an ATM message
+read/ack workflow.
 
 ## Governing Requirements
 
@@ -79,9 +83,10 @@ ATM message read/ack workflow.
 Development work:
 
 1. First commit sets all releasable assemblies to `1.4.0-beta-ai.38`.
-2. Replace the adapter's normal `_message_handler` invocation with one
-   injected async steer port tied to the configured profile `ChatId`.
-3. Bind the port to Hermes's documented non-interrupting steer API. The
+2. Create `atm_graft_hermes_adapter.py` with one injected async steer port
+   tied to the configured profile `ChatId`; do not add a normal-message
+   adapter first.
+3. Bind that port to Hermes's documented non-interrupting steer API. The
    adapter must await/report its result but must never fall back to normal
    user-message dispatch.
 
@@ -103,7 +108,7 @@ Required tests:
 
 - fake steer port records configured `ATM_CHAT_ID` and exact text for a live
   nudge and recovery notice;
-- fake normal message handler fails the test if called;
+- a sentinel normal-message handler fails the test if called;
 - no fallback occurs when steer fails; the failure is structured and visible.
 
 ### 2. Preserve one-profile identity without premature multi-channel work
@@ -125,12 +130,16 @@ Required tests:
 - a duplicate ULID generates one steer; distinct ULIDs generate two;
 - reconnect constructs one profile binding, not a session registry.
 
-### 3. End-to-end proof against a live Hermes profile
+### 3. Reproducible active-profile reference proof
 
 Development work:
 
-1. Extend the Hermes smoke harness to run a real profile with a controlled
-   active tool turn and a real graft nudge.
+1. Create `crates/atm-graft-python/tests/hermes_steer_fixture.py`,
+   `scripts/phase-ai/run-hermes-steer-smoke.py`, and its unit test
+   `scripts/phase-ai/test_run_hermes_steer_smoke.py`. The script must use the
+   checked-in `HermesSteerFixture`: an ATM-controlled reference profile that
+   implements the documented steer-port contract and has a controlled active
+   tool turn. It is not a downstream production Hermes checkout.
 2. Capture evidence that the steer is accepted for the configured session and
    becomes visible after the current safe tool boundary without interrupting
    or replacing that task.
@@ -162,22 +171,27 @@ reliable in production.
 
 1. Every live and recovery ATM wake-up uses the configured Hermes steer path.
 2. No ATM wake-up invokes normal inbound-user-message dispatch.
-3. A real active Hermes agent receives the wake-up at a safe boundary without
-   interruption, while durable ATM mail remains unchanged until its normal ATM
-   skills act.
+3. The checked-in active-profile reference fixture receives the wake-up at a
+   safe boundary without interruption, while durable ATM mail remains
+   unchanged until normal ATM skills act. A separately retained downstream
+   Hermes smoke run is useful operational evidence but is not a merge gate.
 4. One configured profile/session works independently of other profiles.
 
 ## Required Validation
 
 ```text
-python3 -m unittest crates/atm-graft-python/tests/test_hermes_adapter.py
+python3 -m unittest crates/atm-graft-python/tests/test_hermes_adapter.py  # new in AI.38
 python3 -m unittest crates/atm-graft-python/tests/test_hermes_bridge.py
+python3 scripts/phase-ai/run-hermes-steer-smoke.py --fixture
 just test-hermes-graft-bridge
 just lint
 just test
 ```
 
-Plus retained real-Hermes evidence for one live nudge and one recovery summary.
+`run-hermes-steer-smoke.py --fixture` writes the Sub-Task 3 JSON evidence
+schema for one live nudge and one recovery summary. A real downstream Hermes
+run may be retained as operational evidence but cannot replace the checked-in
+fixture proof or block this sprint on an external merge.
 
 ## Required Document Updates
 

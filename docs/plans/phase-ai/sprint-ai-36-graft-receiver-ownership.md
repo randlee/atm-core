@@ -78,10 +78,11 @@ Development work:
    format with a random `owner_generation` and the optional owning `ChatId`.
    Bump `GRAFT_RECEIVER_RECORD_SCHEMA_VERSION`; old records fail closed rather
    than being guessed as live owners.
-3. Add a private ownership guard acquired before record publication. Its
-   cross-platform implementation must use an OS-released exclusive file lock
-   on a sibling lock path; do not use a create-only sentinel that survives a
-   crashed process.
+3. Add a private ownership guard acquired before record publication. Reuse the
+   repository's existing `fs2::FileExt::try_lock_exclusive()` precedent from
+   `crates/atm-daemon/src/host_ownership.rs`; `fs2` maps this to advisory file
+   locking on Unix and `LockFileEx` on Windows. Do not use a create-only
+   sentinel that survives a crashed process.
 
 Required shape:
 
