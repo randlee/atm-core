@@ -15,7 +15,7 @@
   triage:severity "critical" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "fixed" ;
+  triage:status "open" ;
   triage:dispatchReady false ;
   triage:triagedAt "2026-07-29T16:45:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S18 ;
@@ -41,8 +41,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "5c6add7b" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/5c6add7b> .
@@ -52,8 +52,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 31 ;
   triage:snippet "self._inject_user_message = inject_user_message" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "5c6add7b" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/5c6add7b> .
@@ -63,8 +63,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/hermes-integration-continued" ;
   triage:headSha "e83ac3bd" ;
   triage:occursIn <urn:atm:triage:worktree/continued/e83ac3bd> .
@@ -74,8 +74,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 31 ;
   triage:snippet "self._inject_user_message = inject_user_message" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/hermes-integration-continued" ;
   triage:headSha "e83ac3bd" ;
   triage:occursIn <urn:atm:triage:worktree/continued/e83ac3bd> .
@@ -85,8 +85,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "testing/hermes-smoke-testing" ;
   triage:headSha "61e65d31" ;
   triage:occursIn <urn:atm:triage:worktree/test-smoke/61e65d31> .
@@ -96,8 +96,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 31 ;
   triage:snippet "self._inject_user_message = inject_user_message" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "testing/hermes-smoke-testing" ;
   triage:headSha "61e65d31" ;
   triage:occursIn <urn:atm:triage:worktree/test-smoke/61e65d31> .
@@ -107,8 +107,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 265 ;
   triage:snippet "source = SessionSource(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "testing/hermes-atm-graft" ;
   triage:headSha "7673152a" ;
   triage:occursIn <urn:atm:triage:worktree/test-graft/7673152a> .
@@ -118,8 +118,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 31 ;
   triage:snippet "self._inject_user_message = inject_user_message" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "testing/hermes-atm-graft" ;
   triage:headSha "7673152a" ;
   triage:occursIn <urn:atm:triage:worktree/test-graft/7673152a> .
@@ -129,8 +129,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "66c832cb" ;
   triage:occursIn <urn:atm:triage:worktree/repair/66c832cb> .
@@ -140,8 +140,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 31 ;
   triage:snippet "self._inject_user_message = inject_user_message" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "fix/ai36-qa-repair" ;
   triage:headSha "66c832cb" ;
   triage:occursIn <urn:atm:triage:worktree/repair/66c832cb> .
@@ -151,8 +151,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "4dba21c1" ;
   triage:occursIn <urn:atm:triage:worktree/s37/4dba21c1> .
@@ -162,8 +162,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 40 ;
   triage:snippet "inject_user_message: Callable[[str, str], None]," ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "4dba21c1" ;
   triage:occursIn <urn:atm:triage:worktree/s37/4dba21c1> .
@@ -173,8 +173,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 295 ;
   triage:snippet "event = MessageEvent(" ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
   triage:headSha "1c7b9f0f" ;
   triage:occursIn <urn:atm:triage:worktree/s36/1c7b9f0f> .
@@ -184,8 +184,8 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 23 ;
   triage:snippet "inject_user_message: Callable[[str, str], None]," ;
-  triage:status "fixed" ;
-  triage:closed true ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
   triage:headSha "1c7b9f0f" ;
   triage:occursIn <urn:atm:triage:worktree/s36/1c7b9f0f> .
