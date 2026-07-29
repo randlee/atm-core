@@ -948,7 +948,7 @@ Acceptance:
   - branch: `chore/docs-restructure`
   - authoritative source: `docs/adr/INDEX.md`
 
-## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.36; readiness blocked]
+## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.31; readiness blocked]
 
 Planning branch: `plan/phase-ai-planning`
 Integration branch: `integrate/phase-AI`
@@ -1013,7 +1013,7 @@ Implementation Branches:
 | `AI.34` | `in_progress` | `fix/hermes-nudge-endpoint-mismatch` | Hermes graft nudge-endpoint reconciliation |
 | `AI.35` | `in_progress` | `feature/pAI-s35-graft-root-fallback-observability` | graft-root fallback observability |
 | `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | OS-backed singleton graft receiver ownership with generation-safe record cleanup |
-| `AI.37` | `proposed` | `feature/pAI-s37-hermes-recovery-summary` | one delayed durable-work recovery summary |
+| `AI.37` | `complete` | `feature/pAI-s37-hermes-recovery-summary` | one ten-second daemon-count recovery summary with no graft queue or mailbox mutation |
 | `AI.38` | `proposed` | `feature/pAI-s38-hermes-steer-nudge-delivery` | non-interrupting Hermes steer nudge delivery |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).

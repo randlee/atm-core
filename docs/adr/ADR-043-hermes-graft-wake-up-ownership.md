@@ -83,5 +83,9 @@ to make the one-profile path reliable.
   stale-record replacement, concurrent distinct identities, and a real
   child-process crash/reclaim proof executed by the macOS, Linux, and Windows
   CI test matrix.
-- AI.37: one delayed durable-work summary after profile recovery.
-- AI.38: Hermes steer injection and end-to-end non-interruption evidence.
+- AI.37: complete — `MailboxWorkCounts` projects only existing daemon read
+  buckets, while the generic bridge schedules one cancellable ten-second
+  recovery callback. The callback has no message body, replay, persistence,
+  acknowledgement, or retry behavior.
+- AI.38: planned — Hermes steer injection and end-to-end non-interruption
+  evidence.
