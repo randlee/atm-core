@@ -262,13 +262,25 @@ class AtmGraftAdapter(_hermes_types()[1]):
         from gateway.session import SessionSource
         from gateway.config import Platform
 
+        # Graft is an ingress transport, not a second Hermes conversation.
+        # Route the synthetic event into the configured Telegram DM so it
+        # shares the live Telegram session and normal Telegram egress.  The
+        # ATM sender remains useful as the synthetic user identity, but must
+        # not become the session/chat key (that would create an isolated
+        # ``platform=local`` conversation and never wake Telegram).
+        telegram_platform = getattr(Platform, "TELEGRAM", Platform.LOCAL)
+        if not self._chat_id:
+            logger.error(
+                "ATM graft nudge dropped: ATM_CHAT_ID is required for Telegram routing"
+            )
+            return
+
         source = SessionSource(
-            platform=Platform.ATM if hasattr(Platform, "ATM") else Platform.LOCAL,
-            # Preserve the canonical graft chat key so Hermes replies route
-            # back through ``send`` to the originating ATM address/chat.
-            chat_id=chat_key,
+            platform=telegram_platform,
+            chat_id=self._chat_id,
             chat_type="dm",
-            user_id=chat_key,
+            user_id=f"atm-graft-{self._agent}",
+            user_name=chat_key,
         )
 
         event = MessageEvent(

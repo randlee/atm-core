@@ -10,4 +10,4 @@ class SessionSource:
     chat_id: str
     chat_type: str
     user_id: str
-
+    user_name: str | None = None

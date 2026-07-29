@@ -33,12 +33,14 @@ for client operations; it is not a separate receiver endpoint. Keep the bridge
 alive for the gateway lifetime and call `bridge.close()` during shutdown.
 
 The receiver callback runs from the graft receiver thread. The Hermes adapter
-maps the canonical source address to an isolated ATM chat key and schedules a
-native internal message on the gateway event loop:
+keeps the canonical source address as sender metadata, then schedules a native
+internal message on the configured Telegram chat on the gateway event loop:
 
 ```text
 PyNudge(source=hendrix:1234@hermes, body=...) →
-atm:hendrix:1234@hermes → MessageEvent(internal=True) → gateway._handle_message()
+atm:hendrix:1234@hermes (sender metadata) →
+MessageEvent(internal=True, platform=telegram, chat_id=<configured>) →
+gateway._handle_message()
 ```
 
 The callback uses `asyncio.run_coroutine_threadsafe()` (or the equivalent
@@ -68,7 +70,10 @@ The gateway environment supplies:
 - `ATM_IDENTITY` — the agent name;
 - `ATM_TEAM` — the ATM team name;
 - `ATM_HOME` — the ATM home/workspace root; and
-- the Hermes-side chat ID, such as the Telegram chat ID.
+- `ATM_CHAT_ID` — the Telegram chat ID that receives graft-injected messages.
+
+`ATM_CHAT_ID` is required for the Hermes adapter. Without it, graft nudges are
+dropped rather than being misrouted into an isolated local session.
 
 The ATM roster must also identify the workspace root where the gateway's graft
 endpoint is published. If the gateway profile's `ATM_HOME` differs from its

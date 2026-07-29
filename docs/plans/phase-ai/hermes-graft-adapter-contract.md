@@ -47,6 +47,16 @@ The callback is emitted only after the canonical write is durable. A failed
 host injection propagates to the existing graft callback caller; the bridge
 does not retry or persist a delivery result.
 
+## Telegram routing
+
+`HermesGraftBridge` emits the canonical ATM chat key to its host callback. The
+Hermes `AtmGraftAdapter` must not use that key as a second Hermes conversation:
+it creates an internal event on `Platform.TELEGRAM` with the configured
+`ATM_CHAT_ID`, preserving the ATM key only as sender metadata. This is what
+wakes the live Telegram session and sends the normal response back to Telegram.
+`ATM_CHAT_ID` is required; a missing value fails closed and logs a routing
+error instead of falling back to `Platform.LOCAL`.
+
 ## Downstream handoff
 
 Hermes maintainers copy or package this adapter in the Hermes repository,
