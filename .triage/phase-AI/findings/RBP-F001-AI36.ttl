@@ -21,7 +21,11 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "promoted branch (full file)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:note "FIXED on fix/ai36-qa-repair@9cf129e6: all map_err(|_source| ...) sites in crates/atm-core/src/graft.rs were converted to .map_err(|source| ...).with_cause(source). Verified via grep: 0 remaining `map_err(|_source|` occurrences, 20 `.with_cause(source)` call sites." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-28T00:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S16 ;
@@ -52,8 +56,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 132 ;
   triage:snippet ".map_err(|_source| AtmError::daemon_unavailable(write_error))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -63,8 +67,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 143 ;
   triage:snippet ".map_err(|_source| AtmError::daemon_unavailable(read_error))?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -74,8 +78,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 151 ;
   triage:snippet ".map_err(|_source| AtmError::daemon_unavailable(read_error))?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -85,8 +89,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 153 ;
   triage:snippet ".map_err(|_source| AtmError::validation(...))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -96,8 +100,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 235 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -107,8 +111,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 241 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -118,8 +122,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 247 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -129,8 +133,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 288 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -140,8 +144,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 347 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -151,8 +155,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 354 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -162,8 +166,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 395 ;
   triage:snippet ".map_err(|_source| { AtmError::timeout(...) })" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -173,8 +177,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 415 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -184,8 +188,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 428 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -195,8 +199,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 433 ;
   triage:snippet ".map_err(|_source| { AtmError::validation(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -206,8 +210,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 441 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -217,8 +221,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 498 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -228,8 +232,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 504 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -239,8 +243,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 513 ;
   triage:snippet ".map_err(|_source| { AtmError::daemon_unavailable(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .
@@ -250,8 +254,8 @@
   triage:file "crates/atm-core/src/graft.rs" ;
   triage:line 523 ;
   triage:snippet ".map_err(|_source| { AtmError::validation(...) })?;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "76848ce1" ;
   triage:occursIn <urn:atm:triage:worktree/integrate/phase-ai-31-33/76848ce1> .

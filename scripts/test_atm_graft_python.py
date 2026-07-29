@@ -11,6 +11,8 @@ import sys
 import tempfile
 import venv
 
+from graft_receiver_reclaim import verify_cross_process_receiver_reclaim
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
@@ -52,6 +54,7 @@ def main() -> None:
             check=True,
             cwd=ROOT,
         )
+    verify_cross_process_receiver_reclaim(ROOT)
 
 
 if __name__ == "__main__":

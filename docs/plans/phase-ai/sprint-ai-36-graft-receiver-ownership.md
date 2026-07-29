@@ -2,7 +2,7 @@
 title: AI.36 graft receiver ownership
 status: complete
 branch: feature/pAI-s36-graft-receiver-ownership
-target: integrate/phase-ai-31-33
+target: integrate/phase-AI
 depends_on: AI.35
 ---
 
@@ -73,7 +73,8 @@ recorded for validation/observability only and does not change that path.
 
 Development work:
 
-1. First commit sets all releasable assemblies to `1.4.0-beta-ai.36`.
+1. First commit sets all releasable Rust assemblies to `1.4.0-beta.36` and
+   Python packaging metadata to the equivalent PEP 440 `1.4.0b36`.
 2. In `crates/atm-core/src/graft.rs`, extend the private endpoint-record
    format with a random `owner_generation` and the optional owning `ChatId`.
    Bump `GRAFT_RECEIVER_RECORD_SCHEMA_VERSION`; old records fail closed rather
@@ -165,7 +166,7 @@ model deserves its own closure.
 ## Required Validation
 
 ```text
-cargo test -p atm-core graft -- --nocapture
+cargo test -p agent-team-mail-core graft -- --nocapture
 cargo test -p atm-graft -- --nocapture
 cargo test -p atm-graft-python -- --nocapture
 just lint
