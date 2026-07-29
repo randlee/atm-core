@@ -58,6 +58,20 @@ class NoNormalMessageFallbackPort(RecordingSteerPort):
 
 
 class HermesAdapterContractTests(unittest.TestCase):
+    def test_adapter_source_forbids_retired_normal_ingress_symbols(self) -> None:
+        source = (ADAPTER_ROOT / "atm_graft_hermes_adapter.py").read_text(encoding="utf-8")
+
+        for retired_symbol in (
+            "MessageEvent",
+            "SessionSource",
+            "internal=False",
+            "inject_user_message",
+            "BasePlatformAdapter",
+            "register_platform",
+        ):
+            with self.subTest(retired_symbol=retired_symbol):
+                self.assertNotIn(retired_symbol, source)
+
     def test_live_nudge_uses_configured_session_and_preserves_source_as_attribution(self) -> None:
         async def scenario() -> None:
             port = RecordingSteerPort()
@@ -215,6 +229,34 @@ class HermesAdapterContractTests(unittest.TestCase):
             await asyncio.sleep(0)
 
             self.assertEqual(port.calls, [("host-session", "threaded")])
+
+        asyncio.run(scenario())
+
+    def test_scheduled_failure_is_reported_to_the_host_and_cleared_after_success(self) -> None:
+        async def scenario() -> None:
+            failures: list[HermesSteerFailure] = []
+            reported = asyncio.Event()
+
+            def report(failure: HermesSteerFailure) -> None:
+                failures.append(failure)
+                reported.set()
+
+            port = RecordingSteerPort(RuntimeError("gateway unavailable"))
+            adapter = AtmGraftAdapter(
+                chat_id="host-session",
+                steer_port=port,
+                failure_hook=report,
+            )
+            await adapter.connect()
+            adapter.live_nudge_callback(FakeNudge("01KX1TEST00000000000000012", "sender@team", "fail"))
+            await asyncio.wait_for(reported.wait(), timeout=1)
+
+            self.assertEqual([failure.code for failure in failures], ["steer_error"])
+            self.assertEqual(adapter.last_failure.code, "steer_error")
+
+            port.failure = None
+            await adapter.deliver_live_nudge(FakeNudge("01KX1TEST00000000000000013", "sender@team", "pass"))
+            self.assertIsNone(adapter.last_failure)
 
         asyncio.run(scenario())
 

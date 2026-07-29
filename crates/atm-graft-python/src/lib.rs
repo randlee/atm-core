@@ -337,6 +337,13 @@ impl PyGraftSession {
         ))
     }
 
+    fn caller_team(&self) -> PyResult<TeamName> {
+        self.caller
+            .team()
+            .cloned()
+            .ok_or_else(|| PyRuntimeError::new_err("ATM graft caller identity requires a team"))
+    }
+
     fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
         let (home_dir, current_dir) = Self::command_paths()?;
         ReadQuery::new(
@@ -344,7 +351,7 @@ impl PyGraftSession {
             current_dir,
             self.caller.agent().clone(),
             None,
-            self.caller.team().cloned().expect("validated caller team"),
+            self.caller_team()?,
             ReadSelection::All,
             false,
             seen_state_update,
@@ -379,7 +386,7 @@ impl PyGraftSession {
             current_dir,
             self.caller.agent().clone(),
             &to.to_typed()?.to_string(),
-            self.caller.team().cloned().expect("validated caller team"),
+            self.caller_team()?,
             SendMessageSource::Inline(body),
             None,
             requires_ack,
@@ -412,7 +419,7 @@ impl PyGraftSession {
             current_dir,
             caller_identity: self.caller.agent().clone(),
             caller_chat_id: self.caller.chat_id().cloned(),
-            caller_team: self.caller.team().cloned().expect("validated caller team"),
+            caller_team: self.caller_team()?,
             message_id: message_id
                 .parse()
                 .map_err(|error| PyValueError::new_err(format!("invalid message id: {error}")))?,

@@ -19,13 +19,12 @@ acknowledgement path.
 
 `just test-hermes-graft-bridge` builds the Maturin extension in an isolated
 virtual environment and runs both `test_hermes_bridge.py` and
-`test_hermes_adapter.py`. The latter imports the checked-in, dependency-free
-Hermes gateway contract shim at
-`crates/atm-graft-python/tests/hermes_gateway_shim` so the adapter contract is
-actually exercised in CI. To run the same tests against a Hermes checkout,
-set `HERMES_SRC` to its repository root; it must contain
-`gateway/platforms/base.py`. The shim is only a test harness and is not used
-by the installed plugin.
+`test_hermes_adapter.py`. Those tests use only checked-in fake steer ports and
+the checked-in `HermesSteerFixture`; they do not import a Hermes checkout or a
+gateway shim. This makes the boundary, no-normal-ingress guard, and safe-tool
+turn proof reproducible in CI. A downstream Hermes checkout may separately
+bind `HermesRpcSteerPort` to its authenticated RPC client, but is operational
+evidence rather than this sprint's merge gate.
 
 ## Supported Hermes steer contract
 

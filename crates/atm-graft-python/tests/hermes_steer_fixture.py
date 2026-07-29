@@ -8,15 +8,25 @@ not model a normal inbound message, an interrupt, or an ATM mailbox.
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 import sys
+from types import ModuleType
 
 PYTHON_SOURCE = Path(__file__).resolve().parents[1] / "python"
 if str(PYTHON_SOURCE) not in sys.path:
     sys.path.insert(0, str(PYTHON_SOURCE))
 
 from atm_graft_hermes_adapter import AtmGraftAdapter  # noqa: E402
+
+# The fixture executes the real bridge source without requiring its compiled
+# pyo3 extension. It configures the bridge through ``__new__`` below, so only
+# its postponed annotations need this minimal import placeholder.
+if "atm_graft" not in sys.modules:
+    sys.modules["atm_graft"] = ModuleType("atm_graft")
+
+from atm_graft_hermes_bridge import HermesGraftBridge  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -35,6 +45,40 @@ class FixtureRecoveryNotice:
         return f"ATM: {self.unread} unread messages; {self.pending_ack} acknowledgements pending."
 
 
+class FixtureTimer:
+    def __init__(self, callback) -> None:
+        self.callback = callback
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+class FixtureLoop:
+    def __init__(self) -> None:
+        self.calls: list[tuple[float, FixtureTimer]] = []
+
+    def call_later(self, delay: float, callback) -> FixtureTimer:
+        timer = FixtureTimer(callback)
+        self.calls.append((delay, timer))
+        return timer
+
+
+class FixtureGraftSession:
+    def __init__(self, *, unread: int = 2, pending_ack: int = 3) -> None:
+        self.unread = unread
+        self.pending_ack = pending_ack
+        self.activation_count = 0
+        self.count_calls = 0
+
+    def activate_receiver(self, _options: object, _callback: object) -> None:
+        self.activation_count += 1
+
+    def mailbox_work_counts(self):
+        self.count_calls += 1
+        return type("Counts", (), {"unread": self.unread, "pending_ack": self.pending_ack})()
+
+
 class HermesSteerFixture:
     """A one-session, active-tool reference host implementing ``HermesSteerPort``."""
 
@@ -48,6 +92,17 @@ class HermesSteerFixture:
         self._pending_steers: list[str] = []
         self.visible_after_safe_boundary: list[str] = []
         self.adapter = AtmGraftAdapter(chat_id=chat_id, steer_port=self)
+        self._bridge_session = FixtureGraftSession()
+        self._bridge_loop = FixtureLoop()
+        self._bridge = HermesGraftBridge.__new__(HermesGraftBridge)
+        self._bridge._session = self._bridge_session
+        self._bridge._receiver_options = object()
+        self._bridge._deliver_to_host = self.adapter.live_nudge_callback
+        self._bridge._recent_message_limit = 1_024
+        self._bridge._recent_message_ids = OrderedDict()
+        self._bridge._recovery_hook = self.adapter.recovery_summary_callback
+        self._bridge._loop = self._bridge_loop
+        self._bridge._recovery_timer = None
 
     async def steer(self, *, chat_id: str, text: str) -> None:
         if chat_id != self.chat_id:
@@ -65,9 +120,14 @@ class HermesSteerFixture:
     async def prove_live_nudge(self) -> dict[str, object]:
         await self.adapter.connect()
         text = "ATM: live nudge available."
-        await self.adapter.deliver_live_nudge(
+        self._bridge.start()
+        self._bridge._deliver_nudge(
             FixtureNudge("01KX1TEST00000000000000006", "sender:telegram-chat@team", text)
         )
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        if self._bridge_session.count_calls != 0:
+            raise AssertionError("live nudge must not run the delayed recovery inventory")
         self._assert_safe_before_boundary()
         self.finish_current_tool_boundary()
         return self._evidence("live_nudge", text)
@@ -76,7 +136,14 @@ class HermesSteerFixture:
         await self.adapter.connect()
         notice = FixtureRecoveryNotice(2, 3)
         text = notice.render()
-        await self.adapter.deliver_recovery_summary(notice)
+        self._bridge.start()
+        if self._bridge_loop.calls[0][0] != 10.0:
+            raise AssertionError("recovery inventory must be scheduled exactly ten seconds after activation")
+        self._bridge_loop.calls[0][1].callback()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        if self._bridge_session.count_calls != 1:
+            raise AssertionError("recovery inventory must read durable mailbox counts exactly once")
         self._assert_safe_before_boundary()
         self.finish_current_tool_boundary()
         return self._evidence("recovery_summary", text)

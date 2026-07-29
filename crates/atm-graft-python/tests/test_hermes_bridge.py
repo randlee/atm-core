@@ -85,7 +85,7 @@ class HermesBridgeTests(unittest.TestCase):
         bridge._recent_message_limit = limit
         bridge._recent_message_ids = OrderedDict()
         bridge._recovery_hook = recovery_hook
-        bridge._loop = loop
+        bridge._loop = loop or FakeLoop()
         bridge._recovery_timer = None
         return bridge
 
@@ -98,6 +98,19 @@ class HermesBridgeTests(unittest.TestCase):
         session = bridge._session
         self.assertEqual(session.activation_count, 1)
         self.assertTrue(callable(session.callback))
+        self.assertEqual(len(bridge._loop.calls), 1)
+        self.assertEqual(bridge._loop.calls[0][0], 10.0)
+
+    def test_recovery_inventory_runs_without_a_hook_and_reports_missing_delivery(self) -> None:
+        loop = FakeLoop()
+        bridge = self.make_bridge([], loop=loop)
+
+        with self.assertLogs("atm_graft_hermes_bridge", level="ERROR") as logs:
+            bridge.start()
+            loop.calls[0][1].callback()
+
+        self.assertEqual(bridge._session.count_calls, 1)
+        self.assertIn("graft_recovery_hook_missing", "\n".join(logs.output))
 
     def test_write_is_durable_before_hermes_observes_nudge(self) -> None:
         persisted_ids = {"01KX1TEST00000000000000000"}

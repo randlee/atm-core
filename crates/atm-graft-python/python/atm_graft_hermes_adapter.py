@@ -108,6 +108,7 @@ class AtmGraftAdapter:
         chat_id: str,
         steer_port: HermesSteerPort,
         attribution_limit: int = 1_024,
+        failure_hook: Callable[[HermesSteerFailure], None] | None = None,
     ) -> None:
         if not chat_id.strip():
             raise ValueError("ATM_CHAT_ID is required for Hermes steer delivery")
@@ -118,6 +119,7 @@ class AtmGraftAdapter:
         self._attribution_limit = attribution_limit
         self._attribution: OrderedDict[str, HermesNudgeAttribution] = OrderedDict()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._failure_hook = failure_hook
         self.last_failure: HermesSteerFailure | None = None
 
     async def connect(self) -> None:
@@ -157,6 +159,7 @@ class AtmGraftAdapter:
             if not text.strip():
                 raise HermesSteerFailure("invalid_text", self._chat_id, "steer text is blank")
             await self._steer_port.steer(chat_id=self._chat_id, text=text)
+            self.last_failure = None
         except HermesSteerFailure as failure:
             self.last_failure = failure
             LOGGER.error("hermes_steer_delivery_failed code=%s chat_id=%s", failure.code, failure.chat_id)
@@ -198,6 +201,13 @@ class AtmGraftAdapter:
         try:
             task.result()
         except HermesSteerFailure as failure:
-            LOGGER.error("hermes_steer_delivery_failed code=%s chat_id=%s", failure.code, failure.chat_id)
-        except Exception:
-            LOGGER.exception("hermes_steer_delivery_failed code=unexpected chat_id=%s", self._chat_id)
+            self._report_failure(failure)
+        except Exception as exc:
+            failure = HermesSteerFailure("unexpected", self._chat_id, str(exc))
+            self.last_failure = failure
+            self._report_failure(failure)
+
+    def _report_failure(self, failure: HermesSteerFailure) -> None:
+        LOGGER.error("hermes_steer_delivery_failed code=%s chat_id=%s", failure.code, failure.chat_id)
+        if self._failure_hook is not None:
+            self._failure_hook(failure)

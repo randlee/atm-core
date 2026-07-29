@@ -39,7 +39,7 @@ class HermesGraftBridge:
         deliver_nudge: Callable[[atm_graft.PyNudge], None],
         *,
         recent_message_limit: int = 1_024,
-        recovery_hook: Callable[[MailboxRecoveryNotice], None] | None = None,
+        recovery_hook: Callable[[MailboxRecoveryNotice], None],
         loop: object | None = None,
     ) -> None:
         if recent_message_limit < 1:
@@ -57,14 +57,13 @@ class HermesGraftBridge:
         """Activate the one existing graft receiver for this Hermes profile."""
 
         self._session.activate_receiver(self._receiver_options, self._deliver_nudge)
-        if self._recovery_hook is not None:
-            loop = self._loop
-            if loop is None:
-                import asyncio
-                loop = asyncio.get_running_loop()
-            self._cancel_recovery_timer()
-            self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)
-            LOGGER.info("graft_recovery_scheduled delay_seconds=%s", RECOVERY_DELAY_SECONDS)
+        loop = self._loop
+        if loop is None:
+            import asyncio
+            loop = asyncio.get_running_loop()
+        self._cancel_recovery_timer()
+        self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)
+        LOGGER.info("graft_recovery_scheduled delay_seconds=%s", RECOVERY_DELAY_SECONDS)
 
     def snapshot(self) -> atm_graft.PyGraftSessionSnapshot:
         """Return the existing graft receiver snapshot."""
@@ -100,7 +99,10 @@ class HermesGraftBridge:
             notice.unread,
             notice.pending_ack,
         )
-        if self._recovery_hook is not None and (notice.unread or notice.pending_ack):
+        if notice.unread or notice.pending_ack:
+            if self._recovery_hook is None:
+                LOGGER.error("graft_recovery_hook_missing")
+                return
             self._recovery_hook(notice)
             LOGGER.info("graft_recovery_summary_emitted")
         else:
