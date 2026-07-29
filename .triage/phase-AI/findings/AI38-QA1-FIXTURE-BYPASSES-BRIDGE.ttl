@@ -15,7 +15,7 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-29T17:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-S18 ;
@@ -31,8 +31,10 @@
   triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
   triage:line 66 ;
   triage:snippet "await self.adapter.connect()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -42,8 +44,10 @@
   triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
   triage:line 68 ;
   triage:snippet "await self.adapter.deliver_live_nudge(FixtureNudge(...))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -53,8 +57,10 @@
   triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
   triage:line 76 ;
   triage:snippet "await self.adapter.connect()" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
@@ -64,8 +70,10 @@
   triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
   triage:line 79 ;
   triage:snippet "await self.adapter.deliver_recovery_summary(notice)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T17:15:00Z"^^xsd:dateTime ;
+  triage:closedBy "arch-ctm" ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
   triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
