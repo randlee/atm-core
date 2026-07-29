@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI37-001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI37-001" ;
+  triage:title "atm-graft-python has no owned boundary TOML enforcing its no-SQLite/HTTP/routing contract" ;
+  triage:description "The atm-graft-python crate is stated (per requirements.md / ADR-043 / hermes-graft-adapter-contract.md) to hold a 'no SQLite/HTTP/routing-policy' contract, but unlike every other crate in the workspace (atm-core, atm-daemon, atm, atm-storage, atm-storage-rusqlite, atm-runtime, atm-graft, atm-daemon-client all have owned boundaries/<crate>/*.toml files), atm-graft-python has no boundaries/atm-graft-python/ directory at all. Confirmed absent: `ls boundaries/` on integrate/phase-ai-31-33 lists no atm-graft-python entry. The 'no SQLite/HTTP/routing' contract is therefore enforced only by convention/inspection, not mechanically by sc-lint-boundary. Recommend adding boundaries/atm-graft-python/*.toml declaring the forbidden dependency edges (rusqlite, reqwest/hyper/axum, any routing-decision crate)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary_gap" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate_wide" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge false ;
+  triage:note "No boundaries/atm-graft-python/ directory exists (verified against the full boundaries/ listing on integrate/phase-ai-31-33 @ e1c68a39). Remediation: add boundaries/atm-graft-python/*.toml enforcing no-SQLite/no-HTTP/no-routing-policy edges consistent with the stated contract, matching the pattern used by boundaries/atm-graft/*.toml." ;
+  triage:foundIn triage:AI37-QA-1 ;
+  triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T07:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI37-001/boundaries-dir> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> ;
+  triage:highestOpenBranch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI37-001/boundaries-dir>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft-python" ;
+  triage:line 0 ;
+  triage:snippet "boundaries/atm-graft-python/ does not exist; no owned boundary TOML for this crate." ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "e1c68a398a2f15e6bde9d716d127abdc1bd67ede" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:headSha "e1c68a398a2f15e6bde9d716d127abdc1bd67ede" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:orderIndex 2 .

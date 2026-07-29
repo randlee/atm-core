@@ -32,7 +32,9 @@ use rustls::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+use crate::active_connection_registry::{
+    ActiveConnectionGuard, ActiveConnectionRegistry, TrackedDispatchHandle,
+};
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_PEER_HTTP_CONNECTIONS: usize = 64;
@@ -422,22 +424,27 @@ fn accept_loop(
     while !stop.load(std::sync::atomic::Ordering::SeqCst) {
         match listener.accept() {
             Ok((stream, _)) => {
-                match peer_connection_admission(
-                    stop.load(std::sync::atomic::Ordering::SeqCst),
-                    requests.active_connections(),
-                ) {
+                match peer_connection_admission(stop.load(std::sync::atomic::Ordering::SeqCst)) {
                     PeerConnectionAdmission::Stop => break,
-                    PeerConnectionAdmission::CapacityExceeded => {
-                        tracing::warn!(
-                            subsystem = "https_transport",
-                            action = "accept",
-                            outcome = "capacity_exceeded",
-                            cap = MAX_PEER_HTTP_CONNECTIONS,
-                            "peer HTTP listener rejected connection at its bounded concurrency cap"
-                        );
-                    }
                     PeerConnectionAdmission::Admit => {
-                        spawn_request_worker(stream, &security, &router, &requests);
+                        if let Some(reservation) = requests.try_register(MAX_PEER_HTTP_CONNECTIONS)
+                        {
+                            spawn_request_worker(
+                                stream,
+                                &security,
+                                &router,
+                                &requests,
+                                reservation,
+                            );
+                        } else {
+                            tracing::warn!(
+                                subsystem = "https_transport",
+                                action = "accept",
+                                outcome = "capacity_exceeded",
+                                cap = MAX_PEER_HTTP_CONNECTIONS,
+                                "peer HTTP listener rejected connection at its bounded concurrency cap"
+                            );
+                        }
                     }
                 }
             }
@@ -474,18 +481,12 @@ fn accept_loop(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PeerConnectionAdmission {
     Stop,
-    CapacityExceeded,
     Admit,
 }
 
-const fn peer_connection_admission(
-    stop_requested: bool,
-    active_connections: usize,
-) -> PeerConnectionAdmission {
+const fn peer_connection_admission(stop_requested: bool) -> PeerConnectionAdmission {
     if stop_requested {
         PeerConnectionAdmission::Stop
-    } else if active_connections >= MAX_PEER_HTTP_CONNECTIONS {
-        PeerConnectionAdmission::CapacityExceeded
     } else {
         PeerConnectionAdmission::Admit
     }
@@ -496,6 +497,7 @@ fn spawn_request_worker(
     security: &ListenerSecurity,
     router: &Arc<dyn ApiRouter + Send + Sync>,
     requests: &Arc<ActiveConnectionRegistry>,
+    reservation: ActiveConnectionGuard,
 ) {
     if let Err(error) = stream.set_nonblocking(false) {
         tracing::warn!(
@@ -513,9 +515,8 @@ fn spawn_request_worker(
         .spawn({
             let security = security.clone();
             let router = Arc::clone(router);
-            let requests = Arc::clone(requests);
             move || {
-                let _active = requests.register();
+                let _active = reservation;
                 log_peer_request_result(handle_peer_connection(stream, security, router));
                 let _ = completion_tx.send(());
             }
@@ -968,6 +969,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+
+    use crate::active_connection_registry::ActiveConnectionRegistry;
 
     use atm_core::api::{
         ApiRequest, ApiResponse, ApiRouter, AuthenticatedIngress, RequestDeadline,
@@ -1636,22 +1639,31 @@ mod tests {
     }
 
     #[test]
-    fn peer_connection_admission_is_deterministic_for_shutdown_and_capacity() {
+    fn peer_connection_admission_is_deterministic_and_reserves_capacity_atomically() {
         assert_eq!(
-            peer_connection_admission(true, 0),
+            peer_connection_admission(true),
             PeerConnectionAdmission::Stop,
             "the shutdown wake-up is never admitted as a peer request"
         );
         assert_eq!(
-            peer_connection_admission(false, MAX_PEER_HTTP_CONNECTIONS),
-            PeerConnectionAdmission::CapacityExceeded,
+            peer_connection_admission(false),
+            PeerConnectionAdmission::Admit
+        );
+
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let reservations: Vec<_> = (0..MAX_PEER_HTTP_CONNECTIONS)
+            .map(|_| {
+                registry
+                    .try_register(MAX_PEER_HTTP_CONNECTIONS)
+                    .expect("slot")
+            })
+            .collect();
+        assert!(
+            registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(),
             "the connection cap is enforced before a worker is spawned"
         );
-        assert_eq!(
-            peer_connection_admission(false, MAX_PEER_HTTP_CONNECTIONS - 1),
-            PeerConnectionAdmission::Admit,
-            "an ordinary peer connection is admitted below the cap"
-        );
+        drop(reservations);
+        assert!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_some());
     }
 
     fn test_certificate() -> LocalCertificate {

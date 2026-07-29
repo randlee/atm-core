@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-202>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-202" ;
+  triage:title "AI.36 required structural source-scan gate for receiver record writer/unlink is absent" ;
+  triage:description "crates/atm-architecture/tests/boundary_enforcement.rs contains only Cargo dependency-edge checks; no AST/source-text scan enforces the sprint doc sub-task 3 requirement that the endpoint record is written only by GraftReceiverListener and receiver ownership is not reimplemented in the Python bridge (docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md sub-task 3, required tests, lines 146-147: 'a source scan rejects a second record publisher or direct record unlink outside the owner implementation'). The invariant currently holds by inspection only and is unenforced against regression." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test_coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge true ;
+  triage:note "Missing structural test gate in boundary_enforcement.rs; AI.36 sprint sub-task 3 requirement not implemented. Remediation: add a structural/source-scan test failing the build if any file outside GraftReceiverListener writes/unlinks a receiver record, with explicit atm-graft-python coverage." ;
+  triage:foundIn triage:AI36-QA-1 ;
+  triage:foundAt "2026-07-29T04:45:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T05:10:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-202/boundary-enforcement> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
+  triage:highestOpenBranch "integrate/phase-ai-31-33" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-202/boundary-enforcement>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/boundary_enforcement.rs" ;
+  triage:line 1 ;
+  triage:snippet "Only Cargo dependency-edge checks are present; no source-text scan enforcing single-writer/unlink ownership of the graft receiver record." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "phase-AI/integrate-phase-ai-31-33" ;
+  triage:headSha "76848ce1a9a397286b3dd7af333d0db432683ec4" ;
+  triage:orderIndex 1 .
