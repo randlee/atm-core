@@ -27,8 +27,9 @@ unstarted and return its nonzero status to launchd, which may retry the same
 gate through `KeepAlive`. This is the required pre-activation readiness gate;
 the active probe below verifies an already-started job and does not replace it.
 `@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
-`atm_graft_hermes_bridge`; it is not a daemon command. The runner uses its
-ordinary inbound-user-message hook.
+`atm_graft_hermes_bridge`; it is not a daemon command. The runner binds the
+bridge to the configured profile's non-interrupting steer hook, not ordinary
+inbound-user-message ingress.
 
 The bridge process is restartable by launchd. It does not start, stop, restart,
 or own `atm-daemon`.

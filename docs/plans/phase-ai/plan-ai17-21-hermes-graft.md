@@ -65,9 +65,10 @@ mapping is deterministic and never changes the persisted message address.
 The graft callback receives the canonical post-write nudge. The bridge passes
 the message ID and binding-rendered canonical source address into Hermes. It
 must not use a custom session-routing header, locally parse or re-render that
-address, or issue another ATM write. Hermes uses the `atm:`-prefixed canonical
-source identity to select the incoming chat, then submits the body to its
-ordinary inbound-user-message path.
+address, or issue another ATM write. This historical AI.17–AI.21 plan used an
+incoming-chat handoff; ADR-043 and AI.36–AI.38 supersede that handoff with the
+configured profile's non-interrupting steer path. The source remains
+attribution/reply identity, not a Hermes session selector.
 
 ### Boundaries
 

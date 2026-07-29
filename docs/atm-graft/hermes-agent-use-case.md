@@ -23,7 +23,7 @@ options = atm_graft.PyGraftSessionOptions(
     os.environ["ATM_IDENTITY"],
     os.environ["ATM_TEAM"],
 )
-bridge = HermesGraftBridge(caller, options, inject_user_message)
+bridge = HermesGraftBridge(caller, options, inject_steer)
 bridge.start()
 ```
 
@@ -33,19 +33,21 @@ for client operations; it is not a separate receiver endpoint. Keep the bridge
 alive for the gateway lifetime and call `bridge.close()` during shutdown.
 
 The receiver callback runs from the graft receiver thread. The Hermes adapter
-maps the canonical source address to an isolated ATM chat key and schedules a
-native internal message on the gateway event loop:
+retains the canonical source address for attribution and schedules a
+non-interrupting steer to the configured profile session on the gateway event
+loop:
 
 ```text
 PyNudge(source=hendrix:1234@hermes, body=...) →
-atm:hendrix:1234@hermes → MessageEvent(internal=True) → gateway._handle_message()
+configured ATM_CHAT_ID → HermesSteerPort.steer(...)
 ```
 
 The callback uses `asyncio.run_coroutine_threadsafe()` (or the equivalent
 gateway-safe scheduling primitive) to cross from the receiver thread into the
 Hermes event loop. Duplicate message IDs are suppressed by the bridge. The
-body is then handled by Hermes's ordinary inbound-user-message path, so no
-manual `atm read` turn is required.
+steer wakes the host at its next safe tool-loop boundary; the agent's ATM
+skills then use normal daemon-backed `read`/`ack` operations. The bridge never
+stores or consumes mail itself.
 
 For messages that require an explicit ATM acknowledgement, pass the optional
 `requires_ack` argument and acknowledge the returned message after reading it:
@@ -68,7 +70,8 @@ The gateway environment supplies:
 - `ATM_IDENTITY` — the agent name;
 - `ATM_TEAM` — the ATM team name;
 - `ATM_HOME` — the ATM home/workspace root; and
-- the Hermes-side chat ID, such as the Telegram chat ID.
+  - the Hermes-side chat ID, such as the Telegram chat ID, which is the
+    profile's current host-session binding.
 
 The ATM roster must also identify the workspace root where the gateway's graft
 endpoint is published. If the gateway profile's `ATM_HOME` differs from its

@@ -192,6 +192,9 @@ integration; they do not alter it.
 | AI.31 | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work is signalled after response |
 | AI.32 | `feature/pAI-s32-independent-peer-jobs` | Bounded non-durable per-ULID peer jobs; no cross-command delivery-order promise or stream abstraction |
 | AI.33 | `feature/pAI-s33-admission-capacity-smoke` | Isolated 1,000/s admission proof and ten-run, endpoint-explicit local/cross-host smoke report |
+| AI.36 | `feature/pAI-s36-graft-receiver-ownership` | One lease-safe receiver owner per canonical graft root/team/agent; crash reclaim and generation-safe endpoint removal |
+| AI.37 | `feature/pAI-s37-hermes-recovery-summary` | One ten-second durable-mail-derived recovery summary; no graft mail queue or mailbox mutation |
+| AI.38 | `feature/pAI-s38-hermes-steer-nudge-delivery` | Live and recovery graft wake-ups enter the configured Hermes profile through non-interrupting steer, never normal user-message ingress |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
