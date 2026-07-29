@@ -15,9 +15,16 @@ triage:AICH-S9 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 
 triage:AICH-S10 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 10 ; triage:criteria "docs/plans/phase-ai/sprint-ai-29-crosshost-smoke-rerun.md" .
 
 triage:AICH-S11 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 11 ; triage:criteria "docs/plans/phase-ai/findings-closeout.md" ; triage:branch "fix/findings-closeout" .
+triage:AICH-S12 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/sprint-ai-32-independent-peer-jobs.md" .
+triage:AICH-S13 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 13 ; triage:criteria "docs/plans/phase-ai/sprint-ai-33-admission-capacity-smoke.md" .
+triage:AICH-S14 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 14 ; triage:criteria "docs/plans/phase-ai/sprint-ai-34-hermes-graft-nudge-endpoint-reconciliation.md" .
+triage:AICH-S15 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 15 ; triage:criteria "docs/plans/phase-ai/sprint-ai-35-graft-root-fallback-observability.md" .
+triage:AICH-S16 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 16 ; triage:criteria "docs/plans/phase-ai/sprint-ai-36-graft-receiver-ownership.md" .
+triage:AICH-S17 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 17 ; triage:criteria "docs/plans/phase-ai/sprint-ai-37-hermes-recovery-summary.md" .
+triage:AICH-S18 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 18 ; triage:criteria "docs/plans/phase-ai/sprint-ai-38-hermes-steer-nudge-delivery.md" .
 
-triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .
+triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 19 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .
 
-triage:AICH-PHASEEND a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 13 ; triage:criteria "docs/plans/phase-ai/phase-end-qa.md" .
+triage:AICH-PHASEEND a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 20 ; triage:criteria "docs/plans/phase-ai/phase-end-qa.md" .
 
-triage:AICH-PHASE-END-QA-1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 14 ; triage:criteria "docs/plans/phase-ai/phase-end-qa-1.md" .
+triage:AICH-PHASE-END-QA-1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 21 ; triage:criteria "docs/plans/phase-ai/phase-end-qa-1.md" .
