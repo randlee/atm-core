@@ -1274,7 +1274,7 @@ mod tests {
         let recipient: AgentName = "qa-a".parse().expect("recipient");
         let receiver_path = graft_receiver_record_path_from_home(&workspace_dir, &team, &recipient);
         let graft_listener =
-            GraftReceiverListener::bind(&receiver_path).expect("bind fake graft receiver");
+            GraftReceiverListener::bind(&receiver_path, None).expect("bind fake graft receiver");
         let (nudge_tx, nudge_rx) = std::sync::mpsc::sync_channel(1);
         let graft_thread = std::thread::spawn(move || {
             let mut stream = loop {

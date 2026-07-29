@@ -407,7 +407,9 @@ impl PyGraftSession {
         }
         let session = client
             .activate_session(
-                options.to_typed()?,
+                options
+                    .to_typed()?
+                    .with_owner_chat_id(self.caller.chat_id().cloned()),
                 Arc::new(PythonNudgeInjector { callback: on_nudge }),
             )
             .map_err(atm_error)?;

@@ -14,4 +14,4 @@ publish = false
 name = "atm_storage_sqlserver_proof"
 
 [dependencies]
-atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai.32" }
+atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai.36" }
