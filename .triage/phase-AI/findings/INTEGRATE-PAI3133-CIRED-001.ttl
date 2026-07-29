@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/INTEGRATE-PAI3133-CIRED-001>
+  a triage:Finding ;
+  triage:findingId "INTEGRATE-PAI3133-CIRED-001" ;
+  triage:title "integrate/phase-ai-31-33 base branch carries two pre-existing fmt/clippy violations that turn every open PR's merge-preview CI red" ;
+  triage:description "PR #691 (AI.37) shows CI-red on Format check + Just lint (all 3 platforms) despite: (a) AI37's own diff touching neither flagged file (git diff origin/integrate/phase-ai-31-33...feature/pAI-s37-hermes-recovery-summary is empty for both paths), (b) local cargo fmt --check/clippy/just lint all clean inside the AI37 worktree, and (c) all 4 dispatched AI37-QA-2 reviewers independently reporting PASS. Root-caused by fetching GitHub's actual synthetic merge-preview commit (refs/pull/691/merge) and running rustfmt/clippy directly against it: two violations exist on integrate/phase-ai-31-33 itself, pre-dating AI.37's branch point, and surface only when the pull_request-triggered CI job's default actions/checkout@v4 (no explicit ref:) checks out the merge-preview commit instead of the raw PR head. (1) crates/atm-architecture/tests/graft_receiver_ownership_boundary.rs:29-34 fails `cargo fmt --check` (single-line assert_eq! chain that rustfmt wants split to multi-line) — this is already fixed on fix/ai36-qa-repair @ bca831f7 (PR #692, currently green on all 8 CI legs) and will self-resolve once #692 merges into integrate/phase-ai-31-33; it is NOT yet fixed on integrate/phase-ai-31-33 itself. (2) crates/atm-daemon/src/https_transport.rs:1661 fails clippy::bool_assert_comparison (`assert_eq!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(), true, ...)`) — present directly on integrate/phase-ai-31-33 (confirmed via git show origin/integrate/phase-ai-31-33:crates/atm-daemon/src/https_transport.rs), unrelated to any file AI.37 or AI.36 touched; requires its own dedicated one-line fix (assert!(...) or assert_eq!(..., true) -> assert!(...)) directly on integrate/phase-ai-31-33." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ci_gap" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "cross_branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge true ;
+  triage:note "Remediation: (1) merge PR #692 (fix/ai36-qa-repair @ bca831f7 or later) into integrate/phase-ai-31-33 to pick up the already-fixed graft_receiver_ownership_boundary.rs formatting; (2) separately fix the pre-existing clippy::bool_assert_comparison at crates/atm-daemon/src/https_transport.rs:1661 directly on integrate/phase-ai-31-33 (assert!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(), ...) in place of assert_eq!(..., true)). Blocks CI-green merge readiness for every open PR targeting integrate/phase-ai-31-33 (confirmed affecting PR #691; PR #692 itself is unaffected because its own branch already carries fix (1), and its assert_eq! literal-bool at the same base-branch location does not get promoted to a hard clippy error in that run — not yet root-caused, but immaterial since #692 is already green). Not attributable to AI.37's or AI.36's own diffs." ;
+  triage:foundIn triage:AI37-QA-2 ;
+  triage:foundAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/fmt-graft-boundary> ,
+    <urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/clippy-https-transport> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> ;
+  triage:highestOpenBranch "integrate/phase-ai-31-33" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/fmt-graft-boundary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-architecture/tests/graft_receiver_ownership_boundary.rs" ;
+  triage:line 31 ;
+  triage:snippet "assert_eq!(production.matches(\"fs::remove_file(&self.record_path)\").count(), 1, ...) — single-line form fails `cargo fmt --check`; already reformatted to the 3-line chained form on fix/ai36-qa-repair @ bca831f7." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "251bed7a49195c66a8f53dc664800ebe751989c6" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:occurrence/INTEGRATE-PAI3133-CIRED-001/clippy-https-transport>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/https_transport.rs" ;
+  triage:line 1661 ;
+  triage:snippet "assert_eq!(registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(), true, \"the connection cap is enforced before a worker is spawned\") — triggers clippy::bool_assert_comparison, promoted to a hard error under the PR-691 merge-preview's `just lint` invocation." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "251bed7a49195c66a8f53dc664800ebe751989c6" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33> .
+
+<urn:atm:triage:worktree/phase-AI/integrate-phase-ai-31-33>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:headSha "251bed7a49195c66a8f53dc664800ebe751989c6" ;
+  triage:orderIndex 1 .
