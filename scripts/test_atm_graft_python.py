@@ -16,6 +16,33 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CRATE = ROOT / "crates" / "atm-graft-python"
 
 
+def verify_cross_process_receiver_reclaim(root: pathlib.Path) -> None:
+    """Prove that a crashed receiver owner releases its OS lock for a new process."""
+    with tempfile.TemporaryDirectory(prefix="atm-graft-owner-") as fixture_root:
+        environment = {**os.environ, "ATM_GRAFT_RECLAIM_CHILD_ROOT": fixture_root}
+        for test_name in (
+            "child_owner_exits_without_drop",
+            "parent_reclaims_child_owner_lock",
+        ):
+            subprocess.run(
+                [
+                    "cargo",
+                    "test",
+                    "-p",
+                    "agent-team-mail-core",
+                    "--test",
+                    "graft_receiver_ownership",
+                    test_name,
+                    "--",
+                    "--ignored",
+                    "--exact",
+                ],
+                check=True,
+                cwd=root,
+                env=environment,
+            )
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="atm-graft-python-") as temp:
         venv_dir = pathlib.Path(temp) / "venv"
@@ -52,6 +79,7 @@ def main() -> None:
             check=True,
             cwd=ROOT,
         )
+    verify_cross_process_receiver_reclaim(ROOT)
 
 
 if __name__ == "__main__":

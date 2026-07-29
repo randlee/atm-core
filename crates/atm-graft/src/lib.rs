@@ -119,14 +119,6 @@ impl GraftSessionOptions {
         }
     }
 
-    pub fn for_current_process(
-        workspace_root: impl Into<PathBuf>,
-        team: TeamName,
-        agent: AgentName,
-    ) -> Self {
-        Self::new(workspace_root, team, agent)
-    }
-
     /// Retain the host session identity as receiver-owner metadata.
     #[must_use]
     pub fn with_owner_chat_id(mut self, owner_chat_id: Option<ChatId>) -> Self {
@@ -600,7 +592,7 @@ mod tests {
     }
 
     fn session_options(paths: &TestPaths) -> GraftSessionOptions {
-        GraftSessionOptions::for_current_process(
+        GraftSessionOptions::new(
             paths.workspace_root.clone(),
             TeamName::from_validated(TEST_TEAM),
             AgentName::from_validated("qa-a"),
@@ -794,7 +786,7 @@ mod tests {
         let session = GraftSession::activate_with_graft_config(
             Arc::new(StubSessionClient),
             load_graft_config(tempdir.path()).expect("graft config"),
-            GraftSessionOptions::for_current_process(
+            GraftSessionOptions::new(
                 tempdir.path(),
                 TeamName::from_validated(TEST_TEAM),
                 AgentName::from_validated("qa-a"),

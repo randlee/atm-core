@@ -73,7 +73,8 @@ recorded for validation/observability only and does not change that path.
 
 Development work:
 
-1. First commit sets all releasable assemblies to `1.4.0-beta-ai.36`.
+1. First commit sets all releasable Rust assemblies to `1.4.0-beta.36` and
+   Python packaging metadata to the equivalent PEP 440 `1.4.0b36`.
 2. In `crates/atm-core/src/graft.rs`, extend the private endpoint-record
    format with a random `owner_generation` and the optional owning `ChatId`.
    Bump `GRAFT_RECEIVER_RECORD_SCHEMA_VERSION`; old records fail closed rather

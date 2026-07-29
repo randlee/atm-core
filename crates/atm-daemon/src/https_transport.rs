@@ -78,6 +78,8 @@ pub(crate) trait HttpsMessageTransport: Send + Sync {
     ) -> Result<ResponseEnvelope, AtmError>;
 }
 
+// The runtime swaps the transport atomically during trust refresh while
+// request workers retain a cloned immutable transport for their own exchange.
 pub(crate) type SharedHttpsTransport = Arc<Mutex<Option<Arc<dyn HttpsMessageTransport>>>>;
 
 struct TlsIdentity {
@@ -1658,9 +1660,8 @@ mod tests {
                     .expect("slot")
             })
             .collect();
-        assert_eq!(
+        assert!(
             registry.try_register(MAX_PEER_HTTP_CONNECTIONS).is_none(),
-            true,
             "the connection cap is enforced before a worker is spawned"
         );
         drop(reservations);
