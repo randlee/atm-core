@@ -268,7 +268,12 @@ class AtmGraftAdapter(_hermes_types()[1]):
         # ATM sender remains useful as the synthetic user identity, but must
         # not become the session/chat key (that would create an isolated
         # ``platform=local`` conversation and never wake Telegram).
-        telegram_platform = getattr(Platform, "TELEGRAM", Platform.LOCAL)
+        if not hasattr(Platform, "TELEGRAM"):
+            logger.error(
+                "ATM graft nudge dropped: Platform.TELEGRAM not found in gateway config"
+            )
+            return
+        telegram_platform = Platform.TELEGRAM
         if not self._chat_id:
             logger.error(
                 "ATM graft nudge dropped: ATM_CHAT_ID is required for Telegram routing"
@@ -279,7 +284,11 @@ class AtmGraftAdapter(_hermes_types()[1]):
             platform=telegram_platform,
             chat_id=self._chat_id,
             chat_type="dm",
-            user_id=f"atm-graft-{self._agent}",
+            # Use the configured Telegram identity for the gateway's normal
+            # authorization check.  The ATM source remains in user_name so
+            # the event is still attributable without requiring a synthetic
+            # user to be added to TELEGRAM_ALLOWED_USERS.
+            user_id=self._chat_id,
             user_name=chat_key,
         )
 
@@ -287,7 +296,7 @@ class AtmGraftAdapter(_hermes_types()[1]):
             text=body,
             source=source,
             message_type=MessageType.TEXT,
-            internal=True,
+            internal=False,
         )
 
         await self._message_handler(event)

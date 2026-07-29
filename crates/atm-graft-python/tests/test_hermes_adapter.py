@@ -85,7 +85,7 @@ class HermesAdapterContractTests(unittest.TestCase):
         asyncio.run(adapter._dispatch_nudge(chat_key, "reply-route-check"))
         self.assertEqual(
             observed,
-            [("8991600178", f"atm-graft-{adapter._agent}", "reply-route-check")],
+            [("8991600178", "8991600178", "reply-route-check")],
         )
 
 
