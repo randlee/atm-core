@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+# NOTE: original finding id "RBP-F001" from quality-mgr's AI37 QA-1 report was
+# disambiguated with an -AI37 suffix; RBP-F001 (unsuffixed) is an unrelated,
+# already-fixed AI36-era finding in this same directory.
+
+<urn:atm:triage:finding/RBP-F001-AI37>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-AI37" ;
+  triage:title "PyGraftSession Mutex<Option<...>> fields lack rationale comment (RBP-006)" ;
+  triage:description "crates/atm-graft-python/src/lib.rs lines 317-318 declare `client: Mutex<Option<GraftClient>>` and `receiver: Mutex<Option<GraftSession>>` on PyGraftSession with no comment explaining why a Mutex is required (GIL-crossing concurrency: PyO3 methods can be invoked from Python threads without holding the GIL for the call duration, so interior mutability needs a real lock rather than RefCell). RBP-006 requires synchronization-primitive choices to carry a rationale comment. Recommend adding a short comment above the field block." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "best-practices" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge false ;
+  triage:note "RBP-006: add a rationale comment above the client/receiver Mutex<Option<...>> fields explaining the GIL-crossing concurrency requirement for Mutex over RefCell." ;
+  triage:foundIn triage:AI37-QA-1 ;
+  triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T07:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-AI37/pygraftsession-fields> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> ;
+  triage:highestOpenBranch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBP-F001-AI37/pygraftsession-fields>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/src/lib.rs" ;
+  triage:line 317 ;
+  triage:snippet "client: Mutex<Option<GraftClient>>,\n    receiver: Mutex<Option<GraftSession>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:orderIndex 1 .

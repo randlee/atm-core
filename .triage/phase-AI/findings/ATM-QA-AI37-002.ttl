@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-AI37-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-AI37-002" ;
+  triage:title "Zero-work recovery path has no distinct emitted event name" ;
+  triage:description "Implementation-drift: the zero-work recovery path in the Hermes graft recovery summary only re-emits graft_recovery_counts with no distinct event name for the zero-work outcome, so downstream consumers cannot distinguish 'ran and found nothing to recover' from 'ran and produced a summary' by event name alone. Recommend emitting a distinctly-named event, e.g. graft_recovery_no_work, when both counts are zero. Companion to ATM-QA-AI37-001, which covers the missing required test for this same distinction." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "implementation_drift" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:dispatchReady true ;
+  triage:blockingCurrentMerge false ;
+  triage:note "Remediation: emit graft_recovery_no_work (or equivalent distinctly-named event) when both recovered counts are zero, instead of re-emitting graft_recovery_counts unconditionally. Pairs with ATM-QA-AI37-001's missing test." ;
+  triage:foundIn triage:AI37-QA-1 ;
+  triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-07-29T07:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-AI37-002/recovery-summary> ;
+  triage:openOn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> ;
+  triage:highestOpenBranch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/ATM-QA-AI37-002/recovery-summary>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
+  triage:line 99 ;
+  triage:snippet "LOGGER.info(\"graft_recovery_counts unread=%s pending_ack=%s\", ...) — logged unconditionally; zero-work case (both counts zero) shares the same event name as the summary-emitted case instead of a distinct name like graft_recovery_no_work." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
+
+<urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:path "feature/pAI-s37-hermes-recovery-summary" ;
+  triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
+  triage:orderIndex 1 .
