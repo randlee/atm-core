@@ -29,7 +29,9 @@ fn receiver_record_publication_and_unlink_stay_in_the_listener_owner() {
         "only the private helper and GraftReceiverListener::bind may publish a receiver record"
     );
     assert_eq!(
-        production.matches("fs::remove_file(&self.record_path)").count(),
+        production
+            .matches("fs::remove_file(&self.record_path)")
+            .count(),
         1,
         "only GraftReceiverListener cleanup may unlink its endpoint record"
     );
