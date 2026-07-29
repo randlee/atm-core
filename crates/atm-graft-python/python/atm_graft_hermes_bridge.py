@@ -1,9 +1,8 @@
-"""Reference bridge from canonical ATM graft nudges to Hermes user input.
+"""Reference bridge from canonical ATM graft nudges to a host callback.
 
 This module is deliberately transport-free. ``atm_graft`` owns the daemon
-client and receiver lifecycle; Hermes owns its ordinary inbound-user-message
-path. The bridge only maps a typed source to an isolated chat and forwards the
-nudge body once.
+client and receiver lifecycle. The bridge forwards each typed nudge once to
+its host callback; the host owns its safe-boundary delivery semantics.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ class HermesGraftBridge:
         self,
         caller: atm_graft.PyAgentAddress,
         receiver_options: atm_graft.PyGraftSessionOptions,
-        inject_user_message: Callable[[str, str], None],
+        deliver_nudge: Callable[[atm_graft.PyNudge], None],
         *,
         recent_message_limit: int = 1_024,
         recovery_hook: Callable[[MailboxRecoveryNotice], None] | None = None,
@@ -47,7 +46,7 @@ class HermesGraftBridge:
             raise ValueError("recent_message_limit must be positive")
         self._session = atm_graft.PyGraftSession(caller)
         self._receiver_options = receiver_options
-        self._inject_user_message = inject_user_message
+        self._deliver_to_host = deliver_nudge
         self._recent_message_limit = recent_message_limit
         self._recent_message_ids: OrderedDict[str, None] = OrderedDict()
         self._recovery_hook = recovery_hook
@@ -112,12 +111,10 @@ class HermesGraftBridge:
         if message_id in self._recent_message_ids:
             return
 
-        chat_key = f"atm:{nudge.source}"
-        self._recent_message_ids[message_id] = None
         try:
-            self._inject_user_message(chat_key, nudge.body)
+            self._deliver_to_host(nudge)
         except Exception:
-            self._recent_message_ids.pop(message_id, None)
             raise
+        self._recent_message_ids[message_id] = None
         while len(self._recent_message_ids) > self._recent_message_limit:
             self._recent_message_ids.popitem(last=False)

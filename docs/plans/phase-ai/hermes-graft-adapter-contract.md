@@ -1,17 +1,16 @@
 # Hermes Graft Adapter Contract
 
-> **Status:** AI.38 target contract. The current checked-in bridge is generic
-> `inject_user_message` callback plumbing; it does not yet contain the new
-> `atm_graft_hermes_adapter.py` artifact or a Hermes steer implementation.
+> **Status:** AI.38 reference contract. The checked-in adapter binds one
+> configured Hermes session to the documented non-interrupting steer seam.
 
 ## Scope
 
 `atm_graft_hermes_bridge.HermesGraftBridge` stays the generic ATM-core bridge:
 it creates one `PyGraftSession`, activates one receiver, de-duplicates typed
-nudges by bounded message-ID memory, and invokes its supplied callback. It
-does not know Hermes steer semantics. AI.38 creates the separate
-`atm_graft_hermes_adapter.py` artifact and its `HermesSteerPort`; that adapter
-owns forwarding a live nudge or recovery notice to the configured profile's
+nudges by bounded message-ID memory, and invokes its supplied callback with
+the original `PyNudge`. It does not know Hermes steer semantics.
+`atm_graft_hermes_adapter.py` owns the narrow injected `HermesSteerPort`; it
+forwards a live nudge or recovery notice to the configured profile's
 non-interrupting steer callable. Neither layer opens an ATM socket directly,
 writes/retains mail, retries delivery, or implements an alternate
 acknowledgement path.
@@ -28,6 +27,20 @@ set `HERMES_SRC` to its repository root; it must contain
 `gateway/platforms/base.py`. The shim is only a test harness and is not used
 by the installed plugin.
 
+## Supported Hermes steer contract
+
+The installed Hermes source (`tui_gateway/server.py`) exposes the RPC method
+`session.steer`. The port calls it as:
+
+```json
+{"method":"session.steer","params":{"session_id":"<ATM_CHAT_ID>","text":"<nonblank text>"}}
+```
+
+An accepted response contains `result.status == "queued"`; `"rejected"`, a
+missing result, or an RPC `error` is surfaced as `HermesSteerFailure`. There
+is deliberately no normal-message fallback. Hermes owns the scheduling rule:
+the accepted text is visible at the next safe tool boundary without interrupt.
+
 ## Typed callback
 
 The callback receives `PyNudge` from AI.18. It uses only these typed values:
@@ -42,9 +55,9 @@ for bridge/reference-adapter tests. It validates the immutable message ID and
 nonblank body; it does not write, route, or synthesize a nudge.
 
 It performs no address parsing, segment validation, or rendering. The
-binding-rendered identity is retained as attribution (`atm:agent:chat-id@team`
-or `atm:agent@team`); it does not select a second Hermes conversation. The
-configured profile `ATM_CHAT_ID` selects the one current host session.
+binding-rendered identity is retained as attribution (`agent:chat-id@team` or
+`agent@team`); it does not select a second Hermes conversation. The configured
+profile `ATM_CHAT_ID` selects the one current host session.
 
 The callback is emitted only after the canonical write is durable. A failed
 host injection propagates to the existing graft callback caller; the bridge
@@ -57,21 +70,20 @@ The recovery callback receives only `MailboxRecoveryNotice(unread,
 pending_ack)`. It prompts the host to use normal ATM skills; it never exposes
 message bodies or changes mailbox read/acknowledgement state.
 
-## Telegram routing
+## One-profile routing
 
-`HermesGraftBridge` emits the canonical ATM chat key to its host callback. The
-Hermes `AtmGraftAdapter` must not use that key as a second Hermes conversation:
-it creates an internal event on `Platform.TELEGRAM` with the configured
-`ATM_CHAT_ID`, preserving the ATM key only as sender metadata. This is what
-wakes the live Telegram session and sends the normal response back to Telegram.
-`ATM_CHAT_ID` is required; a missing value fails closed and logs a routing
-error instead of falling back to `Platform.LOCAL`.
+`ATM_CHAT_ID` is required and is validated once when the adapter connects.
+Every live nudge and AI.37 recovery summary uses that exact session id. A
+source chat id remains attribution/reply-address data only; it cannot create a
+second Hermes conversation, registry row, `MessageEvent`, or normal inbound
+authorization path. A missing or blank configured id fails closed.
 
 ## Downstream handoff
 
 AI.38 supplies a checked-in `HermesSteerFixture` and
 `scripts/phase-ai/run-hermes-steer-smoke.py` as its merge-gating reference
-proof. Hermes maintainers may additionally copy or package the adapter in the
-Hermes repository and connect its narrow `HermesSteerPort` to the supported
-steer API. That downstream production merge is useful operational evidence but
-is not a closure gate for the ATM-core sprint.
+proof. It records one `live_nudge` and one `recovery_summary`, with the
+configured profile/session, accepted steer, and explicit non-interruption/no
+mail-mutation evidence. Hermes maintainers may additionally connect the port
+to a production RPC client. That downstream run is useful operational evidence
+but is not a closure gate for the ATM-core sprint.
