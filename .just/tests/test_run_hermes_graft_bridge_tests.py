@@ -19,7 +19,7 @@ class HermesGraftBridgeRunnerTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"PATH": "/system/bin"}, clear=True):
             environment = bridge_test_environment(Path("/tmp/venv"), Path("/tmp/venv/bin/python"))
 
-        self.assertEqual(environment["VIRTUAL_ENV"], "/tmp/venv")
+        self.assertEqual(Path(environment["VIRTUAL_ENV"]), Path("/tmp/venv"))
         self.assertEqual(environment["PYTHONPATH"], str(PYTHON_SOURCE))
         self.assertNotIn("HERMES_SRC", environment)
         self.assertNotIn("hermes_gateway_shim", environment["PYTHONPATH"])
