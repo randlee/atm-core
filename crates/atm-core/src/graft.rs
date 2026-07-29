@@ -129,7 +129,7 @@ pub fn write_graft_post_send_message<T: Serialize>(
     writer
         .write_all(&(bytes.len() as u32).to_be_bytes())
         .and_then(|_| writer.write_all(&bytes))
-        .map_err(|_source| AtmError::daemon_unavailable(write_error))
+        .map_err(|source| AtmError::daemon_unavailable(write_error).with_cause(source))
 }
 
 pub fn read_graft_post_send_message<T: DeserializeOwned>(
@@ -140,7 +140,7 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
-        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_cause(source))?;
     let payload_len = u32::from_be_bytes(header) as usize;
     if payload_len > MAX_GRAFT_POST_SEND_FRAME_BYTES {
         return Err(AtmError::daemon_unavailable(oversize_error));
@@ -148,9 +148,10 @@ pub fn read_graft_post_send_message<T: DeserializeOwned>(
     let mut bytes = vec![0u8; payload_len];
     reader
         .read_exact(&mut bytes)
-        .map_err(|_source| AtmError::daemon_unavailable(read_error))?;
-    serde_json::from_slice(&bytes)
-        .map_err(|_source| AtmError::validation("failed to decode graft post-send message"))
+        .map_err(|source| AtmError::daemon_unavailable(read_error).with_cause(source))?;
+    serde_json::from_slice(&bytes).map_err(|source| {
+        AtmError::validation("failed to decode graft post-send message").with_cause(source)
+    })
 }
 
 /// Loopback receiver for graft post-send nudges.
@@ -344,15 +345,17 @@ impl GraftReceiverListener {
             "failed to write graft post-send response",
             "graft post-send response exceeded the bounded payload cap",
         )?;
-        stream.flush().map_err(|_source| {
+        stream.flush().map_err(|source| {
             AtmError::daemon_unavailable("failed to flush graft post-send response")
+                .with_cause(source)
         })
     }
 
     /// Loopback address this receiver is bound to (test/inspection use).
     pub fn local_addr(&self) -> Result<SocketAddr, AtmError> {
-        self.listener.local_addr().map_err(|_source| {
+        self.listener.local_addr().map_err(|source| {
             AtmError::daemon_unavailable("failed to resolve graft receiver endpoint address")
+                .with_cause(source)
         })
     }
 }
@@ -412,8 +415,8 @@ pub fn deliver_graft_post_send(
         "failed to write graft post-send request",
         "graft post-send request exceeded the bounded payload cap",
     )?;
-    stream.flush().map_err(|_source| {
-        AtmError::daemon_unavailable("failed to flush graft post-send request")
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush graft post-send request").with_cause(source)
     })?;
     read_graft_post_send_message(
         &mut stream,
@@ -425,13 +428,15 @@ pub fn deliver_graft_post_send(
 fn apply_stream_deadlines(stream: &TcpStream, io_deadline: Duration) -> Result<(), AtmError> {
     stream
         .set_read_timeout(Some(io_deadline))
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::daemon_unavailable("failed to apply graft post-send read timeout")
+                .with_cause(source)
         })?;
     stream
         .set_write_timeout(Some(io_deadline))
-        .map_err(|_source| {
+        .map_err(|source| {
             AtmError::daemon_unavailable("failed to apply graft post-send write timeout")
+                .with_cause(source)
         })?;
     Ok(())
 }
