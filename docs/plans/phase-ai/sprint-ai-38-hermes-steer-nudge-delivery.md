@@ -2,7 +2,7 @@
 title: AI.38 Hermes steer nudge delivery
 status: proposed
 branch: feature/pAI-s38-hermes-steer-nudge-delivery
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.37
 ---
 

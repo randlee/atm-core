@@ -2,7 +2,7 @@
 title: AI.37 Hermes graft recovery summary
 status: proposed
 branch: feature/pAI-s37-hermes-recovery-summary
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.36
 ---
 
