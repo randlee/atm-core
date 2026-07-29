@@ -1,0 +1,85 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI38-QA1-FIXTURE-BYPASSES-BRIDGE>
+  a triage:Finding ;
+  triage:findingId "AI38-QA1-FIXTURE-BYPASSES-BRIDGE" ;
+  triage:title "HermesSteerFixture bypasses HermesGraftBridge, calling adapter methods directly" ;
+  triage:description "crates/atm-graft-python/tests/hermes_steer_fixture.py (HermesSteerFixture class, around lines 66-79) calls self.adapter.connect(), self.adapter.deliver_live_nudge(...), and self.adapter.deliver_recovery_summary(...) directly on the AtmGraftAdapter instance instead of routing through HermesGraftBridge's live_nudge_callback/recovery_summary_callback entry points. This means the fixture's evidence run (scripts/phase-ai/run-hermes-steer-smoke.py --fixture) never actually exercises the bridge's dedup, attribution, or AI.37 10-second recovery-timer scheduling path -- it only proves the adapter itself works when invoked directly, not that HermesGraftBridge's timer/count callback correctly reaches steer. This gap was identified by arch-ctm's own plan/code audit (ATM message 2026-07-29T16:39:20Z), separate from the AI38-QA-1 reviewer set." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T17:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S18 ;
+  triage:foundAt "2026-07-29T16:39:20Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
+  triage:line 66 ;
+  triage:snippet "await self.adapter.connect()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
+
+<urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
+  triage:line 68 ;
+  triage:snippet "await self.adapter.deliver_live_nudge(FixtureNudge(...))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
+
+<urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
+  triage:line 76 ;
+  triage:snippet "await self.adapter.connect()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
+
+<urn:atm:triage:occurrence/AI38-QA1-FIXTURE-BYPASSES-BRIDGE/S38-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
+  triage:line 79 ;
+  triage:snippet "await self.adapter.deliver_recovery_summary(notice)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:occursIn <urn:atm:triage:worktree/s38/ce666b2a> .
+
+<urn:atm:triage:worktree/s38/ce666b2a>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/s38-hermes-steer" ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "ce666b2a44cdfa60e1cc920d5977e261845d4222" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate/5c6add7b>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "5c6add7bdd9ba40c2089e260b3a985477672a977" ;
+  triage:orderIndex 2 .
