@@ -39,6 +39,12 @@ Rules:
 - automatic between-tool-call nudge injection belongs to this consumer layer
 - reconnect and shutdown behavior are owned here rather than in daemon-private
   runtime code
+- one active receiver must own each canonical `(graft root, team, agent)`
+  endpoint record. Ownership acquisition is explicit and a second live owner
+  fails without replacing the published endpoint; stale owner recovery is
+  process-death-safe.
+- receiver-local state may be a bounded transient nudge handoff only. It must
+  not persist mail, retain acknowledgement state, or implement reconciliation.
 - receiver-private task/thread/callback choices stay inside this consumer layer
 - `atm-graft` must not require shared daemon session registration, daemon-owned
   per-session queues, or a dedicated shared advisory-stream packet family
@@ -52,6 +58,8 @@ Purpose:
 Rules:
 - the host executable owns the final insertion point
 - `atm-graft` must drive that path automatically once nudges arrive
+- a Hermes adapter must use the host's non-interrupting steer insertion path,
+  not normal user-message ingress; the latter may interrupt a running agent
 - external terminal automation is not an accepted production delivery path
 - a language binding may translate the existing `HostNudgeInjector` callback
   into its host language, but may not add another receiver, transport, retry,
@@ -71,3 +79,6 @@ Rules:
   well. Unix UDS support is permitted only transitively through the approved
   `atm-daemon-client` facade.
 - it must not dispatch daemon requests or access SQLite/storage directly
+- endpoint records carry the receiver generation needed to make close
+  compare-and-remove safe; they remain one receiver endpoint per current
+  `(root, team, agent)`, not a multi-chat session registry

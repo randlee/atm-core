@@ -6,6 +6,17 @@ agent (Hermes) acts as a native ATM client through the PyO3 bindings in
 it does not shell out to the `atm` CLI and does not open a second daemon or
 storage path.
 
+## Status
+
+**Current validated flow (pre-AI.36–AI.38):** the checked-in generic bridge
+delivers its typed callback to a host-provided inbound callable. The retained
+Live validation section below documents that pre-AI.38 flow only.
+
+**Target flow (AI.36–AI.38, proposed):** one lease-safe receiver per profile
+identity, one ten-second durable-work summary after recovery, and an adapter
+that injects live/recovery wake-ups through the configured Hermes steer path.
+Those target artifacts are not yet shipped by this document's baseline.
+
 ## Integration shape
 
 Each Hermes gateway runs one background `HermesGraftBridge`. At gateway startup
@@ -32,20 +43,21 @@ The optional caller `chat_id` supplies the Hermes/Telegram conversation context
 for client operations; it is not a separate receiver endpoint. Keep the bridge
 alive for the gateway lifetime and call `bridge.close()` during shutdown.
 
-The receiver callback runs from the graft receiver thread. The Hermes adapter
-maps the canonical source address to an isolated ATM chat key and schedules a
-native internal message on the gateway event loop:
+In the current validated flow, the receiver callback runs from the graft
+receiver thread. The host maps the canonical source address to an ATM chat key
+and schedules its configured inbound callback on the gateway event loop:
 
 ```text
 PyNudge(source=hendrix:1234@hermes, body=...) →
-atm:hendrix:1234@hermes → MessageEvent(internal=True) → gateway._handle_message()
+atm:hendrix:1234@hermes → host-provided callback
 ```
 
 The callback uses `asyncio.run_coroutine_threadsafe()` (or the equivalent
 gateway-safe scheduling primitive) to cross from the receiver thread into the
-Hermes event loop. Duplicate message IDs are suppressed by the bridge. The
-body is then handled by Hermes's ordinary inbound-user-message path, so no
-manual `atm read` turn is required.
+Hermes event loop. Duplicate message IDs are suppressed by the bridge. AI.38
+replaces this target host handoff with non-interrupting steer; this current
+flow does not itself prove steer semantics. The bridge never stores or
+consumes mail itself.
 
 For messages that require an explicit ATM acknowledgement, pass the optional
 `requires_ack` argument and acknowledge the returned message after reading it:
@@ -68,7 +80,8 @@ The gateway environment supplies:
 - `ATM_IDENTITY` — the agent name;
 - `ATM_TEAM` — the ATM team name;
 - `ATM_HOME` — the ATM home/workspace root; and
-- the Hermes-side chat ID, such as the Telegram chat ID.
+  - the Hermes-side chat ID, such as the Telegram chat ID, which is the
+    profile's current host-session binding.
 
 The ATM roster must also identify the workspace root where the gateway's graft
 endpoint is published. If the gateway profile's `ATM_HOME` differs from its

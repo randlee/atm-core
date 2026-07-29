@@ -37,6 +37,16 @@ graft nudge adapter; they are specified in
 [ai17-21-hermes-graft-overview.md](./ai17-21-hermes-graft-overview.md). They
 add no message schema, CLI grammar, HTTP resource, or alternate write path.
 
+AI.36–AI.38 plan the first closure of identified graft wake-up reliability
+gaps without adding mail storage or a conversation manager:
+[AI.36](sprint-ai-36-graft-receiver-ownership.md)
+makes receiver ownership safe, [AI.37](sprint-ai-37-hermes-recovery-summary.md)
+adds one durable-mail-derived restart summary, and
+[AI.38](sprint-ai-38-hermes-steer-nudge-delivery.md) routes live/recovery
+wake-ups through Hermes's non-interrupting steer path. A live steer failure
+while the receiver remains connected is an explicitly retained, logged
+residual; ADR-043 forbids masking it with an unbounded graft retry queue.
+
 The checked-in OpenAPI 3.1 description is a durable interface artifact. A
 browser UI is intentionally deferred to a later phase and consumes this API as
 a client.
