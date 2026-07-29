@@ -188,6 +188,32 @@ class HermesBridgeTests(unittest.TestCase):
         self.assertEqual(notices, [])
         self.assertEqual(bridge._session.count_calls, 1)
 
+    def test_recovery_events_distinguish_empty_work_from_summary_emission(self) -> None:
+        loop = FakeLoop()
+        empty = self.make_bridge(
+            [],
+            session=FakeGraftSession(unread=0, pending_ack=0),
+            loop=loop,
+            recovery_hook=lambda _notice: None,
+        )
+        with self.assertLogs("atm_graft_hermes_bridge", level="INFO") as empty_logs:
+            empty.start()
+            loop.calls[0][1].callback()
+        self.assertIn("graft_recovery_check_empty", "\n".join(empty_logs.output))
+        self.assertNotIn("graft_recovery_summary_emitted", "\n".join(empty_logs.output))
+
+        summary_loop = FakeLoop()
+        summary = self.make_bridge(
+            [],
+            loop=summary_loop,
+            recovery_hook=lambda _notice: None,
+        )
+        with self.assertLogs("atm_graft_hermes_bridge", level="INFO") as summary_logs:
+            summary.start()
+            summary_loop.calls[0][1].callback()
+        self.assertIn("graft_recovery_summary_emitted", "\n".join(summary_logs.output))
+        self.assertNotIn("graft_recovery_check_empty", "\n".join(summary_logs.output))
+
     def test_close_cancels_then_reconnect_schedules_one_new_timer(self) -> None:
         loop = FakeLoop()
         bridge = self.make_bridge([], loop=loop, recovery_hook=lambda _notice: None)

@@ -55,8 +55,9 @@ fn atm_error(error: AtmError) -> PyErr {
 fn python_callback_error(error: PyErr) -> AtmError {
     AtmError::new(
         AtmErrorCode::InternalError,
-        format!("Python graft nudge callback failed: {error}"),
+        "Python graft nudge callback failed",
     )
+    .with_cause(error.to_string())
 }
 
 #[pyclass(from_py_object)]
@@ -314,6 +315,8 @@ impl HostNudgeInjector for PythonNudgeInjector {
 #[pyclass(skip_from_py_object)]
 pub struct PyGraftSession {
     caller: AgentAddress,
+    // PyO3 methods can cross the GIL from multiple Python threads; these
+    // mutable lifecycle handles therefore need real synchronization.
     client: Mutex<Option<GraftClient>>,
     receiver: Mutex<Option<GraftSession>>,
 }
@@ -332,6 +335,28 @@ impl PyGraftSession {
             atm_home().map_err(atm_error)?,
             command_invocation_dir().map_err(atm_error)?,
         ))
+    }
+
+    fn build_read_query(&self, seen_state_update: bool) -> PyResult<ReadQuery> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        ReadQuery::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            None,
+            self.caller.team().cloned().expect("validated caller team"),
+            ReadSelection::All,
+            false,
+            seen_state_update,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .map_err(atm_error)
+        .map(|query| query.with_caller_chat_id(self.caller.chat_id().cloned()))
     }
 }
 
@@ -368,48 +393,12 @@ impl PyGraftSession {
     }
 
     fn read(&self) -> PyResult<Vec<PyMessage>> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let query = ReadQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            self.caller.team().cloned().expect("validated caller team"),
-            ReadSelection::All,
-            false,
-            true,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id().cloned());
+        let query = self.build_read_query(true)?;
         PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
     }
 
     fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
-        let (home_dir, current_dir) = Self::command_paths()?;
-        let query = ReadQuery::new(
-            home_dir,
-            current_dir,
-            self.caller.agent().clone(),
-            None,
-            self.caller.team().cloned().expect("validated caller team"),
-            ReadSelection::All,
-            false,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .map_err(atm_error)?
-        .with_caller_chat_id(self.caller.chat_id().cloned());
+        let query = self.build_read_query(false)?;
         self.client()?
             .mailbox_work_counts(query)
             .map(PyMailboxWorkCounts::from)
@@ -682,6 +671,12 @@ mod tests {
                 .inject_nudge(&event)
                 .expect_err("callback failure must propagate");
             assert_eq!(error.code(), atm_core::error::AtmErrorCode::InternalError);
+            assert!(
+                error
+                    .cause()
+                    .expect("Python callback cause must be retained")
+                    .contains("callback failed")
+            );
         });
     }
 

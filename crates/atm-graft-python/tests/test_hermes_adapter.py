@@ -14,6 +14,10 @@ sys.path.insert(0, str(ADAPTER_ROOT))
 
 from atm_graft_hermes_adapter import AtmGraftAdapter  # noqa: E402
 
+TEST_AGENT = "test-coordinator"
+TEST_SENDER = "test-sender"
+TEST_TEAM = "test-team"
+
 
 class HermesAdapterContractTests(unittest.TestCase):
     def test_adapter_inherits_hermes_base_contract(self) -> None:
@@ -55,11 +59,11 @@ class HermesAdapterContractTests(unittest.TestCase):
                             self.chat_id = chat_id
 
                 target = adapter._target_from_chat_id(
-                    FakeGraft, "atm:team-lead:chat-42@atm-dev"
+                    FakeGraft, f"atm:{TEST_AGENT}:chat-42@{TEST_TEAM}"
                 )
                 self.assertEqual(
                     (target.agent, target.team, target.chat_id),
-                    ("team-lead", "atm-dev", "chat-42"),
+                    (TEST_AGENT, TEST_TEAM, "chat-42"),
                 )
                 self.assertIsNone(adapter._target_from_chat_id(FakeGraft, "atm"))
             finally:
@@ -77,7 +81,7 @@ class HermesAdapterContractTests(unittest.TestCase):
         adapter = AtmGraftAdapter(None)
         adapter._chat_id = "8991600178"
         adapter.set_message_handler(handle)
-        chat_key = "atm:Cipher-311d:8991600178@atm-dev"
+        chat_key = f"atm:{TEST_SENDER}:8991600178@{TEST_TEAM}"
 
         # Run the async dispatch without requiring a live daemon or gateway.
         import asyncio

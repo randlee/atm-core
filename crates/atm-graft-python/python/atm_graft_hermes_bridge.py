@@ -104,6 +104,8 @@ class HermesGraftBridge:
         if self._recovery_hook is not None and (notice.unread or notice.pending_ack):
             self._recovery_hook(notice)
             LOGGER.info("graft_recovery_summary_emitted")
+        else:
+            LOGGER.info("graft_recovery_check_empty")
 
     def _deliver_nudge(self, nudge: atm_graft.PyNudge) -> None:
         message_id = nudge.message_id
