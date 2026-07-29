@@ -21,7 +21,9 @@
   triage:foundIn triage:AICH-S18 ;
   triage:foundAt "2026-07-29T16:39:20Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA1-STALE-LAST-FAILURE/s38-162> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-29T18:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AI38-QA1-STALE-LAST-FAILURE/s38-162>
   a triage:Occurrence ;

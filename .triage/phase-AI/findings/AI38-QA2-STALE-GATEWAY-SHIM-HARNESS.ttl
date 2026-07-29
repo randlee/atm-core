@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS>
+  a triage:Finding ;
+  triage:findingId "AI38-QA2-STALE-GATEWAY-SHIM-HARNESS" ;
+  triage:title "Stale hermes_gateway_shim scaffolding + false comment in .just/run_hermes_graft_bridge_tests.py, not wired into any CI gate" ;
+  triage:description "req-qa's AI38-QA-2 re-verification of feature/pAI-s38-hermes-steer-nudge-delivery @ fd04dcbf found: (1) crates/atm-graft-python/tests/hermes_gateway_shim/gateway/platforms/base.py is dead scaffolding modeling the retired BasePlatformAdapter/MessageEvent/internal=False pattern that AI.38's adapter is explicitly forbidden from using; the current Protocol-based atm_graft_hermes_adapter.py, test_hermes_adapter.py, and test_hermes_bridge.py never import it. (2) .just/run_hermes_graft_bridge_tests.py (invoked by `just test-hermes-graft-bridge`, listed in AI.38's Required Validation) still unconditionally wires HERMES_SRC/gateway_source onto PYTHONPATH pointing at this shim, and retains a comment claiming 'the adapter contract test imports Hermes' gateway modules' -- false for the current tests. This contradicts docs/plans/phase-ai/hermes-graft-adapter-contract.md, which AI.38 corrected to state tests use only checked-in fake steer ports and HermesSteerFixture, with no gateway-shim import. Related: ruthless-boundary-qa's AI38-HERMES-ADAPTER-LINT-GUARD-001 separately found that no CI workflow actually invokes `just test-hermes-graft-bridge`, `test-graft-python`, or `test-hermes-graft-smoke`, and .just/run_pytests.py's build_suite() never discovers crates/*/tests/test_*.py, so the source-scan regression guard in test_hermes_adapter.py (test_adapter_source_forbids_retired_normal_ingress_symbols) never runs in any automated gate." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "implementation-drift" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T17:04:23Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S18 ;
+  triage:foundAt "2026-07-29T17:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-1>
+  a triage:Occurrence ;
+  triage:file ".just/run_hermes_graft_bridge_tests.py" ;
+  triage:line 19 ;
+  triage:snippet "HERMES_TEST_SHIM = TESTS / hermes_gateway_shim" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "fd04dcbf" ;
+  triage:occursIn <urn:atm:triage:worktree/S38/fd04dcbf> .
+
+<urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-2>
+  a triage:Occurrence ;
+  triage:file ".just/run_hermes_graft_bridge_tests.py" ;
+  triage:line 30 ;
+  triage:snippet "# The adapter contract test imports Hermes' gateway modules." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "fd04dcbf" ;
+  triage:occursIn <urn:atm:triage:worktree/S38/fd04dcbf> .
+
+<urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-3>
+  a triage:Occurrence ;
+  triage:file ".just/run_hermes_graft_bridge_tests.py" ;
+  triage:line 44 ;
+  triage:snippet "gateway_source = HERMES_TEST_SHIM" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "fd04dcbf" ;
+  triage:occursIn <urn:atm:triage:worktree/S38/fd04dcbf> .
+
+<urn:atm:triage:occurrence/AI38-QA2-STALE-GATEWAY-SHIM-HARNESS/S38-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_gateway_shim/gateway/__init__.py" ;
+  triage:line 3 ;
+  triage:snippet "Set HERMES_SRC when running against a real Hermes checkout instead." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "fd04dcbf" ;
+  triage:occursIn <urn:atm:triage:worktree/S38/fd04dcbf> .
+
+<urn:atm:triage:worktree/S38/fd04dcbf>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/S38" ;
+  triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
+  triage:headSha "fd04dcbf" ;
+  triage:orderIndex 0 .
