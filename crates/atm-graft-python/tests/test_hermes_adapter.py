@@ -72,7 +72,14 @@ class HermesAdapterContractTests(unittest.TestCase):
         observed = []
 
         async def handle(event) -> None:
-            observed.append((event.source.chat_id, event.source.user_id, event.text))
+            observed.append(
+                (
+                    event.source.chat_id,
+                    event.source.user_id,
+                    event.text,
+                    event.internal,
+                )
+            )
 
         adapter = AtmGraftAdapter(None)
         adapter._chat_id = "8991600178"
@@ -85,7 +92,7 @@ class HermesAdapterContractTests(unittest.TestCase):
         asyncio.run(adapter._dispatch_nudge(chat_key, "reply-route-check"))
         self.assertEqual(
             observed,
-            [("8991600178", "8991600178", "reply-route-check")],
+            [("8991600178", "8991600178", "reply-route-check", False)],
         )
 
 
