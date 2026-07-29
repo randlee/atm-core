@@ -1008,6 +1008,7 @@ Implementation Branches:
 | `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
 | `AI.31` | `complete` | `feature/pAI-s31-async-local-admission` | durable local admission before asynchronous peer work |
+| `AI.36` | `complete` | `feature/pAI-s36-graft-receiver-ownership` | OS-backed singleton graft receiver ownership with generation-safe record cleanup |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

@@ -33,10 +33,10 @@ path = "examples/gen_cli_docs.rs"
 required-features = ["cli-surface-dump"]
 
 [dependencies]
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.32" }
-atm-daemon-bootstrap = { path = "../atm-daemon-bootstrap", version = "1.4.0-beta-ai.32" }
-atm-daemon-client = { path = "../atm-daemon-client", version = "1.4.0-beta-ai.32" }
-atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai.32" }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.36" }
+atm-daemon-bootstrap = { path = "../atm-daemon-bootstrap", version = "1.4.0-beta-ai.36" }
+atm-daemon-client = { path = "../atm-daemon-client", version = "1.4.0-beta-ai.36" }
+atm-storage = { path = "../atm-storage", version = "1.4.0-beta-ai.36" }
 anyhow.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
@@ -50,8 +50,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.32", features = ["test-support"] }
-atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.32", features = ["test-utils"] }
+atm-graft = { path = "../atm-graft", version = "1.4.0-beta-ai.36", features = ["test-support"] }
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.4.0-beta-ai.36", features = ["test-utils"] }
 atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 sc-observability = { workspace = true, features = ["fault-injection"] }
 serial_test = "3"

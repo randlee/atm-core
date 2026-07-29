@@ -20,7 +20,7 @@ use atm_core::observability::{
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope, SendResponseEnvelope};
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_core::types::{AgentName, TeamName};
+use atm_core::types::{AgentName, ChatId, TeamName};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
     resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
@@ -83,6 +83,15 @@ pub trait GraftObservability: Send + Sync {
 
     fn session_error(&self, _snapshot: &SessionSnapshot, _action: &'static str, _error: &AtmError) {
     }
+
+    /// Records receiver-ownership lifecycle without exposing endpoint capability material.
+    fn receiver_ownership(
+        &self,
+        _snapshot: &SessionSnapshot,
+        _action: &'static str,
+        _outcome: &'static str,
+    ) {
+    }
 }
 
 /// No-op graft observability adapter.
@@ -97,6 +106,7 @@ pub struct GraftSessionOptions {
     workspace_root: PathBuf,
     team: TeamName,
     agent: AgentName,
+    owner_chat_id: Option<ChatId>,
 }
 
 impl GraftSessionOptions {
@@ -105,6 +115,7 @@ impl GraftSessionOptions {
             workspace_root: workspace_root.into(),
             team,
             agent,
+            owner_chat_id: None,
         }
     }
 
@@ -114,6 +125,13 @@ impl GraftSessionOptions {
         agent: AgentName,
     ) -> Self {
         Self::new(workspace_root, team, agent)
+    }
+
+    /// Retain the host session identity as receiver-owner metadata.
+    #[must_use]
+    pub fn with_owner_chat_id(mut self, owner_chat_id: Option<ChatId>) -> Self {
+        self.owner_chat_id = owner_chat_id;
+        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -134,6 +152,10 @@ impl GraftSessionOptions {
 
     pub(crate) fn agent(&self) -> &AgentName {
         &self.agent
+    }
+
+    pub(crate) fn owner_chat_id(&self) -> Option<ChatId> {
+        self.owner_chat_id.clone()
     }
 }
 
@@ -464,6 +486,7 @@ fn spawn_graft_receive_loop(
         .spawn(move || {
             run_graft_receiver_loop(GraftReceiverLoopContext {
                 endpoint_path,
+                owner_chat_id: options.owner_chat_id(),
                 snapshot: worker_snapshot,
                 injector,
                 observability: worker_observability,

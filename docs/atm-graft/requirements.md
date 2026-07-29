@@ -81,6 +81,25 @@ Initial crate requirement IDs:
   must use structured `AgentAddress`, preserve the immutable message ID, and
   must not create a session header, daemon session, or transport-specific
   routing policy.
+- `REQ-GRAFT-RUNTIME-002` A graft receiver has exactly one active owner for a
+  `(canonical_graft_root, team, agent)` endpoint record. Activation must either
+  acquire that ownership or fail with a typed conflict; it must never silently
+  replace a live receiver. Close may remove a record only when it still owns
+  the published generation. A crashed owner must be reclaimable without an
+  operator deleting a stale file.
+- `REQ-GRAFT-NOTIFY-002` Graft nudges are bounded wake-up signals only. They
+  are never mail storage, a durable retry queue, a conversation manager, or a
+  second mailbox. The daemon mailbox remains the source of truth.
+- `REQ-GRAFT-HERMES-002` One Hermes profile binds one ATM identity and its
+  configured ADR-037 `ChatId` host session. Live and recovery wake-ups must
+  enter that host session through its non-interrupting steer path, not through
+  normal inbound-user-message dispatch. The full source address, including a
+  present chat-id, remains available for attribution and reply routing.
+- `REQ-GRAFT-HERMES-003` After a Hermes profile receiver becomes listening,
+  its Python adapter waits exactly ten seconds once, reads durable mailbox
+  bucket counts through the ordinary daemon API, and emits at most one concise
+  steer summary when unread or pending-ack counts are non-zero. The summary is
+  advisory; it neither reads, acknowledges, persists, nor replays mail.
 
 ## 4. Required References
 
@@ -155,10 +174,11 @@ Required rules:
   signaling before asserting injection success; acceptance must not depend on
   scheduler luck or on a shorter `#[cfg(test)]` delivery deadline than the
   accepted production path
-- if the host is idle when a nudge arrives, `atm-graft` must enqueue the
-  received nudge or retain equivalent receiver-local state until host
-  consumption and fire a host wake/event signal so the host takes follow-on
-  action promptly
+- if the host is idle when a nudge arrives, `atm-graft` must deliver one
+  bounded receiver-local wake-up through its host injection seam and fire the
+  host wake/event signal promptly. Any receiver-local buffer is transient,
+  bounded, and contains only nudge metadata; it must not become mail storage
+  or a durable retry queue.
 - the exact task/thread/callback mechanism used for that behavior is private to
   `atm-graft` and is not fixed by this requirement doc
 - production `atm-graft` acceptance must not depend on `tmux send-keys`,
@@ -259,8 +279,10 @@ Scope-simplification rule for the first implementation pass:
 - `REQ-GRAFT-NOTIFY-001`
   - daemon-originated nudge receipt is automatic in embedded mode
   - the host-facing nudge payload exposes at least `from` and `message_id`
-  - the client runtime queues nudges or retains equivalent receiver-local
-    state until host consumption and emits a host wake/event signal on arrival
+  - the client runtime delivers bounded transient nudges through the host
+    injection seam and emits a host wake/event signal on arrival; durable mail
+    recovery is supplied by the ordinary daemon read contract, not a graft
+    queue
   - no acceptance path relies on `tmux send-keys` or external terminal key
     injection as the delivery mechanism
 - `REQ-GRAFT-OBS-001`
@@ -268,3 +290,15 @@ Scope-simplification rule for the first implementation pass:
     injected ATM-owned observability boundary
   - the concrete exported observability/injection seams include
     `GraftObservability` and `HostNudgeInjector`
+- `REQ-GRAFT-RUNTIME-002`
+  - a second simultaneous activation for the same canonical root/team/agent
+    fails without changing the current endpoint record
+  - closing an old receiver cannot remove a successor's endpoint record
+  - an abandoned owner can be reclaimed after process death
+- `REQ-GRAFT-HERMES-002` and `REQ-GRAFT-HERMES-003`
+  - an adapter test proves live graft notification invokes the configured steer
+    seam and never ordinary user-message ingress
+  - a restart test proves exactly one summary steer after ten seconds when
+    durable `bucket_counts.unread` or `bucket_counts.pending_ack` is non-zero
+  - a zero-count restart emits no steer; a live nudge during the delay remains
+    a normal one-event wake-up

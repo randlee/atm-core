@@ -101,6 +101,7 @@ fn member_summary_from_roster(
         agent_id: metadata_string(&record.metadata_json, "agentId")
             .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
         agent_type: record.agent_type.to_string(),
+        harness: record.harness,
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),

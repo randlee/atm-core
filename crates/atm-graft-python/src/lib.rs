@@ -407,7 +407,9 @@ impl PyGraftSession {
         }
         let session = client
             .activate_session(
-                options.to_typed()?,
+                options
+                    .to_typed()?
+                    .with_owner_chat_id(self.caller.chat_id().cloned()),
                 Arc::new(PythonNudgeInjector { callback: on_nudge }),
             )
             .map_err(atm_error)?;
@@ -644,6 +646,27 @@ mod tests {
                     .extract::<Option<String>>()
                     .expect("optional cause"),
                 Some("connection refused".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn receiver_ownership_conflict_is_a_typed_python_error() {
+        Python::initialize();
+        Python::attach(|py| {
+            let error = atm_error(AtmError::new(
+                atm_core::error::AtmErrorCode::GraftReceiverAlreadyActive,
+                "receiver already active for qa@test",
+            ));
+            let value = error.value(py);
+            assert!(value.is_instance_of::<AtmGraftError>());
+            assert_eq!(
+                value
+                    .getattr("code")
+                    .expect("code field")
+                    .extract::<String>()
+                    .expect("string code"),
+                "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE"
             );
         });
     }

@@ -27,11 +27,11 @@ retry queue, or second delivery path. The binding calls the existing sealed
 accesses storage directly.
 
 Any session/chat-based host may map a validated `ATM_CHAT_ID` to ADR-037
-`ChatId` before caller address construction. Hermes is the first host adapter;
-AI.19 maps a received canonical source address to a Hermes-local `atm:` chat
-and injects the nudge body through Hermes's ordinary inbound-user-message
-mechanism. No `session_id`, custom session header, webhook-specific address
-grammar, or alternate send/ack path exists.
+`ChatId` before caller address construction. Hermes is the first host adapter.
+Its current profile/session binding and non-interrupting nudge handoff are
+governed by ADR-043: an ATM wake-up is not an ordinary inbound user message.
+No `session_id`, custom session header, webhook-specific address grammar, or
+alternate send/ack path exists.
 
 The atm-core deliverable is an in-repository reference adapter and contract.
 It does not edit or validate an external Hermes checkout; Hermes maintainers

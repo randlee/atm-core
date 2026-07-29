@@ -347,6 +347,26 @@ pub enum RosterHarness {
     PythonGraft,
 }
 
+impl RosterHarness {
+    /// Return the stable CLI/JSON spelling for this roster harness.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ClaudeCode => "claude-code",
+            Self::CodexCli => "codex-cli",
+            Self::GeminiCli => "gemini-cli",
+            Self::Opencode => "opencode",
+            Self::Hermes => "hermes",
+            Self::PythonGraft => "python-graft",
+        }
+    }
+}
+
+impl fmt::Display for RosterHarness {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str((*self).as_str())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentType {
     GeneralPurpose,
