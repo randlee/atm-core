@@ -35,7 +35,7 @@
   triage:line 477 ;
   triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s35-graft-root-fallback-observability" ;
   triage:headSha "32c5486b" ;
   triage:occursIn <urn:atm:triage:worktree/AI35/32c5486b> .
@@ -53,7 +53,7 @@
   triage:line 500 ;
   triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s36-graft-receiver-ownership" ;
   triage:headSha "1c7b9f0f" ;
   triage:occursIn <urn:atm:triage:worktree/AI36/1c7b9f0f> .
@@ -71,7 +71,7 @@
   triage:line 516 ;
   triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "4dba21c1" ;
   triage:occursIn <urn:atm:triage:worktree/AI37/4dba21c1> .
@@ -89,7 +89,7 @@
   triage:line 516 ;
   triage:snippet "fn spawn_receive_loop_error(_source: std::io::Error) -> AtmError { AtmError::daemon_unavailable(\"failed to spawn graft receive loop\") }" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a" ;
   triage:occursIn <urn:atm:triage:worktree/AI38/ce666b2a> .

@@ -31,7 +31,7 @@
   triage:line 18 ;
   triage:snippet "Documentation claims: 'imports the checked-in, dependency-free Hermes gateway contract shim...' but tests do not import it" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "feature/pAI-s38-hermes-steer-nudge-delivery" ;
   triage:headSha "ce666b2a" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-38/ce666b2a> .
