@@ -78,10 +78,10 @@ fn unavailable_peer_does_not_relabel_a_committed_local_admission() {
         .expect("post-commit peer worker must attempt the retained message");
     assert_eq!(delivered.origin_message_id, Some(local_message_id));
     assert_eq!(transport.attempted.lock().expect("deliveries").len(), 1);
-    assert_eq!(
-        dispatcher.peer_link_statuses()[0].last_error_code,
-        Some(AtmErrorCode::RemoteDeliveryUnconfirmed)
-    );
+    // The transport signals this test just before it returns its failure; the
+    // coordinator projects that failure afterward. Peer-status projection is
+    // covered deterministically in peer_observability.rs, so do not race it
+    // against this admission-path proof.
     dispatcher
         .stop_peer_drain_coordinator()
         .expect("stop post-commit peer worker");
