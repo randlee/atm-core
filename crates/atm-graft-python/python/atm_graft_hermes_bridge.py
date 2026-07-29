@@ -10,7 +10,24 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import dataclass
+import logging
 import atm_graft
+
+
+LOGGER = logging.getLogger(__name__)
+RECOVERY_DELAY_SECONDS = 10.0
+
+
+@dataclass(frozen=True)
+class MailboxRecoveryNotice:
+    """One bounded recovery prompt derived from daemon mailbox counts."""
+
+    unread: int
+    pending_ack: int
+
+    def render(self) -> str:
+        return f"ATM: {self.unread} unread messages; {self.pending_ack} acknowledgements pending."
 
 
 class HermesGraftBridge:
@@ -23,6 +40,8 @@ class HermesGraftBridge:
         inject_user_message: Callable[[str, str], None],
         *,
         recent_message_limit: int = 1_024,
+        recovery_hook: Callable[[MailboxRecoveryNotice], None] | None = None,
+        loop: object | None = None,
     ) -> None:
         if recent_message_limit < 1:
             raise ValueError("recent_message_limit must be positive")
@@ -31,11 +50,22 @@ class HermesGraftBridge:
         self._inject_user_message = inject_user_message
         self._recent_message_limit = recent_message_limit
         self._recent_message_ids: OrderedDict[str, None] = OrderedDict()
+        self._recovery_hook = recovery_hook
+        self._loop = loop
+        self._recovery_timer = None
 
     def start(self) -> None:
         """Activate the one existing graft receiver for this Hermes profile."""
 
         self._session.activate_receiver(self._receiver_options, self._deliver_nudge)
+        if self._recovery_hook is not None:
+            loop = self._loop
+            if loop is None:
+                import asyncio
+                loop = asyncio.get_running_loop()
+            self._cancel_recovery_timer()
+            self._recovery_timer = loop.call_later(RECOVERY_DELAY_SECONDS, self._emit_recovery_summary)
+            LOGGER.info("graft_recovery_scheduled delay_seconds=%s", RECOVERY_DELAY_SECONDS)
 
     def snapshot(self) -> atm_graft.PyGraftSessionSnapshot:
         """Return the existing graft receiver snapshot."""
@@ -44,8 +74,36 @@ class HermesGraftBridge:
 
     def close(self) -> None:
         """Close the existing graft receiver and client."""
-
+        self._cancel_recovery_timer()
         self._session.close()
+
+    def disconnect(self) -> None:
+        """Cancel recovery work before the host tears down this bridge."""
+        self.close()
+
+    def _cancel_recovery_timer(self) -> None:
+        if self._recovery_timer is not None:
+            self._recovery_timer.cancel()
+            self._recovery_timer = None
+            LOGGER.info("graft_recovery_cancelled")
+
+    def _emit_recovery_summary(self) -> None:
+        self._recovery_timer = None
+        try:
+            counts = self._session.mailbox_work_counts()
+        except Exception:
+            # Recovery is a best-effort bounded wake-up, never a retry loop.
+            LOGGER.exception("graft_recovery_counts_failed")
+            return
+        notice = MailboxRecoveryNotice(counts.unread, counts.pending_ack)
+        LOGGER.info(
+            "graft_recovery_counts unread=%s pending_ack=%s",
+            notice.unread,
+            notice.pending_ack,
+        )
+        if self._recovery_hook is not None and (notice.unread or notice.pending_ack):
+            self._recovery_hook(notice)
+            LOGGER.info("graft_recovery_summary_emitted")
 
     def _deliver_nudge(self, nudge: atm_graft.PyNudge) -> None:
         message_id = nudge.message_id

@@ -53,6 +53,10 @@ perform the single ADR-043 ten-second count check and submit one advisory
 recovery steer; this is derived from the ordinary daemon mailbox read contract
 and is not a nudge queue or replay.
 
+The recovery callback receives only `MailboxRecoveryNotice(unread,
+pending_ack)`. It prompts the host to use normal ATM skills; it never exposes
+message bodies or changes mailbox read/acknowledgement state.
+
 ## Telegram routing
 
 `HermesGraftBridge` emits the canonical ATM chat key to its host callback. The

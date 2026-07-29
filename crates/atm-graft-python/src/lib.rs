@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use ::atm_graft::{
     GraftClient, GraftSession, GraftSessionOptions, GraftSessionState, HostNudgeInjector,
-    SessionSnapshot,
+    MailboxWorkCounts, SessionSnapshot,
 };
 use atm_core::ack::AckRequest;
 use atm_core::address::AgentAddress;
@@ -255,6 +255,25 @@ pub struct PyGraftSessionSnapshot {
     state: String,
 }
 
+/// Python count-only projection of durable mailbox work for recovery notices.
+#[pyclass(from_py_object)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PyMailboxWorkCounts {
+    #[pyo3(get)]
+    unread: usize,
+    #[pyo3(get)]
+    pending_ack: usize,
+}
+
+impl From<MailboxWorkCounts> for PyMailboxWorkCounts {
+    fn from(counts: MailboxWorkCounts) -> Self {
+        Self {
+            unread: counts.unread,
+            pending_ack: counts.pending_ack,
+        }
+    }
+}
+
 impl From<SessionSnapshot> for PyGraftSessionSnapshot {
     fn from(snapshot: SessionSnapshot) -> Self {
         let state = match snapshot.state {
@@ -371,6 +390,32 @@ impl PyGraftSession {
         PyMessage::from_read(self.client()?.read_message(query).map_err(atm_error)?)
     }
 
+    fn mailbox_work_counts(&self) -> PyResult<PyMailboxWorkCounts> {
+        let (home_dir, current_dir) = Self::command_paths()?;
+        let query = ReadQuery::new(
+            home_dir,
+            current_dir,
+            self.caller.agent().clone(),
+            None,
+            self.caller.team().cloned().expect("validated caller team"),
+            ReadSelection::All,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .map_err(atm_error)?
+        .with_caller_chat_id(self.caller.chat_id().cloned());
+        self.client()?
+            .mailbox_work_counts(query)
+            .map(PyMailboxWorkCounts::from)
+            .map_err(atm_error)
+    }
+
     fn acknowledge(&self, message_id: String, reply_body: String) -> PyResult<()> {
         let (home_dir, current_dir) = Self::command_paths()?;
         let request = AckRequest {
@@ -455,18 +500,21 @@ fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMessage>()?;
     m.add_class::<PyNudge>()?;
     m.add_class::<PyGraftSessionSnapshot>()?;
+    m.add_class::<PyMailboxWorkCounts>()?;
     m.add_class::<PyGraftSession>()?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AtmGraftError, PyAgentAddress, PyNudge, PythonNudgeInjector, atm_error};
+    use super::{
+        AtmGraftError, PyAgentAddress, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
+    };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
     use atm_core::types::{AgentName, ChatId, TeamName};
-    use atm_graft::HostNudgeInjector;
-    use pyo3::prelude::Python;
+    use atm_graft::{HostNudgeInjector, MailboxWorkCounts};
+    use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
 
     const TEST_RECIPIENT: &str = "test-recipient";
@@ -506,6 +554,37 @@ mod tests {
 
         let nudge = PyNudge::from_post_send(&event).expect("python nudge");
         assert_eq!(nudge.source.chat_id.as_deref(), Some("1234"));
+    }
+
+    #[test]
+    fn mailbox_work_counts_exposes_only_integer_count_fields_to_python() {
+        Python::initialize();
+        Python::attach(|py| {
+            let counts = PyMailboxWorkCounts::from(MailboxWorkCounts {
+                unread: 2,
+                pending_ack: 3,
+            });
+            let object = Py::new(py, counts).expect("python count object");
+            let object = object.bind(py);
+
+            assert_eq!(
+                object
+                    .getattr("unread")
+                    .expect("unread")
+                    .extract::<usize>()
+                    .unwrap(),
+                2
+            );
+            assert_eq!(
+                object
+                    .getattr("pending_ack")
+                    .expect("pending ack")
+                    .extract::<usize>()
+                    .unwrap(),
+                3
+            );
+            assert!(object.getattr("body").is_err());
+        });
     }
 
     #[test]

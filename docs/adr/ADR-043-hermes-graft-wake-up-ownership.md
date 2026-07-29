@@ -81,5 +81,9 @@ to make the one-profile path reliable.
   lock, publishes a random generation plus optional `ChatId`, and uses
   generation-checked cleanup. Coverage includes typed live-owner conflict,
   stale-record replacement, and concurrent distinct identities.
-- AI.37: one delayed durable-work summary after profile recovery.
-- AI.38: Hermes steer injection and end-to-end non-interruption evidence.
+- AI.37: complete — `MailboxWorkCounts` projects only existing daemon read
+  buckets, while the generic bridge schedules one cancellable ten-second
+  recovery callback. The callback has no message body, replay, persistence,
+  acknowledgement, or retry behavior.
+- AI.38: planned — Hermes steer injection and end-to-end non-interruption
+  evidence.
