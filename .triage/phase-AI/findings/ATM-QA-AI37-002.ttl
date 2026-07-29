@@ -15,8 +15,10 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:blockingCurrentMerge false ;
   triage:note "Remediation: emit graft_recovery_no_work (or equivalent distinctly-named event) when both recovered counts are zero, instead of re-emitting graft_recovery_counts unconditionally. Pairs with ATM-QA-AI37-001's missing test." ;
@@ -33,8 +35,10 @@
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_bridge.py" ;
   triage:line 99 ;
   triage:snippet "LOGGER.info(\"graft_recovery_counts unread=%s pending_ack=%s\", ...) — logged unconditionally; zero-work case (both counts zero) shares the same event name as the summary-emitted case instead of a distinct name like graft_recovery_no_work." ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-07-29T09:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
