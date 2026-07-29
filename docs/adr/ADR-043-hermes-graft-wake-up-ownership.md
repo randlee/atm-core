@@ -80,7 +80,9 @@ to make the one-profile path reliable.
 - AI.36: complete — `GraftReceiverListener` holds an OS-backed exclusive
   lock, publishes a random generation plus optional `ChatId`, and uses
   generation-checked cleanup. Coverage includes typed live-owner conflict,
-  stale-record replacement, and concurrent distinct identities.
+  stale-record replacement, concurrent distinct identities, and a real
+  child-process crash/reclaim proof executed by the macOS, Linux, and Windows
+  CI test matrix.
 - AI.37: complete — `MailboxWorkCounts` projects only existing daemon read
   buckets, while the generic bridge schedules one cancellable ten-second
   recovery callback. The callback has no message body, replay, persistence,

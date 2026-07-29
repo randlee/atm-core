@@ -115,7 +115,7 @@ impl PyGraftSessionOptions {
         if self.workspace_root.trim().is_empty() {
             return Err(PyValueError::new_err("workspace_root must not be blank"));
         }
-        Ok(GraftSessionOptions::for_current_process(
+        Ok(GraftSessionOptions::new(
             &self.workspace_root,
             self.team.parse::<TeamName>().map_err(atm_error)?,
             self.agent.parse::<AgentName>().map_err(atm_error)?,
@@ -497,14 +497,19 @@ fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AtmGraftError, PyAgentAddress, PyMailboxWorkCounts, PyNudge, PythonNudgeInjector, atm_error,
+        AtmGraftError, PyAgentAddress, PyGraftSession, PyGraftSessionOptions, PyMailboxWorkCounts,
+        PyNudge, PythonNudgeInjector, atm_error,
     };
     use atm_core::boundary::PostSendHookEvent;
     use atm_core::error::AtmError;
+    use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AgentName, ChatId, TeamName};
-    use atm_graft::{HostNudgeInjector, MailboxWorkCounts};
+    use atm_graft::{GraftClient, HostNudgeInjector, MailboxWorkCounts};
     use pyo3::prelude::{Py, Python};
     use pyo3::types::{PyAnyMethods, PyModule};
+    use std::fs;
+    use std::sync::{Arc, Mutex};
+    use tempfile::TempDir;
 
     const TEST_RECIPIENT: &str = "test-recipient";
     const TEST_SENDER: &str = "test-sender";
@@ -742,6 +747,58 @@ mod tests {
                     .expect("string code"),
                 "ATM_GRAFT_RECEIVER_ALREADY_ACTIVE"
             );
+        });
+    }
+
+    #[test]
+    fn python_session_rejects_a_second_receiver_activation() {
+        Python::initialize();
+        let tempdir = TempDir::new().expect("tempdir");
+        fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[graft]\nenabled = true\n",
+        )
+        .expect("graft config");
+        let caller = PyAgentAddress::new(
+            TEST_RECIPIENT.to_string(),
+            TEST_TEAM.to_string(),
+            Some("42".to_string()),
+        )
+        .expect("caller");
+        let session = PyGraftSession {
+            caller: caller.to_typed().expect("typed caller"),
+            client: Mutex::new(Some(GraftClient::from_transport_for_test(Arc::new(
+                FakeClientTransport::new(Box::new(|_| {
+                    panic!("receiver activation must not call the daemon transport")
+                })),
+            )))),
+            receiver: Mutex::new(None),
+        };
+        let options = PyGraftSessionOptions {
+            workspace_root: tempdir.path().display().to_string(),
+            agent: TEST_RECIPIENT.to_string(),
+            team: TEST_TEAM.to_string(),
+        };
+
+        Python::attach(|py| {
+            let callback = PyModule::from_code(
+                py,
+                c"def callback(_nudge):\n    return None\n",
+                c"receiver_activation_test.py",
+                c"receiver_activation_test",
+            )
+            .expect("callback module")
+            .getattr("callback")
+            .expect("callback")
+            .unbind();
+            session
+                .activate_receiver(options.clone(), callback.clone_ref(py))
+                .expect("first receiver activation");
+            let error = session
+                .activate_receiver(options, callback)
+                .expect_err("second activation must be rejected at the Python API boundary");
+            assert!(error.is_instance_of::<pyo3::exceptions::PyRuntimeError>(py));
+            assert!(error.to_string().contains("already active"));
         });
     }
 }

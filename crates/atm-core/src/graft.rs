@@ -233,23 +233,26 @@ impl GraftReceiverListener {
     pub fn bind(record_path: &Path, owner_chat_id: Option<ChatId>) -> Result<Self, AtmError> {
         prepare_receiver_record_parent(record_path)?;
         let ownership = ReceiverOwnershipGuard::acquire(record_path)?;
-        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|_source| {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to bind graft receiver endpoint for {}",
                 record_path.display()
             ))
+            .with_cause(source)
         })?;
-        listener.set_nonblocking(true).map_err(|_source| {
+        listener.set_nonblocking(true).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to configure non-blocking graft receiver endpoint for {}",
                 record_path.display()
             ))
+            .with_cause(source)
         })?;
-        let loopback = listener.local_addr().map_err(|_source| {
+        let loopback = listener.local_addr().map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to resolve graft receiver endpoint address for {}",
                 record_path.display()
             ))
+            .with_cause(source)
         })?;
         let capability = LocalCapability::generate()?;
         let owner_generation = Ulid::new().to_string();
@@ -286,10 +289,11 @@ impl GraftReceiverListener {
                     // listener's non-blocking flag on accepted sockets. Force
                     // the served connection back to blocking so the
                     // timeout-bounded request/response reads behave uniformly.
-                    stream.set_nonblocking(false).map_err(|_source| {
+                    stream.set_nonblocking(false).map_err(|source| {
                         AtmError::daemon_unavailable(
                             "failed to configure blocking graft receiver connection",
                         )
+                        .with_cause(source)
                     })?;
                     Ok(Some(stream))
                 } else {
@@ -297,10 +301,11 @@ impl GraftReceiverListener {
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(_source) => Err(AtmError::daemon_unavailable(format!(
+            Err(source) => Err(AtmError::daemon_unavailable(format!(
                 "failed while accepting graft receiver connection at {}",
                 self.record_path.display()
-            ))),
+            ))
+            .with_cause(source)),
         }
     }
 
@@ -394,16 +399,16 @@ pub fn deliver_graft_post_send(
 ) -> Result<GraftPostSendResponse, AtmError> {
     let record = read_receiver_record(record_path)?;
     let endpoint = record.endpoint()?;
-    let mut stream =
-        TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|_source| {
-            AtmError::new(
-                AtmErrorCode::PostSendGraftUnavailable,
-                format!(
-                    "failed to connect to graft receiver endpoint {} within {:?}",
-                    endpoint, connect_deadline
-                ),
-            )
-        })?;
+    let mut stream = TcpStream::connect_timeout(&endpoint, connect_deadline).map_err(|source| {
+        AtmError::new(
+            AtmErrorCode::PostSendGraftUnavailable,
+            format!(
+                "failed to connect to graft receiver endpoint {} within {:?}",
+                endpoint, connect_deadline
+            ),
+        )
+        .with_cause(source)
+    })?;
     apply_stream_deadlines(&stream, io_deadline)?;
     let wire = GraftPostSendWireRequest {
         capability_base64url: record.capability_base64url.clone(),
@@ -443,11 +448,12 @@ fn apply_stream_deadlines(stream: &TcpStream, io_deadline: Duration) -> Result<(
 
 fn prepare_receiver_record_parent(record_path: &Path) -> Result<(), AtmError> {
     if let Some(parent) = record_path.parent() {
-        fs::create_dir_all(parent).map_err(|_source| {
+        fs::create_dir_all(parent).map_err(|source| {
             AtmError::daemon_unavailable(format!(
                 "failed to prepare graft receiver directory {}",
                 parent.display()
             ))
+            .with_cause(source)
         })?;
     }
     Ok(())
@@ -500,22 +506,24 @@ fn write_receiver_record(
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     apply_owner_only_record_mode(&mut options);
-    let mut file = options.open(record_path).map_err(|_source| {
+    let mut file = options.open(record_path).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to publish graft receiver endpoint record at {}",
             record_path.display()
         ))
+        .with_cause(source)
     })?;
-    file.write_all(&bytes).map_err(|_source| {
+    file.write_all(&bytes).map_err(|source| {
         AtmError::daemon_unavailable(format!(
             "failed to write graft receiver endpoint record at {}",
             record_path.display()
         ))
+        .with_cause(source)
     })
 }
 
 fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecord, AtmError> {
-    let bytes = fs::read(record_path).map_err(|_source| {
+    let bytes = fs::read(record_path).map_err(|source| {
         AtmError::new(
             AtmErrorCode::PostSendGraftUnavailable,
             format!(
@@ -523,14 +531,15 @@ fn read_receiver_record(record_path: &Path) -> Result<GraftReceiverEndpointRecor
                 record_path.display()
             ),
         )
+        .with_cause(source)
     })?;
-    let record: GraftReceiverEndpointRecord =
-        serde_json::from_slice(&bytes).map_err(|_source| {
-            AtmError::validation(format!(
-                "failed to decode graft receiver endpoint record at {}",
-                record_path.display()
-            ))
-        })?;
+    let record: GraftReceiverEndpointRecord = serde_json::from_slice(&bytes).map_err(|source| {
+        AtmError::validation(format!(
+            "failed to decode graft receiver endpoint record at {}",
+            record_path.display()
+        ))
+        .with_cause(source)
+    })?;
     // Decode fail-closed: old schemas and malformed generations are never
     // returned as an apparently usable receiver record.
     record.endpoint()?;
