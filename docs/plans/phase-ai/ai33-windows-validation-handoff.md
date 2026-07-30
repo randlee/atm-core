@@ -97,11 +97,14 @@ The executable procedure is
 
 ### 2026-07-30 — cwin — transient local IPC reset
 
-- With the repaired one-member roster, the next `just smoke localhost` report
-  passed 9/10 complete repetitions. Attempt 1 had one ordinary send failure:
-  Windows `WSAECONNRESET` 10054 while reading daemon HTTP headers.
-- Required-ack and reply passed in that same attempt; attempts 2-10 passed all
+- With the repaired one-member roster, the next two smoke reports each passed
+  9/10 complete repetitions. Attempt 1's ordinary send failed both times with
+  Windows `WSAECONNRESET` 10054, once while reading and once while writing
+  local daemon HTTP headers.
+- Required-ack and reply passed in those attempts; attempts 2-10 passed all
   rows. PID `13396` and both local/public listeners remained healthy. E-016
-  records the retained `ATM_DAEMON_UNAVAILABLE` event.
-- This is not yet a code finding. Pull and rerun the exact smoke to establish
-  whether the local loopback reset reproduces before proposing a fix.
+  records both retained `ATM_DAEMON_UNAVAILABLE` events.
+- Do not add an automatic client retry: a reset during request write can occur
+  after partial delivery and could duplicate a non-idempotent send. This is a
+  confirmed Windows transport finding for team-lead review, with no unsafe
+  smoke-branch code change.
