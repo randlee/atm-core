@@ -59,8 +59,14 @@ pub(crate) fn persist_message_with_ack_update(
     }
 
     let mut prepared = envelope.clone();
-    let inbox_messages =
-        load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
+    // Ordinary immutable messages have no thread relation to validate. Do not
+    // enumerate the recipient mailbox on their admission path; that makes a
+    // simple send grow with mailbox size and opens avoidable SQLite readers.
+    let inbox_messages = if prepared.parent_message_id.is_some() && prepared.thread_mode.is_some() {
+        load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?
+    } else {
+        Vec::new()
+    };
     prepare_threaded_message(&mut prepared, &inbox_messages)?;
 
     match mirror_message_to_store(
