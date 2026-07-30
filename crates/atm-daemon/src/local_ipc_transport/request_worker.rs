@@ -14,21 +14,127 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::SubsystemObservability;
-use crate::active_connection_registry::{
-    ActiveConnectionRegistry, DispatchReapSummary, TrackedDispatchHandle,
-};
+use crate::active_connection_registry::ActiveConnectionRegistry;
 
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{
-    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_CONCURRENT_CONNECTIONS, MAX_KEEP_ALIVE_REQUESTS,
-    REQUEST_DEADLINE, write_shutdown_response,
+    DISPATCH_PANIC_RECOVERED_MESSAGE, MAX_KEEP_ALIVE_REQUESTS, REQUEST_DEADLINE,
+    write_shutdown_response,
 };
 
 type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
-type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
-type DispatchWorkerHandle = std::thread::JoinHandle<()>;
-type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHandle);
+
+struct DispatchWork {
+    request: ApiRequest,
+    deadline: RequestDeadline,
+    result_tx: std::sync::mpsc::SyncSender<Result<ResponseEnvelope, AtmError>>,
+}
+
+/// Fixed, zero-backlog dispatcher workers preserve the post-timeout execution
+/// contract without creating an operating-system thread for every admission.
+pub(super) struct DispatchWorkerPool {
+    sender: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<DispatchWork>>>,
+    workers: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>>,
+}
+
+impl DispatchWorkerPool {
+    pub(super) fn start(
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
+        registry: Arc<ActiveConnectionRegistry>,
+        observability: SubsystemObservability,
+        worker_count: usize,
+    ) -> Result<Arc<Self>, AtmError> {
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<DispatchWork>(0);
+        let receiver = Arc::new(std::sync::Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(worker_count);
+        for worker_index in 0..worker_count {
+            let receiver = Arc::clone(&receiver);
+            let dispatcher = Arc::clone(&dispatcher);
+            let registry = Arc::clone(&registry);
+            let observability = observability.clone();
+            let worker = std::thread::Builder::new()
+                .name(format!("local-ipc-dispatch-{worker_index}"))
+                .spawn(move || loop {
+                    let work = match receiver.lock() {
+                        Ok(receiver) => receiver.recv(),
+                        Err(_) => return,
+                    };
+                    let Ok(work) = work else {
+                        return;
+                    };
+                    let _dispatch_work = registry.register_dispatch_work();
+                    let response = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        dispatcher
+                            .route(work.request, AuthenticatedIngress::Local, work.deadline)
+                            .map(|response| response.into_inner())
+                    }));
+                    let response = match response {
+                        Ok(response) => response,
+                        Err(_) => {
+                            observability.emit_or_warn(
+                                "dispatch_worker",
+                                "panic_recovered",
+                                DISPATCH_PANIC_RECOVERED_MESSAGE,
+                            );
+                            Err(AtmError::daemon_unavailable(
+                                "daemon request dispatcher panicked before returning a response",
+                            ))
+                        }
+                    };
+                    let _ = work.result_tx.send(response);
+                })
+                .map_err(|_| AtmError::daemon_unavailable("failed to start local IPC dispatch worker"))?;
+            workers.push(worker);
+        }
+        Ok(Arc::new(Self {
+            sender: std::sync::Mutex::new(Some(sender)),
+            workers: std::sync::Mutex::new(workers),
+        }))
+    }
+
+    fn dispatch(
+        &self,
+        request: ApiRequest,
+        deadline: RequestDeadline,
+    ) -> Result<DispatchResultRx, AtmError> {
+        let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+        let sender = self
+            .sender
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("local IPC dispatch sender lock poisoned"))?
+            .clone()
+            .ok_or_else(|| {
+                AtmError::daemon_unavailable("local IPC dispatch workers are stopping")
+            })?;
+        sender
+            .send(DispatchWork {
+                request,
+                deadline,
+                result_tx,
+            })
+            .map_err(|_| {
+                AtmError::daemon_unavailable("local IPC dispatch workers stopped accepting work")
+            })?;
+        Ok(result_rx)
+    }
+
+    pub(super) fn shutdown(&self) -> Result<(), AtmError> {
+        self.sender
+            .lock()
+            .map_err(|_| AtmError::daemon_unavailable("local IPC dispatch sender lock poisoned"))?
+            .take();
+        let workers = std::mem::take(&mut *self.workers.lock().map_err(|_| {
+            AtmError::daemon_unavailable("local IPC dispatch worker lock poisoned")
+        })?);
+        for worker in workers {
+            worker.join().map_err(|_| {
+                AtmError::daemon_unavailable("local IPC dispatch worker panicked during shutdown")
+            })?;
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RequestExecutionRisk {
@@ -38,9 +144,8 @@ enum RequestExecutionRisk {
 
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
-    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
     force_shutdown: &AtomicBool,
-    registry: Arc<ActiveConnectionRegistry>,
+    dispatch_workers: &DispatchWorkerPool,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
     apply_primary_request_deadline(&mut stream);
@@ -68,8 +173,7 @@ pub(super) fn handle_connection(
             request_id,
             request,
             RequestDeadline::after(REQUEST_DEADLINE),
-            dispatcher.clone(),
-            &registry,
+            dispatch_workers,
             observability,
         )?;
         if let Err(error) = write_local_http_response(&mut stream, &response, keep_alive) {
@@ -99,26 +203,11 @@ pub(super) fn handle_connection(
             );
             return Err(error);
         }
-        emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
         if !keep_alive {
             return Ok(());
         }
     }
     Ok(())
-}
-
-fn emit_dispatch_panic_recovery(
-    observability: &SubsystemObservability,
-    summary: DispatchReapSummary,
-) {
-    if summary.recovered_panics == 0 {
-        return;
-    }
-    observability.emit_or_warn(
-        "dispatch_worker",
-        "panic_recovered",
-        DISPATCH_PANIC_RECOVERED_MESSAGE,
-    );
 }
 
 pub(super) fn classify_connection_failure(error: &AtmError) -> ConnectionFailureClassification {
@@ -171,63 +260,26 @@ fn dispatch_request(
     request_id: RequestId,
     request: ApiRequest,
     deadline: RequestDeadline,
-    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
-    registry: &Arc<ActiveConnectionRegistry>,
+    dispatch_workers: &DispatchWorkerPool,
     observability: &SubsystemObservability,
 ) -> Result<ResponseEnvelope, AtmError> {
     let execution_risk = request_execution_risk(&request);
-    let result_rx = (|| {
-        let (result_rx, completion_rx, dispatch_handle) =
-            spawn_dispatch_worker(request, deadline, dispatcher, Arc::clone(registry))?;
-        registry.push_dispatch_handle(
-            TrackedDispatchHandle {
-                completion_rx,
-                join_handle: dispatch_handle,
-            },
-            MAX_CONCURRENT_CONNECTIONS,
-        )?;
-        Ok::<DispatchResultRx, AtmError>(result_rx)
-    })()
-    .inspect_err(|error| {
-        emit_connection_failure_event(observability, error, Some(request_id), "dispatch_request");
-    })?;
+    let result_rx = dispatch_workers
+        .dispatch(request, deadline)
+        .inspect_err(|error| {
+            emit_connection_failure_event(
+                observability,
+                error,
+                Some(request_id),
+                "dispatch_request",
+            );
+        })?;
     Ok(await_dispatch_response(
         request_id,
         execution_risk,
         deadline,
         result_rx,
     ))
-}
-
-fn spawn_dispatch_worker(
-    request: ApiRequest,
-    deadline: RequestDeadline,
-    dispatcher: Arc<dyn ApiRouter + Send + Sync>,
-    dispatch_registry: Arc<ActiveConnectionRegistry>,
-) -> Result<DispatchWorker, AtmError> {
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-    // The same-host dispatch worker is intentionally allowed to run to natural
-    // completion after a caller-side timeout. Requests may have already crossed
-    // durable or side-effecting boundaries, so forcing cancellation at
-    // REQUEST_DEADLINE would create a more ambiguous contract than the current
-    // "response timed out; work may still complete in the background" surface.
-    // The completion channel plus tracked join handle keep that bounded worker
-    // visible to shutdown/reap logic instead of leaking silently.
-    let dispatch_handle = std::thread::Builder::new()
-        .name("local-ipc-dispatch".to_string())
-        .spawn(move || {
-            let _dispatch_work = dispatch_registry.register_dispatch_work();
-            let response = dispatcher
-                .route(request, AuthenticatedIngress::Local, deadline)
-                .map(|response| response.into_inner());
-            let _ = result_tx.send(response);
-            let _ = completion_tx.send(());
-        })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn daemon local IPC dispatch worker")
-        })?;
-    Ok((result_rx, completion_rx, dispatch_handle))
 }
 
 fn apply_primary_request_deadline(stream: &mut LocalSocketStream) {
@@ -311,8 +363,8 @@ pub(crate) fn install_injected_accept_error_for_test(
 #[cfg(test)]
 mod tests {
     use super::{
-        RequestExecutionRisk, classify_connection_failure, dispatch_timeout_response,
-        handle_connection, request_execution_risk,
+        DispatchWorkerPool, RequestExecutionRisk, classify_connection_failure,
+        dispatch_timeout_response, handle_connection, request_execution_risk,
     };
     use atm_core::api::ApiRequest;
     use atm_core::clear::ClearQuery;
@@ -464,11 +516,18 @@ mod tests {
             .recv_timeout(Duration::from_secs(5))
             .expect("client connected");
         let started = Instant::now();
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let dispatch_workers = DispatchWorkerPool::start(
+            Arc::new(DoctorOnlyDispatcher),
+            Arc::clone(&registry),
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            1,
+        )
+        .expect("dispatch workers");
         let result = handle_connection(
             server_stream,
-            Arc::new(DoctorOnlyDispatcher),
             &AtomicBool::new(false),
-            Arc::new(ActiveConnectionRegistry::default()),
+            dispatch_workers.as_ref(),
             &SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
         );
 
@@ -482,5 +541,8 @@ mod tests {
         );
         let _ = release_client_tx.send(());
         client.join().expect("join wedged peer");
+        dispatch_workers
+            .shutdown()
+            .expect("shutdown dispatch workers");
     }
 }
