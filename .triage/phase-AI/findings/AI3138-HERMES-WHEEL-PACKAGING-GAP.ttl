@@ -15,7 +15,7 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-graft-python/" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-30T22:05:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI3138-WHEEL-PACKAGING-QA-1 ;
@@ -25,7 +25,9 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-5> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" ;
+  triage:closedAt "2026-07-30T23:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-1>
   a triage:Occurrence ;
@@ -33,7 +35,7 @@
   triage:line 1 ;
   triage:snippet "[tool.maturin] module-name=atm_graft" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/ai3138-hermes-wheel-packaging" ;
   triage:headSha "5110791d" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
@@ -44,7 +46,7 @@
   triage:line 28 ;
   triage:snippet "PYTHONPATH: str(PYTHON_SOURCE)" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/ai3138-hermes-wheel-packaging" ;
   triage:headSha "5110791d" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
@@ -55,7 +57,7 @@
   triage:line 12 ;
   triage:snippet "sys.path.insert(0, str(ADAPTER_ROOT))" ;
   triage:status "fixed" ;
-  triage:closed false ;
+  triage:closed true ;
   triage:branch "fix/ai3138-hermes-wheel-packaging" ;
   triage:headSha "5110791d" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
@@ -65,10 +67,10 @@
   triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
   triage:line 18 ;
   triage:snippet "sys.path.insert(0, str(PYTHON_SOURCE))" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ai3138-hermes-wheel-packaging" ;
-  triage:headSha "5110791d" ;
+  triage:headSha "d2df5fcc" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-5>
@@ -76,10 +78,10 @@
   triage:file "crates/atm-graft-python/pyproject.toml" ;
   triage:line 1 ;
   triage:snippet "python-source = python with module-name = atm_graft (no pure-Python atm_graft package dir exists; maturin build hard-fails on clean CI checkout, all 3 Test legs red)" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "fix/ai3138-hermes-wheel-packaging" ;
-  triage:headSha "cbdc4430" ;
+  triage:headSha "d2df5fcc" ;
   triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
 
 <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0>
