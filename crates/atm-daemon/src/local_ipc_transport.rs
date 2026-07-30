@@ -32,10 +32,7 @@ use std::thread;
 
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
-use accept_loop::{
-    handle_shutdown_probe, reject_connection_when_capped, spawn_connection_worker,
-    take_accept_error,
-};
+use accept_loop::{handle_shutdown_probe, spawn_connection_worker, take_accept_error};
 use request_worker::handle_connection;
 #[cfg(test)]
 pub(crate) use request_worker::install_injected_accept_error_for_test;
@@ -709,6 +706,18 @@ fn prepare_accept_iteration(
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
     }
+    // Keep the fixed worker bound without manufacturing a typed application
+    // failure for a request that has not entered the daemon yet.  When all
+    // workers are busy, leave the next local socket in the operating-system
+    // listener backlog until one completes.  That preserves the 64-work-item
+    // limit and avoids a burst racing a just-completed unary response into an
+    // otherwise avoidable `DaemonConnectionSaturated` response.
+    if context.registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
+        context
+            .registry
+            .wait_for_connection_change(Duration::from_millis(1))?;
+        return Ok(AcceptLoopOutcome::Continue);
+    }
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
         let _ = sender.send(());
@@ -763,13 +772,6 @@ fn handle_accepted_stream<'scope>(
         );
     }
     *terminate_probe_pending = false;
-    if reject_connection_when_capped(
-        &mut stream,
-        context.registry.active_connections(),
-        context.observability,
-    )? {
-        return Ok(AcceptLoopOutcome::Continue);
-    }
     spawn_connection_worker(
         scope,
         stream,
