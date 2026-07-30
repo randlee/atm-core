@@ -245,6 +245,7 @@ fn local_ipc_real_daemon_admission_burst_accepts_each_public_write() {
         .map(|sequence| {
             let atm_home = atm_home.clone();
             let workspace_dir = workspace_dir.clone();
+            #[cfg(not(windows))]
             let socket_path = socket_path.clone();
             std::thread::spawn(move || {
                 let request = RequestEnvelope::Write(Box::new(
@@ -263,14 +264,12 @@ fn local_ipc_real_daemon_admission_burst_accepts_each_public_write() {
                     .expect("send request"),
                 ));
                 #[cfg(windows)]
-                let mut stream = match atm_daemon_client::try_connect(
-                    &atm_daemon_client::resolve_daemon_local_ipc_endpoint()
-                        .expect("windows local HTTP endpoint"),
-                )
-                .expect("connect public local TCP endpoint")
-                {
-                    atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
-                };
+                let atm_daemon_client::LocalDaemonConnection::TcpLoopback(mut stream) =
+                    atm_daemon_client::try_connect(
+                        &atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+                            .expect("windows local HTTP endpoint"),
+                    )
+                    .expect("connect public local TCP endpoint");
                 #[cfg(not(windows))]
                 let mut stream = {
                     use interprocess::local_socket::Stream as LocalSocketStream;
