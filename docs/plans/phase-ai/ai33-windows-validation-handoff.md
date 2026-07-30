@@ -127,6 +127,17 @@ The executable procedure is
 - E-018 records the failure. The next commit will use a let-chain, rerun lint,
   and retain the compatibility retry's strict scope: Windows WSAECONNRESET
   during the read-only preflight only, never a side-effecting send.
+
+### 2026-07-30 — cwin — full-test singleton contention
+
+- The first full `just test` run was intentionally attempted while the one
+  exact-branch smoke daemon was live. Five `atm-daemon` tests failed on the
+  host-wide `C:\Users\rand.lee\.atm\daemon\owner.lock`; the retained output
+  also shows the related readiness-sender failure.
+- E-019 records this as test-environment contention. The daemon singleton is
+  working as designed. The next iteration stops only that owned daemon, runs
+  the full test suite without a live daemon, then starts one matching daemon
+  for smoke.
 ### 2026-07-30 — arch-ctm — reviewed next steps
 
 - Review of cwin's commits through `b8792a09`: they add only sanitized evidence
