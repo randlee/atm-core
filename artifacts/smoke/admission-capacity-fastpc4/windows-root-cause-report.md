@@ -380,3 +380,20 @@ daemon is PID `51824`, with local HTTP `127.0.0.1:56083` and peer HTTPS
 - Final listeners are local HTTP `127.0.0.1:34260` and enabled advertised peer
   HTTPS `10.10.100.98:43101`. The final `atm read --json` check returned zero
   unread and zero pending acknowledgements. No second daemon is running.
+
+## Complete ATM Profile Rebuild
+
+- The entire active `%USERPROFILE%\\.atm` tree was taken out of service before
+  the next official capacity run. This removed inherited DB/WAL, runtime
+  locks/endpoints/logs, nested backup contents, and the previous peer PEM from
+  the active profile; no prior ATM state was reused by the runner.
+- The fresh-profile capacity artifact is
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T215709Z.json`.
+  All 20 intervals ran and achieved `18,438/20,000`; every interval's first
+  failure was response-header `WinError 10053`. This rules out inherited ATM
+  state as the cause of the residual capacity failure.
+- Rebuilt the live profile with a new self-signed certificate/fingerprint,
+  one `capacity-team/cwin` roster member, and the enabled advertised listener
+  `10.10.100.98:43101`. The rebuilt state passed 10/10 localhost smoke
+  repetitions. Evidence:
+  `reports/smoke/20260730T215936Z/FastPC4-localhost.json`.

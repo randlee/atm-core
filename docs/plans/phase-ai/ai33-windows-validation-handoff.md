@@ -550,3 +550,25 @@ The current fastpc4 execution authority and baseline loop are in
   errors, and matching CLI/daemon version `1.4.0-beta-ai.38`. The final
   `atm read --json` check for `cwin/capacity-team` returned zero unread and
   zero pending-ack messages. No other `atm-daemon.exe` process is running.
+
+### 2026-07-30 - cwin - complete ATM profile rebuild
+
+- The prior `%USERPROFILE%\\.atm` tree was taken fully out of service rather
+  than selectively clearing its database. This removed the mailbox DB/WAL,
+  daemon locks/endpoints/logs, nested stale backup, and old peer certificate
+  state from the active profile. The official capacity runner then executed
+  from an empty host runtime and removed its temporary runtime on completion.
+- The live profile was rebuilt from scratch with a new self-signed PEM and
+  SHA-256 fingerprint, a new `capacity-team` roster containing only `cwin`,
+  and the enabled `10.10.100.98:43101` interface. The rebuilt profile passed
+  10/10 localhost smoke repetitions, including advertised-IP send/read and
+  acknowledgement reply. Evidence:
+  `reports/smoke/20260730T215936Z/FastPC4-localhost.json`.
+- The clean-profile capacity artifact is
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T215709Z.json`:
+  `18,438/20,000` responses, all intervals failing at response-header
+  `WinError 10053`. This confirms the remaining capacity failure is not caused
+  by inherited ATM state.
+- Final rebuilt daemon PID is `32036`; Doctor is healthy/ready with zero
+  warnings/errors, and listeners are local HTTP plus advertised peer
+  `10.10.100.98:43101`.
