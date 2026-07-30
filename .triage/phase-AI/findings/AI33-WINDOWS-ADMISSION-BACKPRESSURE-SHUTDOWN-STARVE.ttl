@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-WINDOWS-ADMISSION-BACKPRESSURE-SHUTDOWN-STARVE>
+  a triage:Finding ;
+  triage:findingId "AI33-WINDOWS-ADMISSION-BACKPRESSURE-SHUTDOWN-STARVE" ;
+  triage:title "Windows admission-capacity backpressure wait can starve forced shutdown and a full dispatch-handle table crashes the accept loop instead of degrading gracefully" ;
+  triage:description "In crates/atm-daemon/src/local_tcp_transport.rs (feature/pAI-s33-admission-capacity-smoke @ 7a1247e4), the new Windows-only accept loop calls wait_for_connection_capacity(&registry) (line ~267) before listener.accept(), which loops on registry.wait_for_connection_change(ACCEPT_POLL_INTERVAL) while active_connections() >= MAX_CONCURRENT_CONNECTIONS (64). This wait is NOT interrupted by lifecycle.terminate_requested() -- that flag is only checked at the top of the outer loop, before this call -- so if a handler thread wedges and never releases its ActiveConnectionGuard, the accept loop is trapped inside wait_for_connection_capacity indefinitely and never reaches the shutdown branch, defeating drain_active_connections_for_shutdown's own force_cancel_deadline guarantee. Separately, spawn_connection's fallback path when registry.push_dispatch_handle's own bounded dispatch-handle-table capacity check fails (active_connection_registry.rs push_dispatch_handle, handles.len() >= max_handles) is NOT routed through write_saturated_response like the try_register rejection path is -- instead push_dispatch_handle synchronously calls handle.join_handle.join() on the accept-loop thread itself (blocking up to REQUEST_DEADLINE=3s), then returns Err, which propagates all the way out of serve_with_runtime_hooks via spawn_connection(...)? and terminates the entire daemon accept/serve loop. This dispatch-handle-table saturation path is reachable because dispatch_handles length is only trimmed opportunistically via reap_finished_dispatches, so it can lag active_connections and hit max_handles even while try_register still had headroom. Both issues undermine this sprint's own stated goal of graceful admission handling under Windows local-TCP capacity pressure. Suggested fix: (1) make wait_for_connection_capacity re-check terminate_requested() (or use a select/notify pattern that shutdown can also signal) so shutdown is never blocked behind capacity backpressure; (2) route the push_dispatch_handle rejection path through write_saturated_response (or equivalent graceful 503) instead of propagating a fatal Err, and avoid a synchronous join() on the accept-loop thread." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T16:20:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-07-30T14:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-WINDOWS-ADMISSION-BACKPRESSURE-SHUTDOWN-STARVE/AI33-WINDOWS-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-WINDOWS-ADMISSION-BACKPRESSURE-SHUTDOWN-STARVE/AI33-WINDOWS-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 267 ;
+  triage:snippet "wait_for_connection_capacity(&registry)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "7a1247e4" ;
+  triage:occursIn <urn:atm:triage:worktree/s33-admission-backpressure/7a1247e4> .
+
+<urn:atm:triage:worktree/s33-admission-backpressure/7a1247e4>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature-pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "7a1247e4" ;
+  triage:orderIndex 0 .
