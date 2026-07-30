@@ -4,6 +4,13 @@ This is the current operational handoff for cwin's AI.33 validation work on
 fastpc4. It supersedes any earlier handoff statement that treated the machine's
 existing ATM state as a reason to stop the capacity exercise.
 
+Before another capacity run, complete the two independent daemon-liveness
+repairs in
+[`ai33-windows-admission-backpressure-remediation.md`](ai33-windows-admission-backpressure-remediation.md).
+That repair plan is deliberately separate from the capacity procedure below:
+it preserves the benchmark contract while making its overload and shutdown
+behavior testable.
+
 ## Authority and objective
 
 - fastpc4 is a validation host; it is not carrying a protected production ATM
