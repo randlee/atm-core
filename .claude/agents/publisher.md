@@ -222,9 +222,10 @@ gh release edit v{VERSION} --notes "$(cat release/release-notes.md)"
    - `version=<X.Y.Z or vX.Y.Z>`
    - `run_by_agent=publisher`
 10. Monitor in parallel:
-   - PR CI (if a release PR or release-fix PR is open): `atm gh monitor pr <PR_NUMBER>` — reports merge_conflict, CI pass/fail
-   - Preflight: `atm gh monitor run <run-id>` (fallback: `gh run watch --exit-status <run-id>`)
-   - If `atm gh monitor pr` returns `merge_conflict`, stop and report to `team-lead`.
+   - PR CI (if a release PR or release-fix PR is open): `gh pr checks <PR_NUMBER> --watch`
+   - PR merge state: `gh pr view <PR_NUMBER> --json mergeStateStatus,statusCheckRollup`
+   - Preflight: `gh run watch --exit-status <run-id>` or `gh run view <run-id> --json`
+   - If `gh pr view` reports `mergeStateStatus` equal to `DIRTY` or `HAS_CONFLICTS`, stop and report to `team-lead`.
 11. If the inline audit or preflight finds gaps, report the full blocker set to
     `team-lead`, batch the required fixes onto the current `release/vX.Y.Z`
     branch, and avoid one-blocker-per-PR churn.

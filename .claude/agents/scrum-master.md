@@ -136,9 +136,9 @@ After QA passes:
 ### Phase 5: CI Monitoring
 
 After PR creation:
-- prefer `atm gh monitor pr <PR> --start-timeout 120`
-- fall back to `gh pr checks <PR> --watch` if repo-specific monitoring is not
-  available
+- `gh pr checks <PR> --watch` for check suite monitoring
+- `gh pr view <PR> --json mergeStateStatus,reviewDecision,statusCheckRollup`
+  for one-shot structured commit status
 
 ### Phase 6: CI Fix Loop
 
