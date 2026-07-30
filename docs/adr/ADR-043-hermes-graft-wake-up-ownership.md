@@ -88,6 +88,12 @@ to make the one-profile path reliable.
   recovery callback. The callback has no message body, replay, persistence,
   acknowledgement, or retry behavior.
 - AI.38: complete — live and delayed recovery wakes both use the injected
-  `session.steer` port for the configured `ATM_CHAT_ID`. The checked-in
-  fixture proves accepted text appears only after a safe tool boundary, with
-  no normal inbound-message call, interruption, or mailbox mutation.
+  `session.steer` port. The adapter resolves the configured platform
+  `ATM_CHAT_ID` through an injected `resolve_session_id` callable and sends
+  only the opaque Hermes runtime session ID; it fails closed when that binding
+  is unavailable or invalid. The checked-in fixture proves accepted text
+  appears only after a safe tool boundary, with no normal inbound-message
+  call, interruption, or mailbox mutation. The adapter is a reference seam;
+  no production Hermes caller currently instantiates the resolver. That
+  wiring gap remains tracked separately as
+  `AI3138-HERMES-NO-PRODUCTION-LOADER`.
