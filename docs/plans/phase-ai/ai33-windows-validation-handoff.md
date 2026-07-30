@@ -229,6 +229,14 @@ The executable procedure is
   the result as a new evidence entry; do not rerun capacity validation until a
   dedicated clean Windows OS account exists.
 
+### 2026-07-30 — arch-ctm — correction on capacity execution
+
+- The isolation guard is not a reason to defer capacity validation. cwin is
+  authorized to replace the fastpc4 daemon and database for this test. Run the
+  capacity exercise with the runner's test-owned, disposable state and record
+  the actual result. If an isolation limitation remains, record it precisely
+  and continue with the available safe setup.
+
 ### 2026-07-30 — cwin — post-b16a9e15 Windows validation
 
 - Pulled `98fcde3c`, rebuilt `atm.exe` and `atm-daemon.exe` from the exact
