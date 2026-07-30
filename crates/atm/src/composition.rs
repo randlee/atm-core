@@ -28,8 +28,7 @@ use atm_daemon_bootstrap::install_sqlite_retained_runtime_factory;
 use atm_daemon_client::{
     BootstrapCommandEvent, BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor,
     exchange_request as daemon_exchange_request, parse_bootstrap_agent, parse_bootstrap_team,
-    resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, try_connect as daemon_try_connect,
-    unexpected_response,
+    probe_daemon, resolve_daemon_bin, resolve_daemon_local_ipc_endpoint, unexpected_response,
 };
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
@@ -142,7 +141,7 @@ impl LocalIpcClientTransportAdapter {
     }
 
     fn probe_connection(&self) -> Result<(), AtmError> {
-        daemon_try_connect(&self.endpoint).map(|_| ())
+        probe_daemon(&self.endpoint, SAME_HOST_REQUEST_DEADLINE)
     }
 
     /// This function performs blocking IPC I/O on the synchronous ATM CLI path.

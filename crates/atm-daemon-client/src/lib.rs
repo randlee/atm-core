@@ -434,6 +434,35 @@ pub fn exchange_request(
     )
 }
 
+/// Proves that the local daemon is reachable through one complete,
+/// capability-authenticated HTTP exchange.
+///
+/// A bare TCP connect is insufficient for the Windows loopback transport: it
+/// does not prove that the listener can admit an authenticated HTTP request.
+/// Bootstrap therefore uses this read-only request instead of treating socket
+/// establishment as daemon readiness.
+pub fn probe_daemon(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request_deadline: Duration,
+) -> Result<(), AtmError> {
+    probe_daemon_with_transport(endpoint, request_deadline, local_daemon_transport()?)
+}
+
+fn probe_daemon_with_transport(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request_deadline: Duration,
+    transport: LocalDaemonTransport,
+) -> Result<(), AtmError> {
+    let request = RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery::default());
+    match exchange_request_with_transport(endpoint, &request, request_deadline, transport)? {
+        ResponseEnvelope::Doctor(_) => Ok(()),
+        ResponseEnvelope::Error(error) => Err(error),
+        response => Err(AtmError::daemon_unavailable(format!(
+            "daemon returned an unexpected response to its local readiness probe: {response:?}"
+        ))),
+    }
+}
+
 fn exchange_request_with_transport(
     endpoint: &DaemonLocalIpcEndpoint,
     request: &RequestEnvelope,
@@ -998,7 +1027,8 @@ mod tests {
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
         HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalDaemonTransport,
         apply_local_ipc_deadline, exchange_request_with_transport, next_auto_start_poll_interval,
-        resolve_daemon_local_ipc_endpoint, resolve_daemon_local_ipc_endpoint_from_home,
+        probe_daemon_with_transport, resolve_daemon_local_ipc_endpoint,
+        resolve_daemon_local_ipc_endpoint_from_home,
     };
     #[cfg(unix)]
     use super::{FailedAutoStartChild, reap_failed_auto_start, try_connect_with_transport};
@@ -1051,6 +1081,67 @@ mod tests {
 
         assert_eq!(canonical.as_ref(), expected);
         assert_eq!(compatibility_endpoint.as_ref(), expected);
+    }
+
+    #[test]
+    fn local_readiness_probe_uses_one_authenticated_doctor_exchange() {
+        let tempdir = TempDir::new().expect("temp runtime");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind local HTTP");
+        let endpoint = listener.local_addr().expect("local HTTP address");
+        let capability = atm_core::local_http::LocalCapability::generate().expect("capability");
+        let record_path = tempdir
+            .path()
+            .join(atm_core::local_http::LOCAL_HTTP_RECORD_FILENAME);
+        let record = atm_core::local_http::LocalHttpEndpointRecord::active(
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+                .parse()
+                .expect("daemon instance id"),
+            Some(endpoint),
+            None,
+            &capability,
+        );
+        let instance_id = record.daemon_instance_id;
+        std::fs::write(
+            &record_path,
+            serde_json::to_vec(&record).expect("serialize endpoint record"),
+        )
+        .expect("write endpoint record");
+        std::fs::write(
+            tempdir
+                .path()
+                .join(atm_core::home::HOST_RUNTIME_OWNER_LOCK_FILE),
+            format!("1:test:{instance_id}"),
+        )
+        .expect("write owner record");
+
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept readiness probe");
+            let request = atm_core::api::read_http_request(&mut stream)
+                .expect("read readiness request")
+                .expect("readiness probe must not be a bare TCP connect");
+            assert_eq!(request.path, "/v1/atm/doctor");
+            assert!(
+                request
+                    .header(atm_core::local_http::LOCAL_CAPABILITY_HEADER)
+                    .is_some()
+            );
+            atm_core::api::write_http_response(
+                &mut stream,
+                &atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                    "test daemon not ready",
+                )),
+            )
+            .expect("write terminal response");
+        });
+
+        let error = probe_daemon_with_transport(
+            &DaemonLocalIpcEndpoint::new(record_path).expect("endpoint path"),
+            Duration::from_secs(1),
+            LocalDaemonTransport::TcpLoopback,
+        )
+        .expect_err("daemon error must make the authenticated probe fail");
+        assert!(error.is_daemon_unavailable());
+        server.join().expect("server join");
     }
 
     #[test]

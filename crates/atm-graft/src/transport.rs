@@ -5,8 +5,7 @@ use atm_core::protocol::{
     CLI_SCHEMA_VERSION, CompatibilityPreflight, HttpApiVersion, RequestEnvelope, ResponseEnvelope,
 };
 use atm_daemon_client::{
-    DaemonLocalIpcEndpoint, exchange_request as daemon_exchange_request,
-    try_connect as daemon_try_connect,
+    DaemonLocalIpcEndpoint, exchange_request as daemon_exchange_request, probe_daemon,
 };
 
 pub(crate) use atm_daemon_client::unexpected_response;
@@ -24,7 +23,7 @@ impl GraftLocalIpcClientTransport {
     }
 
     pub(crate) fn probe_connection(&self) -> Result<(), AtmError> {
-        daemon_try_connect(&self.endpoint).map(|_| ())
+        probe_daemon(&self.endpoint, SAME_HOST_REQUEST_DEADLINE)
     }
 
     pub(crate) fn round_trip(
