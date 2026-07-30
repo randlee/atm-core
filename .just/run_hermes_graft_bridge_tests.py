@@ -76,6 +76,12 @@ def main() -> None:
             env=env,
         )
         subprocess.run(
+            [str(python), str(ROOT / "scripts" / "phase-ai" / "run-hermes-steer-smoke.py"), "--fixture"],
+            check=True,
+            cwd=ROOT,
+            env=env,
+        )
+        subprocess.run(
             [str(python), "-m", "unittest", "discover", "-s", str(TESTS), "-p", "test_hermes_*.py"],
             check=True,
             cwd=ROOT,

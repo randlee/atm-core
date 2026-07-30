@@ -489,7 +489,7 @@ impl PyGraftSession {
 }
 
 #[pymodule]
-fn atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _atm_graft(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("AtmGraftError", m.py().get_type::<AtmGraftError>())?;
     m.add_class::<PyAgentAddress>()?;
     m.add_class::<PyGraftSessionOptions>()?;

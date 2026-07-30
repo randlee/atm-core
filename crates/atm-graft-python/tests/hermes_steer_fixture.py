@@ -10,23 +10,9 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
-from pathlib import Path
-import sys
-from types import ModuleType
 
-PYTHON_SOURCE = Path(__file__).resolve().parents[1] / "python"
-if str(PYTHON_SOURCE) not in sys.path:
-    sys.path.insert(0, str(PYTHON_SOURCE))
-
-from atm_graft_hermes_adapter import AtmGraftAdapter  # noqa: E402
-
-# The fixture executes the real bridge source without requiring its compiled
-# pyo3 extension. It configures the bridge through ``__new__`` below, so only
-# its postponed annotations need this minimal import placeholder.
-if "atm_graft" not in sys.modules:
-    sys.modules["atm_graft"] = ModuleType("atm_graft")
-
-from atm_graft_hermes_bridge import HermesGraftBridge  # noqa: E402
+from atm_graft_hermes_adapter import AtmGraftAdapter
+from atm_graft_hermes_bridge import HermesGraftBridge
 
 
 @dataclass(frozen=True)
