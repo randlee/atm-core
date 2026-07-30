@@ -300,3 +300,16 @@ The current fastpc4 execution authority and baseline loop are in
   admissions. The fix will apply bounded accept backpressure, preserve the
   64-connection cap, and add a regression test; no worker, queue, retry, or
   timeout increase is permitted.
+
+### 2026-07-30 - cwin - backpressure rerun remains failing
+
+- Pulled and rebuilt `6e8c6bc2`; `just lint` passed all 23 checks and
+  `just test` passed 317 tests with 2 skipped. The capacity rerun completed
+  all 20 intervals and clean teardown, but remained at `18,453/20,000`
+  HTTP 201 admissions. Every interval still reported Windows 10053, with
+  903-954 accepted admissions per interval:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T191318Z.json`.
+- The first accept-capacity diagnosis was incomplete. Before changing another
+  transport path, the next iteration will retain daemon stdout/stderr and the
+  disposable runtime log on a failed interval so the exact aborting operation
+  is visible. No gate, timeout, retry, worker, or queue change is being made.
