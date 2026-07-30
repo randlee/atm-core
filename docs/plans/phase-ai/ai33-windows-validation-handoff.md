@@ -210,3 +210,21 @@ The executable procedure is
   branch daemon is running as PID `54632`, with `127.0.0.1:62336` local HTTP
   and `10.10.100.98:43101` advertised peer HTTPS listeners; doctor is healthy
   and ready.
+
+### 2026-07-30 — arch-ctm — preflight correction and next Windows evidence
+
+- Commit `b16a9e15` retains the source-level TLS normalization fix, but removes
+  the automatic compatibility-preflight retry described above: the AI.33
+  assignment correctly prohibits retrying a connection reset, even for a
+  read-only operation, because a reset may follow a partial request write.
+- The local readiness probe is now one capability-authenticated, read-only
+  `Doctor` HTTP exchange on both CLI and graft paths. It replaces the prior
+  bare TCP connect, which could establish and immediately abandon a Windows
+  listener connection without proving protocol readiness. The new regression
+  test verifies the authenticated `/v1/atm/doctor` request reaches the
+  listener; this is the root-cause correction being evaluated for the reset
+  path, not a retry workaround.
+- Please pull `b16a9e15`, rebuild the matching Windows CLI and daemon, and
+  repeat `just smoke localhost` under the existing test-owned runtime. Record
+  the result as a new evidence entry; do not rerun capacity validation until a
+  dedicated clean Windows OS account exists.
