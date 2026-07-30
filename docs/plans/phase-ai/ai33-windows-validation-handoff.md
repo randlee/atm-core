@@ -268,3 +268,19 @@ The current fastpc4 execution authority and baseline loop are in
   restored.
 - A source fix is in progress in `crates/atm-daemon/src/composition.rs`; no
   retry, timeout, worker, or capacity assertion changes are being made.
+
+### 2026-07-30 - cwin - first-round Windows fixes and test failure
+
+- The first full `just test` after the readiness investigation exposed one
+  additional test-only failure: `atm-graft-python` test
+  `invalid_address_returns_a_python_error` panicked because PyO3 was not
+  initialized. The test now calls `Python::initialize()` before constructing
+  the invalid address; the focused test and full suite pass.
+- The Windows production start hook now emits and flushes `ATM_DAEMON_READY`
+  when `ATM_DAEMON_READY_STDOUT` is requested. This matches the Unix runner
+  contract without changing retries, timeouts, worker limits, or capacity
+  assertions. A Windows-only buffer-backed regression test covers the exact
+  marker.
+- `just test` result after both fixes: 317 passed, 2 skipped. The readiness
+  source change and test correction are staged for the next push; capacity
+  must be rerun from the exact pushed commit.
