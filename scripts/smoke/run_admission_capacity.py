@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 from queue import Empty, Queue
+import shutil
 import socket
 import subprocess
 import sys
@@ -158,7 +159,11 @@ def runtime_environment(atm_home: Path) -> dict[str, str]:
     return environment
 
 
-def await_daemon_ready(process: subprocess.Popen[str]) -> None:
+def await_daemon_ready(
+    process: subprocess.Popen[str],
+    captured_stdout: list[str],
+    reader_threads: list[Thread],
+) -> None:
     """Wait only for the daemon's explicit readiness signal."""
     if process.stdout is None:
         raise SmokeError("capacity daemon stdout was not captured")
@@ -167,11 +172,14 @@ def await_daemon_ready(process: subprocess.Popen[str]) -> None:
     def read_stdout() -> None:
         try:
             for line in process.stdout:
+                captured_stdout.append(line)
                 lines.put(line)
         finally:
             lines.put(None)
 
-    Thread(target=read_stdout, name="atm-capacity-ready", daemon=True).start()
+    reader = Thread(target=read_stdout, name="atm-capacity-ready", daemon=True)
+    reader_threads.append(reader)
+    reader.start()
     deadline = time.monotonic() + READY_TIMEOUT_SECONDS
     last_line = ""
     while time.monotonic() < deadline:
@@ -187,6 +195,57 @@ def await_daemon_ready(process: subprocess.Popen[str]) -> None:
         if line.strip() == "ATM_DAEMON_READY":
             return
     raise SmokeError("capacity daemon did not publish ATM_DAEMON_READY within 30 seconds")
+
+
+def start_stream_capture(
+    stream: Any,
+    captured: list[str],
+    reader_threads: list[Thread],
+    name: str,
+) -> None:
+    """Drain a daemon pipe so Windows diagnostics cannot block on a full buffer."""
+    if stream is None:
+        return
+
+    def read_stream() -> None:
+        for line in stream:
+            captured.append(line)
+
+    reader = Thread(target=read_stream, name=name, daemon=True)
+    reader_threads.append(reader)
+    reader.start()
+
+
+def retain_failure_diagnostics(
+    evidence: dict[str, Any],
+    evidence_directory: Path,
+    runtime_root: Path | None,
+    captured_stdout: list[str],
+    captured_stderr: list[str],
+    reader_threads: list[Thread],
+) -> None:
+    """Retain bounded-runner process and daemon-log evidence before cleanup."""
+    if evidence.get("passed"):
+        return
+    for reader in reader_threads:
+        reader.join(timeout=2.0)
+    diagnostics = evidence_directory / "diagnostics"
+    diagnostics.mkdir(parents=True, exist_ok=True)
+    suffix = str(evidence.get("daemon_pid", "unknown"))
+    paths: dict[str, str] = {}
+    stdout_path = diagnostics / f"admission-capacity-{suffix}-daemon.stdout.log"
+    stderr_path = diagnostics / f"admission-capacity-{suffix}-daemon.stderr.log"
+    stdout_path.write_text("".join(captured_stdout), encoding="utf-8")
+    stderr_path.write_text("".join(captured_stderr), encoding="utf-8")
+    paths["daemon_stdout"] = str(stdout_path)
+    paths["daemon_stderr"] = str(stderr_path)
+    if runtime_root is not None:
+        runtime_log = runtime_root / "logs" / "atm.log.jsonl"
+        if runtime_log.is_file():
+            retained_log = diagnostics / f"admission-capacity-{suffix}-atm.log.jsonl"
+            shutil.copyfile(runtime_log, retained_log)
+            paths["daemon_runtime_log"] = str(retained_log)
+    evidence["diagnostics"] = paths
 
 
 def prepare_capacity_roster(atm: Path, env: dict[str, str], home: Path) -> None:
@@ -499,6 +558,9 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
     runtime_root: Path | None = None
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
+    captured_stdout: list[str] = []
+    captured_stderr: list[str] = []
+    reader_threads: list[Thread] = []
     evidence: dict[str, Any] = {
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
@@ -514,7 +576,9 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
                 [str(daemon)], cwd=home, env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             )
-            await_daemon_ready(daemon_process)
+            evidence["daemon_pid"] = daemon_process.pid
+            start_stream_capture(daemon_process.stderr, captured_stderr, reader_threads, "atm-capacity-stderr")
+            await_daemon_ready(daemon_process, captured_stdout, reader_threads)
             return daemon_process
 
         process = measure_stage(evidence, "daemon_start_ready_ms", start_daemon)
@@ -567,6 +631,14 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
             evidence["passed"] = False
             evidence["cleanup_failure"] = str(error)
         try:
+            retain_failure_diagnostics(
+                evidence,
+                evidence_directory,
+                runtime_root,
+                captured_stdout,
+                captured_stderr,
+                reader_threads,
+            )
             record_slowest_stage(evidence)
             evidence["html_report"] = str(write_feature_report(evidence))
         except (OSError, RuntimeError, ValueError, SmokeError) as error:
