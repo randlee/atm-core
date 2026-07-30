@@ -37,6 +37,7 @@ evidence.
 | E-012 | `atm peer interface list --json` | The exact branch CLI returned an empty list (`[]`); no enabled advertised interface was available for the physical-interface smoke lane. | This Windows host had no persisted peer interface in its user ATM state. The host's usable IPv4 address is `10.10.100.98` on `Ethernet 2`; this is a setup/configuration gap, not a transport failure. | Pending immediate operational fix: save one enabled interface bound to `10.10.100.98:43101` and advertise `10.10.100.98`, then verify the single daemon reloads it. |
 | E-013 | Exact daemon restart after E-012 | `atm-daemon.exe` exited immediately with code `70`: `daemon runtime assembly is unavailable; atm-daemon startup is blocked`. | The enabled mutual-TLS interface had no local certificate configured. The daemon startup composition requires a local certificate before binding any enabled mTLS HTTPS interface. The retained `.atm` log added no Error/Warn record; this is the daemon's sanitized startup error contract. | Pending operational fix: initialize the local test certificate from the existing host-local PEM bundle, restart one exact branch daemon, and verify the 43101 listener. No production code change indicated. |
 | E-014 | Exact daemon restart after E-013 | `configured TLS certificate fingerprint does not match the PEM bundle` (exit `1`). A doctor auto-start retry also logged `daemon_launch_gate` contended and `daemon_auto_start` timeout_exhausted. | The certificate record was initialized with a `sha256:` label. The branch daemon normalizes only hexadecimal/colon fingerprint material, so the label changed the compared value and could not match the PEM certificate. | Pending operational fix: replace the record with the same fingerprint bytes without the `sha256:` label, then restart one exact branch daemon. No production code change indicated. |
+| E-015 | `just smoke localhost`, report `reports/smoke/20260730T165539Z/FastPC4-localhost.json` | All 10 attempts passed doctor, advertised-host, physical-interface send/read, and required-ack delivery. All 10 acknowledgement reply steps failed: `agent 'cwin' was not found in team 'atm-dev'`. | The smoke environment selected `ATM_TEAM=atm-dev`, but the host roster contains only `capacity-team` with `capacity-agent`; `atm-dev` is not persisted on this Windows account. Retained logs contain repeated `ATM_AGENT_NOT_FOUND` errors plus peer write/recovery warnings for the self target. | Pending operational fix: use the public roster commands to leave one local smoke team member `cwin`, set `ATM_TEAM` to that team, and rerun the same prescribed smoke. No production code change indicated. |
 
 ## Key Contract Clarification
 
@@ -101,6 +102,22 @@ peer interface, when configured, is a separate 43101 listener.
 - E-014 records the operator-input root cause: the stored `sha256:` label is
   not accepted by the branch fingerprint normalization. The next fix removes
   that label while retaining the same certificate bytes.
+
+## Local Smoke Roster Iteration
+
+- `just smoke localhost` ran all 10 required live repetitions. Doctor,
+  advertised-host, physical-interface send/read, and required-ack delivery
+  passed in all 10 attempts.
+- The acknowledgement reply failed in all 10 attempts because `cwin` was not
+  present in the selected `atm-dev` team. The complete JSON report is
+  `reports/smoke/20260730T165539Z/FastPC4-localhost.json`.
+- `atm teams --json` showed only `capacity-team` with one existing member,
+  `capacity-agent`; `atm members --team atm-dev --json` confirmed the selected
+  team was absent. E-015 records the repeated `ATM_AGENT_NOT_FOUND` errors and
+  the associated retained peer delivery/recovery warnings.
+- The next repair is host-state only: make one local team contain `cwin`, then
+  rerun with that exact team context. No daemon restart or code change is
+  indicated by this failure.
 
 ## Next Iteration
 

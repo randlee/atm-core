@@ -82,3 +82,15 @@ The executable procedure is
 - E-014 records that the operator supplied a `sha256:` label which this branch
   does not strip during fingerprint normalization. The next iteration removes
   only that label and retries the same single daemon.
+
+### 2026-07-30 — cwin — local smoke roster blocker
+
+- `just smoke localhost` completed all 10 repetitions. Doctor, advertised
+  host, physical-interface send/read, and required-ack delivery passed every
+  time; only the acknowledgement reply failed.
+- The exact failure was `agent 'cwin' was not found in team 'atm-dev'`. The
+  persisted host roster has only `capacity-team` with `capacity-agent`, so the
+  selected `atm-dev` team does not exist.
+- E-015 records the complete report path and repeated retained
+  `ATM_AGENT_NOT_FOUND` errors. The next step is a public-CLI roster repair to
+  leave one local smoke member `cwin`, then rerun without changing daemon code.
