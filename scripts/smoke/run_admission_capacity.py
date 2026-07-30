@@ -33,7 +33,6 @@ from daemon_lifecycle import (
     count_atm_daemon_processes,
     require_clean_host_daemon_state,
     terminate_process,
-    wait_for_process_exit,
 )
 from fixtures import release_binary
 from smoke_common import SmokeError, command_result, sanitize
@@ -377,6 +376,17 @@ def write_feature_report(evidence: dict[str, Any]) -> Path:
     return write_report("admission-capacity", cases)
 
 
+def terminate_capacity_daemon(process: subprocess.Popen[str]) -> None:
+    """Terminate and reap the runner-owned daemon before leak inspection."""
+    terminate_process(process.pid)
+    try:
+        process.wait(timeout=10.0)
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"admission-capacity daemon pid {process.pid} did not exit within 10.0s"
+        ) from error
+
+
 def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, unavailable_host: str) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     require_isolated_os_user()
@@ -427,9 +437,8 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         evidence["failure"] = str(error)
     finally:
         if process is not None:
-            terminate_process(process.pid)
             try:
-                wait_for_process_exit(process.pid, process_label="admission-capacity daemon")
+                terminate_capacity_daemon(process)
             except RuntimeError as error:
                 evidence["passed"] = False
                 evidence["cleanup_failure"] = str(error)

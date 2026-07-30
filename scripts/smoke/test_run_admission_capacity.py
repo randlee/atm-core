@@ -117,6 +117,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(writer.call_args.args[0], "admission-capacity")
         self.assertEqual(writer.call_args.args[1][1]["detail"], "999/1000 accepted; HTTP 503 TEST")
 
+    def test_cleanup_reaps_the_runner_owned_daemon(self):
+        process = mock.Mock(pid=1234)
+        RUNNER.terminate_capacity_daemon(process)
+        process.wait.assert_called_once_with(timeout=10.0)
+
+    def test_cleanup_reports_a_real_daemon_shutdown_timeout(self):
+        process = mock.Mock(pid=1234)
+        process.wait.side_effect = RUNNER.subprocess.TimeoutExpired(["atm-daemon"], 10.0)
+        with self.assertRaisesRegex(RuntimeError, "pid 1234 did not exit"):
+            RUNNER.terminate_capacity_daemon(process)
+
 
 if __name__ == "__main__":
     unittest.main()
