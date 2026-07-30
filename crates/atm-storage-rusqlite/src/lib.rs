@@ -330,7 +330,18 @@ impl atm_storage::contract::sealed::Sealed for SqliteRosterStore {}
 
 impl MessageStore for SqliteMessageStore {
     fn save_message(&self, message: &Message) -> Result<(), AtmError> {
-        self.db.submit_upsert_message(message.clone())
+        self.db.submit_upsert_message(message.clone()).map(|_| ())
+    }
+
+    fn save_message_if_absent(&self, message: &Message) -> Result<Option<Message>, AtmError> {
+        if self.db.submit_upsert_message(message.clone())? {
+            return Ok(None);
+        }
+        self.load_message(&message.message_key)?.ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "sqlite writer reported an existing message key but the retained record could not be loaded",
+            )
+        }).map(Some)
     }
 
     fn save_messages_atomically(&self, messages: &[Message]) -> Result<(), AtmError> {
@@ -933,6 +944,35 @@ mod tests {
                 .load_message(&original.message_key)
                 .expect("load after delete")
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn sqlite_backend_admits_a_message_once_and_returns_the_existing_record() {
+        let backend = SqliteStorageBackend::in_memory_for_test().expect("backend");
+        let store = backend.message_store();
+        let original = message("atm:admit-once", "immutable payload");
+
+        assert_eq!(
+            store
+                .save_message_if_absent(&original)
+                .expect("first atomic admission"),
+            None,
+            "the first atomic admission writes the message"
+        );
+        assert_eq!(
+            store
+                .save_message_if_absent(&original)
+                .expect("duplicate atomic admission"),
+            Some(original.clone()),
+            "a duplicate returns the record that won the immutable key"
+        );
+        assert_eq!(
+            store
+                .load_message(&original.message_key)
+                .expect("load stored message"),
+            Some(original),
+            "a duplicate admission does not replace the original immutable record"
         );
     }
 

@@ -204,42 +204,6 @@ fn mirror_message_to_store(
         return Ok(DuplicateWriteDisposition::NotDuplicate);
     };
     let message_key = boundary::MessageKey::from(message_id);
-    if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
-        if immutable_envelopes_match(&existing.envelope, envelope) {
-            if let Some((source_host, destination_host)) = same_store_peer_receipt
-                && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
-            {
-                info!(
-                    event = "peer_duplicate_write_skipped",
-                    message_id = %message_id,
-                    source_host = %source_host,
-                    destination_host = %destination_host,
-                    same_store_peer_receipt = true,
-                    database_write = "skipped",
-                    delivery = "continued",
-                    "peer_duplicate_write_skipped"
-                );
-                return Ok(DuplicateWriteDisposition::SameStorePeerReceipt);
-            }
-            info!(
-                message_id = %message_id,
-                team = %team,
-                agent = %agent,
-                "duplicate message ULID write matched immutable data; retaining existing record"
-            );
-            return Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote);
-        }
-        error!(
-            code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
-            message_id = %message_id,
-            team = %team,
-            agent = %agent,
-            "duplicate message ULID carried different immutable data; retaining original record"
-        );
-        return Err(AtmError::message_id_conflict(format!(
-            "message {message_id} already exists for {agent}@{team} with different immutable data"
-        )));
-    }
     let record = boundary::Message {
         team: team.clone(),
         agent: agent.clone(),
@@ -247,11 +211,74 @@ fn mirror_message_to_store(
         envelope: envelope.clone(),
     };
     if let Some(source_update) = acknowledgement_source_update {
+        if let Some(existing) = runtime.load_message_record(home_dir, team, agent, &message_key)? {
+            return classify_existing_message(
+                existing,
+                envelope,
+                message_id,
+                team,
+                agent,
+                same_store_peer_receipt,
+            );
+        }
         runtime.persist_message_records_atomically(vec![record, source_update])?;
     } else {
-        runtime.persist_message_record(record)?;
+        if let Some(existing) = runtime.admit_message_record(home_dir, record)? {
+            return classify_existing_message(
+                existing,
+                envelope,
+                message_id,
+                team,
+                agent,
+                same_store_peer_receipt,
+            );
+        }
     }
     Ok(DuplicateWriteDisposition::NotDuplicate)
+}
+
+fn classify_existing_message(
+    existing: boundary::Message,
+    envelope: &InboxMessage,
+    message_id: crate::schema::AtmMessageId,
+    team: &TeamName,
+    agent: &AgentName,
+    same_store_peer_receipt: Option<(&HostName, &HostName)>,
+) -> Result<DuplicateWriteDisposition, AtmError> {
+    if immutable_envelopes_match(&existing.envelope, envelope) {
+        if let Some((source_host, destination_host)) = same_store_peer_receipt
+            && peer_outbound_host(&existing.envelope)?.as_ref() == Some(destination_host)
+        {
+            info!(
+                event = "peer_duplicate_write_skipped",
+                message_id = %message_id,
+                source_host = %source_host,
+                destination_host = %destination_host,
+                same_store_peer_receipt = true,
+                database_write = "skipped",
+                delivery = "continued",
+                "peer_duplicate_write_skipped"
+            );
+            return Ok(DuplicateWriteDisposition::SameStorePeerReceipt);
+        }
+        info!(
+            message_id = %message_id,
+            team = %team,
+            agent = %agent,
+            "duplicate message ULID write matched immutable data; retaining existing record"
+        );
+        return Ok(DuplicateWriteDisposition::AlreadyDeliveredRemote);
+    }
+    error!(
+        code = %crate::error_codes::AtmErrorCode::MessageIdConflict,
+        message_id = %message_id,
+        team = %team,
+        agent = %agent,
+        "duplicate message ULID carried different immutable data; retaining original record"
+    );
+    Err(AtmError::message_id_conflict(format!(
+        "message {message_id} already exists for {agent}@{team} with different immutable data"
+    )))
 }
 
 fn immutable_envelopes_match(left: &InboxMessage, right: &InboxMessage) -> bool {

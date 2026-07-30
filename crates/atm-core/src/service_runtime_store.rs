@@ -107,6 +107,23 @@ pub(crate) trait RetainedMailboxRuntime {
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::Message>, AtmError>;
+    /// Atomically admits a new immutable record or returns the existing record
+    /// for duplicate classification. The default retains compatibility for
+    /// narrow test runtimes; the production SQLite runtime overrides it to
+    /// keep the normal admission path on its writer lane.
+    fn admit_message_record(
+        &self,
+        home_dir: &Path,
+        record: boundary::Message,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        if let Some(existing) =
+            self.load_message_record(home_dir, &record.team, &record.agent, &record.message_key)?
+        {
+            return Ok(Some(existing));
+        }
+        self.persist_message_record(record)?;
+        Ok(None)
+    }
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError>;
     fn persist_message_records_atomically(
         &self,
@@ -165,6 +182,21 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .load_message(message_key)?
             .filter(|message| &message.team == team && &message.agent == agent)
             .map(shared_message_to_record))
+    }
+
+    fn admit_message_record(
+        &self,
+        _home_dir: &Path,
+        record: boundary::Message,
+    ) -> Result<Option<boundary::Message>, AtmError> {
+        self.message_store
+            .save_message_if_absent(&SharedMessage {
+                team: record.team,
+                agent: record.agent,
+                message_key: record.message_key,
+                envelope: record.envelope,
+            })
+            .map(|existing| existing.map(shared_message_to_record))
     }
 
     fn persist_message_record(&self, record: boundary::Message) -> Result<(), AtmError> {
