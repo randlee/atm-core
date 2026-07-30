@@ -38,6 +38,7 @@ evidence.
 | E-013 | Exact daemon restart after E-012 | `atm-daemon.exe` exited immediately with code `70`: `daemon runtime assembly is unavailable; atm-daemon startup is blocked`. | The enabled mutual-TLS interface had no local certificate configured. The daemon startup composition requires a local certificate before binding any enabled mTLS HTTPS interface. The retained `.atm` log added no Error/Warn record; this is the daemon's sanitized startup error contract. | Pending operational fix: initialize the local test certificate from the existing host-local PEM bundle, restart one exact branch daemon, and verify the 43101 listener. No production code change indicated. |
 | E-014 | Exact daemon restart after E-013 | `configured TLS certificate fingerprint does not match the PEM bundle` (exit `1`). A doctor auto-start retry also logged `daemon_launch_gate` contended and `daemon_auto_start` timeout_exhausted. | The certificate record was initialized with a `sha256:` label. The branch daemon normalizes only hexadecimal/colon fingerprint material, so the label changed the compared value and could not match the PEM certificate. | Pending operational fix: replace the record with the same fingerprint bytes without the `sha256:` label, then restart one exact branch daemon. No production code change indicated. |
 | E-015 | `just smoke localhost`, report `reports/smoke/20260730T165539Z/FastPC4-localhost.json` | All 10 attempts passed doctor, advertised-host, physical-interface send/read, and required-ack delivery. All 10 acknowledgement reply steps failed: `agent 'cwin' was not found in team 'atm-dev'`. | The smoke environment selected `ATM_TEAM=atm-dev`, but the host roster contains only `capacity-team` with `capacity-agent`; `atm-dev` is not persisted on this Windows account. Retained logs contain repeated `ATM_AGENT_NOT_FOUND` errors plus peer write/recovery warnings for the self target. | Pending operational fix: use the public roster commands to leave one local smoke team member `cwin`, set `ATM_TEAM` to that team, and rerun the same prescribed smoke. No production code change indicated. |
+| E-016 | Second `just smoke localhost`, report `reports/smoke/20260730T165659Z/FastPC4-localhost.json` | Attempt 1 ordinary physical-interface send failed with `failed to read daemon HTTP headers: An existing connection was forcibly closed by the remote host (os error 10054)`. The same attempt's required-ack and reply passed; attempts 2-10 passed all rows. | The retained event is `ATM_DAEMON_UNAVAILABLE` on the local loopback HTTP control path, not the 43101 peer listener. PID `13396` stayed alive, both listeners remained bound, and no daemon shutdown/error event occurred. This is an intermittent Windows loopback connection reset; the single occurrence does not establish a reproducible code defect. | Pending reproduction retry. No production-code change justified unless the reset recurs. |
 
 ## Key Contract Clarification
 
@@ -118,6 +119,20 @@ peer interface, when configured, is a separate 43101 listener.
 - The next repair is host-state only: make one local team contain `cwin`, then
   rerun with that exact team context. No daemon restart or code change is
   indicated by this failure.
+
+## Local IPC Reset Iteration
+
+- After the roster repair, the second smoke report completed all 10 attempts.
+  Nine attempts passed every row. Attempt 1 passed doctor, advertised host,
+  required-ack delivery, and acknowledgement reply, but its ordinary send
+  failed on the local daemon HTTP path with Windows `WSAECONNRESET` 10054.
+- The retained log contains one corresponding `ATM_DAEMON_UNAVAILABLE`
+  `service` event at `2026-07-30T16:56:55.581071Z`. PID `13396` remained alive,
+  `127.0.0.1:57120` and `10.10.100.98:43101` stayed bound, and later requests
+  succeeded. No crash or listener loss was observed.
+- E-016 is therefore recorded as a transient Windows local-loopback reset. A
+  repeat run is required to determine whether it is reproducible before any
+  cross-platform code change is considered.
 
 ## Next Iteration
 

@@ -94,3 +94,14 @@ The executable procedure is
 - E-015 records the complete report path and repeated retained
   `ATM_AGENT_NOT_FOUND` errors. The next step is a public-CLI roster repair to
   leave one local smoke member `cwin`, then rerun without changing daemon code.
+
+### 2026-07-30 — cwin — transient local IPC reset
+
+- With the repaired one-member roster, the next `just smoke localhost` report
+  passed 9/10 complete repetitions. Attempt 1 had one ordinary send failure:
+  Windows `WSAECONNRESET` 10054 while reading daemon HTTP headers.
+- Required-ack and reply passed in that same attempt; attempts 2-10 passed all
+  rows. PID `13396` and both local/public listeners remained healthy. E-016
+  records the retained `ATM_DAEMON_UNAVAILABLE` event.
+- This is not yet a code finding. Pull and rerun the exact smoke to establish
+  whether the local loopback reset reproduces before proposing a fix.
