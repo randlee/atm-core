@@ -23,40 +23,52 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-3> ;
-  triage:triageRecordVersion "1" .
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-4> ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/pyproject.toml" ;
   triage:line 1 ;
   triage:snippet "[tool.maturin] module-name=atm_graft" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:closed false ;
-  triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "6d1225a0" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+  triage:branch "fix/ai3138-hermes-wheel-packaging" ;
+  triage:headSha "5110791d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-2>
   a triage:Occurrence ;
   triage:file ".just/run_hermes_graft_bridge_tests.py" ;
   triage:line 28 ;
   triage:snippet "PYTHONPATH: str(PYTHON_SOURCE)" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:closed false ;
-  triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "6d1225a0" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+  triage:branch "fix/ai3138-hermes-wheel-packaging" ;
+  triage:headSha "5110791d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-3>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
   triage:line 12 ;
   triage:snippet "sys.path.insert(0, str(ADAPTER_ROOT))" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:branch "fix/ai3138-hermes-wheel-packaging" ;
+  triage:headSha "5110791d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/hermes_steer_fixture.py" ;
+  triage:line 18 ;
+  triage:snippet "sys.path.insert(0, str(PYTHON_SOURCE))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "integrate/phase-ai-31-33" ;
-  triage:headSha "6d1225a0" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+  triage:branch "fix/ai3138-hermes-wheel-packaging" ;
+  triage:headSha "5110791d" ;
+  triage:occursIn <urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d> .
 
 <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0>
   a triage:WorktreeSnapshot ;
@@ -64,3 +76,10 @@
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "6d1225a0" ;
   triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/fix-ai3138-hermes-wheel-packaging/5110791d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/fix-ai3138-hermes-wheel-packaging" ;
+  triage:branch "fix/ai3138-hermes-wheel-packaging" ;
+  triage:headSha "5110791d" ;
+  triage:orderIndex 1 .
