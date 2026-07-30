@@ -33,9 +33,9 @@ use std::thread;
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 use accept_loop::{handle_shutdown_probe, take_accept_error};
-use request_worker::handle_connection;
 #[cfg(test)]
 pub(crate) use request_worker::install_injected_accept_error_for_test;
+use request_worker::{DispatchWorkerPool, handle_connection};
 use shutdown::{
     emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
     prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
@@ -203,20 +203,20 @@ struct ConnectionWorkerPool {
 
 impl ConnectionWorkerPool {
     fn start(
-        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
         force_shutdown: Arc<AtomicBool>,
         registry: Arc<ActiveConnectionRegistry>,
         observability: SubsystemObservability,
+        dispatch_workers: Arc<DispatchWorkerPool>,
     ) -> Result<Self, AtmError> {
         let (sender, receiver) = std::sync::mpsc::sync_channel(0);
         let receiver = Arc::new(Mutex::new(receiver));
         let mut workers = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
         for worker_index in 0..MAX_CONCURRENT_CONNECTIONS {
             let receiver = Arc::clone(&receiver);
-            let dispatcher = Arc::clone(&dispatcher);
             let force_shutdown = Arc::clone(&force_shutdown);
             let registry = Arc::clone(&registry);
             let observability = observability.clone();
+            let dispatch_workers = Arc::clone(&dispatch_workers);
             let worker = std::thread::Builder::new()
                 .name(format!("local-ipc-connection-{worker_index}"))
                 .spawn(move || {
@@ -232,9 +232,8 @@ impl ConnectionWorkerPool {
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             handle_connection(
                                 stream,
-                                Arc::clone(&dispatcher),
                                 force_shutdown.as_ref(),
-                                Arc::clone(&registry),
+                                dispatch_workers.as_ref(),
                                 &observability,
                             )
                         }));
@@ -529,11 +528,17 @@ where
         lifecycle_control.clone(),
     )?;
     publish_ready()?;
-    let connection_workers = ConnectionWorkerPool::start(
+    let dispatch_workers = DispatchWorkerPool::start(
         Arc::clone(&dispatcher),
+        Arc::clone(&registry),
+        observability.clone(),
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    let connection_workers = ConnectionWorkerPool::start(
         Arc::clone(&force_shutdown),
         Arc::clone(&registry),
         observability.clone(),
+        Arc::clone(&dispatch_workers),
     )?;
     let mut accept_context = build_accept_context(
         listener,
@@ -560,12 +565,18 @@ where
         lifecycle_waiter,
     );
     let connection_worker_error = connection_workers.shutdown().err();
+    let dispatch_worker_error = dispatch_workers.shutdown().err();
     #[cfg(unix)]
     let tcp_error = finish_tcp_loopback_server(tcp_server)?;
     #[cfg(unix)]
-    let shutdown_error = shutdown_error.or(connection_worker_error).or(tcp_error);
+    let shutdown_error = shutdown_error
+        .or(connection_worker_error)
+        .or(dispatch_worker_error)
+        .or(tcp_error);
     #[cfg(not(unix))]
-    let shutdown_error = shutdown_error.or(connection_worker_error);
+    let shutdown_error = shutdown_error
+        .or(connection_worker_error)
+        .or(dispatch_worker_error);
     finish_serve_shutdown(serve_error, shutdown_error)
 }
 
