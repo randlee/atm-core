@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3138-HERMES-CHATID-SESSIONID-MISMATCH>
+  a triage:Finding ;
+  triage:findingId "AI3138-HERMES-CHATID-SESSIONID-MISMATCH" ;
+  triage:title "ATM_CHAT_ID is forwarded as a Hermes TUI internal session_id, not a platform chat ID" ;
+  triage:description "arch-ctm's read-only AI3138-HERMES-HARNESS-REVIEW-1 reports ATM code forwards chat_id unchanged as {session_id: chat_id} in atm_graft_hermes_adapter.py lines 71-78 and 102-131. Hermes session.steer resolves only server _sessions keyed by runtime UUIDs, distinct from platform chat IDs. A configured Telegram/Discord chat id always gets a 4001 session not found error. This finding was independently corroborated by a second reviewer, skillrx, on 2026-07-30T00:10:46Z: Chat-ID/session-ID mismatch BLOCKING: adapter passes chat_id as session_id to session.steer RPC, but gateway resolves via _sessions.get(session_id) keyed by UUIDs, not chat IDs. Always hits session not found. Two independent reviewers converged on the same root cause." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "integration-correctness" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:48:21Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3138-HERMES-HARNESS-REVIEW-1 ;
+  triage:foundAt "2026-07-29T23:48:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-CHATID-SESSIONID-MISMATCH/AI3138-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-CHATID-SESSIONID-MISMATCH/AI3138-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
+  triage:line 77 ;
+  triage:snippet "{\"session_id\": chat_id, \"text\": text}" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0c1010752d8f6c3a642caf1ab879a4764" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-ai-31-33/6d1225a0> .
+
+<urn:atm:triage:worktree/integrate-ai-31-33/6d1225a0>
+  a triage:WorktreeSnapshot ;
+  triage:path "integrate/phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0c1010752d8f6c3a642caf1ab879a4764" ;
+  triage:orderIndex 0 .

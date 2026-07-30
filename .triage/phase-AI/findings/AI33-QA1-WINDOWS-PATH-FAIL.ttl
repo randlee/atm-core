@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-QA1-WINDOWS-PATH-FAIL>
+  a triage:Finding ;
+  triage:findingId "AI33-QA1-WINDOWS-PATH-FAIL" ;
+  triage:title "test_run_admission_capacity.py hardcodes POSIX paths, fails just-lint on windows-latest CI" ;
+  triage:description "quality-mgr's AI33-QA-1 verdict confirmed via windows-latest CI job log (not flaky) that 2 tests in test_run_admission_capacity.py hardcode POSIX-only paths (/tmp/atm, /Users/capacity) at lines 28-30 and 54-61, which break under Windows path semantics. This is a genuine cross-platform CI failure, not a flake." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "cross-platform" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T01:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI33-QA-1 ;
+  triage:foundAt "2026-07-30T00:50:47Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-4> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-1>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 29 ;
+  triage:snippet "Path(\"/Users/capacity\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-2>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 54 ;
+  triage:snippet "Path(\"/tmp/atm\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-3>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 54 ;
+  triage:snippet "\"/tmp/atm-capacity-test\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-4>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/test_run_admission_capacity.py" ;
+  triage:line 59 ;
+  triage:snippet "\"/tmp/atm\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 0 .
