@@ -345,3 +345,16 @@ The current fastpc4 execution authority and baseline loop are in
   short-lived loopback connections per run, so this is a likely client-side
   ephemeral-port exhaustion limit. The next step is a fresh/expired-port
   rerun for confirmation; no ATM daemon behavior is being weakened.
+
+### 2026-07-30 - cwin - clean-port confirmation
+
+- The next run started with only 22 `TIME_WAIT` entries and still failed at
+  response headers: `18,585/20,000` HTTP 201 admissions across all 20
+  intervals. The daemon logged 18,585 successful sends with no handler errors;
+  after teardown, `TIME_WAIT` rose to 14,522. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T192601Z.json`.
+- This confirms the stock Windows dynamic TCP range (`16,384` ports), not
+  stale prior runs, is the remaining limit for the runner's 20,000
+  short-lived local TCP connections. Apply the authorized Windows-only range
+  expansion and record the before/after `netsh` output; no ATM source or gate
+  change is indicated.
