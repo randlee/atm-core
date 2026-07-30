@@ -108,3 +108,11 @@ The executable procedure is
   after partial delivery and could duplicate a non-idempotent send. This is a
   confirmed Windows transport finding for team-lead review, with no unsafe
   smoke-branch code change.
+
+### 2026-07-30 — cwin — preflight retry implementation test error
+
+- The focused `cargo test -p atm-daemon-client` compile caught a missing
+  `AtmError` import in the new Windows-only predicate test. E-017 records the
+  exact compile failure; production code compiled through that point.
+- The import will be corrected before full lint/test. The implementation still
+  retries only the idempotent compatibility preflight, never a write.
