@@ -13,15 +13,11 @@ use atm_storage::schema::ThreadMode;
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError, TransactionBehavior};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-/// Keep one permanent writer handle plus at most three concurrent reader handles so the
-/// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
-/// unbounded connection fan-out.
-const MAX_SQLITE_READER_CONNECTIONS: usize = 3;
 const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
@@ -178,25 +174,6 @@ pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
     observability: Arc<dyn SqliteObservability>,
-    // Reader handles are budgeted across cloned SharedDb adapters, so the
-    // counter must be shared and synchronized independently of any one
-    // connection instance.
-    connection_count: Arc<Mutex<usize>>,
-}
-
-#[derive(Debug)]
-struct SharedDbConnectionGuard {
-    // Connection release can happen on whichever clone drops the guard, so the
-    // shared counter uses the same synchronized ownership model as SharedDb.
-    connection_count: Arc<Mutex<usize>>,
-}
-
-impl Drop for SharedDbConnectionGuard {
-    fn drop(&mut self) {
-        if let Ok(mut connection_count) = self.connection_count.lock() {
-            *connection_count = connection_count.saturating_sub(1);
-        }
-    }
 }
 
 impl SharedDb {
@@ -223,7 +200,6 @@ impl SharedDb {
             target,
             writer,
             observability,
-            connection_count: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -250,7 +226,6 @@ impl SharedDb {
         )?);
         tracing::debug!(
             writer_handles = 1,
-            reader_budget = MAX_SQLITE_READER_CONNECTIONS,
             path = %target.display(),
             "sqlite boundary assembly opened"
         );
@@ -258,7 +233,6 @@ impl SharedDb {
             target,
             writer,
             observability,
-            connection_count: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -273,7 +247,6 @@ impl SharedDb {
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
         debug_assert_blocking_only("SharedDb::with_connection");
-        let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         operation(&mut connection)
     }
@@ -293,7 +266,6 @@ impl SharedDb {
                 "sqlite query budget expired before the read started",
             ));
         }
-        let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         connection.busy_timeout(budget).map_err(|error| {
             sqlite_error(
@@ -442,50 +414,9 @@ impl SharedDb {
         result
     }
 
-    fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
-        let mut connection_count = self.connection_count.lock().map_err(|_| {
-            let error =
-                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned");
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "reader_budget_state",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            error
-        })?;
-        if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
-            tracing::warn!(
-                limit = MAX_SQLITE_READER_CONNECTIONS,
-                current = %connection_count,
-                "sqlite reader connection budget exhausted"
-            );
-            let error = reader_budget_exceeded_error();
-            self.observability
-                .emit_or_warn(SqliteObservabilityEvent::new(
-                    "reader_budget_acquire",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message().to_owned(),
-                    Some(error.code()),
-                ));
-            return Err(error);
-        }
-        *connection_count += 1;
-        Ok(SharedDbConnectionGuard {
-            connection_count: Arc::clone(&self.connection_count),
-        })
-    }
-
     fn open_connection(&self) -> Result<Connection, AtmError> {
         open_connection_for_target(self.target.as_ref())
     }
-}
-
-fn reader_budget_exceeded_error() -> AtmError {
-    AtmError::daemon_unavailable(format!(
-        "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
-    ))
 }
 
 impl std::fmt::Debug for SharedDb {
@@ -940,6 +871,37 @@ pub(crate) fn sqlite_thread_mode(mode: Option<ThreadMode>) -> Option<&'static st
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Barrier;
+    use std::thread;
+
+    #[test]
+    fn concurrent_read_handles_do_not_fail_fast_at_an_arbitrary_reader_cap() {
+        let db = Arc::new(SharedDb::open_in_memory_for_test().expect("open database"));
+        let start = Arc::new(Barrier::new(9));
+        thread::scope(|scope| {
+            let mut workers = Vec::new();
+            for _ in 0..8 {
+                let db = Arc::clone(&db);
+                let start = Arc::clone(&start);
+                workers.push(scope.spawn(move || {
+                    start.wait();
+                    db.with_connection(|connection| {
+                        connection
+                            .query_row("SELECT 1;", [], |row| row.get::<_, i64>(0))
+                            .map_err(|error| db.error("concurrent reader failed", error))
+                            .map(|_| ())
+                    })
+                }));
+            }
+            start.wait();
+            for worker in workers {
+                worker
+                    .join()
+                    .expect("reader thread panicked")
+                    .expect("reader should succeed");
+            }
+        });
+    }
 
     #[test]
     fn ensure_team_roster_harness_values_migrates_legacy_check_constraint() {

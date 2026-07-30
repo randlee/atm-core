@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value};
@@ -130,6 +131,7 @@ pub(super) struct TestRuntime {
     pub(super) non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
     pub(super) persisted_records: Mutex<Vec<Message>>,
     pub(super) mailbox_rows: Mutex<Vec<MailStoreMailboxMetadataRow>>,
+    pub(super) mailbox_metadata_queries: AtomicUsize,
     pub(super) persisted_states: Mutex<Vec<MailMessageState>>,
 }
 
@@ -172,6 +174,7 @@ impl TestRuntime {
             non_claude_deliveries: Mutex::new(Vec::new()),
             persisted_records: Mutex::new(Vec::new()),
             mailbox_rows: Mutex::new(Vec::new()),
+            mailbox_metadata_queries: AtomicUsize::new(0),
             persisted_states: Mutex::new(Vec::new()),
         }
     }
@@ -357,6 +360,8 @@ impl RetainedMailboxRuntime for TestRuntime {
         _agent: &AgentName,
         _limit: Option<usize>,
     ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
+        self.mailbox_metadata_queries
+            .fetch_add(1, Ordering::Relaxed);
         Ok(self.mailbox_rows.lock().expect("mailbox rows lock").clone())
     }
 
@@ -533,6 +538,30 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
         &result.original_message,
         result.companion_message.as_ref().expect("companion"),
         &outbound.text,
+    );
+}
+
+#[test]
+fn ordinary_persist_skips_the_unneeded_mailbox_projection() {
+    let runtime = TestRuntime::new(None, DeliveryHarnessPath::NonClaude);
+    let tempdir = tempdir().expect("tempdir");
+    let inbox_path = tempdir.path().join("recipient.jsonl");
+
+    persist_message(
+        &runtime,
+        tempdir.path(),
+        &delivery_snapshot(DeliveryHarnessPath::NonClaude),
+        &inbox_path,
+        &outbound_message(),
+        false,
+        None,
+    )
+    .expect("ordinary message persists");
+
+    assert_eq!(
+        runtime.mailbox_metadata_queries.load(Ordering::Relaxed),
+        0,
+        "a non-threaded immutable message has no mailbox thread state to read"
     );
 }
 
