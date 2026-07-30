@@ -3,6 +3,8 @@
 This is the committed handoff log for the AI.33 Windows capacity validation.
 The executable procedure is
 [`plan-ai33-windows-capacity-verification.md`](plan-ai33-windows-capacity-verification.md).
+The current fastpc4 execution authority and baseline loop are in
+[`ai33-fastpc4-capacity-execution-handoff.md`](ai33-fastpc4-capacity-execution-handoff.md).
 
 ## Working agreement
 
