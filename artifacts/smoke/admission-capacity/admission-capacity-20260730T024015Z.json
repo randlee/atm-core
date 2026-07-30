@@ -1,0 +1,986 @@
+{
+  "atm_home": "/private/var/folders/3q/0f7c3v_j6ps28gtz8xfz99km0000gn/T/atm-capacity-live-batch",
+  "daemon_pid": 63382,
+  "doctor": {
+    "bootstrap_trace": {
+      "daemon_auto_start": "skipped",
+      "daemon_connect": "connected",
+      "daemon_launch_gate": "skipped"
+    },
+    "client_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent",
+      "team": "capacity-team",
+      "version": "1.4.0-beta-ai.38"
+    },
+    "config": {
+      "findings": []
+    },
+    "daemon_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent",
+      "team": "capacity-team",
+      "version": "1.4.0-beta-ai.38"
+    },
+    "daemon_runtime": {
+      "findings": [
+        {
+          "code": "ATM_OBSERVABILITY_HEALTH_OK",
+          "message": "daemon retained observability sink is healthy at /Users/randlee/.atm/logs/atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=3 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+          "remediation": null,
+          "severity": "info"
+        },
+        {
+          "code": "ATM_OBSERVABILITY_HEALTH_OK",
+          "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(63382); degraded_ingest=false; active=0, idle=0, offline=0, unknown=1",
+          "remediation": null,
+          "severity": "info"
+        }
+      ],
+      "peer_config": {
+        "configured_interface_count": 0,
+        "enabled_interface_count": 0,
+        "enabled_trusted_peer_count": 0,
+        "trusted_peer_count": 0,
+        "trusted_peers": []
+      },
+      "peer_links": []
+    },
+    "drift_findings": [],
+    "environment": {
+      "atm_home": "/private/var/folders/3q/0f7c3v_j6ps28gtz8xfz99km0000gn/T/atm-capacity-live-batch",
+      "atm_identity": "capacity-agent",
+      "atm_team": "capacity-team",
+      "team_override": null
+    },
+    "findings": [
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "shared observability active at /Users/randlee/.atm/logs/atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=3 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+        "remediation": null,
+        "severity": "info"
+      },
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon retained observability sink is healthy at /Users/randlee/.atm/logs/atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=3 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+        "remediation": null,
+        "severity": "info"
+      },
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(63382); degraded_ingest=false; active=0, idle=0, offline=0, unknown=1",
+        "remediation": null,
+        "severity": "info"
+      }
+    ],
+    "mail_store": {
+      "findings": []
+    },
+    "member_roster": {
+      "members": [
+        {
+          "agent_id": "capacity-agent@capacity-team",
+          "agent_type": "general-purpose",
+          "extra": {},
+          "harness": "claude-code",
+          "home_dir": "/private/var/folders/3q/0f7c3v_j6ps28gtz8xfz99km0000gn/T/atm-capacity-live-batch",
+          "joined_at": 1785379194912,
+          "live_cwd": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s33-admission-capacity-smoke-m5",
+          "model": "unknown",
+          "name": "capacity-agent",
+          "tmux_pane_id": null
+        }
+      ],
+      "team": "capacity-team"
+    },
+    "observability": {
+      "active_log_path": "/Users/randlee/.atm/logs/atm.log.jsonl",
+      "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=3 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+      "diagnostic": null,
+      "logging_state": "healthy",
+      "maintenance": {
+        "last_pass_at": null,
+        "pruned_files_total": 0,
+        "rotated_files_total": 0,
+        "state": "running"
+      },
+      "query_state": null
+    },
+    "post_send": {
+      "config_root": "",
+      "external_rules": [],
+      "recipient_paths": []
+    },
+    "recommendations": [],
+    "roster_store": {
+      "findings": []
+    },
+    "runtime_status": {
+      "degraded_ingest": false,
+      "liveness": "running",
+      "member_counts": {
+        "active_members": 0,
+        "idle_members": 0,
+        "offline_members": 0,
+        "unknown_members": 1
+      },
+      "readiness": "ready",
+      "singleton_owner_pid": 63382
+    },
+    "summary": {
+      "error_count": 0,
+      "info_count": 3,
+      "message": "ATM doctor completed with healthy findings only",
+      "status": "healthy",
+      "warning_count": 0
+    }
+  },
+  "passed": false,
+  "release": {
+    "atm": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s33-admission-capacity-smoke-m5/target/release/atm",
+    "atm_daemon": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pAI-s33-admission-capacity-smoke-m5/target/release/atm-daemon"
+  },
+  "report_failure": "sc-compose render failed: [Errno 2] No such file or directory: 'sc-compose'",
+  "runs": [
+    {
+      "intervals": [
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 997.3140666670167,
+          "elapsed_seconds": 1.0026931669999999,
+          "first_failure": null,
+          "interval": 1,
+          "latency_ms": {
+            "max": 121.35045900000007,
+            "min": 8.970917000000078,
+            "p50": 61.9631249999999
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 3.9580419999999394,
+              "min": 0.004916999999937666,
+              "p50": 0.0896670000001265
+            },
+            "daemon_response_boundary": {
+              "max": 121.01120899999995,
+              "min": 8.858750000000025,
+              "p50": 61.42187499999996
+            },
+            "request_build": {
+              "max": 0.12583399999999134,
+              "min": 0.00041600000000308057,
+              "p50": 0.0020000000000575113
+            },
+            "request_write": {
+              "max": 4.025624999999922,
+              "min": 0.0028750000000687947,
+              "p50": 0.0744169999999933
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 121.35045900000007,
+            "min": 8.970917000000078,
+            "p50": 61.9631249999999
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 979.97498631487,
+          "elapsed_seconds": 1.0204342089999998,
+          "first_failure": null,
+          "interval": 2,
+          "latency_ms": {
+            "max": 177.36383300000026,
+            "min": 8.227082999999968,
+            "p50": 61.2306669999998
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 3.861208000000005,
+              "min": 0.0082499999998209,
+              "p50": 0.11895899999991855
+            },
+            "daemon_response_boundary": {
+              "max": 176.659291,
+              "min": 7.526459000000152,
+              "p50": 60.65633299999984
+            },
+            "request_build": {
+              "max": 0.05570800000009868,
+              "min": 0.0007910000001665196,
+              "p50": 0.0020830000000415794
+            },
+            "request_write": {
+              "max": 8.425792000000154,
+              "min": 0.00495899999997107,
+              "p50": 0.0999589999999273
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 177.36383300000026,
+            "min": 8.227082999999968,
+            "p50": 61.2306669999998
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1024.6972972967324,
+          "elapsed_seconds": 0.975897958,
+          "first_failure": null,
+          "interval": 3,
+          "latency_ms": {
+            "max": 172.36862500000026,
+            "min": 12.296000000000085,
+            "p50": 56.29066599999977
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 3.3661660000001703,
+              "min": 0.0066659999999885144,
+              "p50": 0.10408300000008808
+            },
+            "daemon_response_boundary": {
+              "max": 171.80216700000005,
+              "min": 11.293417000000083,
+              "p50": 55.484625000000065
+            },
+            "request_build": {
+              "max": 0.04099999999995774,
+              "min": 0.0007909999997224304,
+              "p50": 0.002042000000201938
+            },
+            "request_write": {
+              "max": 8.111208000000314,
+              "min": 0.0044579999998184405,
+              "p50": 0.09537499999989763
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 172.36862500000026,
+            "min": 12.296000000000085,
+            "p50": 56.29066599999977
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1013.247536719751,
+          "elapsed_seconds": 0.9869256660000003,
+          "first_failure": null,
+          "interval": 4,
+          "latency_ms": {
+            "max": 162.4239169999999,
+            "min": 12.994250000000207,
+            "p50": 58.71691599999984
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 8.59929199999998,
+              "min": 0.005290999999907342,
+              "p50": 0.11120799999986275
+            },
+            "daemon_response_boundary": {
+              "max": 162.11666700000026,
+              "min": 12.198457999999857,
+              "p50": 58.20191699999988
+            },
+            "request_build": {
+              "max": 0.018457999999554886,
+              "min": 0.0007919999998051708,
+              "p50": 0.0021249999999639613
+            },
+            "request_write": {
+              "max": 8.67312500000006,
+              "min": 0.004416999999978799,
+              "p50": 0.11399999999994748
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 162.4239169999999,
+            "min": 12.994250000000207,
+            "p50": 58.71691599999984
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1037.5320743313914,
+          "elapsed_seconds": 0.9638256250000001,
+          "first_failure": null,
+          "interval": 5,
+          "latency_ms": {
+            "max": 125.4588330000006,
+            "min": 8.695874999999909,
+            "p50": 57.453291999999934
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 3.9361659999999077,
+              "min": 0.006332999999969502,
+              "p50": 0.12370799999938953
+            },
+            "daemon_response_boundary": {
+              "max": 124.76758299999969,
+              "min": 7.941375000000583,
+              "p50": 56.69545800000009
+            },
+            "request_build": {
+              "max": 0.025584000000300477,
+              "min": 0.0007499999998827889,
+              "p50": 0.0021249999999639613
+            },
+            "request_write": {
+              "max": 8.17104199999985,
+              "min": 0.004333000000578124,
+              "p50": 0.10225000000030349
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 125.4588330000006,
+            "min": 8.695874999999909,
+            "p50": 57.453291999999934
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1005.4984850088972,
+          "elapsed_seconds": 0.9945315829999997,
+          "first_failure": null,
+          "interval": 6,
+          "latency_ms": {
+            "max": 175.33050000000028,
+            "min": 13.330541000000196,
+            "p50": 55.85029099999961
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 4.222000000000392,
+              "min": 0.0059580000000281075,
+              "p50": 0.10799999999999699
+            },
+            "daemon_response_boundary": {
+              "max": 175.1882499999997,
+              "min": 13.257666999999529,
+              "p50": 55.24687499999992
+            },
+            "request_build": {
+              "max": 0.22441600000000506,
+              "min": 0.0007909999997224304,
+              "p50": 0.0020840000001243197
+            },
+            "request_write": {
+              "max": 6.4969579999996085,
+              "min": 0.004125000000243517,
+              "p50": 0.10166700000002749
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 175.33050000000028,
+            "min": 13.330541000000196,
+            "p50": 55.85029099999961
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1048.5534422518988,
+          "elapsed_seconds": 0.9536948330000001,
+          "first_failure": null,
+          "interval": 7,
+          "latency_ms": {
+            "max": 182.20875000000004,
+            "min": 7.290790999999963,
+            "p50": 55.86941599999928
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 1.9353750000004055,
+              "min": 0.0072500000003472564,
+              "p50": 0.11120799999986275
+            },
+            "daemon_response_boundary": {
+              "max": 181.87883299999984,
+              "min": 6.927166999999734,
+              "p50": 55.028666000000115
+            },
+            "request_build": {
+              "max": 0.015832999999965125,
+              "min": 0.0007919999998051708,
+              "p50": 0.002000000000279556
+            },
+            "request_write": {
+              "max": 7.784415999999794,
+              "min": 0.0049579999998883295,
+              "p50": 0.09875000000025835
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 182.20875000000004,
+            "min": 7.290790999999963,
+            "p50": 55.86941599999928
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 977.1642814697286,
+          "elapsed_seconds": 1.0233693749999997,
+          "first_failure": null,
+          "interval": 8,
+          "latency_ms": {
+            "max": 203.10295899999974,
+            "min": 7.392084000000132,
+            "p50": 58.240750000001285
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 6.996499999999628,
+              "min": 0.0055420000002470715,
+              "p50": 0.10437499999937927
+            },
+            "daemon_response_boundary": {
+              "max": 202.60487500000045,
+              "min": 6.733749999999539,
+              "p50": 57.826290999999586
+            },
+            "request_build": {
+              "max": 0.09641699999995978,
+              "min": 0.0007909999997224304,
+              "p50": 0.0020830000000415794
+            },
+            "request_write": {
+              "max": 1.4875830000011803,
+              "min": 0.0037499999994139444,
+              "p50": 0.10158400000026546
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 203.10295899999974,
+            "min": 7.392084000000132,
+            "p50": 58.240750000001285
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 850.8432137451892,
+          "elapsed_seconds": 1.1753046670000007,
+          "first_failure": null,
+          "interval": 9,
+          "latency_ms": {
+            "max": 328.44545800000094,
+            "min": 7.149416999999048,
+            "p50": 58.61691700000016
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 7.855499999999793,
+              "min": 0.00816600000064227,
+              "p50": 0.11383300000034069
+            },
+            "daemon_response_boundary": {
+              "max": 328.22695800000014,
+              "min": 6.79420899999883,
+              "p50": 58.05941600000075
+            },
+            "request_build": {
+              "max": 0.17412500000091313,
+              "min": 0.0007909999997224304,
+              "p50": 0.0020840000001243197
+            },
+            "request_write": {
+              "max": 7.991791000000248,
+              "min": 0.005041999999733093,
+              "p50": 0.09533299999908706
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 328.44545800000094,
+            "min": 7.149416999999048,
+            "p50": 58.61691700000016
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1074.9938557382438,
+          "elapsed_seconds": 0.9302378749999995,
+          "first_failure": null,
+          "interval": 10,
+          "latency_ms": {
+            "max": 179.63312499999873,
+            "min": 8.013959000001236,
+            "p50": 54.32662499999985
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 12.425415999999245,
+              "min": 0.006541999999498671,
+              "p50": 0.11216699999927471
+            },
+            "daemon_response_boundary": {
+              "max": 179.5436670000008,
+              "min": 7.660958999998968,
+              "p50": 53.92733300000074
+            },
+            "request_build": {
+              "max": 0.1545000000007235,
+              "min": 0.0006670000001207654,
+              "p50": 0.002000000000279556
+            },
+            "request_write": {
+              "max": 2.3673750000003935,
+              "min": 0.004833000000203924,
+              "p50": 0.10850000000139914
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 179.63312499999873,
+            "min": 8.013959000001236,
+            "p50": 54.32662499999985
+          }
+        }
+      ],
+      "label": "accepting-configured-peer",
+      "passed": false,
+      "peer_host": "127.0.0.1"
+    },
+    {
+      "intervals": [
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 945.3441776562175,
+          "elapsed_seconds": 1.0578157919999995,
+          "first_failure": null,
+          "interval": 1,
+          "latency_ms": {
+            "max": 199.0254999999994,
+            "min": 8.022625000000616,
+            "p50": 59.00662500000031
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 2.904541999999566,
+              "min": 0.007834000001594177,
+              "p50": 0.10362500000127284
+            },
+            "daemon_response_boundary": {
+              "max": 198.3372919999997,
+              "min": 7.477084000001355,
+              "p50": 58.51287499999991
+            },
+            "request_build": {
+              "max": 0.1134999999994335,
+              "min": 0.000707999999960407,
+              "p50": 0.0021249999999639613
+            },
+            "request_write": {
+              "max": 8.072457999999116,
+              "min": 0.0045830000008351135,
+              "p50": 0.11066699999950913
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 199.0254999999994,
+            "min": 8.022625000000616,
+            "p50": 59.00662500000031
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 931.0154772012938,
+          "elapsed_seconds": 1.074095999999999,
+          "first_failure": null,
+          "interval": 2,
+          "latency_ms": {
+            "max": 153.66570799999835,
+            "min": 8.358375000000251,
+            "p50": 61.96487499999925
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 7.9544170000005465,
+              "min": 0.007208000001313053,
+              "p50": 0.0957919999997614
+            },
+            "daemon_response_boundary": {
+              "max": 152.9261669999986,
+              "min": 7.794125000000207,
+              "p50": 61.59491700000075
+            },
+            "request_build": {
+              "max": 0.0857500000002176,
+              "min": 0.0008329999996448123,
+              "p50": 0.0020830000000415794
+            },
+            "request_write": {
+              "max": 8.077040999999952,
+              "min": 0.004457999999374351,
+              "p50": 0.08625000000073157
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 153.66570799999835,
+            "min": 8.358375000000251,
+            "p50": 61.96487499999925
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1054.604939057676,
+          "elapsed_seconds": 0.9482223750000003,
+          "first_failure": null,
+          "interval": 3,
+          "latency_ms": {
+            "max": 149.4644999999988,
+            "min": 8.62250000000131,
+            "p50": 55.93158299999956
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 2.0144589999997464,
+              "min": 0.00550000000032469,
+              "p50": 0.11879100000022902
+            },
+            "daemon_response_boundary": {
+              "max": 149.33262499999955,
+              "min": 8.174082999998333,
+              "p50": 55.33937499999908
+            },
+            "request_build": {
+              "max": 0.07245800000177383,
+              "min": 0.0008329999996448123,
+              "p50": 0.002000000000279556
+            },
+            "request_write": {
+              "max": 8.340082999998444,
+              "min": 0.003666999999651921,
+              "p50": 0.10391599999870493
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 149.4644999999988,
+            "min": 8.62250000000131,
+            "p50": 55.93158299999956
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 999.5579045348447,
+          "elapsed_seconds": 1.0004422910000006,
+          "first_failure": null,
+          "interval": 4,
+          "latency_ms": {
+            "max": 158.6454169999989,
+            "min": 8.99000000000072,
+            "p50": 56.763083999999964
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 5.9313329999994835,
+              "min": 0.006415999999731525,
+              "p50": 0.09412500000038904
+            },
+            "daemon_response_boundary": {
+              "max": 158.413083000001,
+              "min": 8.434541999999823,
+              "p50": 56.28941700000034
+            },
+            "request_build": {
+              "max": 0.32412500000056355,
+              "min": 0.0008329999996448123,
+              "p50": 0.0021249999999639613
+            },
+            "request_write": {
+              "max": 6.055875000001265,
+              "min": 0.0042499999999279225,
+              "p50": 0.09558400000031497
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 158.6454169999989,
+            "min": 8.99000000000072,
+            "p50": 56.763083999999964
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 965.367675966617,
+          "elapsed_seconds": 1.0358747499999996,
+          "first_failure": null,
+          "interval": 5,
+          "latency_ms": {
+            "max": 165.99720799999852,
+            "min": 12.895083000000085,
+            "p50": 60.21129199999997
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 7.593124999999645,
+              "min": 0.006959000000250626,
+              "p50": 0.11354200000113224
+            },
+            "daemon_response_boundary": {
+              "max": 165.53370799999988,
+              "min": 12.406207999999808,
+              "p50": 59.636249999998725
+            },
+            "request_build": {
+              "max": 0.13054200000084393,
+              "min": 0.0007919999998051708,
+              "p50": 0.0021249999999639613
+            },
+            "request_write": {
+              "max": 7.659916999999794,
+              "min": 0.0049579999998883295,
+              "p50": 0.10391599999870493
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 165.99720799999852,
+            "min": 12.895083000000085,
+            "p50": 60.21129199999997
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 979.1849351160018,
+          "elapsed_seconds": 1.0212575420000025,
+          "first_failure": null,
+          "interval": 6,
+          "latency_ms": {
+            "max": 219.4755000000015,
+            "min": 10.247875000001017,
+            "p50": 60.72095800000099
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 3.7529589999998336,
+              "min": 0.007249999999459078,
+              "p50": 0.10474999999843249
+            },
+            "daemon_response_boundary": {
+              "max": 219.0294580000014,
+              "min": 9.607499999999547,
+              "p50": 60.11962500000223
+            },
+            "request_build": {
+              "max": 0.024707999997986008,
+              "min": 0.0007910000014987872,
+              "p50": 0.0020829999982652225
+            },
+            "request_write": {
+              "max": 8.931249999999835,
+              "min": 0.005083000001349092,
+              "p50": 0.10912499999804481
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 219.4755000000015,
+            "min": 10.247875000001017,
+            "p50": 60.72095800000099
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 1046.0309857913662,
+          "elapsed_seconds": 0.9559946250000024,
+          "first_failure": null,
+          "interval": 7,
+          "latency_ms": {
+            "max": 183.868915999998,
+            "min": 7.549708999999183,
+            "p50": 54.077208000002486
+          },
+          "passed": true,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 5.033292000000245,
+              "min": 0.003834000001035065,
+              "p50": 0.11754200000169135
+            },
+            "daemon_response_boundary": {
+              "max": 183.446,
+              "min": 7.03308399999969,
+              "p50": 53.66341599999913
+            },
+            "request_build": {
+              "max": 0.05354199999985099,
+              "min": 0.0007079999981840501,
+              "p50": 0.0020000000020559128
+            },
+            "request_write": {
+              "max": 1.505209000001173,
+              "min": 0.003750000001190301,
+              "p50": 0.11000000000294108
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 183.868915999998,
+            "min": 7.549708999999183,
+            "p50": 54.077208000002486
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 919.2165321152117,
+          "elapsed_seconds": 1.0878829580000016,
+          "first_failure": null,
+          "interval": 8,
+          "latency_ms": {
+            "max": 200.1229579999979,
+            "min": 9.483875000000808,
+            "p50": 62.08820900000234
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 7.994000000000057,
+              "min": 0.007000000000090267,
+              "p50": 0.10858399999946755
+            },
+            "daemon_response_boundary": {
+              "max": 200.02441699999807,
+              "min": 8.942000000001116,
+              "p50": 61.67737499999859
+            },
+            "request_build": {
+              "max": 0.10379199999732691,
+              "min": 0.0008330000014211691,
+              "p50": 0.0021249999981876044
+            },
+            "request_write": {
+              "max": 8.103667000000314,
+              "min": 0.0046669999989035205,
+              "p50": 0.10262500000024488
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 200.1229579999979,
+            "min": 9.483875000000808,
+            "p50": 62.08820900000234
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 987.0141022107385,
+          "elapsed_seconds": 1.0131567500000003,
+          "first_failure": null,
+          "interval": 9,
+          "latency_ms": {
+            "max": 164.05529200000046,
+            "min": 9.80083399999998,
+            "p50": 58.04995800000157
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 5.116208000000455,
+              "min": 0.007333999999303842,
+              "p50": 0.11791700000074457
+            },
+            "daemon_response_boundary": {
+              "max": 163.77150000000285,
+              "min": 9.084041000001264,
+              "p50": 57.37345800000071
+            },
+            "request_build": {
+              "max": 0.08941599999801042,
+              "min": 0.0008340000015039095,
+              "p50": 0.0020840000019006766
+            },
+            "request_write": {
+              "max": 5.1825409999999295,
+              "min": 0.004833000001980281,
+              "p50": 0.09975000000039813
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 164.05529200000046,
+            "min": 9.80083399999998,
+            "p50": 58.04995800000157
+          }
+        },
+        {
+          "accepted_count": 1000,
+          "admissions_per_second": 978.5072114146797,
+          "elapsed_seconds": 1.0219648749999983,
+          "first_failure": null,
+          "interval": 10,
+          "latency_ms": {
+            "max": 170.88908300000227,
+            "min": 16.942332999999365,
+            "p50": 60.15491699999842
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 5.59783399999958,
+              "min": 0.00658400000119741,
+              "p50": 0.10858299999938481
+            },
+            "daemon_response_boundary": {
+              "max": 170.57979200000162,
+              "min": 16.28675000000257,
+              "p50": 59.47883300000001
+            },
+            "request_build": {
+              "max": 0.4908749999970041,
+              "min": 0.0007500000016591457,
+              "p50": 0.0020829999982652225
+            },
+            "request_write": {
+              "max": 5.632291000001288,
+              "min": 0.0051670000011938555,
+              "p50": 0.11070800000112513
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 170.88908300000227,
+            "min": 16.942332999999365,
+            "p50": 60.15491699999842
+          }
+        }
+      ],
+      "label": "unavailable-configured-peer",
+      "passed": false,
+      "peer_host": "192.0.2.1"
+    }
+  ],
+  "stages": {
+    "endpoint_discovery_ms": 0.08608399999998628,
+    "public_stage_timing_ms": "recorded for every interval; daemon_response_boundary is measured rather than inferred"
+  }
+}
