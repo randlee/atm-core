@@ -51,6 +51,7 @@ CROSSHOST_SEND = "crosshost-send"
 CROSSHOST_ACK = "crosshost-ack"
 CROSSHOST_CURL_PLAINTEXT = "crosshost-curl-plain"
 CROSSHOST_CURL_MTLS = "crosshost-curl-tls"
+ADMISSION_CAPACITY = "admission-capacity"
 DOCTOR_BODY = '{"home_dir":"","current_dir":"","team_override":null,"caller_team":null,"caller_identity":null}'
 DEFAULT_LIVE_REPETITIONS = 10
 
@@ -79,8 +80,13 @@ def branch_version() -> str:
         "cargo metadata",
     )
     packages = metadata.get("packages", []) if isinstance(metadata, dict) else []
-    versions = {package.get("version") for package in packages if package.get("name") in {"atm", "atm-daemon"}}
-    if len(versions) != 1 or not isinstance(next(iter(versions)), str):
+    selected = {
+        package.get("name"): package.get("version")
+        for package in packages
+        if package.get("name") in {"agent-team-mail", "atm-daemon"}
+    }
+    versions = set(selected.values())
+    if set(selected) != {"agent-team-mail", "atm-daemon"} or len(versions) != 1 or not isinstance(next(iter(versions)), str):
         raise SmokeError("cargo metadata did not expose one shared atm/atm-daemon version")
     return next(iter(versions))
 
@@ -834,6 +840,13 @@ def main() -> int:
     parser.add_argument("feature", nargs="?", default="normal")
     parser.add_argument("peers", nargs="*")
     args = parser.parse_args()
+    if args.feature == ADMISSION_CAPACITY:
+        if args.peers:
+            raise SmokeError("admission-capacity does not accept peer hostnames")
+        return subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "smoke" / "run_admission_capacity.py")],
+            check=False,
+        ).returncode
     if args.feature in FIXTURE_FEATURES:
         if args.peers:
             raise SmokeError(f"fixture smoke `{args.feature}` does not accept hostnames")
@@ -853,7 +866,7 @@ def main() -> int:
         raise SmokeError(
             "supported smoke features: fast, normal, thorough, localhost, local-ip, "
             "peer-preflight, crosshost-curl-plain, crosshost-curl-tls, "
-            "crosshost-send, crosshost-ack"
+            "crosshost-send, crosshost-ack, admission-capacity"
         )
     if args.peers and feature not in crosshost_features:
         raise SmokeError("hostnames are only valid with a cross-host smoke feature")

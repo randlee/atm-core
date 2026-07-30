@@ -23,12 +23,14 @@ def sanitize(value: str) -> str:
     return SECRET.sub("<redacted>", value)[-MAX_CAPTURE:]
 
 
-def command_result(command: list[str], timeout: float = 15.0) -> dict[str, Any]:
+def command_result(
+    command: list[str], timeout: float = 15.0, *, env: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Run one command and retain only bounded, redacted evidence."""
     try:
         completed = subprocess.run(
             command, capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=timeout, check=False,
+            errors="replace", timeout=timeout, check=False, env=env,
         )
         return {
             "command": command,
