@@ -313,3 +313,6 @@ The current fastpc4 execution authority and baseline loop are in
   transport path, the next iteration will retain daemon stdout/stderr and the
   disposable runtime log on a failed interval so the exact aborting operation
   is visible. No gate, timeout, retry, worker, or queue change is being made.
+- The initial diagnostic-retention edit had a one-level Python indentation
+  error at line 632. It was corrected before any rerun; the focused
+  `test_run_admission_capacity.py` suite passes all 15 tests.
