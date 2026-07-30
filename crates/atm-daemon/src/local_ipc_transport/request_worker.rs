@@ -10,7 +10,6 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{ConnectionFailureClassification, DaemonConnectionFailureFields};
 use atm_core::protocol::{RequestId, ResponseEnvelope};
-use interprocess::TryClone as _;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
@@ -240,35 +239,10 @@ fn read_bounded_http_request(
     frames: &mut HttpFrameReader,
     stream: &mut LocalSocketStream,
 ) -> Result<Option<atm_core::api::HttpRequest>, AtmError> {
-    let mut read_stream = stream.try_clone().map_err(|_source| {
-        AtmError::daemon_unavailable("failed to clone daemon local IPC stream for bounded read")
-    })?;
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let mut reader = std::mem::take(frames);
-    std::thread::Builder::new()
-        .name("local-ipc-request-read".to_string())
-        .spawn(move || {
-            let request = reader.read_request(&mut read_stream);
-            let _ = result_tx.send((reader, request));
-        })
-        .map_err(|_source| {
-            AtmError::daemon_unavailable("failed to spawn daemon local IPC request read worker")
-        })?;
-    match result_rx.recv_timeout(REQUEST_DEADLINE) {
-        Ok((reader, result)) => {
-            *frames = reader;
-            result
-        }
-        // The worker retains `reader` in these branches.  `handle_connection`
-        // returns the error immediately, which drops this connection, so the
-        // caller can never reuse the moved frame state on another request.
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
-            "daemon local IPC request read exceeded the 3s deadline",
-        )),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
-            "daemon local IPC request read worker stopped before returning a request",
-        )),
-    }
+    // `apply_primary_request_deadline` installs the same deadline directly on
+    // this socket. Keeping the stateful reader on this worker avoids a thread
+    // per request while preserving buffered keep-alive framing.
+    frames.read_request(stream)
 }
 
 fn await_dispatch_response(
