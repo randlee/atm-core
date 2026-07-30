@@ -251,7 +251,7 @@ fn execute_upsert_message(
         &StorageEnvelope::new(&record.envelope),
         "mail-store envelope",
     )?;
-    validate_message_record(record, envelope_json.len(), connection, cache, target)?;
+    validate_message_record(record, envelope_json.len())?;
     let parent_message_id = record
         .envelope
         .parent_message_id
@@ -307,9 +307,7 @@ fn execute_upsert_message(
                 recorded_at.clone(),
             ],
         )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
-        })?
+        .map_err(|error| map_message_insert_error(target, error))?
         == 1;
     let timestamps =
         initial_state_timestamps(pending_ack_at, acknowledged_at, expires_at, recorded_at);
@@ -367,13 +365,7 @@ fn insert_initial_message_state(
     Ok(())
 }
 
-fn validate_message_record(
-    record: &Message,
-    envelope_json_len: usize,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
+fn validate_message_record(record: &Message, envelope_json_len: usize) -> Result<(), AtmError> {
     if envelope_json_len > MAX_ENVELOPE_JSON_BYTES {
         return Err(AtmError::validation(format!(
             "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
@@ -387,82 +379,20 @@ fn validate_message_record(
         )));
     }
 
-    validate_single_successor_invariant(record, connection, cache, target)?;
-    validate_message_id_uniqueness(record, connection, cache, target)?;
-
     Ok(())
 }
 
-fn validate_single_successor_invariant(
-    record: &Message,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let message_key = record.message_key.as_ref();
-    if let Some(parent_message_id) = record.envelope.parent_message_id {
-        let owner = cache
-            .load_successor_owner(
-                connection,
-                params![
-                    record.team.as_str(),
-                    record.agent.as_str(),
-                    parent_message_id.to_string()
-                ],
-            )
-            .optional()
-            .map_err(|error| {
-                crate::shared_db::sqlite_error(
-                    target,
-                    "failed to validate single-successor mail-store invariant",
-                    error,
-                )
-            })?;
-        if let Some(owner) = owner
-            && owner != message_key
-        {
-            return Err(AtmError::validation(format!(
-                "mail-store parent message `{parent_message_id}` already has successor `{owner}`; `{message_key}` would violate the single-successor invariant"
-            )));
-        }
+fn map_message_insert_error(target: &SharedDbTarget, error: rusqlite::Error) -> AtmError {
+    if matches!(
+        error,
+        rusqlite::Error::SqliteFailure(ref failure, _)
+            if failure.code == rusqlite::ErrorCode::ConstraintViolation
+    ) {
+        return AtmError::validation(
+            "mail-store message violates a durable message-id or successor uniqueness invariant",
+        );
     }
-    Ok(())
-}
-
-fn validate_message_id_uniqueness(
-    record: &Message,
-    connection: &Connection,
-    cache: &mut WriterStatementCache,
-    target: &SharedDbTarget,
-) -> Result<(), AtmError> {
-    let message_key = record.message_key.as_ref();
-    if let Some(message_id) = record.envelope.message_id {
-        let owner = cache
-            .load_message_id_owner(
-                connection,
-                params![
-                    record.team.as_str(),
-                    record.agent.as_str(),
-                    message_id.to_string()
-                ],
-            )
-            .optional()
-            .map_err(|error| {
-                crate::shared_db::sqlite_error(
-                    target,
-                    "failed to validate message identity uniqueness",
-                    error,
-                )
-            })?;
-        if let Some(owner) = owner
-            && owner != message_key
-        {
-            return Err(AtmError::validation(format!(
-                "message_id `{message_id}` is already owned by `{owner}` and cannot be reassigned to `{message_key}`"
-            )));
-        }
-    }
-    Ok(())
+    crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
 }
 
 #[derive(Serialize)]
