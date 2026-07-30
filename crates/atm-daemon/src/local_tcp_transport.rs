@@ -264,6 +264,7 @@ impl PreparedRuntimeServer {
                 drop(hooks.endpoint_guard);
                 return Ok(());
             }
+            wait_for_connection_capacity(&registry)?;
             if lifecycle.take_reload_requested() {
                 (hooks.reload_runtime_view)()?;
             }
@@ -275,6 +276,7 @@ impl PreparedRuntimeServer {
                     registry.reap_finished_dispatches()?;
                     let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
                     else {
+                        write_saturated_response(stream);
                         continue;
                     };
                     let router = Arc::clone(&router);
@@ -307,6 +309,24 @@ impl PreparedRuntimeServer {
             }
         }
     }
+}
+
+#[cfg(windows)]
+fn wait_for_connection_capacity(registry: &ActiveConnectionRegistry) -> Result<(), AtmError> {
+    while registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
+        registry.wait_for_connection_change(ACCEPT_POLL_INTERVAL)?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn write_saturated_response(mut stream: TcpStream) {
+    let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
+    let response = atm_core::ResponseEnvelope::Error(AtmError::new(
+        atm_core::error::AtmErrorCode::DaemonConnectionSaturated,
+        "local admission saturated",
+    ));
+    let _ = write_http_response(&mut stream, &response);
 }
 
 fn handle_connection(
@@ -568,7 +588,7 @@ impl LocalIpcServerTransportAdapter {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
     use std::thread;
@@ -637,6 +657,25 @@ mod tests {
         let response = read_http_response(&mut stream, &request).expect("read response");
 
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+        server.join().expect("server join");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn saturated_connection_returns_typed_http_error() {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
+        let address = listener.local_addr().expect("address");
+        let server = thread::spawn(move || {
+            let (stream, peer) = listener.accept().expect("accept client");
+            assert!(peer.ip().is_loopback());
+            super::write_saturated_response(stream);
+        });
+        let mut stream = TcpStream::connect(address).expect("connect");
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).expect("read response");
+        let response = String::from_utf8(response).expect("HTTP UTF-8");
+        assert!(response.starts_with("HTTP/1.1 503 Service Unavailable"));
+        assert!(response.contains("ATM_DAEMON_CONNECTION_SATURATED"));
         server.join().expect("server join");
     }
 
