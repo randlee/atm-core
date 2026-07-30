@@ -1,7 +1,5 @@
 use std::marker::PhantomData;
 use std::time::Duration;
-#[cfg(windows)]
-use std::{thread, time::Duration as WindowsRetryDuration};
 
 use atm_core::protocol::{
     CompatibilityPreflight, CompatibilityVerdict, HttpApiVersion, ReleaseVersion, RequestEnvelope,
@@ -100,7 +98,11 @@ pub fn verify_connection_compatibility(
     preflight: CompatibilityPreflight,
     request_deadline: Duration,
 ) -> Result<Connection<VersionVerified>, AtmError> {
-    let response = exchange_compatibility_preflight(endpoint, &preflight, request_deadline)?;
+    let response = exchange_request(
+        endpoint,
+        &RequestEnvelope::CompatibilityPreflight(preflight.clone()),
+        request_deadline,
+    )?;
     let verdict = match response {
         ResponseEnvelope::CompatibilityVerdict(verdict) => verdict,
         other => {
@@ -137,40 +139,10 @@ pub fn verify_connection_compatibility(
     }
 }
 
-fn exchange_compatibility_preflight(
-    endpoint: &DaemonLocalIpcEndpoint,
-    preflight: &CompatibilityPreflight,
-    request_deadline: Duration,
-) -> Result<ResponseEnvelope, AtmError> {
-    let request = RequestEnvelope::CompatibilityPreflight(preflight.clone());
-    let first = exchange_request(endpoint, &request, request_deadline);
-    #[cfg(windows)]
-    if let Err(error) = &first
-        && is_transient_windows_loopback_reset(error)
-    {
-        // The compatibility probe is read-only. Retry only this probe;
-        // retrying a partially written send could duplicate a message.
-        thread::sleep(WindowsRetryDuration::from_millis(25));
-        return exchange_request(endpoint, &request, request_deadline);
-    }
-    first
-}
-
-#[cfg(windows)]
-fn is_transient_windows_loopback_reset(error: &AtmError) -> bool {
-    error.is_daemon_unavailable()
-        && (error.message().contains("10054")
-            || error
-                .message()
-                .contains("forcibly closed by the remote host"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{CompatibilityPreflight, Connection, HttpApiVersion, ReleaseVersion, Unverified};
     use atm_core::protocol::CLI_SCHEMA_VERSION;
-    #[cfg(windows)]
-    use atm_storage::AtmError;
 
     #[test]
     fn matching_versions_transition_to_verified_connection() {
@@ -196,21 +168,5 @@ mod tests {
             atm_core::protocol::RequestEnvelope::CompatibilityPreflight(preflight.clone());
         let (_, path) = atm_core::api::endpoint_for(&request);
         assert_eq!(path, "/v1/atm/compatibility");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn only_windows_loopback_reset_errors_are_retryable() {
-        assert!(super::is_transient_windows_loopback_reset(
-            &AtmError::daemon_unavailable(
-                "failed to write daemon HTTP request headers: An existing connection was forcibly closed by the remote host. (os error 10054)"
-            )
-        ));
-        assert!(!super::is_transient_windows_loopback_reset(
-            &AtmError::daemon_unavailable("failed to connect to daemon local HTTP endpoint")
-        ));
-        assert!(!super::is_transient_windows_loopback_reset(
-            &AtmError::validation("request body is invalid")
-        ));
     }
 }
