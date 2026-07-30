@@ -2,7 +2,7 @@
 title: AI.33 admission capacity and smoke evidence
 status: proposed
 branch: feature/pAI-s33-admission-capacity-smoke
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.31, AI.32
 requires_merged_pr: PR #675 (keeper smoke runner on develop)
 ---

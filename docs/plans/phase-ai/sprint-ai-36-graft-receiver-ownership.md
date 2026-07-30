@@ -2,7 +2,7 @@
 title: AI.36 graft receiver ownership
 status: complete
 branch: feature/pAI-s36-graft-receiver-ownership
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.35
 ---
 

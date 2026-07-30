@@ -2,7 +2,7 @@
 title: AI.31 asynchronous durable local admission
 status: complete
 branch: feature/pAI-s31-async-local-admission
-target: integrate/phase-AI
+target: integrate/phase-ai-31-33
 depends_on: AI.23, AI.27, AI.28
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/ai31-async-local-admission
 ---
