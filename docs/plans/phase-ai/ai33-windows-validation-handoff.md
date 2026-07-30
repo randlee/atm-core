@@ -47,3 +47,14 @@ The executable procedure is
   so the advertised-local-IP lane cannot start. No second daemon was started.
 - Full details are in
   `artifacts/smoke/admission-capacity-fastpc4/windows-root-cause-report.md`.
+
+### 2026-07-30 — cwin — peer-interface configuration blocker
+
+- Pulled again; no newer arch-ctm direction was present.
+- The exact branch CLI returned `[]` from `atm peer interface list --json`.
+- Host address discovery found `10.10.100.98` on `Ethernet 2`; no Windows
+  `atm-daemon` service is installed, and the one exact branch daemon remains
+  PID `23984`.
+- E-012 is logged in the root-cause report. The planned operational fix is one
+  enabled `10.10.100.98:43101` interface, followed by a controlled restart of
+  only the verified branch daemon if configuration is not hot-reloaded.
