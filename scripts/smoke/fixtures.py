@@ -44,6 +44,15 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def release_binary(root: Path, name: str) -> Path:
+    """Resolve one matching release binary without consulting PATH."""
+    suffix = ".exe" if os.name == "nt" else ""
+    binary = root / "target" / "release" / f"{name}{suffix}"
+    if not binary.is_file():
+        raise RuntimeError(f"release-built {name} is required at {binary}; run cargo build --release first")
+    return binary
+
+
 def timestamp_slug(now: datetime | None = None) -> str:
     moment = now or datetime.now(timezone.utc)
     return moment.strftime("%Y-%m-%d-%H-%M-%S")
@@ -225,7 +234,6 @@ def create_shared_host_fixture_pair(
 
 def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None) -> dict[str, str]:
     working_root = root or repo_root()
-    daemon_name = "atm-daemon.exe" if os.name == "nt" else "atm-daemon"
     temp_root = fixture.root / "tmp"
     temp_root.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
@@ -237,7 +245,7 @@ def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None)
             "ATM_IDENTITY": identity,
             "ATM_LOG": "debug",
             "ATM_LOG_DIR": str(fixture.log_dir),
-            "ATM_DAEMON_BIN": str(working_root / "target" / "release" / daemon_name),
+            "ATM_DAEMON_BIN": str(release_binary(working_root, "atm-daemon")),
             "TMPDIR": str(temp_root),
             "TMP": str(temp_root),
             "TEMP": str(temp_root),

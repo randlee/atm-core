@@ -35,7 +35,8 @@ from daemon_lifecycle import (
     terminate_process,
     wait_for_process_exit,
 )
-from smoke_common import SmokeError, command_result
+from fixtures import release_binary
+from smoke_common import SmokeError, command_result, sanitize
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -44,12 +45,21 @@ ADMISSIONS_PER_INTERVAL = 1_000
 WORKERS = 64
 READY_TIMEOUT_SECONDS = 30.0
 CAPACITY_ROOT_PREFIX = "atm-capacity-"
+MAX_ERROR_RESPONSE_BYTES = 8_192
 
 
 @dataclass(frozen=True)
 class AdmissionResult:
     status: int
     elapsed_ms: float
+    failure: str | None = None
+
+
+@dataclass(frozen=True)
+class HttpResponseSummary:
+    """Bounded public HTTP response evidence for one admission."""
+
+    status: int
     failure: str | None = None
 
 
@@ -86,6 +96,8 @@ def validate_capacity_home(path: Path) -> Path:
     if not path.is_absolute():
         raise SmokeError("capacity ATM_HOME must be an absolute path")
     resolved = path.resolve()
+    if resolved == os_account_home().resolve() / ".atm":
+        raise SmokeError("capacity runner must never target the production ~/.atm directory")
     temporary = Path(tempfile.gettempdir()).resolve()
     try:
         resolved.relative_to(temporary)
@@ -93,18 +105,7 @@ def validate_capacity_home(path: Path) -> Path:
         raise SmokeError("capacity ATM_HOME must be below the OS temporary directory") from error
     if not resolved.name.startswith(CAPACITY_ROOT_PREFIX):
         raise SmokeError(f"capacity ATM_HOME basename must start with {CAPACITY_ROOT_PREFIX!r}")
-    if resolved == os_account_home().resolve() / ".atm":
-        raise SmokeError("capacity runner must never target the production ~/.atm directory")
     return resolved
-
-
-def release_binary(name: str) -> Path:
-    """Locate an already-built branch release executable without using PATH."""
-    suffix = ".exe" if os.name == "nt" else ""
-    path = ROOT / "target" / "release" / f"{name}{suffix}"
-    if not path.is_file():
-        raise SmokeError(f"release-built {name} is required at {path}; run cargo build --release first")
-    return path
 
 
 def runtime_environment(atm_home: Path) -> dict[str, str]:
@@ -213,21 +214,56 @@ def local_endpoint() -> LocalEndpoint:
         raise SmokeError(f"could not read daemon local HTTP endpoint record: {error}") from error
 
 
-def read_http_status(stream: socket.socket) -> int:
-    """Read just enough of one close-delimited HTTP response to classify admission."""
+def read_http_response_summary(stream: socket.socket) -> HttpResponseSummary:
+    """Retain a bounded structured error response instead of losing its cause."""
     data = bytearray()
-    while b"\r\n" not in data:
+    while b"\r\n\r\n" not in data:
         chunk = stream.recv(4096)
         if not chunk:
-            raise SmokeError("daemon closed the local HTTP connection before a status line")
+            raise SmokeError("daemon closed the local HTTP connection before response headers")
         data.extend(chunk)
-        if len(data) > 8_192:
-            raise SmokeError("daemon local HTTP status line exceeded the safety bound")
-    status_line = bytes(data).split(b"\r\n", 1)[0].decode("ascii", "replace")
+        if len(data) > 16_384:
+            raise SmokeError("daemon local HTTP response headers exceeded the safety bound")
+    raw_headers, body = bytes(data).split(b"\r\n\r\n", 1)
+    headers = raw_headers.decode("ascii", "replace").split("\r\n")
+    status_line = headers[0]
     fields = status_line.split()
     if len(fields) < 2 or not fields[1].isdigit():
         raise SmokeError(f"daemon returned malformed HTTP status line: {status_line}")
-    return int(fields[1])
+    content_length = 0
+    for header in headers[1:]:
+        name, separator, value = header.partition(":")
+        if separator and name.lower() == "content-length":
+            try:
+                content_length = int(value.strip())
+            except ValueError as error:
+                raise SmokeError("daemon returned invalid Content-Length") from error
+            break
+    if content_length < 0:
+        raise SmokeError("daemon returned negative Content-Length")
+    captured = bytearray(body[:MAX_ERROR_RESPONSE_BYTES])
+    remaining = content_length - len(body)
+    while remaining > 0:
+        chunk = stream.recv(min(4096, remaining))
+        if not chunk:
+            raise SmokeError("daemon closed the local HTTP connection before its declared body")
+        if len(captured) < MAX_ERROR_RESPONSE_BYTES:
+            captured.extend(chunk[:MAX_ERROR_RESPONSE_BYTES - len(captured)])
+        remaining -= len(chunk)
+    status = int(fields[1])
+    if status == 201:
+        return HttpResponseSummary(status)
+    try:
+        error = json.loads(bytes(captured))
+    except json.JSONDecodeError:
+        detail = sanitize(bytes(captured).decode("utf-8", "replace"))
+        return HttpResponseSummary(status, f"HTTP {status}: {detail or '<empty error response>'}")
+    if isinstance(error, dict):
+        code = error.get("code")
+        message = error.get("message")
+        if isinstance(code, str) and isinstance(message, str):
+            return HttpResponseSummary(status, f"HTTP {status} {code}: {sanitize(message)}")
+    return HttpResponseSummary(status, f"HTTP {status}: {sanitize(json.dumps(error, sort_keys=True))}")
 
 
 def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
@@ -251,9 +287,9 @@ def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
             stream.settimeout(3.5)
             stream.connect(endpoint.address)
             stream.sendall(request)
-            status = read_http_status(stream)
+            response = read_http_response_summary(stream)
         elapsed_ms = (time.perf_counter() - started) * 1_000
-        return AdmissionResult(status=status, elapsed_ms=elapsed_ms, failure=None if status == 201 else f"HTTP {status}")
+        return AdmissionResult(status=response.status, elapsed_ms=elapsed_ms, failure=response.failure)
     except (OSError, SmokeError) as error:
         return AdmissionResult(status=0, elapsed_ms=(time.perf_counter() - started) * 1_000, failure=str(error))
 
@@ -282,6 +318,11 @@ def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dic
             "max": latencies[-1] if latencies else 0.0,
         },
         "first_failure": failures[0] if failures else None,
+        "response_timing_ms": {
+            "min": latencies[0] if latencies else 0.0,
+            "p50": latencies[len(latencies) // 2] if latencies else 0.0,
+            "max": latencies[-1] if latencies else 0.0,
+        },
         "passed": accepted == ADMISSIONS_PER_INTERVAL and elapsed_seconds <= 1.0,
     }
 
@@ -302,14 +343,51 @@ def write_evidence(directory: Path, evidence: dict[str, Any]) -> Path:
     return path
 
 
+def write_feature_report(evidence: dict[str, Any]) -> Path:
+    """Feed capacity results into the same per-host XHTML/HTML smoke report."""
+    from run_feature_smoke import write_report
+
+    host = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "local")
+    doctor = evidence.get("doctor")
+    healthy = isinstance(doctor, dict) and doctor.get("summary", {}).get("status") == "healthy"
+    cases: list[dict[str, Any]] = [
+        {
+            "name": "doctor",
+            "status": "PASS" if healthy else "FAIL",
+            "detail": "ATM doctor healthy" if healthy else "capacity daemon doctor was not healthy",
+            "origin": host,
+            "destination": host,
+        }
+    ]
+    for run in evidence.get("runs", []):
+        intervals = run.get("intervals", [])
+        passed = bool(run.get("passed"))
+        accepted = sum(int(interval.get("accepted_count", 0)) for interval in intervals)
+        total = len(intervals) * ADMISSIONS_PER_INTERVAL
+        first_failure = next((interval.get("first_failure") for interval in intervals if interval.get("first_failure")), None)
+        cases.append(
+            {
+                "name": f"admission capacity — {run.get('label', 'unknown')}",
+                "status": "PASS" if passed else "FAIL",
+                "detail": f"{accepted}/{total} accepted" + (f"; {first_failure}" if first_failure else ""),
+                "origin": host,
+                "destination": host,
+            }
+        )
+    return write_report("admission-capacity", cases)
+
+
 def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, unavailable_host: str) -> tuple[int, Path]:
     """Start one branch daemon, exercise public UDS API, retain evidence, then clean up."""
     require_isolated_os_user()
     home = validate_capacity_home(atm_home)
     require_clean_host_daemon_state(smoke_label="admission-capacity smoke")
     before = count_atm_daemon_processes()
-    atm = release_binary("atm")
-    daemon = release_binary("atm-daemon")
+    try:
+        atm = release_binary(ROOT, "atm")
+        daemon = release_binary(ROOT, "atm-daemon")
+    except RuntimeError as error:
+        raise SmokeError(str(error)) from error
     home.mkdir(parents=True, exist_ok=False)
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
@@ -318,10 +396,9 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         "atm_home": str(home),
         "runs": [],
         "stages": {
-            "runtime_view_validation": "daemon-owned; no peer/store/network work is requested by this client before response",
-            "sqlite_transaction": "measured by each public admission response latency",
-            "post_commit_signal": "not awaited by this runner",
-            "response_write": "included in each public admission response latency",
+            "endpoint_discovery_ms": None,
+            "public_response_ms": "recorded per interval as response_timing_ms; includes daemon validation, SQLite commit, and response write",
+            "post_commit_signal": "not awaited; the public admission response is the boundary",
         },
     }
     try:
@@ -335,7 +412,9 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         evidence["doctor"] = json.loads(doctor["stdout"])
         configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer")
         configure_controlled_peer(atm, env, unavailable_host, "capacity-unavailable-peer")
+        endpoint_started = time.perf_counter()
         endpoint = local_endpoint()
+        evidence["stages"]["endpoint_discovery_ms"] = (time.perf_counter() - endpoint_started) * 1_000
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         evidence["runs"] = [
@@ -343,7 +422,7 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
             run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer"),
         ]
         evidence["passed"] = all(run["passed"] for run in evidence["runs"])
-    except (OSError, ValueError, SmokeError) as error:
+    except (OSError, RuntimeError, ValueError, SmokeError) as error:
         evidence["passed"] = False
         evidence["failure"] = str(error)
     finally:
@@ -359,6 +438,11 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         except RuntimeError as error:
             evidence["passed"] = False
             evidence["cleanup_failure"] = str(error)
+        try:
+            evidence["html_report"] = str(write_feature_report(evidence))
+        except (OSError, RuntimeError, ValueError, SmokeError) as error:
+            evidence["passed"] = False
+            evidence["report_failure"] = str(error)
         evidence_path = write_evidence(evidence_directory, evidence)
         try:
             if home.exists():

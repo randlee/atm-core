@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import socket
 import sys
 import tempfile
 import unittest
@@ -25,10 +26,14 @@ RUNNER = load_runner()
 
 
 class AdmissionCapacityTests(unittest.TestCase):
+    def temp_path(self, name: str) -> Path:
+        return Path(tempfile.gettempdir()) / name
+
     def test_home_rejects_production_or_non_temporary_paths(self):
-        with mock.patch.object(RUNNER, "os_account_home", return_value=Path("/Users/capacity")):
-            with self.assertRaisesRegex(RUNNER.SmokeError, "temporary"):
-                RUNNER.validate_capacity_home(Path("/Users/capacity/.atm"))
+        account_home = self.temp_path("capacity-account")
+        with mock.patch.object(RUNNER, "os_account_home", return_value=account_home):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "production"):
+                RUNNER.validate_capacity_home(account_home / ".atm")
         with self.assertRaisesRegex(RUNNER.SmokeError, "basename"):
             RUNNER.validate_capacity_home(Path(tempfile.gettempdir()) / "shared-atm")
 
@@ -42,7 +47,7 @@ class AdmissionCapacityTests(unittest.TestCase):
                 RUNNER.require_isolated_os_user()
 
     def test_public_request_is_host_qualified_and_never_a_dispatch_envelope(self):
-        body = __import__("json").loads(RUNNER.http_request_body(Path("/tmp/atm-capacity-test"), 42, "192.0.2.10"))
+        body = __import__("json").loads(RUNNER.http_request_body(self.temp_path("atm-capacity-test"), 42, "192.0.2.10"))
         self.assertEqual(body["to"], {"agent": "capacity-agent", "team": "capacity-team", "host": "192.0.2.10"})
         self.assertEqual(body["message_source"], {"Inline": "capacity-42"})
         self.assertNotIn("RequestEnvelope", body)
@@ -51,12 +56,12 @@ class AdmissionCapacityTests(unittest.TestCase):
         result = {"exit_code": 0, "stdout": "", "stderr": ""}
         with mock.patch.object(RUNNER, "command_result", return_value=result) as command:
             RUNNER.configure_controlled_peer(
-                Path("/tmp/atm"), {"ATM_HOME": "/tmp/atm-capacity-test"}, "192.0.2.10", "fingerprint"
+                self.temp_path("atm"), {"ATM_HOME": str(self.temp_path("atm-capacity-test"))}, "192.0.2.10", "fingerprint"
             )
         self.assertEqual(
             command.call_args.args[0],
             [
-                "/tmp/atm", "peer", "trust", "add", "--host", "192.0.2.10",
+                str(self.temp_path("atm")), "peer", "trust", "add", "--host", "192.0.2.10",
                 "--fingerprint", "fingerprint", "--yes",
             ],
         )
@@ -81,11 +86,36 @@ class AdmissionCapacityTests(unittest.TestCase):
             RUNNER, "run_interval", return_value={"passed": True}
         ) as interval:
             result = RUNNER.run_peer_case(
-                RUNNER.LocalEndpoint("uds", "/tmp/socket"), Path("/tmp/atm-capacity-test"), "peer.example", "peer"
+                RUNNER.LocalEndpoint("uds", str(self.temp_path("socket"))), self.temp_path("atm-capacity-test"), "peer.example", "peer"
             )
         self.assertEqual(len(result["intervals"]), 3)
         self.assertTrue(result["passed"])
         self.assertEqual(interval.call_count, 3)
+
+    def test_response_summary_preserves_structured_daemon_error(self):
+        client, daemon = socket.socketpair()
+        self.addCleanup(client.close)
+        self.addCleanup(daemon.close)
+        payload = b'{"code":"ATM_DAEMON_CONNECTION_SATURATED","message":"local admission saturated"}'
+        daemon.sendall(
+            b"HTTP/1.1 503 Service Unavailable\r\n"
+            + f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii")
+            + payload
+        )
+        response = RUNNER.read_http_response_summary(client)
+        self.assertEqual(response.status, 503)
+        self.assertEqual(response.failure, "HTTP 503 ATM_DAEMON_CONNECTION_SATURATED: local admission saturated")
+
+    def test_feature_report_reuses_the_unified_html_report_writer(self):
+        evidence = {
+            "doctor": {"summary": {"status": "healthy"}},
+            "runs": [{"label": "accepting", "passed": False, "intervals": [{"accepted_count": 999, "first_failure": "HTTP 503 TEST"}]}],
+        }
+        with mock.patch("run_feature_smoke.write_report", return_value=Path("report.json")) as writer:
+            report = RUNNER.write_feature_report(evidence)
+        self.assertEqual(report, Path("report.json"))
+        self.assertEqual(writer.call_args.args[0], "admission-capacity")
+        self.assertEqual(writer.call_args.args[1][1]["detail"], "999/1000 accepted; HTTP 503 TEST")
 
 
 if __name__ == "__main__":
