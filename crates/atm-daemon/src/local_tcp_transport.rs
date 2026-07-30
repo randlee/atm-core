@@ -274,27 +274,12 @@ impl PreparedRuntimeServer {
                         continue;
                     }
                     registry.reap_finished_dispatches()?;
-                    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS)
-                    else {
-                        write_saturated_response(stream);
-                        continue;
-                    };
-                    let router = Arc::clone(&router);
-                    let capability = capability.clone();
-                    let force_shutdown = Arc::clone(&force_shutdown);
-                    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-                    let join_handle = thread::spawn(move || {
-                        let _active = active_connection;
-                        let _ =
-                            handle_connection(stream, router, &capability, force_shutdown.as_ref());
-                        let _ = completion_tx.send(());
-                    });
-                    registry.push_dispatch_handle(
-                        TrackedDispatchHandle {
-                            completion_rx,
-                            join_handle,
-                        },
-                        MAX_CONCURRENT_CONNECTIONS,
+                    spawn_connection(
+                        stream,
+                        Arc::clone(&router),
+                        capability.clone(),
+                        Arc::clone(&force_shutdown),
+                        &registry,
                     )?;
                 }
                 Err(source) if source.kind() == std::io::ErrorKind::WouldBlock => {
@@ -317,6 +302,44 @@ fn wait_for_connection_capacity(registry: &ActiveConnectionRegistry) -> Result<(
         registry.wait_for_connection_change(ACCEPT_POLL_INTERVAL)?;
     }
     Ok(())
+}
+
+#[cfg(windows)]
+fn spawn_connection(
+    stream: TcpStream,
+    router: Arc<dyn ApiRouter + Send + Sync>,
+    capability: LocalCapability,
+    force_shutdown: Arc<AtomicBool>,
+    registry: &Arc<ActiveConnectionRegistry>,
+) -> Result<(), AtmError> {
+    let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else {
+        write_saturated_response(stream);
+        return Ok(());
+    };
+    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+    let join_handle = thread::spawn(move || {
+        let _active = active_connection;
+        if let Err(error) = handle_connection(stream, router, &capability, force_shutdown.as_ref())
+        {
+            tracing::warn!(
+                subsystem = "local_tcp_transport",
+                action = "handle_connection",
+                outcome = "failed",
+                error_code = %error.code(),
+                diagnostic = %error.message(),
+                cause = error.cause().unwrap_or(""),
+                "Windows local TCP connection handler failed"
+            );
+        }
+        let _ = completion_tx.send(());
+    });
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle,
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )
 }
 
 #[cfg(windows)]
