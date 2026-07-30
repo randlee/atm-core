@@ -1,0 +1,29 @@
+{
+  "plan": "docs/plans/phase-ai/plan-ai33-windows-capacity-verification.md",
+  "worktree": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke",
+  "branch": "feature/pAI-s33-admission-capacity-smoke",
+  "commit": "e057c39adb6e599de552aabb692481366b9a5bee",
+  "account": "RZ\\rand.lee",
+  "just_version": "1.51.0",
+  "atm_version": "1.4.0-beta-ai.38",
+  "atm_daemon_version": "1.4.0-beta-ai.38 (cargo package metadata; executable has no --version option)",
+  "ambient_atm_daemon_before_run": false,
+  "sequence": [
+    {
+      "step": 1,
+      "command": "just test",
+      "result": "pass",
+      "summary": "Windows recipe completed successfully; Python suite reported 317 tests, 2 skipped, and Rust test groups reported no failures."
+    },
+    {
+      "step": 2,
+      "command": "just smoke localhost",
+      "result": "fail",
+      "exit_code": 1,
+      "error": "smoke error: set ATM_IDENTITY and ATM_TEAM before running live daemon smoke",
+      "summary": "Stopped here as required. Step 3 was not run."
+    }
+  ],
+  "capacity_result": "not_run",
+  "sanitization": "No message payloads, credentials, private keys, or host-owned database contents recorded."
+}

@@ -1,0 +1,21 @@
+{
+  "atm_home": "C:\\Users\\rand.lee\\AppData\\Local\\Temp\\atm-capacity-parent-rtk9iutv\\atm-capacity-home",
+  "cleanup_failure": "admission-capacity smoke detected leaked atm-daemon pid(s): 29872",
+  "failure": "capacity daemon did not publish ATM_DAEMON_READY within 30 seconds",
+  "passed": false,
+  "release": {
+    "atm": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm.exe",
+    "atm_daemon": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm-daemon.exe"
+  },
+  "report_failure": "sc-compose render failed: [WinError 2] The system cannot find the file specified",
+  "runs": [],
+  "slowest_stage": {
+    "elapsed_ms": 30250.38099999074,
+    "name": "daemon_start_ready_ms"
+  },
+  "stages": {
+    "daemon_start_ready_ms": 30250.38099999074,
+    "host_runtime_root_setup_ms": 0.2703999634832144,
+    "roster_setup_ms": 335.7461999403313
+  }
+}

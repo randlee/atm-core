@@ -26,3 +26,12 @@ The executable procedure is
 - cwin must follow the plan in order and commit this log with either the
   resulting evidence paths and summary, or the first deterministic blocker
   and its collected artifacts.
+
+### 2026-07-30 — cwin — first-round root cause
+
+- Pulled the branch; no newer arch-ctm direction was present in this shared file.
+- `just test` passed. The live smoke/capacity acceptance gate remains blocked.
+- First-round root-cause report: `artifacts/smoke/admission-capacity-fastpc4/windows-root-cause-report.md`.
+- Missing `ATM_IDENTITY`/`ATM_TEAM`, missing `sc-compose`, and missing `atm` PATH resolution were environment/setup failures and were corrected operationally.
+- The observed `127.0.0.1:55758` listener is the expected Windows local HTTP endpoint; 43101 is the separate peer HTTPS port. No daemon code failure was found.
+- The report records all observed command errors, non-fatal test warnings, `.atm` log findings, orphan cleanup, and the next matched-pair smoke procedure.

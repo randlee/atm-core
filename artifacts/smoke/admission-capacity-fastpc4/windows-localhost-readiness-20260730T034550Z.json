@@ -1,0 +1,27 @@
+{
+  "plan": "docs/plans/phase-ai/plan-ai33-windows-capacity-verification.md",
+  "worktree": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke",
+  "branch": "feature/pAI-s33-admission-capacity-smoke",
+  "commit": "e057c39adb6e599de552aabb692481366b9a5bee",
+  "command": "ATM_IDENTITY=cwin ATM_TEAM=atm-dev ATM_SMOKE_ATM=target\\release\\atm.exe just smoke localhost",
+  "result": "readiness_failure",
+  "runner_exit": "terminated after exceeding bounded smoke duration with no final result",
+  "daemon": {
+    "pid": 33936,
+    "executable": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm-daemon.exe",
+    "parent_pid": 29732,
+    "thread_count": 6,
+    "cpu_seconds": 1.15625,
+    "listeners": [
+      "127.0.0.1:55758"
+    ],
+    "expected_listeners_present": false,
+    "terminated": true
+  },
+  "smoke_report": "reports/smoke/20260730T034550Z/FastPC4-localhost.json",
+  "smoke_failure": "doctor failed: [WinError 2] The system cannot find the file specified",
+  "runtime_files": "No matching host runtime files or retained daemon logs were found under the inspected .atm, AppData\\Local\\atm, or AppData\\Roaming\\atm roots.",
+  "stdout_stderr": "No separate daemon stdout/stderr files were produced by the runner.",
+  "capacity_step": "not_run",
+  "sanitization": "No message payloads, credentials, private keys, or host-owned database contents recorded."
+}

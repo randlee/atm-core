@@ -1,0 +1,15 @@
+{
+  "plan": "docs/plans/phase-ai/plan-ai33-windows-capacity-verification.md",
+  "worktree": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke",
+  "branch": "feature/pAI-s33-admission-capacity-smoke",
+  "commit": "e057c39adb6e599de552aabb692481366b9a5bee",
+  "command": "ATM_IDENTITY=cwin ATM_TEAM=atm-dev just smoke localhost",
+  "result": "fail",
+  "exit_code": 1,
+  "attempts": 10,
+  "failure": "sc-compose render failed: [WinError 2] The system cannot find the file specified",
+  "root_cause": "sc-compose is not available on PATH; no sc-compose executable exists under target\\debug or target\\release.",
+  "daemon_started": false,
+  "capacity_step": "not_run",
+  "sanitization": "No message payloads, credentials, private keys, or host-owned database contents recorded."
+}
