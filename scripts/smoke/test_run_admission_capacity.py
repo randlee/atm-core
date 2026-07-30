@@ -41,6 +41,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         path = Path(tempfile.gettempdir()) / "atm-capacity-unit-home"
         self.assertEqual(RUNNER.validate_capacity_home(path), path.resolve())
 
+    def test_runner_requires_and_creates_a_fresh_host_runtime_root(self):
+        with tempfile.TemporaryDirectory(prefix="atm-capacity-unit-") as temp:
+            account_home = Path(temp) / "account"
+            runtime_root = account_home / ".atm"
+            with mock.patch.object(RUNNER, "os_account_home", return_value=account_home):
+                created = RUNNER.create_disposable_host_runtime_root()
+                self.assertEqual(created, runtime_root.resolve())
+                self.assertTrue(created.is_dir())
+                with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS user"):
+                    RUNNER.create_disposable_host_runtime_root()
+
     def test_requires_explicit_clean_os_user_guard(self):
         with mock.patch.dict(os.environ, {"ATM_CAPACITY_ISOLATED_OS_USER": ""}, clear=False):
             with self.assertRaisesRegex(RUNNER.SmokeError, "dedicated clean OS-user"):
@@ -135,6 +146,17 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(report, Path("report.json"))
         self.assertEqual(writer.call_args.args[0], "admission-capacity")
         self.assertEqual(writer.call_args.args[1][1]["detail"], "999/1000 accepted; HTTP 503 TEST")
+
+    def test_failure_evidence_names_the_slowest_measured_runner_stage(self):
+        evidence = {"passed": False, "stages": {"setup_ms": 2.5, "burst_ms": 7.5}}
+        RUNNER.record_slowest_stage(evidence)
+        self.assertEqual(evidence["slowest_stage"], {"name": "burst_ms", "elapsed_ms": 7.5})
+
+    def test_measure_stage_retains_the_real_elapsed_value(self):
+        evidence = {"stages": {}}
+        with mock.patch.object(RUNNER.time, "perf_counter", side_effect=[10.0, 10.125]):
+            self.assertEqual(RUNNER.measure_stage(evidence, "setup_ms", lambda: "done"), "done")
+        self.assertEqual(evidence["stages"]["setup_ms"], 125.0)
 
     def test_cleanup_reaps_the_runner_owned_daemon(self):
         process = mock.Mock(pid=1234)

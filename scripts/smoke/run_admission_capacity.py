@@ -111,6 +111,40 @@ def validate_capacity_home(path: Path) -> Path:
     return resolved
 
 
+def host_runtime_root() -> Path:
+    """Return the ADR-026 host-owned runtime root used by the daemon."""
+    return os_account_home().resolve() / ".atm"
+
+
+def create_disposable_host_runtime_root() -> Path:
+    """Create the benchmark account's otherwise-empty host runtime root.
+
+    ``ATM_HOME`` selects configuration only.  The daemon's runtime and SQLite
+    state are deliberately owned by the OS account, so a capacity run must
+    prove that account has no pre-existing ``.atm`` state before it starts.
+    """
+    runtime_root = host_runtime_root()
+    if runtime_root.exists():
+        raise SmokeError(
+            "admission-capacity smoke requires a dedicated clean OS user whose "
+            f"host runtime root does not already exist: {runtime_root}"
+        )
+    runtime_root.mkdir(parents=True, exist_ok=False)
+    return runtime_root
+
+
+def remove_tree(path: Path) -> None:
+    """Remove a runner-created disposable directory without following links."""
+    if not path.exists():
+        return
+    for child in sorted(path.rglob("*"), reverse=True):
+        if child.is_file() or child.is_symlink():
+            child.unlink()
+        elif child.is_dir():
+            child.rmdir()
+    path.rmdir()
+
+
 def runtime_environment(atm_home: Path) -> dict[str, str]:
     environment = dict(os.environ)
     environment.update(
@@ -418,6 +452,27 @@ def write_feature_report(evidence: dict[str, Any]) -> Path:
     return write_report("admission-capacity", cases)
 
 
+def measure_stage(evidence: dict[str, Any], name: str, operation: Callable[[], Any]) -> Any:
+    """Run one real runner stage and retain its elapsed wall-clock time."""
+    started = time.perf_counter()
+    try:
+        return operation()
+    finally:
+        evidence["stages"][name] = (time.perf_counter() - started) * 1_000
+
+
+def record_slowest_stage(evidence: dict[str, Any]) -> None:
+    """Name the real expensive stage whenever the capacity gate failed."""
+    timings = {
+        name: elapsed
+        for name, elapsed in evidence["stages"].items()
+        if isinstance(elapsed, (int, float))
+    }
+    if timings and not evidence.get("passed"):
+        name, elapsed_ms = max(timings.items(), key=lambda item: item[1])
+        evidence["slowest_stage"] = {"name": name, "elapsed_ms": elapsed_ms}
+
+
 def terminate_capacity_daemon(process: subprocess.Popen[str]) -> None:
     """Terminate and reap the runner-owned daemon before leak inspection."""
     terminate_process(process.pid)
@@ -441,36 +496,59 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
     except RuntimeError as error:
         raise SmokeError(str(error)) from error
     home.mkdir(parents=True, exist_ok=False)
+    runtime_root: Path | None = None
     env = runtime_environment(home)
     process: subprocess.Popen[str] | None = None
     evidence: dict[str, Any] = {
         "release": {"atm": str(atm), "atm_daemon": str(daemon)},
         "atm_home": str(home),
         "runs": [],
-        "stages": {
-            "endpoint_discovery_ms": None,
-            "public_stage_timing_ms": "recorded for every interval; daemon_response_boundary is measured rather than inferred",
-        },
+        "stages": {},
     }
     try:
-        prepare_capacity_roster(atm, env, home)
-        process = subprocess.Popen([str(daemon)], cwd=home, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        await_daemon_ready(process)
-        doctor = command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env)
+        runtime_root = measure_stage(evidence, "host_runtime_root_setup_ms", create_disposable_host_runtime_root)
+        measure_stage(evidence, "roster_setup_ms", lambda: prepare_capacity_roster(atm, env, home))
+
+        def start_daemon() -> subprocess.Popen[str]:
+            daemon_process = subprocess.Popen(
+                [str(daemon)], cwd=home, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            await_daemon_ready(daemon_process)
+            return daemon_process
+
+        process = measure_stage(evidence, "daemon_start_ready_ms", start_daemon)
+        doctor = measure_stage(
+            evidence,
+            "doctor_ms",
+            lambda: command_result([str(atm), "doctor", "--json"], timeout=10.0, env=env),
+        )
         if doctor["exit_code"] != 0:
             raise SmokeError(f"capacity doctor failed: {doctor['stderr'].strip()}")
         evidence["daemon_pid"] = process.pid
         evidence["doctor"] = json.loads(doctor["stdout"])
-        configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer")
-        configure_controlled_peer(atm, env, unavailable_host, "capacity-unavailable-peer")
-        endpoint_started = time.perf_counter()
-        endpoint = local_endpoint()
-        evidence["stages"]["endpoint_discovery_ms"] = (time.perf_counter() - endpoint_started) * 1_000
+        measure_stage(
+            evidence,
+            "peer_setup_ms",
+            lambda: (
+                configure_controlled_peer(atm, env, accepting_host, "capacity-accepting-peer"),
+                configure_controlled_peer(atm, env, unavailable_host, "capacity-unavailable-peer"),
+            ),
+        )
+        endpoint = measure_stage(evidence, "endpoint_discovery_ms", local_endpoint)
         if endpoint.kind == "uds" and not Path(str(endpoint.address)).exists():
             raise SmokeError(f"daemon did not publish public local socket {endpoint.address}")
         evidence["runs"] = [
-            run_peer_case(endpoint, home, accepting_host, "accepting-configured-peer"),
-            run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer"),
+            measure_stage(
+                evidence,
+                "accepting_burst_ms",
+                lambda: run_peer_case(endpoint, home, accepting_host, "accepting-configured-peer"),
+            ),
+            measure_stage(
+                evidence,
+                "unavailable_burst_ms",
+                lambda: run_peer_case(endpoint, home, unavailable_host, "unavailable-configured-peer"),
+            ),
         ]
         evidence["passed"] = all(run["passed"] for run in evidence["runs"])
     except (OSError, RuntimeError, ValueError, SmokeError) as error:
@@ -479,7 +557,7 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
     finally:
         if process is not None:
             try:
-                terminate_capacity_daemon(process)
+                measure_stage(evidence, "daemon_teardown_ms", lambda: terminate_capacity_daemon(process))
             except RuntimeError as error:
                 evidence["passed"] = False
                 evidence["cleanup_failure"] = str(error)
@@ -489,19 +567,16 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
             evidence["passed"] = False
             evidence["cleanup_failure"] = str(error)
         try:
+            record_slowest_stage(evidence)
             evidence["html_report"] = str(write_feature_report(evidence))
         except (OSError, RuntimeError, ValueError, SmokeError) as error:
             evidence["passed"] = False
             evidence["report_failure"] = str(error)
         evidence_path = write_evidence(evidence_directory, evidence)
         try:
-            if home.exists():
-                for child in sorted(home.rglob("*"), reverse=True):
-                    if child.is_file() or child.is_symlink():
-                        child.unlink()
-                    elif child.is_dir():
-                        child.rmdir()
-                home.rmdir()
+            remove_tree(home)
+            if runtime_root is not None:
+                remove_tree(runtime_root)
         except OSError as error:
             raise SmokeError(f"could not remove temporary capacity ATM_HOME {home}: {error}") from error
     return (0 if evidence.get("passed") else 1), evidence_path

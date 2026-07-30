@@ -166,3 +166,140 @@ fn local_ipc_host_qualified_admission_returns_before_blocked_peer_delivery() {
         .stop_peer_drain_coordinator()
         .expect("stop peer drain coordinator");
 }
+
+#[test]
+#[serial_test::serial(env)]
+fn local_ipc_real_daemon_admission_burst_accepts_each_public_write() {
+    const BURST_SIZE: usize = 16;
+
+    install_retained_runtime_factory();
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    let workspace_dir = tempdir.path().join("workspace");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    write_team_config(&atm_home, &[]);
+    write_workspace_config(&workspace_dir);
+    add_member_via_retained_admin(
+        &db_path,
+        &atm_home,
+        TEST_TEAM,
+        ROLE_TEAM_LEAD,
+        &workspace_dir,
+    );
+    add_member_via_retained_admin(&db_path, &atm_home, TEST_TEAM, "qa-a", &workspace_dir);
+
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        (
+            SQLITE_RUNTIME_PATH_ENV,
+            Some(db_path.to_str().expect("utf8 sqlite db path")),
+        ),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
+    let socket_path = tempdir.path().join("daemon.sock");
+    let server_transport = LocalIpcServerTransportAdapter::new();
+    let mut runtime = server_transport
+        .prepare_runtime_at_socket_path_for_home(socket_path.clone(), &atm_home)
+        .expect("prepare runtime");
+    let endpoint_guard = runtime.take_endpoint_guard().expect("take endpoint guard");
+    let (lifecycle, _reset) = {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+        (lifecycle, reset)
+    };
+    let dispatcher: Arc<dyn ApiRouter + Send + Sync> = Arc::new(
+        DaemonRequestDispatcher::new_for_test(atm_home.clone(), RuntimeStatusCache::new(), db_path),
+    );
+    let (serve_result_tx, serve_result_rx) = mpsc::channel();
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
+    let join = std::thread::spawn(move || {
+        let result = runtime.serve_with_runtime_hooks(
+            dispatcher,
+            RuntimeServeHooks {
+                endpoint_guard,
+                graceful_drain_deadline: Duration::from_millis(500),
+                force_cancel_deadline: Duration::from_secs(2),
+                begin_shutdown: || Ok(()),
+                reload_runtime_view: || Ok(()),
+                publish_ready: move || {
+                    ready_tx.send(()).map_err(|_| {
+                        AtmError::daemon_unavailable(
+                            "admission burst test failed to observe daemon ready",
+                        )
+                    })
+                },
+            },
+        );
+        serve_result_tx.send(result).expect("send serve result");
+    });
+
+    drop(connect_daemon_local_ipc_until_ready(&socket_path, ready_rx));
+    let joins: Vec<_> = (0..BURST_SIZE)
+        .map(|sequence| {
+            let atm_home = atm_home.clone();
+            let workspace_dir = workspace_dir.clone();
+            let socket_path = socket_path.clone();
+            std::thread::spawn(move || {
+                let request = RequestEnvelope::Write(Box::new(
+                    SendRequest::new(
+                        atm_home,
+                        workspace_dir,
+                        ROLE_TEAM_LEAD.parse().expect("caller"),
+                        "qa-a@test-team",
+                        TEST_TEAM.parse().expect("team"),
+                        SendMessageSource::Inline(format!("real local admission burst {sequence}")),
+                        None,
+                        false,
+                        None,
+                        false,
+                    )
+                    .expect("send request"),
+                ));
+                #[cfg(windows)]
+                let mut stream = match atm_daemon_client::try_connect(
+                    &atm_daemon_client::resolve_daemon_local_ipc_endpoint()
+                        .expect("windows local HTTP endpoint"),
+                )
+                .expect("connect public local TCP endpoint")
+                {
+                    atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream,
+                };
+                #[cfg(not(windows))]
+                let mut stream = {
+                    use interprocess::local_socket::Stream as LocalSocketStream;
+                    use interprocess::local_socket::traits::Stream as _;
+
+                    let name = atm_core::protocol::daemon_local_ipc_name_from_path(&socket_path)
+                        .expect("local IPC name")
+                        .into_owned();
+                    LocalSocketStream::connect(name).expect("connect public local UDS endpoint")
+                };
+                configure_test_local_ipc_timeouts(&stream);
+                write_test_local_ipc_request(&mut stream, &request)
+                    .expect("write public local admission");
+                atm_core::api::read_http_response(&mut stream, &request)
+                    .expect("read public local admission")
+            })
+        })
+        .collect();
+    for join in joins {
+        assert!(matches!(
+            join.join().expect("join admission burst client"),
+            ResponseEnvelope::Send(SendResponseEnvelope::Sent(_))
+        ));
+    }
+
+    lifecycle.set_terminate_for_test(true);
+    serve_result_rx
+        .recv_timeout(Duration::from_secs(15))
+        .expect("receive serve result")
+        .expect("serve runtime result");
+    join.join().expect("join serve thread");
+}

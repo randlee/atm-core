@@ -201,6 +201,11 @@ struct ConnectionWorkerPool {
     workers: Vec<std::thread::JoinHandle<()>>,
 }
 
+struct RuntimeWorkerPools {
+    dispatch_workers: Arc<DispatchWorkerPool>,
+    connection_workers: ConnectionWorkerPool,
+}
+
 impl ConnectionWorkerPool {
     fn start(
         force_shutdown: Arc<AtomicBool>,
@@ -528,23 +533,13 @@ where
         lifecycle_control.clone(),
     )?;
     publish_ready()?;
-    let dispatch_workers = DispatchWorkerPool::start(
-        Arc::clone(&dispatcher),
-        Arc::clone(&registry),
-        observability.clone(),
-        MAX_CONCURRENT_CONNECTIONS,
-    )?;
-    let connection_workers = ConnectionWorkerPool::start(
-        Arc::clone(&force_shutdown),
-        Arc::clone(&registry),
-        observability.clone(),
-        Arc::clone(&dispatch_workers),
-    )?;
+    let worker_pools =
+        start_runtime_worker_pools(&dispatcher, &force_shutdown, &registry, &observability)?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
         &observability,
-        &connection_workers,
+        &worker_pools.connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
         endpoint_path,
@@ -552,9 +547,7 @@ where
         accept_error_inject,
     );
     let serve_error = capture_serve_error(scope, &mut accept_context);
-    #[cfg(unix)]
-    tcp_stop.store(true, Ordering::SeqCst);
-    let shutdown_error = finalize_runtime_scope(
+    let shutdown_error = shutdown_runtime_scope(
         &begin_shutdown,
         endpoint_guard,
         graceful_drain_deadline,
@@ -563,21 +556,80 @@ where
         force_shutdown.as_ref(),
         &lifecycle_control,
         lifecycle_waiter,
-    );
-    let connection_worker_error = connection_workers.shutdown().err();
-    let dispatch_worker_error = dispatch_workers.shutdown().err();
+        worker_pools,
+        #[cfg(unix)]
+        tcp_stop,
+        #[cfg(unix)]
+        tcp_server,
+    )?;
+    finish_serve_shutdown(serve_error, shutdown_error)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn shutdown_runtime_scope<'scope, BeginShutdown>(
+    begin_shutdown: &BeginShutdown,
+    endpoint_guard: SocketEndpointGuard,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    registry: &Arc<ActiveConnectionRegistry>,
+    force_shutdown: &AtomicBool,
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    lifecycle_waiter: std::thread::ScopedJoinHandle<'scope, ()>,
+    worker_pools: RuntimeWorkerPools,
+    #[cfg(unix)] tcp_stop: Arc<AtomicBool>,
+    #[cfg(unix)] tcp_server: std::thread::ScopedJoinHandle<'scope, Result<(), AtmError>>,
+) -> Result<Option<AtmError>, AtmError>
+where
+    BeginShutdown: Fn() -> Result<(), AtmError>,
+{
     #[cfg(unix)]
-    let tcp_error = finish_tcp_loopback_server(tcp_server)?;
+    tcp_stop.store(true, Ordering::SeqCst);
+    let shutdown_error = finalize_runtime_scope(
+        begin_shutdown,
+        endpoint_guard,
+        graceful_drain_deadline,
+        force_cancel_deadline,
+        registry,
+        force_shutdown,
+        lifecycle_control,
+        lifecycle_waiter,
+    );
+    let connection_worker_error = worker_pools.connection_workers.shutdown().err();
+    let dispatch_worker_error = worker_pools.dispatch_workers.shutdown().err();
     #[cfg(unix)]
     let shutdown_error = shutdown_error
         .or(connection_worker_error)
         .or(dispatch_worker_error)
-        .or(tcp_error);
+        .or(finish_tcp_loopback_server(tcp_server)?);
     #[cfg(not(unix))]
     let shutdown_error = shutdown_error
         .or(connection_worker_error)
         .or(dispatch_worker_error);
-    finish_serve_shutdown(serve_error, shutdown_error)
+    Ok(shutdown_error)
+}
+
+fn start_runtime_worker_pools(
+    dispatcher: &Arc<dyn ApiRouter + Send + Sync>,
+    force_shutdown: &Arc<AtomicBool>,
+    registry: &Arc<ActiveConnectionRegistry>,
+    observability: &SubsystemObservability,
+) -> Result<RuntimeWorkerPools, AtmError> {
+    let dispatch_workers = DispatchWorkerPool::start(
+        Arc::clone(dispatcher),
+        Arc::clone(registry),
+        observability.clone(),
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    let connection_workers = ConnectionWorkerPool::start(
+        Arc::clone(force_shutdown),
+        Arc::clone(registry),
+        observability.clone(),
+        Arc::clone(&dispatch_workers),
+    )?;
+    Ok(RuntimeWorkerPools {
+        dispatch_workers,
+        connection_workers,
+    })
 }
 
 fn new_serve_loop_state() -> (Arc<ShutdownBeacon>, Arc<ServeLoopSignals>) {

@@ -1,6 +1,6 @@
 ---
 title: AI.33 admission capacity and smoke evidence
-status: complete
+status: in_progress
 branch: feature/pAI-s33-admission-capacity-smoke
 target: integrate/phase-ai-31-33
 depends_on: AI.31, AI.32
