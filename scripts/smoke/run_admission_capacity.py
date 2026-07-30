@@ -76,6 +76,14 @@ class LocalEndpoint:
     capability: str | None = None
 
 
+def recv_response_chunk(stream: socket.socket, phase: str, size: int = 4096) -> bytes:
+    """Classify Windows socket aborts at the response framing boundary."""
+    try:
+        return stream.recv(size)
+    except OSError as error:
+        raise SmokeError(f"{phase}: {error}") from error
+
+
 def require_isolated_os_user() -> None:
     """Reject a developer's ordinary account before any daemon can start."""
     if os.environ.get("ATM_CAPACITY_ISOLATED_OS_USER") != "1":
@@ -314,7 +322,7 @@ def read_http_response_summary(stream: socket.socket) -> HttpResponseSummary:
     """Retain a bounded structured error response instead of losing its cause."""
     data = bytearray()
     while b"\r\n\r\n" not in data:
-        chunk = stream.recv(4096)
+        chunk = recv_response_chunk(stream, "response_headers")
         if not chunk:
             raise SmokeError("daemon closed the local HTTP connection before response headers")
         data.extend(chunk)
@@ -340,7 +348,7 @@ def read_http_response_summary(stream: socket.socket) -> HttpResponseSummary:
     captured = bytearray(body[:MAX_ERROR_RESPONSE_BYTES])
     remaining = content_length - len(body)
     while remaining > 0:
-        chunk = stream.recv(min(4096, remaining))
+        chunk = recv_response_chunk(stream, "response_body", min(4096, remaining))
         if not chunk:
             raise SmokeError("daemon closed the local HTTP connection before its declared body")
         if len(captured) < MAX_ERROR_RESPONSE_BYTES:
