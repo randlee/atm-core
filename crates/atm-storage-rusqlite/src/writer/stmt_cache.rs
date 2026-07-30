@@ -18,34 +18,6 @@ impl WriterStatementCache {
         statement.execute(params)
     }
 
-    pub(crate) fn load_successor_owner<P: Params>(
-        &mut self,
-        connection: &Connection,
-        params: P,
-    ) -> SqlResult<String> {
-        let mut statement = cached(
-            connection,
-            "SELECT message_key
-             FROM mail_messages
-             WHERE team = ?1 AND agent = ?2 AND parent_message_id = ?3;",
-        )?;
-        statement.query_row(params, |row| row.get(0))
-    }
-
-    pub(crate) fn load_message_id_owner<P: Params>(
-        &mut self,
-        connection: &Connection,
-        params: P,
-    ) -> SqlResult<String> {
-        let mut statement = cached(
-            connection,
-            "SELECT message_key
-             FROM mail_messages
-             WHERE team = ?1 AND agent = ?2 AND message_id = ?3;",
-        )?;
-        statement.query_row(params, |row| row.get(0))
-    }
-
     pub(crate) fn upsert_message_state<P: Params>(
         &mut self,
         connection: &Connection,
