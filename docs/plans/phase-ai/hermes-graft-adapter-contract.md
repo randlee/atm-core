@@ -32,13 +32,19 @@ The installed Hermes source (`tui_gateway/server.py`) exposes the RPC method
 `session.steer`. The port calls it as:
 
 ```json
-{"method":"session.steer","params":{"session_id":"<ATM_CHAT_ID>","text":"<nonblank text>"}}
+{"method":"session.steer","params":{"session_id":"<HERMES_RUNTIME_SESSION_ID>","text":"<nonblank text>"}}
 ```
 
-An accepted response contains `result.status == "queued"`; `"rejected"`, a
-missing result, or an RPC `error` is surfaced as `HermesSteerFailure`. There
-is deliberately no normal-message fallback. Hermes owns the scheduling rule:
-the accepted text is visible at the next safe tool boundary without interrupt.
+The adapter receives an injected async `resolve_session_id(chat_id)` callable.
+The host's Hermes registration/rebind lifecycle must resolve the configured
+platform chat identity to the live opaque runtime session ID before this call.
+An absent resolver, resolver failure, empty/non-string result, or resolver
+returning the raw chat ID is surfaced as a typed `HermesSteerFailure`; the
+adapter never guesses or falls back to the platform identity. An accepted
+response contains `result.status == "queued"`; `"rejected"`, a missing result,
+or an RPC `error` is also surfaced as `HermesSteerFailure`. There is
+deliberately no normal-message fallback. Hermes owns the scheduling rule: the
+accepted text is visible at the next safe tool boundary without interrupt.
 
 ## Typed callback
 
@@ -72,10 +78,13 @@ message bodies or changes mailbox read/acknowledgement state.
 ## One-profile routing
 
 `ATM_CHAT_ID` is required and is validated once when the adapter connects.
-Every live nudge and AI.37 recovery summary uses that exact session id. A
-source chat id remains attribution/reply-address data only; it cannot create a
-second Hermes conversation, registry row, `MessageEvent`, or normal inbound
-authorization path. A missing or blank configured id fails closed.
+Every live nudge and AI.37 recovery summary resolves that platform identity to
+the current Hermes runtime session before steering. A source chat id remains
+attribution/reply-address data only; it cannot create a second Hermes
+conversation, registry row, `MessageEvent`, or normal inbound authorization
+path. A missing or blank configured id fails closed. Production wiring of the
+resolver remains a separate open finding
+(`AI3138-HERMES-NO-PRODUCTION-LOADER`).
 
 ## Downstream handoff
 

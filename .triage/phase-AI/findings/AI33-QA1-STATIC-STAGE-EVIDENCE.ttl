@@ -15,23 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "scripts/smoke/run_admission_capacity.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI33-QA-1 ;
   triage:foundAt "2026-07-30T00:50:47Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-STATIC-STAGE-EVIDENCE/s33-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-07-30T03:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI33-M5-NINEFIX-QA-1: closed at a8d1e237. The static placeholder prose dict is gone; evidence['stages'] is now populated exclusively through measure_stage() (run_admission_capacity.py:455-461) with real time.perf_counter() elapsed measurements per runner phase, and record_slowest_stage() (464-473) names evidence['slowest_stage'] on failure. Unit coverage: test_run_admission_capacity.py:150-159. Confirmed independently by req-qa and ruthless-boundary-qa (RBQA-F002 origin), both PASS. Note: req-qa separately flagged (as ATM-QA-001, non-blocking, out of this finding's literal scope) that the sprint doc's Throughput-rule text also calls for per-substage DAEMON-internal timing (runtime-view validation/SQLite transaction/post-commit signal/response write) which the harness cannot measure externally and intentionally does not fabricate -- that residual gap is a separate acceptance-criteria question, not part of this finding's narrow real-vs-placeholder scope, and does not block this closure." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI33-QA1-STATIC-STAGE-EVIDENCE/s33-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/run_admission_capacity.py" ;
   triage:line 316 ;
   triage:snippet "evidence['stages'] = { 'runtime_view_validation': '...', 'sqlite_transaction': '...', 'post_commit_signal': '...', 'response_write': '...' }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
-  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:headSha "a8d1e237" ;
   triage:occursIn <urn:atm:triage:worktree/s33-0/199111d35e06ae829c481505e9dfca5b4f6c613f> .
 
 <urn:atm:triage:worktree/s33-0/199111d35e06ae829c481505e9dfca5b4f6c613f>
