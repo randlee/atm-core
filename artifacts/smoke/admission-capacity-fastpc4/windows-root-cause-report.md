@@ -76,7 +76,7 @@ no ATM transport contract or capacity gate was changed.
 
 ## Final Validation State
 
-- Branch tip: `b2808188`.
+- Branch tip: `d1f541b2`.
 - `just lint`: passed all 23 checks after the final source change
   (`b1fa33c0` plus diagnostic runner `e1ce0fb8`).
 - `just test`: passed with 317 tests and 2 skipped on the final pushed tree.
