@@ -81,6 +81,25 @@ class AdmissionCapacityTests(unittest.TestCase):
         self.assertEqual(result["first_failure"], "HTTP 503")
         self.assertFalse(result["passed"])
 
+    def test_interval_records_measured_public_stage_timing(self):
+        def submit(_sequence):
+            return RUNNER.AdmissionResult(
+                201,
+                4.0,
+                request_build_ms=0.2,
+                connect_ms=0.3,
+                request_write_ms=0.4,
+                response_read_ms=3.1,
+            )
+
+        with mock.patch.object(RUNNER, "ADMISSIONS_PER_INTERVAL", 2), mock.patch.object(RUNNER, "WORKERS", 1):
+            result = RUNNER.run_interval(submit, 0)
+        stages = result["public_stage_timing_ms"]
+        self.assertEqual(stages["request_build"]["p50"], 0.2)
+        self.assertEqual(stages["connect"]["p50"], 0.3)
+        self.assertEqual(stages["request_write"]["p50"], 0.4)
+        self.assertEqual(stages["daemon_response_boundary"]["p50"], 3.1)
+
     def test_peer_case_retains_each_interval_in_evidence(self):
         with mock.patch.object(RUNNER, "INTERVALS", 3), mock.patch.object(
             RUNNER, "run_interval", return_value={"passed": True}

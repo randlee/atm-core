@@ -52,6 +52,10 @@ class AdmissionResult:
     status: int
     elapsed_ms: float
     failure: str | None = None
+    request_build_ms: float = 0.0
+    connect_ms: float = 0.0
+    request_write_ms: float = 0.0
+    response_read_ms: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -268,6 +272,7 @@ def read_http_response_summary(stream: socket.socket) -> HttpResponseSummary:
 def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
     """Submit one real same-host API request over the daemon's public local transport."""
     started = time.perf_counter()
+    request_started = started
     capability = (
         f"X-ATM-Local-Capability: {endpoint.capability}\r\n".encode("ascii")
         if endpoint.capability is not None
@@ -280,17 +285,37 @@ def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
         + f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n".encode("ascii")
         + body
     )
+    request_build_ms = (time.perf_counter() - request_started) * 1_000
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
         with socket.socket(family, socket.SOCK_STREAM) as stream:
             stream.settimeout(3.5)
+            connect_started = time.perf_counter()
             stream.connect(endpoint.address)
+            connect_ms = (time.perf_counter() - connect_started) * 1_000
+            write_started = time.perf_counter()
             stream.sendall(request)
+            request_write_ms = (time.perf_counter() - write_started) * 1_000
+            response_started = time.perf_counter()
             response = read_http_response_summary(stream)
+            response_read_ms = (time.perf_counter() - response_started) * 1_000
         elapsed_ms = (time.perf_counter() - started) * 1_000
-        return AdmissionResult(status=response.status, elapsed_ms=elapsed_ms, failure=response.failure)
+        return AdmissionResult(
+            status=response.status,
+            elapsed_ms=elapsed_ms,
+            failure=response.failure,
+            request_build_ms=request_build_ms,
+            connect_ms=connect_ms,
+            request_write_ms=request_write_ms,
+            response_read_ms=response_read_ms,
+        )
     except (OSError, SmokeError) as error:
-        return AdmissionResult(status=0, elapsed_ms=(time.perf_counter() - started) * 1_000, failure=str(error))
+        return AdmissionResult(
+            status=0,
+            elapsed_ms=(time.perf_counter() - started) * 1_000,
+            failure=str(error),
+            request_build_ms=request_build_ms,
+        )
 
 
 def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dict[str, Any]:
@@ -305,6 +330,13 @@ def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dic
     accepted = sum(result.status == 201 for result in results)
     failures = [result.failure or f"HTTP {result.status}" for result in results if result.status != 201]
     latencies = sorted(result.elapsed_ms for result in results)
+    def timing_summary(attribute: str) -> dict[str, float]:
+        values = sorted(getattr(result, attribute) for result in results)
+        return {
+            "min": values[0] if values else 0.0,
+            "p50": values[len(values) // 2] if values else 0.0,
+            "max": values[-1] if values else 0.0,
+        }
     return {
         "interval": interval + 1,
         "accepted_count": accepted,
@@ -321,6 +353,16 @@ def run_interval(submit: Callable[[int], AdmissionResult], interval: int) -> dic
             "min": latencies[0] if latencies else 0.0,
             "p50": latencies[len(latencies) // 2] if latencies else 0.0,
             "max": latencies[-1] if latencies else 0.0,
+        },
+        "public_stage_timing_ms": {
+            "request_build": timing_summary("request_build_ms"),
+            "connect": timing_summary("connect_ms"),
+            "request_write": timing_summary("request_write_ms"),
+            # This is the complete daemon-owned response-boundary interval:
+            # decode, admission validation, SQLite commit, post-commit signal,
+            # response serialization, and the local response read. Individual
+            # daemon substeps are intentionally not inferred from this number.
+            "daemon_response_boundary": timing_summary("response_read_ms"),
         },
         "passed": accepted == ADMISSIONS_PER_INTERVAL and elapsed_seconds <= 1.0,
     }
@@ -407,8 +449,7 @@ def run_capacity(atm_home: Path, evidence_directory: Path, accepting_host: str, 
         "runs": [],
         "stages": {
             "endpoint_discovery_ms": None,
-            "public_response_ms": "recorded per interval as response_timing_ms; includes daemon validation, SQLite commit, and response write",
-            "post_commit_signal": "not awaited; the public admission response is the boundary",
+            "public_stage_timing_ms": "recorded for every interval; daemon_response_boundary is measured rather than inferred",
         },
     }
     try:
