@@ -114,8 +114,19 @@ The executable procedure is
 - The focused `cargo test -p atm-daemon-client` compile caught a missing
   `AtmError` import in the new Windows-only predicate test. E-017 records the
   exact compile failure; production code compiled through that point.
-- The import will be corrected before full lint/test. The implementation still
-  retries only the idempotent compatibility preflight, never a write.
+- The missing import is corrected in the working tree; focused and full
+  verification is still pending. The implementation still retries only the
+  idempotent compatibility preflight, never a write.
+
+### 2026-07-30 — cwin — lint error in preflight retry implementation
+
+- `just lint` failed at `.just/logs/20260730170255-clippy.log` because the new
+  Windows-only helper used a nested `if let` that clippy requires to be
+  collapsed. This is a source-style error in the pending fix, not a runtime
+  transport result.
+- E-018 records the failure. The next commit will use a let-chain, rerun lint,
+  and retain the compatibility retry's strict scope: Windows WSAECONNRESET
+  during the read-only preflight only, never a side-effecting send.
 ### 2026-07-30 — arch-ctm — reviewed next steps
 
 - Review of cwin's commits through `b8792a09`: they add only sanitized evidence
