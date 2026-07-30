@@ -1,0 +1,1002 @@
+{
+  "atm_home": "C:\\Users\\rand.lee\\AppData\\Local\\Temp\\atm-capacity-parent-a624s827\\atm-capacity-home",
+  "daemon_pid": 39192,
+  "diagnostics": {
+    "daemon_runtime_log": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\artifacts\\smoke\\admission-capacity\\diagnostics\\admission-capacity-39192-atm.log.jsonl",
+    "daemon_stderr": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\artifacts\\smoke\\admission-capacity\\diagnostics\\admission-capacity-39192-daemon.stderr.log",
+    "daemon_stdout": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\artifacts\\smoke\\admission-capacity\\diagnostics\\admission-capacity-39192-daemon.stdout.log"
+  },
+  "doctor": {
+    "bootstrap_trace": {
+      "daemon_auto_start": "skipped",
+      "daemon_connect": "connected",
+      "daemon_launch_gate": "skipped"
+    },
+    "client_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent",
+      "team": "capacity-team",
+      "version": "1.4.0-beta-ai.38"
+    },
+    "config": {
+      "findings": []
+    },
+    "daemon_context": {
+      "cli_schema_version": 1,
+      "http_api_version": "1.0.0",
+      "identity": "capacity-agent",
+      "team": "capacity-team",
+      "version": "1.4.0-beta-ai.38"
+    },
+    "daemon_runtime": {
+      "findings": [
+        {
+          "code": "ATM_OBSERVABILITY_HEALTH_OK",
+          "message": "daemon retained observability sink is healthy at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+          "remediation": null,
+          "severity": "info"
+        },
+        {
+          "code": "ATM_OBSERVABILITY_HEALTH_OK",
+          "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(39192); degraded_ingest=false; active=0, idle=0, offline=0, unknown=1",
+          "remediation": null,
+          "severity": "info"
+        }
+      ],
+      "peer_config": {
+        "configured_interface_count": 0,
+        "enabled_interface_count": 0,
+        "enabled_trusted_peer_count": 0,
+        "trusted_peer_count": 0,
+        "trusted_peers": []
+      },
+      "peer_links": []
+    },
+    "drift_findings": [],
+    "environment": {
+      "atm_home": "C:\\Users\\rand.lee\\AppData\\Local\\Temp\\atm-capacity-parent-a624s827\\atm-capacity-home",
+      "atm_identity": "capacity-agent",
+      "atm_team": "capacity-team",
+      "team_override": null
+    },
+    "findings": [
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "shared observability active at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; logging health is healthy and query readiness is unknown. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+        "remediation": null,
+        "severity": "info"
+      },
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon retained observability sink is healthy at C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl; daemon query/follow remain deferred to the CLI-owned log surface. Detail: writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+        "remediation": null,
+        "severity": "info"
+      },
+      {
+        "code": "ATM_OBSERVABILITY_HEALTH_OK",
+        "message": "daemon runtime liveness is Running; readiness is Ready; owner_pid=Some(39192); degraded_ingest=false; active=0, idle=0, offline=0, unknown=1",
+        "remediation": null,
+        "severity": "info"
+      }
+    ],
+    "mail_store": {
+      "findings": []
+    },
+    "member_roster": {
+      "members": [
+        {
+          "agent_id": "capacity-agent@capacity-team",
+          "agent_type": "general-purpose",
+          "extra": {},
+          "harness": "claude-code",
+          "home_dir": "C:\\Users\\rand.lee\\AppData\\Local\\Temp\\atm-capacity-parent-a624s827\\atm-capacity-home",
+          "joined_at": 1785439310693,
+          "live_cwd": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke",
+          "model": "unknown",
+          "name": "capacity-agent",
+          "tmux_pane_id": null
+        }
+      ],
+      "team": "capacity-team"
+    },
+    "observability": {
+      "active_log_path": "C:\\Users\\rand.lee\\.atm\\logs\\atm.log.jsonl",
+      "detail": "writer_state=running queue_depth=0 queue_capacity=1024 queue_high_water_mark=5 queue_full_drops_total=0 | maintenance state=running rotated_files_total=0 pruned_files_total=0 last_pass_at=never",
+      "diagnostic": null,
+      "logging_state": "healthy",
+      "maintenance": {
+        "last_pass_at": null,
+        "pruned_files_total": 0,
+        "rotated_files_total": 0,
+        "state": "running"
+      },
+      "query_state": null
+    },
+    "post_send": {
+      "config_root": "",
+      "external_rules": [],
+      "recipient_paths": []
+    },
+    "recommendations": [],
+    "roster_store": {
+      "findings": []
+    },
+    "runtime_status": {
+      "degraded_ingest": false,
+      "liveness": "running",
+      "member_counts": {
+        "active_members": 0,
+        "idle_members": 0,
+        "offline_members": 0,
+        "unknown_members": 1
+      },
+      "readiness": "ready",
+      "singleton_owner_pid": 39192
+    },
+    "summary": {
+      "error_count": 0,
+      "info_count": 3,
+      "message": "ATM doctor completed with healthy findings only",
+      "status": "healthy",
+      "warning_count": 0
+    }
+  },
+  "html_report": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\reports\\smoke\\20260730T192203Z\\FastPC4-admission-capacity.json",
+  "passed": false,
+  "release": {
+    "atm": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm.exe",
+    "atm_daemon": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm-daemon.exe"
+  },
+  "runs": [
+    {
+      "intervals": [
+        {
+          "accepted_count": 919,
+          "admissions_per_second": 1693.6043123629881,
+          "elapsed_seconds": 0.5426297000376508,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 1,
+          "latency_ms": {
+            "max": 61.93259998690337,
+            "min": 2.435400034300983,
+            "p50": 33.861299976706505
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 16.26970001962036,
+              "min": 0.0,
+              "p50": 1.712299999780953
+            },
+            "daemon_response_boundary": {
+              "max": 52.04889993183315,
+              "min": 0.0,
+              "p50": 27.894299943000078
+            },
+            "request_build": {
+              "max": 0.07329997606575489,
+              "min": 0.000500003807246685,
+              "p50": 0.001400010660290718
+            },
+            "request_write": {
+              "max": 4.411899950355291,
+              "min": 0.0,
+              "p50": 0.03509991802275181
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 61.93259998690337,
+            "min": 2.435400034300983,
+            "p50": 33.861299976706505
+          }
+        },
+        {
+          "accepted_count": 912,
+          "admissions_per_second": 1748.3020191668704,
+          "elapsed_seconds": 0.5216490000020713,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 2,
+          "latency_ms": {
+            "max": 65.85410004481673,
+            "min": 4.67289995867759,
+            "p50": 31.499700038693845
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 22.29810005519539,
+              "min": 0.0,
+              "p50": 1.7071999609470367
+            },
+            "daemon_response_boundary": {
+              "max": 59.97980001848191,
+              "min": 0.0,
+              "p50": 26.078799972310662
+            },
+            "request_build": {
+              "max": 0.0070999376475811005,
+              "min": 0.000600004568696022,
+              "p50": 0.001500011421740055
+            },
+            "request_write": {
+              "max": 2.9662000015378,
+              "min": 0.0,
+              "p50": 0.03560003824532032
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 65.85410004481673,
+            "min": 4.67289995867759,
+            "p50": 31.499700038693845
+          }
+        },
+        {
+          "accepted_count": 879,
+          "admissions_per_second": 1507.487014085552,
+          "elapsed_seconds": 0.5830895999679342,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 3,
+          "latency_ms": {
+            "max": 67.63339997269213,
+            "min": 5.645100027322769,
+            "p50": 35.33510002307594
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 14.25300003029406,
+              "min": 0.0,
+              "p50": 1.7766000237315893
+            },
+            "daemon_response_boundary": {
+              "max": 63.99289995897561,
+              "min": 0.0,
+              "p50": 31.540800002403557
+            },
+            "request_build": {
+              "max": 0.006800051778554916,
+              "min": 0.000600004568696022,
+              "p50": 0.001500011421740055
+            },
+            "request_write": {
+              "max": 3.5821000346913934,
+              "min": 0.0,
+              "p50": 0.0339999096468091
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 67.63339997269213,
+            "min": 5.645100027322769,
+            "p50": 35.33510002307594
+          }
+        },
+        {
+          "accepted_count": 872,
+          "admissions_per_second": 1507.7192805989105,
+          "elapsed_seconds": 0.5783570000203326,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 4,
+          "latency_ms": {
+            "max": 68.25050001498312,
+            "min": 5.858500022441149,
+            "p50": 34.843800007365644
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 24.26000009290874,
+              "min": 0.0,
+              "p50": 1.850700005888939
+            },
+            "daemon_response_boundary": {
+              "max": 56.499999947845936,
+              "min": 0.0,
+              "p50": 29.357000021263957
+            },
+            "request_build": {
+              "max": 0.015099998563528061,
+              "min": 0.000400003045797348,
+              "p50": 0.001700012944638729
+            },
+            "request_write": {
+              "max": 2.5394000113010406,
+              "min": 0.0,
+              "p50": 0.0412999652326107
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 68.25050001498312,
+            "min": 5.858500022441149,
+            "p50": 34.843800007365644
+          }
+        },
+        {
+          "accepted_count": 899,
+          "admissions_per_second": 1655.7651386889643,
+          "elapsed_seconds": 0.5429513999260962,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 5,
+          "latency_ms": {
+            "max": 62.077000038698316,
+            "min": 6.837000022642314,
+            "p50": 33.902900060638785
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 19.926800043322146,
+              "min": 0.0,
+              "p50": 1.8227000255137682
+            },
+            "daemon_response_boundary": {
+              "max": 52.03130003064871,
+              "min": 0.0,
+              "p50": 28.35199993569404
+            },
+            "request_build": {
+              "max": 0.06019999273121357,
+              "min": 0.000600004568696022,
+              "p50": 0.001800013706088066
+            },
+            "request_write": {
+              "max": 2.321199979633093,
+              "min": 0.0,
+              "p50": 0.04439998883754015
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 62.077000038698316,
+            "min": 6.837000022642314,
+            "p50": 33.902900060638785
+          }
+        },
+        {
+          "accepted_count": 913,
+          "admissions_per_second": 1627.898725155148,
+          "elapsed_seconds": 0.5608456999761984,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 6,
+          "latency_ms": {
+            "max": 58.396700071170926,
+            "min": 7.0930999936535954,
+            "p50": 35.081999958492815
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 17.587600043043494,
+              "min": 0.0,
+              "p50": 1.9989999709650874
+            },
+            "daemon_response_boundary": {
+              "max": 49.04149996582419,
+              "min": 0.0,
+              "p50": 29.502799967303872
+            },
+            "request_build": {
+              "max": 0.011999974958598614,
+              "min": 0.000600004568696022,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 5.97079994622618,
+              "min": 0.0,
+              "p50": 0.04179996903985739
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 58.396700071170926,
+            "min": 7.0930999936535954,
+            "p50": 35.081999958492815
+          }
+        },
+        {
+          "accepted_count": 903,
+          "admissions_per_second": 1729.8916850826859,
+          "elapsed_seconds": 0.5219980000983924,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 7,
+          "latency_ms": {
+            "max": 54.558100062422454,
+            "min": 7.806400069966912,
+            "p50": 32.616699929349124
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 18.665799987502396,
+              "min": 0.0,
+              "p50": 1.7948000459000468
+            },
+            "daemon_response_boundary": {
+              "max": 47.75799997150898,
+              "min": 0.0,
+              "p50": 27.767500025220215
+            },
+            "request_build": {
+              "max": 0.014999997802078724,
+              "min": 0.000700005330145359,
+              "p50": 0.00200001522898674
+            },
+            "request_write": {
+              "max": 6.277000065892935,
+              "min": 0.0,
+              "p50": 0.042199972085654736
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 54.558100062422454,
+            "min": 7.806400069966912,
+            "p50": 32.616699929349124
+          }
+        },
+        {
+          "accepted_count": 910,
+          "admissions_per_second": 1515.5052841933737,
+          "elapsed_seconds": 0.6004598001018167,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 8,
+          "latency_ms": {
+            "max": 62.770499964244664,
+            "min": 8.409400004893541,
+            "p50": 36.17960005067289
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 15.206599957309663,
+              "min": 0.0,
+              "p50": 1.9335999386385083
+            },
+            "daemon_response_boundary": {
+              "max": 59.832199942320585,
+              "min": 0.0,
+              "p50": 31.506999977864325
+            },
+            "request_build": {
+              "max": 0.027799978852272034,
+              "min": 0.000600004568696022,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 3.7211000453680754,
+              "min": 0.0,
+              "p50": 0.03870006185024977
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 62.770499964244664,
+            "min": 8.409400004893541,
+            "p50": 36.17960005067289
+          }
+        },
+        {
+          "accepted_count": 924,
+          "admissions_per_second": 1623.7748758961382,
+          "elapsed_seconds": 0.5690444000065327,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 9,
+          "latency_ms": {
+            "max": 72.21229991409928,
+            "min": 5.766700021922588,
+            "p50": 34.08870007842779
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 22.87930005695671,
+              "min": 0.0,
+              "p50": 1.7730999970808625
+            },
+            "daemon_response_boundary": {
+              "max": 64.09420003183186,
+              "min": 0.0,
+              "p50": 29.82749999500811
+            },
+            "request_build": {
+              "max": 0.012599979527294636,
+              "min": 0.000700005330145359,
+              "p50": 0.0018998980522155762
+            },
+            "request_write": {
+              "max": 3.525800071656704,
+              "min": 0.0,
+              "p50": 0.03890006337314844
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 72.21229991409928,
+            "min": 5.766700021922588,
+            "p50": 34.08870007842779
+          }
+        },
+        {
+          "accepted_count": 895,
+          "admissions_per_second": 1697.5320348204968,
+          "elapsed_seconds": 0.5272360000526533,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 10,
+          "latency_ms": {
+            "max": 59.36740001197904,
+            "min": 4.317300044931471,
+            "p50": 31.923200003802776
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 22.282800055108964,
+              "min": 0.0,
+              "p50": 1.8028999911621213
+            },
+            "daemon_response_boundary": {
+              "max": 53.043599938973784,
+              "min": 0.0,
+              "p50": 26.633000001311302
+            },
+            "request_build": {
+              "max": 0.011499971151351929,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 1.8837000243365765,
+              "min": 0.0,
+              "p50": 0.039899954572319984
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 59.36740001197904,
+            "min": 4.317300044931471,
+            "p50": 31.923200003802776
+          }
+        }
+      ],
+      "label": "accepting-configured-peer",
+      "passed": false,
+      "peer_host": "127.0.0.1"
+    },
+    {
+      "intervals": [
+        {
+          "accepted_count": 912,
+          "admissions_per_second": 1587.1482755281384,
+          "elapsed_seconds": 0.5746155000524595,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 1,
+          "latency_ms": {
+            "max": 62.00659996829927,
+            "min": 6.024900008924305,
+            "p50": 36.20450000744313
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 20.15719993505627,
+              "min": 0.0,
+              "p50": 1.7145000165328383
+            },
+            "daemon_response_boundary": {
+              "max": 57.04909993801266,
+              "min": 0.0,
+              "p50": 31.596000073477626
+            },
+            "request_build": {
+              "max": 0.010199961252510548,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 4.062599968165159,
+              "min": 0.0,
+              "p50": 0.042599975131452084
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 62.00659996829927,
+            "min": 6.024900008924305,
+            "p50": 36.20450000744313
+          }
+        },
+        {
+          "accepted_count": 910,
+          "admissions_per_second": 1548.0726751494085,
+          "elapsed_seconds": 0.5878276999574155,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 2,
+          "latency_ms": {
+            "max": 69.75739996414632,
+            "min": 1.5710999723523855,
+            "p50": 35.782999941147864
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 16.304099932312965,
+              "min": 0.0,
+              "p50": 1.8338999943807721
+            },
+            "daemon_response_boundary": {
+              "max": 64.2630000365898,
+              "min": 0.0,
+              "p50": 30.665799975395203
+            },
+            "request_build": {
+              "max": 0.006200047209858894,
+              "min": 0.000700005330145359,
+              "p50": 0.001800013706088066
+            },
+            "request_write": {
+              "max": 5.606099963188171,
+              "min": 0.0,
+              "p50": 0.037899939343333244
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 69.75739996414632,
+            "min": 1.5710999723523855,
+            "p50": 35.782999941147864
+          }
+        },
+        {
+          "accepted_count": 904,
+          "admissions_per_second": 1648.1736356938677,
+          "elapsed_seconds": 0.5484859000425786,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 3,
+          "latency_ms": {
+            "max": 63.558500027284026,
+            "min": 10.350900003686547,
+            "p50": 32.933900016359985
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 16.95850002579391,
+              "min": 0.0,
+              "p50": 1.8568000523373485
+            },
+            "daemon_response_boundary": {
+              "max": 54.72320003900677,
+              "min": 0.0,
+              "p50": 26.924000005237758
+            },
+            "request_build": {
+              "max": 0.008299946784973145,
+              "min": 0.000600004568696022,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 3.5670000361278653,
+              "min": 0.0,
+              "p50": 0.04050007555633783
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 63.558500027284026,
+            "min": 10.350900003686547,
+            "p50": 32.933900016359985
+          }
+        },
+        {
+          "accepted_count": 917,
+          "admissions_per_second": 1507.9860770984644,
+          "elapsed_seconds": 0.6080958000384271,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 4,
+          "latency_ms": {
+            "max": 67.88580003194511,
+            "min": 9.111699997447431,
+            "p50": 37.98699995968491
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 22.206799942068756,
+              "min": 0.0,
+              "p50": 1.943000010214746
+            },
+            "daemon_response_boundary": {
+              "max": 63.09259997215122,
+              "min": 0.0,
+              "p50": 32.2783999145031
+            },
+            "request_build": {
+              "max": 0.009600073099136353,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 3.2079999800771475,
+              "min": 0.0,
+              "p50": 0.038899946957826614
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 67.88580003194511,
+            "min": 9.111699997447431,
+            "p50": 37.98699995968491
+          }
+        },
+        {
+          "accepted_count": 886,
+          "admissions_per_second": 1650.4902475195947,
+          "elapsed_seconds": 0.5368102000793442,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 5,
+          "latency_ms": {
+            "max": 60.77860004734248,
+            "min": 5.6940000504255295,
+            "p50": 33.25970005244017
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 18.979999935254455,
+              "min": 0.0,
+              "p50": 1.6477000899612904
+            },
+            "daemon_response_boundary": {
+              "max": 53.642099956050515,
+              "min": 0.0,
+              "p50": 28.52849999908358
+            },
+            "request_build": {
+              "max": 0.013199984095990658,
+              "min": 0.000500003807246685,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 5.044299992732704,
+              "min": 0.0,
+              "p50": 0.044100102968513966
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 60.77860004734248,
+            "min": 5.6940000504255295,
+            "p50": 33.25970005244017
+          }
+        },
+        {
+          "accepted_count": 938,
+          "admissions_per_second": 1569.898912028654,
+          "elapsed_seconds": 0.5974907000781968,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 6,
+          "latency_ms": {
+            "max": 75.15039993450046,
+            "min": 6.939699989743531,
+            "p50": 34.51530006714165
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 23.435700102709234,
+              "min": 0.0,
+              "p50": 1.774400006979704
+            },
+            "daemon_response_boundary": {
+              "max": 64.2993999645114,
+              "min": 0.0,
+              "p50": 30.72550008073449
+            },
+            "request_build": {
+              "max": 0.012200092896819115,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 3.59139998909086,
+              "min": 0.0,
+              "p50": 0.04249997437000275
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 75.15039993450046,
+            "min": 6.939699989743531,
+            "p50": 34.51530006714165
+          }
+        },
+        {
+          "accepted_count": 928,
+          "admissions_per_second": 1595.204485056164,
+          "elapsed_seconds": 0.5817436000797898,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 7,
+          "latency_ms": {
+            "max": 62.30610003694892,
+            "min": 6.135699921287596,
+            "p50": 35.979699925519526
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 20.086399978026748,
+              "min": 0.0,
+              "p50": 1.7314000288024545
+            },
+            "daemon_response_boundary": {
+              "max": 58.23480000253767,
+              "min": 0.0,
+              "p50": 31.29419998731464
+            },
+            "request_build": {
+              "max": 0.6379000842571259,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 5.116899963468313,
+              "min": 0.0,
+              "p50": 0.04409998655319214
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 62.30610003694892,
+            "min": 6.135699921287596,
+            "p50": 35.979699925519526
+          }
+        },
+        {
+          "accepted_count": 923,
+          "admissions_per_second": 1538.1567018790038,
+          "elapsed_seconds": 0.6000688999192789,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 8,
+          "latency_ms": {
+            "max": 68.7751000514254,
+            "min": 5.528200068511069,
+            "p50": 36.70509997755289
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 26.307799969799817,
+              "min": 0.0,
+              "p50": 1.8787001026794314
+            },
+            "daemon_response_boundary": {
+              "max": 62.496199971064925,
+              "min": 0.0,
+              "p50": 32.238899962976575
+            },
+            "request_build": {
+              "max": 0.011199968867003918,
+              "min": 0.000600004568696022,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 4.719899967312813,
+              "min": 0.0,
+              "p50": 0.04160008393228054
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 68.7751000514254,
+            "min": 5.528200068511069,
+            "p50": 36.70509997755289
+          }
+        },
+        {
+          "accepted_count": 936,
+          "admissions_per_second": 1831.9377202982155,
+          "elapsed_seconds": 0.5109344000229612,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 9,
+          "latency_ms": {
+            "max": 55.56790006812662,
+            "min": 9.38900001347065,
+            "p50": 30.394700006581843
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 16.036100103519857,
+              "min": 0.0,
+              "p50": 1.679499982856214
+            },
+            "daemon_response_boundary": {
+              "max": 48.6071000341326,
+              "min": 0.0,
+              "p50": 25.866099982522428
+            },
+            "request_build": {
+              "max": 0.01650000922381878,
+              "min": 0.0006998889148235321,
+              "p50": 0.00200001522898674
+            },
+            "request_write": {
+              "max": 7.883700076490641,
+              "min": 0.0,
+              "p50": 0.04680000711232424
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 55.56790006812662,
+            "min": 9.38900001347065,
+            "p50": 30.394700006581843
+          }
+        },
+        {
+          "accepted_count": 931,
+          "admissions_per_second": 1590.672338584344,
+          "elapsed_seconds": 0.585287099936977,
+          "first_failure": "response_read: [WinError 10053] An established connection was aborted by the software in your host machine",
+          "interval": 10,
+          "latency_ms": {
+            "max": 60.899300035089254,
+            "min": 6.709399982355535,
+            "p50": 36.33829997852445
+          },
+          "passed": false,
+          "public_stage_timing_ms": {
+            "connect": {
+              "max": 20.627400022931397,
+              "min": 0.0,
+              "p50": 1.7980999546125531
+            },
+            "daemon_response_boundary": {
+              "max": 53.31089999526739,
+              "min": 0.0,
+              "p50": 31.994599965400994
+            },
+            "request_build": {
+              "max": 0.48390007577836514,
+              "min": 0.000700005330145359,
+              "p50": 0.001900014467537403
+            },
+            "request_write": {
+              "max": 6.953600095584989,
+              "min": 0.0,
+              "p50": 0.04260009154677391
+            }
+          },
+          "response_count": 1000,
+          "response_timing_ms": {
+            "max": 60.899300035089254,
+            "min": 6.709399982355535,
+            "p50": 36.33829997852445
+          }
+        }
+      ],
+      "label": "unavailable-configured-peer",
+      "passed": false,
+      "peer_host": "192.0.2.1"
+    }
+  ],
+  "slowest_stage": {
+    "elapsed_ms": 5746.925899991766,
+    "name": "unavailable_burst_ms"
+  },
+  "stages": {
+    "accepting_burst_ms": 5559.567399905063,
+    "daemon_start_ready_ms": 303.1987000722438,
+    "daemon_teardown_ms": 297.5718999514356,
+    "doctor_ms": 80.93559998087585,
+    "endpoint_discovery_ms": 0.14910008758306503,
+    "host_runtime_root_setup_ms": 0.27540000155568123,
+    "peer_setup_ms": 151.74310002475977,
+    "roster_setup_ms": 34.63000000920147,
+    "unavailable_burst_ms": 5746.925899991766
+  }
+}

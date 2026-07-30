@@ -358,3 +358,16 @@ The current fastpc4 execution authority and baseline loop are in
   short-lived local TCP connections. Apply the authorized Windows-only range
   expansion and record the before/after `netsh` output; no ATM source or gate
   change is indicated.
+
+### 2026-07-30 - cwin - elevation blocked for port-range remediation
+
+- Two intermediate diagnostic runs were retained while adding server-side
+  logging: `admission-capacity-20260730T191703Z.json` and
+  `admission-capacity-20260730T192203Z.json`. Both reproduced the same
+  response-header/response-read 10053 pattern with clean daemon teardown.
+- The authorized command
+  `netsh int ipv4 set dynamicport tcp start=1024 num=64511` requires an
+  administrator shell. The non-elevated invocation failed with the explicit
+  elevation error, and the UAC-launched attempt did not complete in the
+  remote session; the range remains unchanged. No system setting or ATM code
+  workaround was applied.
