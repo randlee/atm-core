@@ -411,6 +411,23 @@ The current fastpc4 execution authority and baseline loop are in
   a separate scoped fix or classify this benchmark result as an environment/
   benchmark-limit finding.
 
+### 2026-07-30 - cwin - 48-worker diagnostic
+
+- A diagnostic-only run overrode the runner module's `WORKERS` value from 64
+  to 48 without editing the committed script. The first invocation failed
+  before execution because the ad hoc import omitted `scripts/smoke` from
+  `sys.path`; the corrected invocation ran the full workload.
+- The 48-worker run completed all 20 intervals and clean teardown but still
+  returned `16,681/20,000` HTTP 201 responses. Every interval failed at
+  response-header read with WinError 10053. The daemon log contains exactly
+  16,681 successful send/peer-delivery pairs and no handler/error records.
+  Evidence: `artifacts/smoke/admission-capacity/admission-capacity-20260730T195829Z.json`.
+- Lowering client concurrency from 64 to 48 did not clear the failure. This
+  rules out a simple client-count-equals-daemon-cap explanation, but does not
+  change the conclusion that the remaining issue is sustained short-lived
+  Windows loopback TCP churn/listener-backlog behavior. The official runner,
+  daemon cap, and capacity assertion remain unchanged.
+
 ### 2026-07-30 - cwin - final daemon verification
 
 - After publishing the report, started exactly one release daemon from branch
