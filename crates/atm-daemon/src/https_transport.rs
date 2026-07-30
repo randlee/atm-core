@@ -33,7 +33,8 @@ use rustls::{
 use sha2::{Digest, Sha256};
 
 use crate::active_connection_registry::{
-    ActiveConnectionGuard, ActiveConnectionRegistry, TrackedDispatchHandle,
+    ActiveConnectionGuard, ActiveConnectionRegistry, DispatchHandleReservation,
+    TrackedDispatchHandle,
 };
 
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(5);
@@ -511,6 +512,10 @@ fn spawn_request_worker(
         );
         return;
     }
+    let Some(dispatch_reservation) = reserve_request_worker_slot(requests) else {
+        drop(reservation);
+        return;
+    };
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
     let request = std::thread::Builder::new()
         .name("atm-peer-http-request".to_string())
@@ -530,7 +535,7 @@ fn spawn_request_worker(
             )
         });
     match request {
-        Ok(request) => track_request_worker(requests, request, completion_rx),
+        Ok(request) => track_request_worker(requests, dispatch_reservation, request, completion_rx),
         Err(error) => tracing::warn!(
             subsystem = "https_transport",
             action = "start_request",
@@ -538,6 +543,57 @@ fn spawn_request_worker(
             error_code = %error.code(),
             "peer HTTP listener rejected connection because request worker startup failed"
         ),
+    }
+}
+
+fn reserve_request_worker_slot(
+    requests: &Arc<ActiveConnectionRegistry>,
+) -> Option<DispatchHandleReservation> {
+    match requests.try_reserve_dispatch_handle(MAX_PEER_HTTP_CONNECTIONS) {
+        Ok(Some(reservation)) => Some(reservation),
+        Ok(None) => {
+            tracing::warn!(
+                subsystem = "https_transport",
+                action = "track_connection",
+                outcome = "capacity_exceeded",
+                cap = MAX_PEER_HTTP_CONNECTIONS,
+                "peer HTTP listener rejected connection because its bounded shutdown registry is full"
+            );
+            None
+        }
+        Err(error) => {
+            tracing::error!(
+                subsystem = "https_transport",
+                action = "track_connection",
+                outcome = "failed",
+                %error,
+                "peer HTTP listener could not reserve shutdown bookkeeping"
+            );
+            None
+        }
+    }
+}
+
+fn track_request_worker(
+    requests: &ActiveConnectionRegistry,
+    reservation: DispatchHandleReservation,
+    request: std::thread::JoinHandle<()>,
+    completion_rx: std::sync::mpsc::Receiver<()>,
+) {
+    if let Err(error) = requests.push_reserved_dispatch_handle(
+        reservation,
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle: request,
+        },
+    ) {
+        tracing::error!(
+            subsystem = "https_transport",
+            action = "track_connection",
+            outcome = "failed",
+            %error,
+            "HTTPS request worker could not be tracked for shutdown"
+        );
     }
 }
 
@@ -550,28 +606,6 @@ fn log_peer_request_result(result: Result<(), AtmError>) {
             error_code = %error.code(),
             error_message = %error.message(),
             "HTTPS peer request was rejected before or during shared API routing"
-        );
-    }
-}
-
-fn track_request_worker(
-    requests: &ActiveConnectionRegistry,
-    request: std::thread::JoinHandle<()>,
-    completion_rx: std::sync::mpsc::Receiver<()>,
-) {
-    if let Err(error) = requests.push_dispatch_handle(
-        TrackedDispatchHandle {
-            completion_rx,
-            join_handle: request,
-        },
-        MAX_PEER_HTTP_CONNECTIONS,
-    ) {
-        tracing::error!(
-            subsystem = "https_transport",
-            action = "track_connection",
-            outcome = "failed",
-            %error,
-            "HTTPS request worker could not be tracked for shutdown"
         );
     }
 }

@@ -1033,13 +1033,17 @@ mod tests {
             let _ = release_rx.recv();
             let _ = completion_tx.send(());
         });
+        let reservation = registry
+            .try_reserve_dispatch_handle(1)
+            .expect("reserve dispatch handle")
+            .expect("dispatch handle capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                reservation,
                 TrackedDispatchHandle {
                     completion_rx,
                     join_handle,
                 },
-                1,
             )
             .expect("dispatch handle push");
         let force_shutdown = AtomicBool::new(false);
@@ -1083,13 +1087,17 @@ mod tests {
             let _completion_tx = completion_tx;
             panic!("intentional dispatch worker panic for shutdown drain test");
         });
+        let reservation = registry
+            .try_reserve_dispatch_handle(1)
+            .expect("reserve dispatch handle")
+            .expect("dispatch handle capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                reservation,
                 TrackedDispatchHandle {
                     completion_rx,
                     join_handle,
                 },
-                1,
             )
             .expect("dispatch handle push");
         let force_shutdown = AtomicBool::new(false);
@@ -1109,8 +1117,8 @@ mod tests {
     }
 
     #[test]
-    fn tracked_dispatch_handle_capacity_overflow_returns_lifecycle_wedge() {
-        let registry = ActiveConnectionRegistry::default();
+    fn tracked_dispatch_handle_capacity_is_rejected_without_joining() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
 
         let (release_first_tx, release_first_rx) = mpsc::sync_channel(1);
         let (completion_first_tx, completion_first_rx) = mpsc::sync_channel(1);
@@ -1118,13 +1126,17 @@ mod tests {
             let _ = release_first_rx.recv();
             let _ = completion_first_tx.send(());
         });
+        let first_reservation = registry
+            .try_reserve_dispatch_handle(1)
+            .expect("reserve first dispatch handle")
+            .expect("first handle should fit within capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                first_reservation,
                 TrackedDispatchHandle {
                     completion_rx: completion_first_rx,
                     join_handle: first_join,
                 },
-                1,
             )
             .expect("first handle should fit within capacity");
 
@@ -1132,21 +1144,17 @@ mod tests {
         let second_join = std::thread::spawn(move || {
             let _ = completion_second_tx.send(());
         });
-        let error = registry
-            .push_dispatch_handle(
-                TrackedDispatchHandle {
-                    completion_rx: completion_second_rx,
-                    join_handle: second_join,
-                },
-                1,
-            )
-            .expect_err("second handle should be rejected once the bounded registry is full");
         assert!(
-            error
-                .message()
-                .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
-            "unexpected error: {error:?}"
+            registry
+                .try_reserve_dispatch_handle(1)
+                .expect("reserve second dispatch handle")
+                .is_none(),
+            "second handle should be rejected before worker creation once the table is full"
         );
+        drop(completion_second_rx);
+        second_join
+            .join()
+            .expect("untracked saturated worker exits");
 
         let _ = release_first_tx.send(());
         registry

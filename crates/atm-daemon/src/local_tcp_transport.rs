@@ -328,7 +328,32 @@ fn spawn_connection(
     force_shutdown: Arc<AtomicBool>,
     registry: &Arc<ActiveConnectionRegistry>,
 ) -> Result<(), AtmError> {
+    spawn_connection_with_handle_limit(
+        stream,
+        router,
+        capability,
+        force_shutdown,
+        registry,
+        MAX_CONCURRENT_CONNECTIONS,
+    )
+}
+
+#[cfg(windows)]
+fn spawn_connection_with_handle_limit(
+    stream: TcpStream,
+    router: Arc<dyn ApiRouter + Send + Sync>,
+    capability: LocalCapability,
+    force_shutdown: Arc<AtomicBool>,
+    registry: &Arc<ActiveConnectionRegistry>,
+    max_tracked_handles: usize,
+) -> Result<(), AtmError> {
     let Some(active_connection) = registry.try_register(MAX_CONCURRENT_CONNECTIONS) else {
+        write_saturated_response(stream);
+        return Ok(());
+    };
+    let Some(dispatch_reservation) = registry.try_reserve_dispatch_handle(max_tracked_handles)?
+    else {
+        drop(active_connection);
         write_saturated_response(stream);
         return Ok(());
     };
@@ -347,15 +372,26 @@ fn spawn_connection(
                 "Windows local TCP connection handler failed"
             );
         }
+        drop(_active);
         let _ = completion_tx.send(());
     });
-    registry.push_dispatch_handle(
+    if let Err(error) = registry.push_reserved_dispatch_handle(
+        dispatch_reservation,
         TrackedDispatchHandle {
             completion_rx,
             join_handle,
         },
-        MAX_CONCURRENT_CONNECTIONS,
-    )
+    ) {
+        tracing::error!(
+            subsystem = "local_tcp_transport",
+            action = "track_connection",
+            outcome = "failed",
+            error_code = %error.code(),
+            diagnostic = %error.message(),
+            "Windows local TCP connection worker could not be tracked"
+        );
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -640,7 +676,11 @@ mod tests {
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use ulid::Ulid;
 
+    #[cfg(windows)]
+    use super::spawn_connection_with_handle_limit;
     use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
+    #[cfg(windows)]
+    use crate::active_connection_registry::ActiveConnectionRegistry;
     use crate::test_support::DoctorOnlyDispatcher;
 
     #[cfg(windows)]
@@ -775,6 +815,143 @@ mod tests {
         server.join().expect("server join");
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn saturated_dispatch_tracking_keeps_tcp_accept_loop_live() {
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let first_release = hold_dispatch_handler(&registry, 1);
+        assert_saturated_connection(&registry);
+        assert_eq!(registry.active_connections(), 1);
+        assert_eq!(
+            registry
+                .lock_dispatch_handles()
+                .expect("lock dispatch handles")
+                .len(),
+            1
+        );
+        first_release.send(()).expect("release first handler");
+        reap_until_idle(&registry);
+        assert_post_saturation_connection(&registry);
+        reap_until_idle(&registry);
+    }
+
+    #[cfg(windows)]
+    fn hold_dispatch_handler(
+        registry: &Arc<ActiveConnectionRegistry>,
+        max_handles: usize,
+    ) -> mpsc::SyncSender<()> {
+        use crate::active_connection_registry::TrackedDispatchHandle;
+
+        let active = registry.register();
+        let (release_tx, release_rx) = mpsc::sync_channel(1);
+        let (started_tx, started_rx) = mpsc::sync_channel(1);
+        let (completion_tx, completion_rx) = mpsc::sync_channel(1);
+        let reservation = registry
+            .try_reserve_dispatch_handle(max_handles)
+            .expect("reserve held dispatch handle")
+            .expect("held dispatch handle capacity");
+        let join_handle = thread::spawn(move || {
+            let _active = active;
+            started_tx.send(()).expect("signal held handler");
+            release_rx.recv().expect("release held handler");
+            drop(_active);
+            completion_tx.send(()).expect("signal held completion");
+        });
+        registry
+            .push_reserved_dispatch_handle(
+                reservation,
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+            )
+            .expect("track held handler");
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("held handler must start before saturation");
+        release_tx
+    }
+
+    #[cfg(windows)]
+    fn assert_saturated_connection(registry: &Arc<ActiveConnectionRegistry>) {
+        let (server, mut client) = connected_tcp_pair();
+        assert!(
+            spawn_connection_with_handle_limit(
+                server,
+                Arc::new(DoctorOnlyDispatcher),
+                LocalCapability::generate().expect("saturated capability"),
+                Arc::new(AtomicBool::new(false)),
+                registry,
+                1,
+            )
+            .is_ok(),
+            "dispatch-table saturation must not terminate the accept loop"
+        );
+        let mut response = Vec::new();
+        client
+            .read_to_end(&mut response)
+            .expect("read saturated response");
+        let response = String::from_utf8(response).expect("HTTP UTF-8");
+        assert!(response.starts_with("HTTP/1.1 503 Service Unavailable"));
+        assert!(response.contains("ATM_DAEMON_CONNECTION_SATURATED"));
+    }
+
+    #[cfg(windows)]
+    fn assert_post_saturation_connection(registry: &Arc<ActiveConnectionRegistry>) {
+        let capability = LocalCapability::generate().expect("post-saturation capability");
+        let (server, mut client) = connected_tcp_pair();
+        spawn_connection_with_handle_limit(
+            server,
+            Arc::new(DoctorOnlyDispatcher),
+            capability.clone(),
+            Arc::new(AtomicBool::new(false)),
+            registry,
+            1,
+        )
+        .expect("accept loop must admit a connection after reaping");
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let header = capability.to_base64url();
+        write_http_request_with_headers(
+            &mut client,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write post-saturation request");
+        client.flush().expect("flush post-saturation request");
+        let response = read_http_response(&mut client, &request).expect("read response");
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+    }
+
+    #[cfg(windows)]
+    fn reap_until_idle(registry: &Arc<ActiveConnectionRegistry>) {
+        for _ in 0..10 {
+            registry
+                .reap_finished_dispatches()
+                .expect("reap dispatch handlers");
+            let handles_empty = registry
+                .lock_dispatch_handles()
+                .expect("lock dispatch handles")
+                .is_empty();
+            if registry.active_connections() == 0 && handles_empty {
+                return;
+            }
+            registry
+                .wait_for_connection_change(Duration::from_secs(1))
+                .expect("wait for dispatch handler release");
+        }
+        panic!("dispatch registry did not return to idle");
+    }
+
+    #[cfg(windows)]
+    fn connected_tcp_pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind test listener");
+        let address = listener.local_addr().expect("test listener address");
+        let client = TcpStream::connect(address).expect("connect test client");
+        let (server, peer) = listener.accept().expect("accept test client");
+        assert!(peer.ip().is_loopback());
+        (server, client)
+    }
+
     #[cfg(unix)]
     #[test]
     fn endpoint_record_is_owner_readable_only() {
@@ -824,13 +1001,17 @@ mod tests {
             let _ = release_rx.recv();
             let _ = completion_tx.send(());
         });
+        let dispatch_reservation = registry
+            .try_reserve_dispatch_handle(super::MAX_CONCURRENT_CONNECTIONS)
+            .expect("reserve TCP listener worker")
+            .expect("TCP listener worker capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                dispatch_reservation,
                 TrackedDispatchHandle {
                     completion_rx,
                     join_handle,
                 },
-                super::MAX_CONCURRENT_CONNECTIONS,
             )
             .expect("track TCP listener worker");
         registered_rx

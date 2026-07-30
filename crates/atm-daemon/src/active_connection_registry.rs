@@ -47,6 +47,9 @@ pub(crate) struct ActiveConnectionRegistry {
     // atomics keep the shutdown/drain accounting wait-free on the hot path.
     active_connections: AtomicUsize,
     active_dispatches: AtomicUsize,
+    // Reserve bounded join-table capacity before a worker thread is created. This keeps
+    // saturation off the accept-loop hot path and prevents a full table from forcing a join.
+    dispatch_handle_slots: AtomicUsize,
     // JoinHandles stay behind this mutex so shutdown and post-request reap paths can
     // deterministically join finished dispatch workers without racing the accept loop.
     dispatch_handles: Mutex<Vec<TrackedDispatchHandle>>,
@@ -120,10 +123,36 @@ impl ActiveConnectionRegistry {
             .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
     }
 
-    pub(crate) fn push_dispatch_handle(
-        &self,
-        handle: TrackedDispatchHandle,
+    pub(crate) fn try_reserve_dispatch_handle(
+        self: &Arc<Self>,
         max_handles: usize,
+    ) -> Result<Option<DispatchHandleReservation>, AtmError> {
+        let mut current = self.dispatch_handle_slots.load(Ordering::SeqCst);
+        loop {
+            if current >= max_handles {
+                return Ok(None);
+            }
+            match self.dispatch_handle_slots.compare_exchange_weak(
+                current,
+                current + 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(_) => {
+                    return Ok(Some(DispatchHandleReservation {
+                        registry: Arc::clone(self),
+                        committed: false,
+                    }));
+                }
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
+    pub(crate) fn push_reserved_dispatch_handle(
+        &self,
+        reservation: DispatchHandleReservation,
+        handle: TrackedDispatchHandle,
     ) -> Result<(), AtmError> {
         let mut handles = match self.lock_dispatch_handles() {
             Ok(handles) => handles,
@@ -132,13 +161,8 @@ impl ActiveConnectionRegistry {
                 return Err(error);
             }
         };
-        if handles.len() >= max_handles {
-            let _ = handle.join_handle.join();
-            return Err(AtmError::daemon_lifecycle_wedge(format!(
-                "tracked daemon dispatch registry exceeded its bounded capacity of {max_handles} handles"
-            )));
-        }
         handles.push(handle);
+        reservation.commit();
         Ok(())
     }
 
@@ -185,6 +209,7 @@ impl ActiveConnectionRegistry {
             *handles = pending;
             finished
         };
+        self.release_dispatch_handle_slots(finished.len());
         let mut summary = DispatchReapSummary::default();
         for handle in finished {
             if let Err(error) = join_dispatch_handle(handle) {
@@ -212,6 +237,7 @@ impl ActiveConnectionRegistry {
             let mut handles = self.lock_dispatch_handles()?;
             std::mem::take(&mut *handles)
         };
+        self.release_dispatch_handle_slots(handles.len());
         for handle in handles {
             join_dispatch_handle_with_timeout(handle, timeout)?;
         }
@@ -237,6 +263,13 @@ impl ActiveConnectionRegistry {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
         self.drain_wake.notify_all();
     }
+
+    fn release_dispatch_handle_slots(&self, count: usize) {
+        if count != 0 {
+            self.dispatch_handle_slots
+                .fetch_sub(count, Ordering::SeqCst);
+        }
+    }
 }
 
 pub(crate) struct ActiveConnectionGuard {
@@ -245,6 +278,25 @@ pub(crate) struct ActiveConnectionGuard {
 
 pub(crate) struct ActiveDispatchGuard {
     registry: Arc<ActiveConnectionRegistry>,
+}
+
+pub(crate) struct DispatchHandleReservation {
+    registry: Arc<ActiveConnectionRegistry>,
+    committed: bool,
+}
+
+impl DispatchHandleReservation {
+    fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for DispatchHandleReservation {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.registry.release_dispatch_handle_slots(1);
+        }
+    }
 }
 
 impl Drop for ActiveConnectionGuard {
@@ -321,13 +373,17 @@ mod tests {
                 panic!("intentional dispatch worker panic for reap test");
             })
             .expect("spawn panicking dispatch worker");
+        let reservation = registry
+            .try_reserve_dispatch_handle(1)
+            .expect("reserve dispatch handle")
+            .expect("dispatch handle capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                reservation,
                 TrackedDispatchHandle {
                     completion_rx,
                     join_handle,
                 },
-                1,
             )
             .expect("push dispatch handle");
         match unwound_rx.recv_timeout(Duration::from_secs(5)) {
@@ -403,13 +459,17 @@ mod tests {
                 .send(())
                 .expect("report tracked worker completion");
         });
+        let reservation = registry
+            .try_reserve_dispatch_handle(1)
+            .expect("reserve dispatch handle")
+            .expect("dispatch handle capacity");
         registry
-            .push_dispatch_handle(
+            .push_reserved_dispatch_handle(
+                reservation,
                 TrackedDispatchHandle {
                     completion_rx,
                     join_handle,
                 },
-                1,
             )
             .expect("track dispatch worker");
         started_rx

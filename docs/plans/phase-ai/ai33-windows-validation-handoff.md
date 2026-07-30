@@ -486,3 +486,31 @@ The current fastpc4 execution authority and baseline loop are in
   --all --check` passed, `just lint` passed 23/23, `just test` passed with 317
   tests and 2 skipped, and `just smoke localhost` passed 10/10. The source
   repair is committed separately in the corresponding Fix 1 commit.
+
+### 2026-07-30 - cwin - arch-ctm remediation Fix 2
+
+- Fix 2 replaces synchronous full-table joining with an atomic
+  `DispatchHandleReservation`. Local TCP and HTTPS reserve bounded shutdown
+  bookkeeping before creating a worker; saturation closes only the current
+  connection with the existing typed `ATM_DAEMON_CONNECTION_SATURATED` 503 and
+  leaves the accept loop running. Reaping and shutdown release each committed
+  reservation exactly once; spawn/lock errors remain observable and do not
+  silently disappear.
+- Added the deterministic Windows test
+  `saturated_dispatch_tracking_keeps_tcp_accept_loop_live`. It holds one
+  handler in an injected one-slot table, proves the next connection receives a
+  typed saturation response while the serving path returns `Ok`, releases and
+  reaps the first handler, then proves a subsequent Doctor request succeeds and
+  both active and tracked counts return to zero.
+- The first full `just test` attempt was invalidated by the intentionally
+  running shared daemon owning the host `owner.lock`; five daemon tests failed
+  at setup. After stopping only that exact branch daemon, `just test` passed
+  with 317 tests and 2 skipped. No test or production failure remained.
+- Rebuilt exact release `atm.exe` and `atm-daemon.exe`, started exactly one
+  release daemon (PID `54408`), and verified matching `1.4.0-beta-ai.38`
+  Doctor readiness. `just smoke localhost` passed 10/10 with evidence at
+  `reports/smoke/20260730T213347Z/FastPC4-localhost.json`.
+- Fix 2 validation: `cargo fmt --all --check`, `just lint` (23/23), `just test`,
+  and rebuilt-release `just smoke localhost` all passed. The shared inbox was
+  checked after pulling `feed41a4`; no unread or pending-ack arch-ctm messages
+  were present.

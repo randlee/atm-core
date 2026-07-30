@@ -294,6 +294,26 @@ peer interface, when configured, is a separate 43101 listener.
   reply. Evidence:
   `reports/smoke/20260730T212500Z/FastPC4-localhost.json`.
 
+## Arch-ctm Remediation Fix 2
+
+- The Windows local TCP worker path no longer creates a worker and then tries
+  to insert its join handle into a possibly full table. An atomic reservation
+  is acquired first. If the injected bookkeeping limit is full, only the
+  current connection receives the existing typed saturation response; the
+  accept loop remains alive. Successful reservations are committed to the
+  bounded table, and reaping/shutdown release them exactly once.
+- The same reservation contract is used by the HTTPS peer worker path and the
+  retained Unix test call sites, preserving bounded shutdown tracking across
+  transports rather than introducing a Windows-only detached-worker escape.
+- The Windows regression test holds one handler at an injected one-slot limit,
+  verifies the second request gets HTTP 503 with
+  `ATM_DAEMON_CONNECTION_SATURATED`, releases/reaps the first handler, and
+  verifies a subsequent Doctor request succeeds with zero active/tracked work.
+- `just lint` passed all 23 checks and `just test` passed after stopping the
+  shared daemon so host-singleton tests could own the lock. The rebuilt exact
+  release pair passed 10/10 localhost smoke repetitions. Evidence:
+  `reports/smoke/20260730T213347Z/FastPC4-localhost.json`.
+
 ## Next Iteration
 
 Before the next smoke attempt, pull the branch and re-read the shared handoff.
