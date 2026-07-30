@@ -35,6 +35,7 @@ evidence.
 | E-010 | Diagnostic cleanup | Orphaned exact-branch daemon PIDs `33936`, `54896`, and `59404` were found during separate diagnostics. | The CLI auto-start child can outlive an externally terminated smoke wrapper; this is a test execution cleanup issue, not evidence of a daemon crash. | Each was terminated only after ownership/path verification. Current daemon count is zero. |
 | E-011 | Direct local curl probe | First request returned HTTP 400: `invalid doctor HTTP request body: key must be a string at line 1 column 2`. | PowerShell single-quoted JSON contained literal backslashes (`{\"...`) instead of valid JSON; this was a probe-command quoting error, not an ATM failure. | Corrected the request with `ConvertTo-Json -Compress`; curl exited 0 and returned healthy/ready doctor JSON from the exact branch daemon. |
 | E-012 | `atm peer interface list --json` | The exact branch CLI returned an empty list (`[]`); no enabled advertised interface was available for the physical-interface smoke lane. | This Windows host had no persisted peer interface in its user ATM state. The host's usable IPv4 address is `10.10.100.98` on `Ethernet 2`; this is a setup/configuration gap, not a transport failure. | Pending immediate operational fix: save one enabled interface bound to `10.10.100.98:43101` and advertise `10.10.100.98`, then verify the single daemon reloads it. |
+| E-013 | Exact daemon restart after E-012 | `atm-daemon.exe` exited immediately with code `70`: `daemon runtime assembly is unavailable; atm-daemon startup is blocked`. | The enabled mutual-TLS interface had no local certificate configured. The daemon startup composition requires a local certificate before binding any enabled mTLS HTTPS interface. The retained `.atm` log added no Error/Warn record; this is the daemon's sanitized startup error contract. | Pending operational fix: initialize the local test certificate from the existing host-local PEM bundle, restart one exact branch daemon, and verify the 43101 listener. No production code change indicated. |
 
 ## Key Contract Clarification
 
@@ -75,6 +76,17 @@ peer interface, when configured, is a separate 43101 listener.
 - `atm peer interface list --json` returned `[]`; local CLI/curl health is
   proven, but the advertised-local-IP smoke lane cannot proceed until the
   Windows peer interface is configured. No second daemon was started.
+
+## Peer Listener Restart Iteration
+
+- Saved the one enabled interface with bind `10.10.100.98:43101` and advertise
+  host `10.10.100.98` using the branch CLI.
+- The live daemon did not hot-reload the interface. After verifying PID `23984`
+  was the only exact branch daemon, it was stopped and the exact branch daemon
+  was restarted once.
+- The restart failed before serving because no local mTLS certificate was
+  configured. E-013 records the exact sanitized error and exit code. The
+  stale loopback runtime file was not treated as proof of a live daemon.
 
 ## Next Iteration
 

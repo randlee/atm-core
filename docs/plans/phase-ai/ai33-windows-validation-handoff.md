@@ -58,3 +58,16 @@ The executable procedure is
 - E-012 is logged in the root-cause report. The planned operational fix is one
   enabled `10.10.100.98:43101` interface, followed by a controlled restart of
   only the verified branch daemon if configuration is not hot-reloaded.
+
+### 2026-07-30 — cwin — mTLS certificate startup blocker
+
+- The interface was saved, but the running daemon did not hot-reload it.
+- After stopping only verified PID `23984`, an exact branch daemon restart
+  exited `70` with the sanitized message `daemon runtime assembly is
+  unavailable; atm-daemon startup is blocked`.
+- No new Error/Warn event was written to the retained `.atm` log. Source-level
+  startup requirements identify the missing local certificate for the enabled
+  mutual-TLS interface as the cause. E-013 records the result.
+- Next iteration: initialize the local test certificate from the existing
+  host-local PEM bundle, restart one exact branch daemon, and verify listener
+  `10.10.100.98:43101` before running smoke.
