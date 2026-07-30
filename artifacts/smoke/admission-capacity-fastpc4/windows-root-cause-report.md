@@ -85,9 +85,9 @@ no ATM transport contract or capacity gate was changed.
   claimed as a capacity pass.
 - Windows port range was changed with the approved elevated command from
   `49152-65535` to `1024-65534`; the change did not clear E-033.
-- Final exact release daemon: PID `20896`; Doctor exited `0` with
+- Final exact release daemon: PID `26552`; Doctor exited `0` with
   `healthy`, zero warnings, and zero errors. Local HTTP is
-  `127.0.0.1:46455`; peer HTTPS is `10.10.100.98:43101`. No other
+  `127.0.0.1:37978`; peer HTTPS is `10.10.100.98:43101`. No other
   `atm-daemon.exe` process is running.
 
 ## Capacity Interval Evidence
