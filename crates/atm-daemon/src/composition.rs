@@ -425,7 +425,11 @@ impl RuntimeComposition {
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.start_https_listeners()
             .or_else(|error| self.rollback_failed_startup(error))?;
-        self.serve_runtime(runtime, || Ok(()))
+        self.serve_runtime(runtime, || {
+            #[cfg(windows)]
+            emit_ready_signal_if_requested()?;
+            Ok(())
+        })
     }
 
     #[cfg(test)]
@@ -514,6 +518,25 @@ impl RuntimeComposition {
             (Ok(()), Err(error)) => Err(error),
         }
     }
+}
+
+#[cfg(windows)]
+fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
+    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
+        return Ok(());
+    }
+    let mut stdout = std::io::stdout().lock();
+    write_ready_signal(&mut stdout)
+}
+
+#[cfg(windows)]
+fn write_ready_signal(stdout: &mut impl std::io::Write) -> Result<(), AtmError> {
+    writeln!(stdout, "ATM_DAEMON_READY")
+        .map_err(|_source| AtmError::daemon_unavailable("failed to emit daemon ready signal"))?;
+    stdout
+        .flush()
+        .map_err(|_source| AtmError::daemon_unavailable("failed to flush daemon ready signal"))?;
+    Ok(())
 }
 
 fn build_host_ownership_adapter(
@@ -748,6 +771,14 @@ mod tests {
         fn drop(&mut self) {
             std::env::set_current_dir(&self.0).expect("restore cwd");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn ready_signal_writer_emits_a_flushed_marker() {
+        let mut output = Vec::new();
+        super::write_ready_signal(&mut output).expect("ready signal");
+        assert_eq!(output, b"ATM_DAEMON_READY\n");
     }
 
     #[test]
