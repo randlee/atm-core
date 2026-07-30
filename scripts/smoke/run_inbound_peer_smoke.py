@@ -13,6 +13,7 @@ import argparse
 from datetime import datetime, timezone
 from html import escape
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -310,8 +311,9 @@ def compose(template: Path, variables: dict[str, Any], output: Path) -> None:
         json.dump(variables, handle)
         variables_path = Path(handle.name)
     try:
+        renderer = os.environ.get("ATM_SMOKE_SC_COMPOSE", "sc-compose")
         result = command_result([
-            "sc-compose", "render", "--root", str(REPO_ROOT), "--file", str(template),
+            renderer, "render", "--root", str(REPO_ROOT), "--file", str(template),
             "--var-file", str(variables_path), "--output", str(output),
         ], 15.0)
         if result["exit_code"] != 0:

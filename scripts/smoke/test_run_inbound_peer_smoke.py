@@ -72,6 +72,14 @@ class InboundPeerSmokeTests(unittest.TestCase):
         self.assertIn('class="fail"', pane)
         self.assertIn("Investigation required: local-doctor", pane)
 
+    def test_compose_honors_explicit_renderer_path(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             mock.patch.dict("os.environ", {"ATM_SMOKE_SC_COMPOSE": "/opt/test/sc-compose"}), \
+             mock.patch.object(RUNNER, "command_result", return_value={"exit_code": 0, "stdout": "", "stderr": ""}) as command:
+            RUNNER.compose(Path(directory) / "template.j2", {"name": "value"}, Path(directory) / "output.html")
+
+        self.assertEqual(command.call_args.args[0][0], "/opt/test/sc-compose")
+
     def test_doctor_version_or_api_mismatch_is_a_hard_failure(self):
         local = {"expected_daemon_version": TEST_VERSION, "expected_http_api_version": 1}
         result = {"exit_code": 0, "stderr": "", "stdout": json.dumps({
