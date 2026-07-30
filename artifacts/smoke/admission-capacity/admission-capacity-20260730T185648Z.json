@@ -1,0 +1,21 @@
+{
+  "atm_home": "C:\\Users\\rand.lee\\AppData\\Local\\Temp\\atm-capacity-parent-scmrbbvi\\atm-capacity-home",
+  "cleanup_failure": "admission-capacity smoke detected leaked atm-daemon pid(s): 36828",
+  "failure": "capacity daemon did not publish ATM_DAEMON_READY within 30 seconds",
+  "html_report": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\reports\\smoke\\20260730T185648Z\\FastPC4-admission-capacity.json",
+  "passed": false,
+  "release": {
+    "atm": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm.exe",
+    "atm_daemon": "F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm-daemon.exe"
+  },
+  "runs": [],
+  "slowest_stage": {
+    "elapsed_ms": 30023.595500038937,
+    "name": "daemon_start_ready_ms"
+  },
+  "stages": {
+    "daemon_start_ready_ms": 30023.595500038937,
+    "host_runtime_root_setup_ms": 0.3375000087544322,
+    "roster_setup_ms": 32.68090006895363
+  }
+}

@@ -251,3 +251,20 @@ The current fastpc4 execution authority and baseline loop are in
   `reports/smoke/20260730T174501Z/FastPC4-localhost.json`.
 - Capacity remains intentionally blocked pending a dedicated clean Windows OS
   account; no database replacement or capacity rerun was performed.
+
+### 2026-07-30 - cwin - capacity Windows readiness-signal failure
+
+- With the authorized disposable-state procedure, the capacity runner created
+  a fresh host runtime and started the exact release daemon. The retained log
+  shows `startup_completed` and a bound local HTTP listener.
+- The runner nevertheless timed out waiting for `ATM_DAEMON_READY` after 30
+  seconds. It then reported cleanup `WinError 32` because leaked PID `36828`
+  still held the temporary ATM home. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T185648Z.json`.
+- Root cause is Windows-only composition: the Windows local TCP path used a
+  no-op production `publish_ready` closure, while the Unix path emitted the
+  requested marker. The exact daemon was terminated, the generated disposable
+  state was retained outside the live root, and the original `.atm` state was
+  restored.
+- A source fix is in progress in `crates/atm-daemon/src/composition.rs`; no
+  retry, timeout, worker, or capacity assertion changes are being made.
