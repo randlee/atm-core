@@ -13,6 +13,7 @@
 - First-round report commit: `eec67b217d7a0f224475a61f01adc6ebeac28db8`
 - Source-fix commit: `641ed02b`
 - Latest report commit before capacity attempt: `c14f983a`
+- Latest pulled validation commit: `98fcde3c` (`b16a9e15` source correction)
 
 ## Result
 
@@ -157,14 +158,29 @@ report after each update.
 
 ## E-016 Follow-Up
 
-`641ed02b` adds only a classified retry for the preceding read-only
-compatibility preflight; it deliberately does not retry the side-effecting
-send that produced E-016. The clean 10/10 run had no reset, but does not prove
-the daemon connection-ownership defect is fully root-caused. Team follow-up
-remains required for a deterministic transport regression test.
+The later correction in `b16a9e15` removes the preflight retry entirely and
+uses one capability-authenticated Doctor exchange for readiness. It deliberately
+does not retry the side-effecting send that produced E-016. The clean 10/10 run
+had no reset, but does not prove the daemon connection-ownership defect is fully
+root-caused. Team follow-up remains required for a deterministic transport
+regression test.
 
 ## Final Runtime State
 
 After the capacity attempt, exactly one rebuilt branch daemon is running as
 PID `54632`, with local HTTP `127.0.0.1:62336` and advertised peer HTTPS
 `10.10.100.98:43101` listeners. Doctor reports healthy and ready.
+
+## Latest Reset Correction Validation
+
+After pulling `98fcde3c`, rebuilding the release CLI and daemon, and running
+the full repository gates with no daemon active, the updated readiness path was
+validated with `just smoke localhost`. All 10/10 attempts passed Doctor,
+advertised-host, physical-interface send/read/content, required-ack delivery,
+and acknowledgement reply. Evidence:
+`reports/smoke/20260730T174501Z/FastPC4-localhost.json`.
+
+The updated source uses one capability-authenticated Doctor HTTP exchange for
+local readiness and does not retry connection resets. The final exact-branch
+daemon is PID `51824`, with local HTTP `127.0.0.1:56083` and peer HTTPS
+`10.10.100.98:43101` listeners.

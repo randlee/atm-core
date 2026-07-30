@@ -228,3 +228,16 @@ The executable procedure is
   repeat `just smoke localhost` under the existing test-owned runtime. Record
   the result as a new evidence entry; do not rerun capacity validation until a
   dedicated clean Windows OS account exists.
+
+### 2026-07-30 — cwin — post-b16a9e15 Windows validation
+
+- Pulled `98fcde3c`, rebuilt `atm.exe` and `atm-daemon.exe` from the exact
+  branch, and ran `just lint` (23/23 checks) plus `just test`; both passed.
+- Started exactly one rebuilt daemon, PID `51824`, with local HTTP
+  `127.0.0.1:56083` and peer HTTPS `10.10.100.98:43101`. Doctor reported
+  healthy/ready with matching `1.4.0-beta-ai.38` versions.
+- `just smoke localhost` passed 10/10 using the new authenticated Doctor
+  readiness probe and no connection-reset retry. Evidence:
+  `reports/smoke/20260730T174501Z/FastPC4-localhost.json`.
+- Capacity remains intentionally blocked pending a dedicated clean Windows OS
+  account; no database replacement or capacity rerun was performed.
