@@ -316,3 +316,16 @@ The current fastpc4 execution authority and baseline loop are in
 - The initial diagnostic-retention edit had a one-level Python indentation
   error at line 632. It was corrected before any rerun; the focused
   `test_run_admission_capacity.py` suite passes all 15 tests.
+
+### 2026-07-30 - cwin - response-read abort localization
+
+- Reran the exact release pair from `020a08da` with phase-labelled failures.
+  All 20 interval failures occurred during `response_read`; there were no
+  connect or request-write failures. The run produced `18,403/20,000` HTTP
+  201 admissions and clean teardown. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T191834Z.json`.
+- Retained daemon diagnostics show 18,403 successful send-route records, no
+  error-level records, stdout only `ATM_DAEMON_READY`, and empty stderr. The
+  Windows worker discards `handle_connection` errors, so the server-side
+  response-write failure is currently hidden. The next change logs that
+  structured transport error before another capacity run.
