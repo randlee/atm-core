@@ -317,13 +317,13 @@ impl SharedDb {
         })
     }
 
-    pub(crate) fn submit_upsert_message(&self, record: Message) -> Result<(), AtmError> {
+    pub(crate) fn submit_upsert_message(&self, record: Message) -> Result<bool, AtmError> {
         validate_upsert_message_request(&record)?;
         let result = self
             .writer
             .submit(WriteOp::UpsertMessage(Box::new(record)))?;
         match result {
-            WriteOpResult::UpsertMessage { .. } => Ok(()),
+            WriteOpResult::UpsertMessage { inserted } => Ok(inserted),
             WriteOpResult::UpsertMessages | WriteOpResult::Acknowledged(_) => {
                 Err(AtmError::daemon_unavailable(
                     "sqlite writer returned the wrong result for message upsert",
