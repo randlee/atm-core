@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-M5-NO-REAL-DAEMON-CI-TEST>
+  a triage:Finding ;
+  triage:findingId "AI33-M5-NO-REAL-DAEMON-CI-TEST" ;
+  triage:title "No deterministic real-daemon admission burst test wired into Rust/CI" ;
+  triage:description "arch-ctm's M5 root-cause investigation reports there is no deterministic real-daemon admission-burst test wired into Rust or CI — the existing unit tests for scripts/smoke/run_admission_capacity.py only exercise mocked runner helpers, never a real daemon under load. This means the genuine capacity/backpressure defect surfaced by the live M5 run (mass HTTP 503 rejection, ~168 accepted/s vs required >=1000/s) has no regression-guard once fixed; only a manual isolated-OS-user run catches it. arch-ctm flags this as blocking alongside the response-body-discard gap (AI33-M5-RESPONSE-BODY-DISCARDED)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "test-coverage" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:57:41Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-S13 ;
+  triage:foundAt "2026-07-30T00:57:41Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-M5-NO-REAL-DAEMON-CI-TEST/AI33-M5-001> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-M5-NO-REAL-DAEMON-CI-TEST/AI33-M5-001>
+  a triage:Occurrence ;
+  triage:file "scripts/smoke/run_admission_capacity.py" ;
+  triage:line 0 ;
+  triage:snippet "unit tests exercise mocked runner helpers only, no real-daemon burst test in CI" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
+
+<urn:atm:triage:worktree/pAI-s33/199111d35e06ae829c481505e9dfca5b4f6c613f>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 1 .

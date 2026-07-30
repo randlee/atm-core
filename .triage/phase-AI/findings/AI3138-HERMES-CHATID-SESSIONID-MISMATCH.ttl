@@ -15,21 +15,24 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-30T00:48:21Z"^^xsd:dateTime ;
   triage:foundIn triage:AI3138-HERMES-HARNESS-REVIEW-1 ;
   triage:foundAt "2026-07-29T23:48:39Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-CHATID-SESSIONID-MISMATCH/AI3138-1> ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "3" ;
+  triage:closedAt "2026-07-30T01:58:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI3138-CHATID-QA-1 (PR #696 @ 9436c5e6) verdict: FAIL, 2/5 deliverables (40%). The specific literal defect this record names -- chat_id forwarded unchanged as session_id in the session.steer RPC payload -- is code-fixed: HermesRpcSteerPort now requires an injected resolve_session_id callable and fails closed (session_binding_required/session_resolution_failed/session_not_bound/session_binding_invalid) rather than ever sending the raw chat_id as session_id; regression coverage proves it (test_hermes_adapter.py:225-249). Record stays open, not closed, for two reasons: (1) two of the sprint's own required doc updates (docs/plans/phase-ai/hermes-graft-runbook.md:29-33, docs/plans/phase-ai/hermes-graft-adapter-contract.md:29-36) still describe the exact rejected anti-pattern verbatim and were not updated -- a genuine defect in this PR's own scope, not a deferred item; (2) per team-lead's explicit instruction, this fix does not achieve live end-to-end chat-id-to-session delivery -- no production/host caller anywhere in the repo constructs HermesRpcSteerPort with a concrete resolver (confirmed independently by req-qa and arch-qa via repo-wide grep), so a configured chat-id target still cannot reach a live Hermes session; only the failure mode changed (Hermes-side 4001 after an RPC round-trip -> ATM-side session_binding_required before any RPC call). That production-wiring gap is tracked separately and correctly as AI3138-HERMES-NO-PRODUCTION-LOADER (blocking, open, unaffected by this PR) -- this record's own closure should not be gated on that separate finding once the doc-conflict is fixed, but is gated on it this round because req-qa's doc finding is real. AI3138-CHATID-QA-2 (PR #696 @ 67927cc3) verdict: PASS, 3/3 (100%), req-qa. Docs-only round: hermes-graft-runbook.md and hermes-graft-adapter-contract.md now accurately describe the mandatory resolver/fail-closed contract with zero remaining references to the raw-chat_id-as-session_id anti-pattern; ADR-043's AI.38 addendum correctly names AI3138-HERMES-NO-PRODUCTION-LOADER as a still-open, separately-tracked production-wiring gap without overclaiming end-to-end delivery. All 8 CI legs green. This record's own literal defect (chat_id forwarded as session_id) is fully closed: code-fixed with regression coverage, and every doc that previously described the anti-pattern is corrected. Closing per the split explicitly agreed with team-lead: end-to-end chat-id-to-live-Hermes-session delivery remains unimplemented and stays tracked under AI3138-HERMES-NO-PRODUCTION-LOADER, not this record." .
 
 <urn:atm:triage:occurrence/AI3138-HERMES-CHATID-SESSIONID-MISMATCH/AI3138-1>
   a triage:Occurrence ;
   triage:file "crates/atm-graft-python/python/atm_graft_hermes_adapter.py" ;
   triage:line 77 ;
   triage:snippet "{\"session_id\": chat_id, \"text\": text}" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "integrate/phase-ai-31-33" ;
   triage:headSha "6d1225a0c1010752d8f6c3a642caf1ab879a4764" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-ai-31-33/6d1225a0> .
