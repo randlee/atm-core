@@ -62,18 +62,31 @@ class FeatureSmokeTests(unittest.TestCase):
                 self.assertEqual(RUNNER.main(), 0)
         self.assertEqual(Path(run.call_args.args[0][1]).name, "run.py")
 
+    def test_admission_capacity_reuses_the_feature_smoke_dispatcher(self):
+        completed = mock.Mock(returncode=0)
+        with mock.patch.object(RUNNER.subprocess, "run", return_value=completed) as run:
+            with mock.patch.object(RUNNER.sys, "argv", ["smoke", "admission-capacity"]):
+                self.assertEqual(RUNNER.main(), 0)
+        self.assertEqual(Path(run.call_args.args[0][1]).name, "run_admission_capacity.py")
+
     def test_missing_identity_is_a_hard_failure(self):
         with mock.patch.dict(os.environ, {"ATM_IDENTITY": "", "ATM_TEAM": ""}, clear=False):
             with self.assertRaisesRegex(RUNNER.SmokeError, "ATM_IDENTITY"):
                 RUNNER.require_environment()
 
     def test_branch_version_requires_one_shared_cli_daemon_version(self):
-        metadata = {"packages": [{"name": "atm", "version": "1.3.2-beta.27"}, {"name": "atm-daemon", "version": "1.3.2-beta.27"}]}
+        metadata = {"packages": [{"name": "agent-team-mail", "version": "1.3.2-beta.27"}, {"name": "atm-daemon", "version": "1.3.2-beta.27"}]}
         with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(metadata), "stderr": ""}):
             self.assertEqual(RUNNER.branch_version(), "1.3.2-beta.27")
 
     def test_branch_version_rejects_divergent_cli_daemon_versions(self):
-        metadata = {"packages": [{"name": "atm", "version": "1.3.2-beta.27"}, {"name": "atm-daemon", "version": "1.3.2-beta.28"}]}
+        metadata = {"packages": [{"name": "agent-team-mail", "version": "1.3.2-beta.27"}, {"name": "atm-daemon", "version": "1.3.2-beta.28"}]}
+        with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(metadata), "stderr": ""}):
+            with self.assertRaisesRegex(RUNNER.SmokeError, "shared"):
+                RUNNER.branch_version()
+
+    def test_branch_version_rejects_metadata_without_the_real_cli_package(self):
+        metadata = {"packages": [{"name": "atm", "version": "1.3.2-beta.27"}, {"name": "atm-daemon", "version": "1.3.2-beta.27"}]}
         with mock.patch.object(RUNNER, "command", return_value={"exit_code": 0, "stdout": __import__("json").dumps(metadata), "stderr": ""}):
             with self.assertRaisesRegex(RUNNER.SmokeError, "shared"):
                 RUNNER.branch_version()
