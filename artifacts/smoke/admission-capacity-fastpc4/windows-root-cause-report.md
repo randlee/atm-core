@@ -10,7 +10,7 @@
 - atm-daemon version: `1.4.0-beta-ai.38`
 - just: `1.51.0`
 - sc-compose: `1.2.0`, installed from sibling checkout `F:\github\sc-compose`
-- First-round report commit: pending initial push, recorded in the next log update
+- First-round report commit: `eec67b217d7a0f224475a61f01adc6ebeac28db8`
 
 ## Result
 
@@ -33,6 +33,7 @@ evidence.
 | E-008 | `just test` embedded smoke output | Two fixture-style `FAIL` lines appeared for an acknowledgement reply and an IPv6 advertised-IP case. | These are fixture scenario output inside the passing repository test run, not failed test assertions. | `just test` exited 0; retained as non-fatal output. |
 | E-009 | `.atm/logs/atm.log.jsonl` | No Error/Warn records or error outcomes were found. Daemon entries were Info-level `start_requested`, `install_hooks`, `acquire_owner_lock`, `bind_listener`, and `startup_completed`. | No daemon-side error was logged. | Direct release `atm doctor --json` subsequently returned healthy/ready with matching CLI and daemon versions. |
 | E-010 | Diagnostic cleanup | Orphaned exact-branch daemon PIDs `33936`, `54896`, and `59404` were found during separate diagnostics. | The CLI auto-start child can outlive an externally terminated smoke wrapper; this is a test execution cleanup issue, not evidence of a daemon crash. | Each was terminated only after ownership/path verification. Current daemon count is zero. |
+| E-011 | Direct local curl probe | First request returned HTTP 400: `invalid doctor HTTP request body: key must be a string at line 1 column 2`. | PowerShell single-quoted JSON contained literal backslashes (`{\"...`) instead of valid JSON; this was a probe-command quoting error, not an ATM failure. | Corrected the request with `ConvertTo-Json -Compress`; curl exited 0 and returned healthy/ready doctor JSON from the exact branch daemon. |
 
 ## Key Contract Clarification
 
@@ -59,6 +60,20 @@ peer interface, when configured, is a separate 43101 listener.
 - Verified direct `atm doctor --json` returns healthy/ready with matching versions.
 - Terminated only verified orphaned branch daemons.
 - Did not run the capacity command because the plan requires stopping at the first live-smoke failure.
+
+## Local CLI/Curl Iteration
+
+- Pulled the branch again before this iteration; no newer arch-ctm direction was
+  present in the shared handoff.
+- Reused exactly one already-running exact-branch release daemon, PID `23984`,
+  with local endpoint `127.0.0.1:62527`; doctor reported healthy/ready and
+  matching `1.4.0-beta-ai.38` CLI/daemon versions.
+- The corrected local branch CLI doctor command passed.
+- The corrected curl doctor request passed. The failed first curl request is
+  retained as E-011 so the malformed-payload root cause is not lost.
+- `atm peer interface list --json` returned `[]`; local CLI/curl health is
+  proven, but the advertised-local-IP smoke lane cannot proceed until the
+  Windows peer interface is configured. No second daemon was started.
 
 ## Next Iteration
 

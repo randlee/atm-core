@@ -35,3 +35,15 @@ The executable procedure is
 - Missing `ATM_IDENTITY`/`ATM_TEAM`, missing `sc-compose`, and missing `atm` PATH resolution were environment/setup failures and were corrected operationally.
 - The observed `127.0.0.1:55758` listener is the expected Windows local HTTP endpoint; 43101 is the separate peer HTTPS port. No daemon code failure was found.
 - The report records all observed command errors, non-fatal test warnings, `.atm` log findings, orphan cleanup, and the next matched-pair smoke procedure.
+
+### 2026-07-30 — cwin — local CLI/curl iteration
+
+- Pulled the branch; no newer arch-ctm direction was present.
+- Reused exactly one exact-branch release daemon, PID `23984`, and verified
+  healthy/ready doctor status with matching CLI and daemon versions.
+- Corrected local CLI doctor and curl doctor both passed. The first curl probe
+  used malformed PowerShell JSON quoting and is logged as E-011 in the report.
+- The next blocker is configuration: `atm peer interface list --json` is empty,
+  so the advertised-local-IP lane cannot start. No second daemon was started.
+- Full details are in
+  `artifacts/smoke/admission-capacity-fastpc4/windows-root-cause-report.md`.
