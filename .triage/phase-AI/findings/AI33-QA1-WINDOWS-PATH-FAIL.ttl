@@ -9,14 +9,16 @@
   triage:findingId "AI33-QA1-WINDOWS-PATH-FAIL" ;
   triage:title "test_run_admission_capacity.py hardcodes POSIX paths, fails just-lint on windows-latest CI" ;
   triage:description "quality-mgr's AI33-QA-1 verdict confirmed via windows-latest CI job log (not flaky) that 2 tests in test_run_admission_capacity.py hardcode POSIX-only paths (/tmp/atm, /Users/capacity) at lines 28-30 and 54-61, which break under Windows path semantics. This is a genuine cross-platform CI failure, not a flake." ;
-  triage:progressNote "AI33-M5-NINEFIX-QA-1 (2026-07-30): the original POSIX-path hardcoding IS fixed at a8d1e237 -- temp_path() now resolves via Path(tempfile.gettempdir())/name; grep of scripts/smoke/ for '/Users/capacity' and '/tmp/atm' returns zero matches (confirmed by req-qa). HOWEVER `gh pr checks 695 -R randlee/atm-core` at head a8d1e23777616a6b0a6c8c87e99c2dc2b5904a67 shows 'Just lint (windows-latest)' FAILING (run 30509874157, job 90767409974) -- confirmed via job log, not a flake: clippy error 'unused variable: socket_path' plus 'you seem to be trying to use match to destructure a single infallible pattern' in crates/atm-daemon (the new local_ipc_real_daemon_admission_burst_accepts_each_public_write test added by AI33-M5-NO-REAL-DAEMON-CI-TEST's fix). Root cause: crates/atm-daemon/src/tests/runtime_root/local_ipc.rs:248 clones socket_path unconditionally into a thread closure, but only the #[cfg(not(windows))] branch (274-283) uses it -- under #[cfg(windows)] it is captured-but-unused, and the single-arm match on LocalDaemonConnection::TcpLoopback (266-273) trips clippy's single-infallible-pattern lint. This is a genuine NEW windows-only compile-lint regression introduced by this fix batch, distinct from and additional to the original finding's POSIX-path-literal defect. Test(windows-latest) itself passes (the test never runs on Windows CI because clippy fails first); the windows-latest leg as a whole is red. Remains OPEN -- do not close. Required correction: gate the socket_path clone/use under #[cfg(not(windows))] (or prefix with _ and restructure the match into a let-else) so windows-latest clippy passes. AI33-M5-NINEFIX-QA-2 (2026-07-30): arch-ctm pushed a fix at 4038ca75 -- local_ipc.rs:248-249 now gates the socket_path clone under #[cfg(not(windows))], and local_ipc.rs:266-273 was rewritten as an irrefutable let-binding (valid because LocalDaemonConnection::UnixDomainSocket is cfg(unix)-gated in crates/atm-daemon-client/src/lib.rs:376-380, leaving TcpLoopback the sole Windows variant) -- confirmed independently by req-qa and arch-qa, both PASS on this specific file. HOWEVER req-qa found, and I independently verified by reading the worktree file directly, that the IDENTICAL unconverted single-arm match on LocalDaemonConnection::TcpLoopback under #[cfg(windows)] remains at crates/atm-daemon/src/test_support.rs:210-214 -- same enum, same cfg gating, same clippy trigger class, in the same #[cfg(test)] compilation unit as local_ipc.rs (test_support.rs is gated at crates/atm-daemon/src/lib.rs:46, and connect_daemon_local_ipc_until_ready is called directly by the local_ipc.rs tests via use super::*). This was not touched by the 4038ca75 fix and will independently reproduce the same clippy failure on windows-latest CI. Remains OPEN -- do not close. Required correction: apply the identical let-binding fix used in local_ipc.rs:266-273 to test_support.rs:210-214, then confirm on genuine windows-latest CI." ;
+  triage:progressNote "AI33-M5-NINEFIX-QA-1 (2026-07-30): the original POSIX-path hardcoding IS fixed at a8d1e237 -- temp_path() now resolves via Path(tempfile.gettempdir())/name; grep of scripts/smoke/ for '/Users/capacity' and '/tmp/atm' returns zero matches (confirmed by req-qa). HOWEVER `gh pr checks 695 -R randlee/atm-core` at head a8d1e23777616a6b0a6c8c87e99c2dc2b5904a67 shows 'Just lint (windows-latest)' FAILING (run 30509874157, job 90767409974) -- confirmed via job log, not a flake: clippy error 'unused variable: socket_path' plus 'you seem to be trying to use match to destructure a single infallible pattern' in crates/atm-daemon (the new local_ipc_real_daemon_admission_burst_accepts_each_public_write test added by AI33-M5-NO-REAL-DAEMON-CI-TEST's fix). Root cause: crates/atm-daemon/src/tests/runtime_root/local_ipc.rs:248 clones socket_path unconditionally into a thread closure, but only the #[cfg(not(windows))] branch (274-283) uses it -- under #[cfg(windows)] it is captured-but-unused, and the single-arm match on LocalDaemonConnection::TcpLoopback (266-273) trips clippy's single-infallible-pattern lint. This is a genuine NEW windows-only compile-lint regression introduced by this fix batch, distinct from and additional to the original finding's POSIX-path-literal defect. Test(windows-latest) itself passes (the test never runs on Windows CI because clippy fails first); the windows-latest leg as a whole is red. Remains OPEN -- do not close. Required correction: gate the socket_path clone/use under #[cfg(not(windows))] (or prefix with _ and restructure the match into a let-else) so windows-latest clippy passes. AI33-M5-NINEFIX-QA-2 (2026-07-30): arch-ctm pushed a fix at 4038ca75 -- local_ipc.rs:248-249 now gates the socket_path clone under #[cfg(not(windows))], and local_ipc.rs:266-273 was rewritten as an irrefutable let-binding (valid because LocalDaemonConnection::UnixDomainSocket is cfg(unix)-gated in crates/atm-daemon-client/src/lib.rs:376-380, leaving TcpLoopback the sole Windows variant) -- confirmed independently by req-qa and arch-qa, both PASS on this specific file. HOWEVER req-qa found, and I independently verified by reading the worktree file directly, that the IDENTICAL unconverted single-arm match on LocalDaemonConnection::TcpLoopback under #[cfg(windows)] remains at crates/atm-daemon/src/test_support.rs:210-214 -- same enum, same cfg gating, same clippy trigger class, in the same #[cfg(test)] compilation unit as local_ipc.rs (test_support.rs is gated at crates/atm-daemon/src/lib.rs:46, and connect_daemon_local_ipc_until_ready is called directly by the local_ipc.rs tests via use super::*). This was not touched by the 4038ca75 fix and will independently reproduce the same clippy failure on windows-latest CI. Remains OPEN -- do not close. Required correction: apply the identical let-binding fix used in local_ipc.rs:266-273 to test_support.rs:210-214, then confirm on genuine windows-latest CI. AI33-M5-NINEFIX-QA-3 (2026-07-30): arch-ctm pushed 028c0a0d -- test_support.rs:210-213 rewritten as an irrefutable let-binding identical in shape to local_ipc.rs:266-273, confirmed independently by req-qa, arch-qa, and ruthless-boundary-qa via direct file read. Full-workspace grep sweep for LocalDaemonConnection::TcpLoopback found two additional sites (crates/atm-daemon-client/src/lib.rs:448,463) plus a third found by arch-qa (crates/atm-daemon-client/src/local_transport.rs:44), all unconditional production code with a #[cfg(unix)]-gated match arm that reduces to a single exhaustive arm on windows after cfg stripping. req-qa and ruthless-boundary-qa assessed these as structurally safe (tail-position match expressions / definition-site per-arm cfg gating, not let-statement destructures -- the shape clippy's single-infallible-pattern lint does not fire on); arch-qa disagreed and raised 3 BLOCKING findings (ARCH-001/002/003) predicting these would independently keep windows-latest clippy red. This was empirically resolved, not merely argued: quality-mgr confirmed genuine windows-latest CI (gh pr checks 695, run 30511382596 at head e057c39a -- a pure merge-forward from integrate/phase-ai-31-33 with a verified zero-diff against 028c0a0d across test_support.rs, lib.rs, local_transport.rs, and local_ipc.rs) shows all 8 legs green including 'Just lint (windows-latest)' PASS (3m41s) and 'Test (windows-latest)' PASS. This empirically confirms req-qa/ruthless-boundary-qa's theoretical model was correct and arch-qa's ARCH-001/002/003 predictions did not materialize; no further action needed on lib.rs/local_transport.rs. All 5 occurrences (original POSIX-path literals S33-1..4, windows clippy regression S33-5) are now fully resolved with genuine CI confirmation. CLOSED." ;
   triage:phaseId "phase-AI" ;
   triage:triageMode "initial_pass" ;
   triage:category "cross-platform" ;
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-07-30T03:55:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-30T01:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI33-QA-1 ;
@@ -26,15 +28,15 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-3> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-4> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-5> ;
-  triage:triageRecordVersion "2" .
+  triage:triageRecordVersion "3" .
 
 <urn:atm:triage:occurrence/AI33-QA1-WINDOWS-PATH-FAIL/S33-1>
   a triage:Occurrence ;
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 29 ;
   triage:snippet "Path(\"/Users/capacity\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
   triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
   triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
@@ -44,8 +46,8 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 54 ;
   triage:snippet "Path(\"/tmp/atm\")" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
   triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
   triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
@@ -55,8 +57,8 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 54 ;
   triage:snippet "\"/tmp/atm-capacity-test\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
   triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
   triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
@@ -66,8 +68,8 @@
   triage:file "scripts/smoke/test_run_admission_capacity.py" ;
   triage:line 59 ;
   triage:snippet "\"/tmp/atm\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
   triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
   triage:occursIn <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f> .
@@ -77,11 +79,11 @@
   triage:file "crates/atm-daemon/src/test_support.rs" ;
   triage:line 210 ;
   triage:snippet "match atm_daemon_client::try_connect(&endpoint).expect(...) { atm_daemon_client::LocalDaemonConnection::TcpLoopback(stream) => stream, }" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
-  triage:headSha "4038ca75" ;
-  triage:occursIn <urn:atm:triage:worktree/S33/4038ca75> .
+  triage:headSha "028c0a0d" ;
+  triage:occursIn <urn:atm:triage:worktree/S33/028c0a0d> .
 
 <urn:atm:triage:worktree/S33/199111d35e06ae829c481505e9dfca5b4f6c613f>
   a triage:WorktreeSnapshot ;
@@ -96,3 +98,10 @@
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
   triage:headSha "4038ca75" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S33/028c0a0d>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "028c0a0d" ;
+  triage:orderIndex 2 .
