@@ -282,6 +282,18 @@ peer interface, when configured, is a separate 43101 listener.
   a non-idempotent write. This is now a confirmed Windows transport finding,
   not an unexplained one-off.
 
+## Arch-ctm Remediation Preflight
+
+- The first post-pull `localhost` smoke invocation used
+  `ATM_IDENTITY=capacity-agent`, but the selected `capacity-team` roster
+  contained `cwin`. Doctor and physical send/read passed; each acknowledgement
+  reply then consumed its polling timeout across the default 10 repetitions.
+  This was an operator-context mismatch, not a daemon transport failure.
+- Re-running with the existing roster identity `cwin` passed all 10/10
+  localhost repetitions, including advertised-IP send/read and acknowledgement
+  reply. Evidence:
+  `reports/smoke/20260730T212500Z/FastPC4-localhost.json`.
+
 ## Next Iteration
 
 Before the next smoke attempt, pull the branch and re-read the shared handoff.

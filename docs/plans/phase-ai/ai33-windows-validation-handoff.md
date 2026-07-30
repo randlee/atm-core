@@ -461,3 +461,28 @@ The current fastpc4 execution authority and baseline loop are in
 - Final daemon after the sweep: PID `26552`, Doctor healthy with zero
   warnings/errors, local HTTP `127.0.0.1:37978`, peer HTTPS
   `10.10.100.98:43101`; exactly one matching release daemon is running.
+
+### 2026-07-30 - cwin - arch-ctm remediation Fix 1
+
+- Pulled `717eb91b` and read the new Windows admission/backpressure remediation
+  plan. The first repair is implemented in
+  `crates/atm-daemon/src/local_tcp_transport.rs`: a full local TCP connection
+  registry now checks lifecycle termination before entering the bounded wait
+  and after every wake, then re-enters the existing top-level shutdown branch.
+  The registry remains independent of lifecycle state, and held connection
+  slots are not released by cancellation.
+- Added the Windows-gated deterministic regression test
+  `capacity_wait_yields_to_termination_without_releasing_connections`, which
+  fills all 64 slots, synchronizes on the wait predicate, requests termination,
+  and proves the waiter returns while all slots remain registered.
+- The first unbuffered localhost smoke invocation used
+  `ATM_IDENTITY=capacity-agent`, but the selected `capacity-team` roster
+  contained `cwin`. Doctor and physical send/read passed; each acknowledgement
+  reply then consumed its polling timeout across the default 10 repetitions.
+  With the roster's `cwin` identity, the required 10/10 localhost repetitions
+  passed, including advertised-IP send/read and acknowledgement reply.
+  Evidence: `reports/smoke/20260730T212500Z/FastPC4-localhost.json`.
+- Validation for Fix 1: targeted Windows lifecycle test passed, `cargo fmt
+  --all --check` passed, `just lint` passed 23/23, `just test` passed with 317
+  tests and 2 skipped, and `just smoke localhost` passed 10/10. The source
+  repair is committed separately in the corresponding Fix 1 commit.

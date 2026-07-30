@@ -264,7 +264,11 @@ impl PreparedRuntimeServer {
                 drop(hooks.endpoint_guard);
                 return Ok(());
             }
-            wait_for_connection_capacity(&registry)?;
+            if wait_for_connection_capacity(&registry, || lifecycle.terminate_requested())? {
+                // Re-enter the top of the loop so the existing shutdown branch remains the
+                // sole owner of drain, cancellation, and endpoint cleanup.
+                continue;
+            }
             if lifecycle.take_reload_requested() {
                 (hooks.reload_runtime_view)()?;
             }
@@ -297,11 +301,23 @@ impl PreparedRuntimeServer {
 }
 
 #[cfg(windows)]
-fn wait_for_connection_capacity(registry: &ActiveConnectionRegistry) -> Result<(), AtmError> {
+fn wait_for_connection_capacity<F>(
+    registry: &ActiveConnectionRegistry,
+    should_terminate: F,
+) -> Result<bool, AtmError>
+where
+    F: Fn() -> bool,
+{
     while registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
+        if should_terminate() {
+            return Ok(true);
+        }
         registry.wait_for_connection_change(ACCEPT_POLL_INTERVAL)?;
+        if should_terminate() {
+            return Ok(true);
+        }
     }
-    Ok(())
+    Ok(false)
 }
 
 #[cfg(windows)]
@@ -614,6 +630,8 @@ mod tests {
     use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
 
@@ -624,6 +642,61 @@ mod tests {
 
     use super::{LOCAL_CAPABILITY_HEADER, LocalCapability, handle_connection};
     use crate::test_support::DoctorOnlyDispatcher;
+
+    #[cfg(windows)]
+    #[test]
+    fn capacity_wait_yields_to_termination_without_releasing_connections() {
+        use crate::active_connection_registry::ActiveConnectionRegistry;
+        use crate::lifecycle_control::LifecycleControlSourceAdapter;
+
+        let registry = Arc::new(ActiveConnectionRegistry::default());
+        let held_connections: Vec<_> = (0..super::MAX_CONCURRENT_CONNECTIONS)
+            .map(|_| {
+                registry
+                    .try_register(super::MAX_CONCURRENT_CONNECTIONS)
+                    .expect("capacity slot")
+            })
+            .collect();
+        assert_eq!(
+            registry.active_connections(),
+            super::MAX_CONCURRENT_CONNECTIONS
+        );
+
+        let lifecycle = LifecycleControlSourceAdapter::new_for_test();
+        let waiter_lifecycle = lifecycle.clone();
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+        let predicate_announced = Arc::new(AtomicBool::new(false));
+        let waiter_announced = Arc::clone(&predicate_announced);
+        let waiter_registry = Arc::clone(&registry);
+        let waiter = thread::spawn(move || {
+            super::wait_for_connection_capacity(&waiter_registry, || {
+                if !waiter_announced.swap(true, Ordering::SeqCst) {
+                    entered_tx.send(()).expect("signal capacity wait entry");
+                }
+                waiter_lifecycle.terminate_requested()
+            })
+        });
+
+        entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("capacity wait should evaluate its cancellation predicate");
+        lifecycle.set_terminate_for_test(true);
+        registry.interrupt_all();
+
+        assert!(
+            waiter
+                .join()
+                .expect("capacity waiter thread")
+                .expect("capacity wait result"),
+            "termination must cancel a full-capacity wait"
+        );
+        assert_eq!(
+            registry.active_connections(),
+            super::MAX_CONCURRENT_CONNECTIONS,
+            "cancelling the wait must not release the held worker slots"
+        );
+        drop(held_connections);
+    }
 
     fn serve_one(capability: LocalCapability) -> (std::net::SocketAddr, thread::JoinHandle<()>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind loopback");
