@@ -171,3 +171,24 @@ The executable procedure is
   investigate connection ownership and request-worker close paths with a
   deterministic regression test. Only a clean 10/10 smoke batch unlocks the
   isolated capacity runner.
+
+### 2026-07-30 — cwin — source fixes and clean local smoke
+
+- Pushed source fixes in `641ed02b`: the TLS fingerprint normalizer now strips
+  one case-insensitive `sha256:` presentation prefix, and the Windows client
+  retries only a classified WSAECONNRESET/10054 during the read-only
+  compatibility preflight. Side-effecting sends remain single-attempt.
+- Focused tests, `just lint` (23/23 checks), and `just test` pass. The first
+  test failure was E-019 singleton contention and passed after stopping only
+  the owned daemon.
+- Rebuilt and started exactly one release daemon from this branch (PID
+  `52228`), with local HTTP `127.0.0.1:56810` and advertised peer
+  `10.10.100.98:43101`. Doctor is healthy/ready with matching
+  `1.4.0-beta-ai.38` versions.
+- `just smoke localhost` completed 10/10. Every doctor, advertised-host,
+  physical-interface send/read/content, required-ack, and acknowledgement
+  reply row passed. Evidence: `reports/smoke/20260730T170917Z/FastPC4-localhost.json`.
+- The post-run retained-log scan found no new Error rows and 60 expected
+  warning-level peer-delivery outcome rows in the smoke window. Historical
+  errors remain listed in the root-cause report; no runtime state was
+  committed.
