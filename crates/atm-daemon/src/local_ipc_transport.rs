@@ -32,7 +32,7 @@ use std::thread;
 
 #[cfg(unix)]
 use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
-use accept_loop::{handle_shutdown_probe, spawn_connection_worker, take_accept_error};
+use accept_loop::{handle_shutdown_probe, take_accept_error};
 use request_worker::handle_connection;
 #[cfg(test)]
 pub(crate) use request_worker::install_injected_accept_error_for_test;
@@ -185,15 +185,101 @@ enum AcceptLoopOutcome {
 struct AcceptLoopContext<'a> {
     listener: &'a LocalSocketListener,
     lifecycle_control: &'a LifecycleControlSourceAdapter,
-    registry: &'a Arc<ActiveConnectionRegistry>,
-    force_shutdown: &'a Arc<AtomicBool>,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
+    connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
     #[cfg(test)]
     accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
+}
+
+/// Fixed same-host connection workers. The zero-capacity channel is a
+/// rendezvous, not an in-process backlog: when every worker is busy, the
+/// listener pauses and the existing OS socket backlog applies backpressure.
+struct ConnectionWorkerPool {
+    sender: std::sync::mpsc::SyncSender<LocalSocketStream>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl ConnectionWorkerPool {
+    fn start(
+        dispatcher: Arc<dyn ApiRouter + Send + Sync>,
+        force_shutdown: Arc<AtomicBool>,
+        registry: Arc<ActiveConnectionRegistry>,
+        observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(0);
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(MAX_CONCURRENT_CONNECTIONS);
+        for worker_index in 0..MAX_CONCURRENT_CONNECTIONS {
+            let receiver = Arc::clone(&receiver);
+            let dispatcher = Arc::clone(&dispatcher);
+            let force_shutdown = Arc::clone(&force_shutdown);
+            let registry = Arc::clone(&registry);
+            let observability = observability.clone();
+            let worker = std::thread::Builder::new()
+                .name(format!("local-ipc-connection-{worker_index}"))
+                .spawn(move || {
+                    loop {
+                        let stream = match receiver.lock() {
+                            Ok(receiver) => receiver.recv(),
+                            Err(_) => return,
+                        };
+                        let Ok(stream) = stream else {
+                            return;
+                        };
+                        let _active = registry.register();
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            handle_connection(
+                                stream,
+                                Arc::clone(&dispatcher),
+                                force_shutdown.as_ref(),
+                                Arc::clone(&registry),
+                                &observability,
+                            )
+                        }));
+                        match result {
+                            Ok(Ok(())) => {}
+                            Ok(Err(error)) => tracing::warn!(
+                                subsystem = "local_ipc_transport",
+                                action = "connection_worker",
+                                outcome = "classified_failure",
+                                %error,
+                                "daemon local IPC connection handling failed"
+                            ),
+                            Err(_) => observability.emit_or_warn(
+                                "connection_worker",
+                                "panic",
+                                CONNECTION_WORKER_PANIC_RECOVERED_MESSAGE,
+                            ),
+                        }
+                    }
+                })
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("failed to start local IPC connection worker")
+                })?;
+            workers.push(worker);
+        }
+        Ok(Self { sender, workers })
+    }
+
+    fn dispatch(&self, stream: LocalSocketStream) -> Result<(), AtmError> {
+        self.sender.send(stream).map_err(|_| {
+            AtmError::daemon_unavailable("local IPC connection workers stopped accepting work")
+        })
+    }
+
+    fn shutdown(self) -> Result<(), AtmError> {
+        let Self { sender, workers } = self;
+        drop(sender);
+        for worker in workers {
+            worker.join().map_err(|_| {
+                AtmError::daemon_unavailable("local IPC connection worker panicked during shutdown")
+            })?;
+        }
+        Ok(())
+    }
 }
 
 struct ServeShutdownContext<'a> {
@@ -444,13 +530,17 @@ where
         lifecycle_control.clone(),
     )?;
     publish_ready()?;
+    let connection_workers = ConnectionWorkerPool::start(
+        Arc::clone(&dispatcher),
+        Arc::clone(&force_shutdown),
+        Arc::clone(&registry),
+        observability.clone(),
+    )?;
     let mut accept_context = build_accept_context(
         listener,
         &lifecycle_control,
-        &registry,
-        &force_shutdown,
         &observability,
-        &dispatcher,
+        &connection_workers,
         signals.as_ref(),
         shutdown_beacon.as_ref(),
         endpoint_path,
@@ -470,10 +560,13 @@ where
         &lifecycle_control,
         lifecycle_waiter,
     );
+    let connection_worker_error = connection_workers.shutdown().err();
     #[cfg(unix)]
     let tcp_error = finish_tcp_loopback_server(tcp_server)?;
     #[cfg(unix)]
-    let shutdown_error = shutdown_error.or(tcp_error);
+    let shutdown_error = shutdown_error.or(connection_worker_error).or(tcp_error);
+    #[cfg(not(unix))]
+    let shutdown_error = shutdown_error.or(connection_worker_error);
     finish_serve_shutdown(serve_error, shutdown_error)
 }
 
@@ -537,10 +630,8 @@ where
 fn build_accept_context<'a>(
     listener: &'a LocalSocketListener,
     lifecycle_control: &'a LifecycleControlSourceAdapter,
-    registry: &'a Arc<ActiveConnectionRegistry>,
-    force_shutdown: &'a Arc<AtomicBool>,
     observability: &'a SubsystemObservability,
-    dispatcher: &'a Arc<dyn ApiRouter + Send + Sync>,
+    connection_workers: &'a ConnectionWorkerPool,
     signals: &'a ServeLoopSignals,
     shutdown_beacon: &'a ShutdownBeacon,
     endpoint_path: &'a Path,
@@ -549,10 +640,8 @@ fn build_accept_context<'a>(
     AcceptLoopContext {
         listener,
         lifecycle_control,
-        registry,
-        force_shutdown,
         observability,
-        dispatcher,
+        connection_workers,
         signals,
         shutdown_beacon,
         endpoint_path,
@@ -706,18 +795,6 @@ fn prepare_accept_iteration(
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
     }
-    // Keep the fixed worker bound without manufacturing a typed application
-    // failure for a request that has not entered the daemon yet.  When all
-    // workers are busy, leave the next local socket in the operating-system
-    // listener backlog until one completes.  That preserves the 64-work-item
-    // limit and avoids a burst racing a just-completed unary response into an
-    // otherwise avoidable `DaemonConnectionSaturated` response.
-    if context.registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
-        context
-            .registry
-            .wait_for_connection_change(Duration::from_millis(1))?;
-        return Ok(AcceptLoopOutcome::Continue);
-    }
     #[cfg(test)]
     if let Some(sender) = context.accept_error_inject.take() {
         let _ = sender.send(());
@@ -772,14 +849,8 @@ fn handle_accepted_stream<'scope>(
         );
     }
     *terminate_probe_pending = false;
-    spawn_connection_worker(
-        scope,
-        stream,
-        context.dispatcher,
-        context.force_shutdown,
-        context.registry,
-        context.observability,
-    )?;
+    let _ = scope;
+    context.connection_workers.dispatch(stream)?;
     Ok(AcceptLoopOutcome::Continue)
 }
 
