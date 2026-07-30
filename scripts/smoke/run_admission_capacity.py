@@ -379,6 +379,7 @@ def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
         + body
     )
     request_build_ms = (time.perf_counter() - request_started) * 1_000
+    phase = "connect"
     try:
         family = socket.AF_UNIX if endpoint.kind == "uds" else socket.AF_INET
         with socket.socket(family, socket.SOCK_STREAM) as stream:
@@ -386,9 +387,11 @@ def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
             connect_started = time.perf_counter()
             stream.connect(endpoint.address)
             connect_ms = (time.perf_counter() - connect_started) * 1_000
+            phase = "request_write"
             write_started = time.perf_counter()
             stream.sendall(request)
             request_write_ms = (time.perf_counter() - write_started) * 1_000
+            phase = "response_read"
             response_started = time.perf_counter()
             response = read_http_response_summary(stream)
             response_read_ms = (time.perf_counter() - response_started) * 1_000
@@ -406,7 +409,7 @@ def submit_admission(endpoint: LocalEndpoint, body: bytes) -> AdmissionResult:
         return AdmissionResult(
             status=0,
             elapsed_ms=(time.perf_counter() - started) * 1_000,
-            failure=str(error),
+            failure=f"{phase}: {error}",
             request_build_ms=request_build_ms,
         )
 
