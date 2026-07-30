@@ -11,13 +11,15 @@
 - just: `1.51.0`
 - sc-compose: `1.2.0`, installed from sibling checkout `F:\github\sc-compose`
 - First-round report commit: `eec67b217d7a0f224475a61f01adc6ebeac28db8`
+- Source-fix commit: `641ed02b`
+- Latest report commit before capacity attempt: `c14f983a`
 
 ## Result
 
-`just test` passed. AI.33 acceptance is not complete because the required live
-smoke was not executed with a pre-started matched daemon pair, and the capacity
-step was not run. No production-code fix was justified by the first-round
-evidence.
+`just lint`, `just test`, and the required 10/10 live localhost smoke passed on
+the exact branch binaries. AI.33 capacity acceptance is not complete because
+the required clean Windows OS account is unavailable on this host; the runner
+rejected the ordinary account before starting a benchmark daemon.
 
 ## Error Log
 
@@ -36,9 +38,14 @@ evidence.
 | E-011 | Direct local curl probe | First request returned HTTP 400: `invalid doctor HTTP request body: key must be a string at line 1 column 2`. | PowerShell single-quoted JSON contained literal backslashes (`{\"...`) instead of valid JSON; this was a probe-command quoting error, not an ATM failure. | Corrected the request with `ConvertTo-Json -Compress`; curl exited 0 and returned healthy/ready doctor JSON from the exact branch daemon. |
 | E-012 | `atm peer interface list --json` | The exact branch CLI returned an empty list (`[]`); no enabled advertised interface was available for the physical-interface smoke lane. | This Windows host had no persisted peer interface in its user ATM state. The host's usable IPv4 address is `10.10.100.98` on `Ethernet 2`; this is a setup/configuration gap, not a transport failure. | Pending immediate operational fix: save one enabled interface bound to `10.10.100.98:43101` and advertise `10.10.100.98`, then verify the single daemon reloads it. |
 | E-013 | Exact daemon restart after E-012 | `atm-daemon.exe` exited immediately with code `70`: `daemon runtime assembly is unavailable; atm-daemon startup is blocked`. | The enabled mutual-TLS interface had no local certificate configured. The daemon startup composition requires a local certificate before binding any enabled mTLS HTTPS interface. The retained `.atm` log added no Error/Warn record; this is the daemon's sanitized startup error contract. | Pending operational fix: initialize the local test certificate from the existing host-local PEM bundle, restart one exact branch daemon, and verify the 43101 listener. No production code change indicated. |
-| E-014 | Exact daemon restart after E-013 | `configured TLS certificate fingerprint does not match the PEM bundle` (exit `1`). A doctor auto-start retry also logged `daemon_launch_gate` contended and `daemon_auto_start` timeout_exhausted. | The certificate record was initialized with a `sha256:` label. The branch daemon normalizes only hexadecimal/colon fingerprint material, so the label changed the compared value and could not match the PEM certificate. | Pending operational fix: replace the record with the same fingerprint bytes without the `sha256:` label, then restart one exact branch daemon. No production code change indicated. |
+| E-014 | Exact daemon restart after E-013 | `configured TLS certificate fingerprint does not match the PEM bundle` (exit `1`). A doctor auto-start retry also logged `daemon_launch_gate` contended and `daemon_auto_start` timeout_exhausted. | The stored `sha256:` label is valid certificate-fingerprint presentation, but the source normalizer treated the `a` in that prefix as hexadecimal input. The resulting value could not match the PEM digest. | Fixed in `641ed02b`: strip one case-insensitive `sha256:` presentation prefix before separator normalization, preserving raw and colon-separated forms. Unit coverage passes; the host record was not changed as a workaround. |
 | E-015 | `just smoke localhost`, report `reports/smoke/20260730T165539Z/FastPC4-localhost.json` | All 10 attempts passed doctor, advertised-host, physical-interface send/read, and required-ack delivery. All 10 acknowledgement reply steps failed: `agent 'cwin' was not found in team 'atm-dev'`. | The smoke environment selected `ATM_TEAM=atm-dev`, but the host roster contains only `capacity-team` with `capacity-agent`; `atm-dev` is not persisted on this Windows account. Retained logs contain repeated `ATM_AGENT_NOT_FOUND` errors plus peer write/recovery warnings for the self target. | Pending operational fix: use the public roster commands to leave one local smoke team member `cwin`, set `ATM_TEAM` to that team, and rerun the same prescribed smoke. No production code change indicated. |
 | E-016 | Second and third `just smoke localhost` runs, reports `reports/smoke/20260730T165659Z/FastPC4-localhost.json` and `reports/smoke/20260730T165810Z/FastPC4-localhost.json` | Attempt 1 ordinary physical-interface send failed in both runs with Windows `WSAECONNRESET` 10054: first while reading daemon HTTP headers, then while writing daemon HTTP request headers. The same attempts' required-ack and reply passed; attempts 2-10 passed all rows. | The retained events are `ATM_DAEMON_UNAVAILABLE` on the local loopback HTTP control path, not the 43101 peer listener. PID `13396` stayed alive, both listeners remained bound, and no daemon shutdown/error event occurred. The failure is reproducible at the first physical send after the runner's doctor call, with phase variation between write and read. | No safe retry was added: a reset during request write can occur after some bytes are accepted, so automatic retry of a non-idempotent send could duplicate a message. This requires a scoped Windows transport fix or an explicit team decision; no production change made in this smoke branch. |
+| E-017 | Focused `cargo test -p atm-daemon-client` after the Windows preflight-retry change | Windows test compilation failed three times with `use of undeclared type AtmError` in the new predicate test. | The test module did not import the error type used by its new assertions. Production code compiled to this point; this was an implementation test-import omission. | Fixed in `641ed02b` by importing `atm_storage::AtmError`; focused tests and full `just test` pass. |
+| E-018 | `just lint`, `.just/logs/20260730170255-clippy.log` | Clippy rejected the new Windows-only preflight helper: `this if statement can be collapsed` at `crates/atm-daemon-client/src/compatibility.rs:148-149`. | The initial implementation used nested `if let` and predicate checks. This is a source-style error in the new fix, not a platform behavior failure. | Fixed in `641ed02b` with a let-chain; `just lint` subsequently passed all 23 checks. |
+| E-019 | First full `just test` with the smoke daemon running | Five `atm-daemon` tests failed with `DaemonServingStateRejected`: `a live ATM daemon already owns C:\Users\rand.lee\.atm\daemon\owner.lock`; one runtime-composition test also reported `daemon local ipc ready signal sender dropped before readiness`. | The full test suite uses the same user-scoped ATM home and host-wide daemon ownership lock as the live smoke daemon. Running both concurrently is intentionally rejected by the singleton contract; the readiness failure is the corresponding test startup consequence. This is test-environment contention, not a production regression. | Resolved as environment-only: stopped PID `13396`, reran `just test` with no daemon, and the full suite passed. The rebuilt daemon was then restarted once as PID `52228`. |
+| E-020 | Retained `.atm` log scan after clean smoke report `reports/smoke/20260730T170917Z/FastPC4-localhost.json` | The log contains 17 historical `Error` rows from E-001/E-015/E-016, but no `Error` row during the clean 10/10 smoke window. It contains 60 `Warn` rows in that window: expected `peer_delivery` outcomes `write_persisted` and `peer_recovery_attempt` for the self-target physical-interface lane. | The warning-level peer-delivery records are the daemon's retained outcome telemetry for the prescribed self-target lane; they are not failed sends. The historical errors predate the clean run and remain documented in earlier rows. | No new runtime error. Evidence retained in the host log; no `.atm` state or log files committed. |
+| E-021 | `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T171045Z.json` | Runner exited `1` before starting a daemon: `admission-capacity smoke requires a dedicated clean OS user whose host runtime root does not already exist: C:\Users\rand.lee\.atm`. | The current account is the normal developer account and already owns persistent ATM runtime/database state. The explicit environment variable acknowledges the required isolation; it cannot convert an existing account into a clean benchmark account. | Correctly blocked by the runner's ADR-026 guard. No Windows code fix is appropriate. Capacity remains unclaimed until a designated clean Windows OS account is provisioned; no daemon was leaked and the evidence artifact records zero benchmark runs. |
 
 ## Key Contract Clarification
 
@@ -147,3 +154,17 @@ Before the next smoke attempt, pull the branch and re-read the shared handoff.
 Use the daemon-switch procedure to start exactly one matched release pair,
 verify doctor readiness, then run `just smoke localhost`. Commit and push this
 report after each update.
+
+## E-016 Follow-Up
+
+`641ed02b` adds only a classified retry for the preceding read-only
+compatibility preflight; it deliberately does not retry the side-effecting
+send that produced E-016. The clean 10/10 run had no reset, but does not prove
+the daemon connection-ownership defect is fully root-caused. Team follow-up
+remains required for a deterministic transport regression test.
+
+## Final Runtime State
+
+After the capacity attempt, exactly one rebuilt branch daemon is running as
+PID `54632`, with local HTTP `127.0.0.1:62336` and advertised peer HTTPS
+`10.10.100.98:43101` listeners. Doctor reports healthy and ready.

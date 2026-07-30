@@ -947,6 +947,10 @@ fn certificate_fingerprint(certificate: &CertificateDer<'_>) -> String {
 }
 
 fn normalize_fingerprint(value: &str) -> String {
+    let value = value
+        .get(..7)
+        .filter(|prefix| prefix.eq_ignore_ascii_case("sha256:"))
+        .map_or(value, |_| &value[7..]);
     value
         .chars()
         .filter(char::is_ascii_hexdigit)
@@ -1062,8 +1066,16 @@ mod tests {
 
     #[test]
     fn fingerprints_are_exact_after_presentation_normalization() {
-        assert_eq!(normalize_fingerprint("AA:bb-CC"), "aabbcc");
-        assert_ne!(normalize_fingerprint("aabbcd"), "aabbcc");
+        let raw = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+        let colon_separated = "00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99:aa:bb:cc:dd:ee:ff";
+        assert_eq!(normalize_fingerprint(raw), raw);
+        assert_eq!(normalize_fingerprint(colon_separated), raw);
+        assert_eq!(
+            normalize_fingerprint(&format!("sha256:{colon_separated}")),
+            raw
+        );
+        assert_eq!(normalize_fingerprint(&format!("SHA256:{raw}")), raw);
+        assert_ne!(normalize_fingerprint(raw), "aabbcc");
     }
 
     #[test]

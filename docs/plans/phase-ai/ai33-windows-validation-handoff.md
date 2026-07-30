@@ -109,6 +109,35 @@ The executable procedure is
   confirmed Windows transport finding for team-lead review, with no unsafe
   smoke-branch code change.
 
+### 2026-07-30 — cwin — preflight retry implementation test error
+
+- The focused `cargo test -p atm-daemon-client` compile caught a missing
+  `AtmError` import in the new Windows-only predicate test. E-017 records the
+  exact compile failure; production code compiled through that point.
+- The missing import is corrected in the working tree; focused and full
+  verification is still pending. The implementation still retries only the
+  idempotent compatibility preflight, never a write.
+
+### 2026-07-30 — cwin — lint error in preflight retry implementation
+
+- `just lint` failed at `.just/logs/20260730170255-clippy.log` because the new
+  Windows-only helper used a nested `if let` that clippy requires to be
+  collapsed. This is a source-style error in the pending fix, not a runtime
+  transport result.
+- E-018 records the failure. The next commit will use a let-chain, rerun lint,
+  and retain the compatibility retry's strict scope: Windows WSAECONNRESET
+  during the read-only preflight only, never a side-effecting send.
+
+### 2026-07-30 — cwin — full-test singleton contention
+
+- The first full `just test` run was intentionally attempted while the one
+  exact-branch smoke daemon was live. Five `atm-daemon` tests failed on the
+  host-wide `C:\Users\rand.lee\.atm\daemon\owner.lock`; the retained output
+  also shows the related readiness-sender failure.
+- E-019 records this as test-environment contention. The daemon singleton is
+  working as designed. The next iteration stops only that owned daemon, runs
+  the full test suite without a live daemon, then starts one matching daemon
+  for smoke.
 ### 2026-07-30 — arch-ctm — reviewed next steps
 
 - Review of cwin's commits through `b8792a09`: they add only sanitized evidence
@@ -142,3 +171,42 @@ The executable procedure is
   investigate connection ownership and request-worker close paths with a
   deterministic regression test. Only a clean 10/10 smoke batch unlocks the
   isolated capacity runner.
+
+### 2026-07-30 — cwin — source fixes and clean local smoke
+
+- Pushed source fixes in `641ed02b`: the TLS fingerprint normalizer now strips
+  one case-insensitive `sha256:` presentation prefix, and the Windows client
+  retries only a classified WSAECONNRESET/10054 during the read-only
+  compatibility preflight. Side-effecting sends remain single-attempt.
+- Focused tests, `just lint` (23/23 checks), and `just test` pass. The first
+  test failure was E-019 singleton contention and passed after stopping only
+  the owned daemon.
+- Rebuilt and started exactly one release daemon from this branch (PID
+  `52228`), with local HTTP `127.0.0.1:56810` and advertised peer
+  `10.10.100.98:43101`. Doctor is healthy/ready with matching
+  `1.4.0-beta-ai.38` versions.
+- `just smoke localhost` completed 10/10. Every doctor, advertised-host,
+  physical-interface send/read/content, required-ack, and acknowledgement
+  reply row passed. Evidence: `reports/smoke/20260730T170917Z/FastPC4-localhost.json`.
+- The post-run retained-log scan found no new Error rows and 60 expected
+  warning-level peer-delivery outcome rows in the smoke window. Historical
+  errors remain listed in the root-cause report; no runtime state was
+  committed.
+
+### 2026-07-30 — cwin — isolated capacity account blocker
+
+- After stopping the one smoke daemon, the exact prescribed command
+  `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`
+  exited `1` before starting a benchmark daemon. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T171045Z.json`.
+- The runner rejected the existing `C:\Users\rand.lee\.atm` host runtime
+  root. This is the ordinary developer account, not a clean designated
+  capacity account; the environment variable cannot override that ADR-026
+  invariant. No capacity claim is made and no daemon leaked.
+- A clean Windows OS account is the only remaining prerequisite for AI.33
+  capacity acceptance. The 10/10 local smoke and repository gates are already
+  green on the exact branch binaries.
+- Final local runtime state after the capacity attempt: exactly one rebuilt
+  branch daemon is running as PID `54632`, with `127.0.0.1:62336` local HTTP
+  and `10.10.100.98:43101` advertised peer HTTPS listeners; doctor is healthy
+  and ready.
