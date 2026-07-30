@@ -5,15 +5,10 @@ from __future__ import annotations
 import ast
 from collections import OrderedDict
 import inspect
-from pathlib import Path
-import sys
 import textwrap
 import unittest
 
 import atm_graft
-
-BRIDGE_ROOT = Path(__file__).resolve().parents[1] / "python"
-sys.path.insert(0, str(BRIDGE_ROOT))
 
 from atm_graft_hermes_bridge import HermesGraftBridge, MailboxRecoveryNotice  # noqa: E402
 

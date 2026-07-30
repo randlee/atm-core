@@ -45,7 +45,7 @@ def collect_violations(
 ) -> list[HermesAdapterViolation]:
     source_root = repo_root / ADAPTER_SOURCE_ROOT
     violations: list[HermesAdapterViolation] = []
-    for source_path in sorted(source_root.glob("*.py")):
+    for source_path in sorted(source_root.rglob("*.py")):
         relative_path = source_path.relative_to(repo_root).as_posix()
         for line_number, line in enumerate(source_path.read_text(encoding="utf-8").splitlines(), start=1):
             for symbol in retired_symbols:

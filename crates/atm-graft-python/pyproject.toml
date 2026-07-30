@@ -9,4 +9,6 @@ requires-python = ">=3.9"
 
 [tool.maturin]
 module-name = "atm_graft"
+python-source = "python"
+python-packages = ["atm_graft_hermes_adapter", "atm_graft_hermes_bridge"]
 features = ["extension-module"]
