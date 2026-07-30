@@ -329,3 +329,7 @@ The current fastpc4 execution authority and baseline loop are in
   Windows worker discards `handle_connection` errors, so the server-side
   response-write failure is currently hidden. The next change logs that
   structured transport error before another capacity run.
+- The first logging edit tripped the repository function-length gate because
+  the accept loop reached 90 lines. The worker spawn and logging block were
+  extracted into `spawn_connection`; the focused transport test and
+  `just lint` now pass all 23 checks.
