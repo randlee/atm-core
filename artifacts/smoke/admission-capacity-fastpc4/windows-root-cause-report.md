@@ -18,9 +18,12 @@
 ## Result
 
 `just lint`, `just test`, and the required 10/10 live localhost smoke passed on
-the exact branch binaries. AI.33 capacity acceptance is still pending: the
-authorized disposable-state run reached daemon startup but exposed a
-Windows-only readiness-marker defect before the benchmark intervals began.
+the exact branch binaries. AI.33 capacity acceptance remains blocked by the
+stock Windows dynamic TCP-port range: the authorized disposable-state run
+reached all 20 intervals, but 20,000 one-connection-per-admission requests
+cannot complete reliably within the 16,384-port range while closed sockets
+remain in `TIME_WAIT`. The authorized range expansion requires administrator
+elevation unavailable in this session.
 
 ## Error Log
 
@@ -60,6 +63,21 @@ Windows-only readiness-marker defect before the benchmark intervals began.
 | E-032 | `netsh int ipv4 set dynamicport tcp start=1024 num=64511` | Non-elevated shell returned `The requested operation requires elevation (Run as administrator)`. Before and after remained `Start Port: 49152`, `Number of Ports: 16384`. The UAC-launched attempt did not complete in the remote shell. | The current Windows session cannot change the global TCP dynamic-port range without administrator elevation. | No system setting was changed and no unsafe socket workaround was added. Capacity remains blocked on this host until an administrator applies the documented range change or supplies a clean capacity host with sufficient ephemeral ports. |
 
 ## Key Contract Clarification
+
+## Final Validation State
+
+- Branch tip: `36139c9e`.
+- `just lint`: passed all 23 checks after the final source change
+  (`b1fa33c0` plus diagnostic runner `e1ce0fb8`).
+- `just test`: passed with 317 tests and 2 skipped on the final pushed tree.
+- Latest capacity evidence: `admission-capacity-20260730T192601Z.json`,
+  `18,585/20,000` accepted with response-header 10053 failures; this is not
+  claimed as a capacity pass.
+- Windows port range remained unchanged at `49152-65535` because the
+  administrator-only `netsh` update could not be completed.
+- Final exact release daemon: PID `52480`; Doctor healthy with zero warnings
+  or errors; local HTTP `127.0.0.1:49489`; peer HTTPS
+  `10.10.100.98:43101`.
 
 ## Capacity Interval Evidence
 

@@ -371,3 +371,14 @@ The current fastpc4 execution authority and baseline loop are in
   elevation error, and the UAC-launched attempt did not complete in the
   remote session; the range remains unchanged. No system setting or ATM code
   workaround was applied.
+
+### 2026-07-30 - cwin - final Windows runtime state
+
+- Final full `just test` passed with 317 tests and 2 skipped. The final source
+  lint state is 23/23 checks passed.
+- The exact release daemon from the branch was restarted after testing as PID
+  `52480`. Doctor is healthy with zero warnings/errors; listeners are local
+  HTTP `127.0.0.1:49489` and peer HTTPS `10.10.100.98:43101`.
+- Capacity remains unclaimed because the stock Windows port range could not
+  be expanded without administrator elevation. The branch has no retry,
+  timeout, worker, queue, or capacity-gate weakening.
