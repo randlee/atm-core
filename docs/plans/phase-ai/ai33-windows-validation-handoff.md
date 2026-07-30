@@ -439,3 +439,25 @@ The current fastpc4 execution authority and baseline loop are in
 - Direct branch CLI `atm doctor --json` exited `0` with `status=healthy`,
   zero warnings, and zero errors. The daemon is left running in this healthy
   state for the next operator.
+
+### 2026-07-30 - cwin - concurrency sweep and inbox check
+
+- Pulled branch commit `7a1247e4` and rebuilt the exact release pair. The
+  shared handoff contained no newer arch-ctm direction. An initial `atm read`
+  failed because the shell lacked identity configuration; the corrected read
+  with `capacity-agent/capacity-team` returned zero unread, pending-ack, and
+  history messages.
+- Ran diagnostic-only concurrency variants by overriding the in-memory runner
+  `WORKERS` value without editing the committed script. Results over the full
+  20-interval workload were: 16 workers `15,193/20,000`; 32 workers
+  `14,985/20,000`; 48 workers `16,681/20,000`; and the recorded 64-worker
+  baseline `16,768/20,000`. All variants had response-header WinError 10053
+  failures and daemon logs containing only successful application records.
+- Lower concurrency did not produce a clean result and reduced total
+  throughput. The complete sweep table and sanitized artifacts are in
+  `artifacts/smoke/admission-capacity-fastpc4/windows-root-cause-report.md`.
+  The official runner, 64-connection daemon cap, and capacity gate remain
+  unchanged.
+- Final daemon after the sweep: PID `26552`, Doctor healthy with zero
+  warnings/errors, local HTTP `127.0.0.1:37978`, peer HTTPS
+  `10.10.100.98:43101`; exactly one matching release daemon is running.

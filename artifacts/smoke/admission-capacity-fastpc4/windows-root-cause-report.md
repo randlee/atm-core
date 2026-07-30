@@ -68,6 +68,9 @@ no ATM transport contract or capacity gate was changed.
 | E-033 | Capacity rerun from branch `21c47109`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T194602Z.json` and `diagnostics/admission-capacity-57032-atm.log.jsonl` | The expanded-range run completed startup, Doctor, all 20 intervals, and teardown, but returned `16,768/20,000` HTTP 201 responses. All 20 intervals reported `response_read: response_headers: [WinError 10053]`. The daemon logged 16,768 successful `send`/`sent` and `peer_delivery/write_persisted` pairs, no handler/error records, stdout only `ATM_DAEMON_READY`, and empty stderr. Post-run inventory showed `16,939` loopback `TIME_WAIT` entries. | The failure is no longer explained by the old dynamic-port range or stale pre-run `TIME_WAIT`. Successful application records equal the accepted count, while failed clients never produce daemon handler/error records and abort while awaiting response headers. The remaining supported diagnosis is Windows loopback listener/accept backlog pressure during the runner's 1,000-client burst against the intentionally bounded 64-connection admission path. This is not evidence of a daemon crash or database failure. | Not fixed in source. No retries, worker/queue increases, timeout changes, or gate weakening were made. Requires a separately scoped Windows transport/backlog investigation or a benchmark contract decision. |
 | E-034 | First 48-worker diagnostic invocation | `ModuleNotFoundError: No module named 'daemon_lifecycle'` before the runner started. | The diagnostic `python -c` import did not include `scripts/smoke` on `sys.path`; this was an operator invocation error, not an ATM failure. | Corrected the invocation by inserting `scripts/smoke` into `sys.path`; no repository change. ATM state was restored. |
 | E-035 | 48-worker diagnostic variant, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T195829Z.json` and `diagnostics/admission-capacity-12428-atm.log.jsonl` | The unmodified runner logic with its module-level `WORKERS` value overridden to `48` completed all 20 intervals and clean teardown, but returned `16,681/20,000` HTTP 201 responses. All intervals failed at response-header read with `WinError 10053`. The daemon logged exactly 16,681 successful send and peer-delivery pairs, with no handler/error records. | Reducing client concurrency from 64 to 48 did not remove the abort, so the failure is not explained by simple equality between client concurrency and the daemon's 64 active-connection cap. This strengthens the sustained short-lived TCP connection churn/listener-backlog diagnosis, while leaving the exact Windows kernel threshold uninstrumented. | Diagnostic only; the official runner remains `WORKERS=64`. No production code, retry, queue, timeout, or capacity-gate change was made. |
+| E-036 | First `atm read --json` before the sweep | `identity is not configured` and the command exited `1`. | The shell did not have the smoke identity/team environment variables required by the CLI. | Retried with `ATM_IDENTITY=capacity-agent` and `ATM_TEAM=capacity-team`; the inbox returned zero unread, pending-ack, and history messages. No code issue. |
+| E-037 | 16-worker diagnostic variant, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T200548Z.json` and `diagnostics/admission-capacity-61940-atm.log.jsonl` | The full 20-interval run returned `15,193/20,000` HTTP 201 responses. All intervals had response-header `WinError 10053`; the daemon logged exactly 15,193 successful send/peer-delivery pairs and no handler/error records. | Lowering the diagnostic concurrency to 16 reduced throughput and did not eliminate the Windows abort. The 16-worker run also exceeded the one-second interval limit, with average interval elapsed time about `1.63s`. | Diagnostic only; no source or official runner change. |
+| E-038 | 32-worker diagnostic variant, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T200619Z.json` and `diagnostics/admission-capacity-24400-atm.log.jsonl` | The full 20-interval run returned `14,985/20,000` HTTP 201 responses. All intervals had response-header `WinError 10053`; the daemon logged exactly 14,985 successful send/peer-delivery pairs and no handler/error records. | Lowering concurrency to 32 also reduced total throughput and did not eliminate the abort. Average interval elapsed time was about `0.89s`, but accepted admissions remained below 1,000 in every interval. | Diagnostic only; no source or official runner change. |
 
 ## Key Contract Clarification
 
@@ -156,6 +159,25 @@ accepted counts were `817,817,844,817,837,850,814,840,859,859` and
 `840,836,856,824,817,868,811,816,838,821`; all failures were the same
 response-header WinError 10053. This variant was not treated as an official
 capacity result and did not modify the committed runner.
+
+## Concurrency Sweep
+
+The diagnostic sweep overrode only the in-memory `WORKERS` value; the official
+runner remains `WORKERS=64`. Every run used the same 20 intervals, 1,000
+responses per interval, fresh runner-owned state, and exact release binaries.
+
+| Client workers | Accepting-peer | Unavailable-peer | Total accepted | Result |
+| ---: | ---: | ---: | ---: | --- |
+| 16 | 7,599 | 7,594 | 15,193/20,000 | response-header 10053 in all intervals |
+| 32 | 7,488 | 7,497 | 14,985/20,000 | response-header 10053 in all intervals |
+| 48 | 8,354 | 8,327 | 16,681/20,000 | response-header 10053 in all intervals |
+| 64 | 8,383 | 8,385 | 16,768/20,000 | response-header 10053 in all intervals |
+
+The sweep does not show a lower-concurrency path to `20,000/20,000`.
+Throughput improved from 32 to 64 workers, but the abort remained and no run
+produced a daemon handler error. This supports a sustained Windows TCP
+connection-churn/listener-backlog limit rather than a simple 64-client slot
+collision or a recoverable ATM request failure.
 
 Aggregate: `18,374/20,000` accepted; slowest runner stage was
 `unavailable_burst_ms` at `5562.0ms`. The daemon process was PID `59148`, and
