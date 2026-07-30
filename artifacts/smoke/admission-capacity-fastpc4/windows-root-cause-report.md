@@ -18,12 +18,16 @@
 ## Result
 
 `just lint`, `just test`, and the required 10/10 live localhost smoke passed on
-the exact branch binaries. AI.33 capacity acceptance remains blocked by the
-stock Windows dynamic TCP-port range: the authorized disposable-state run
-reached all 20 intervals, but 20,000 one-connection-per-admission requests
-cannot complete reliably within the 16,384-port range while closed sockets
-remain in `TIME_WAIT`. The authorized range expansion requires administrator
-elevation unavailable in this session.
+the exact branch binaries. AI.33 capacity acceptance remains blocked. The
+authorized disposable-state run reached all 20 intervals, but only
+`16,768/20,000` one-connection-per-admission requests returned HTTP 201 after
+the Windows dynamic TCP range was expanded to `1024-65534`. Every failure was
+at response-header read with `WinError 10053`; the daemon logged no handler
+errors and logged exactly the 16,768 successful sends. This rules out stale
+`TIME_WAIT` and the former 16,384-port range as the sole cause. The remaining
+evidence points to Windows loopback admission/backlog pressure under the
+runner's 1,000-client burst and the daemon's bounded 64-connection contract;
+no ATM transport contract or capacity gate was changed.
 
 ## Error Log
 
@@ -60,7 +64,8 @@ elevation unavailable in this session.
 | E-029 | Capacity rerun from `e1ce0fb8`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T192334Z.json` and post-run Windows socket inventory | All 20 interval failures were `response_read: response_headers: [WinError 10053]`; the daemon processed 18,490 sends with no handler/error records. After teardown the host had 14,160 TCP `TIME_WAIT` entries while Windows reported a 16,384-port dynamic TCP range. | The runner creates one new short-lived loopback TCP connection per admission and requires 20,000 connections in one run. Windows retains closed client ports in `TIME_WAIT`; once the ephemeral range is pressured, connections can establish but abort before response headers. This is client-side Windows resource exhaustion, not a daemon crash or response-handler error. | Pending disposition: verify on a fresh/expired `TIME_WAIT` pool before changing the runner. Do not add retries, increase daemon workers/queues/timeouts, or weaken the 1,000/second gate. |
 | E-030 | Fresh-port rerun from `9642522d`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T192601Z.json` | The host started with only 22 `TIME_WAIT` entries, but the run still produced response-header 10053 failures in all 20 intervals: 18,585/20,000 HTTP 201 admissions. The daemon logged 18,585 successful sends and no handler errors; post-run `TIME_WAIT` was 14,522. | This confirms the stock Windows dynamic TCP range, not stale prior runs, is the limiting condition: 20,000 one-connection-per-admission requests exceed the 16,384 available dynamic TCP ports while closed sockets remain in `TIME_WAIT`. | Windows-only environment fix authorized: expand the dynamic IPv4 TCP range before the next run and record the prior/new values. No ATM source, retry, timeout, worker, queue, or gate change is required for this host limitation. |
 | E-031 | Intermediate diagnostic runs from `4330b344` and `b1fa33c0`, evidence `admission-capacity-20260730T191703Z.json` and `admission-capacity-20260730T192203Z.json` | Both additional 20-interval runs completed daemon startup and clean teardown but reproduced response-header/response-read 10053 failures with no daemon stderr or handler-error records. | These runs are consistent with E-029/E-030 and were retained while adding phase labels and structured server-side error logging; neither revealed a distinct ATM code failure. | Covered by the committed diagnostic and logging changes; no separate production fix indicated. |
-| E-032 | `netsh int ipv4 set dynamicport tcp start=1024 num=64511` | Non-elevated shell returned `The requested operation requires elevation (Run as administrator)`. Before and after remained `Start Port: 49152`, `Number of Ports: 16384`. The UAC-launched attempt did not complete in the remote shell. | The current Windows session cannot change the global TCP dynamic-port range without administrator elevation. | No system setting was changed and no unsafe socket workaround was added. Capacity remains blocked on this host until an administrator applies the documented range change or supplies a clean capacity host with sufficient ephemeral ports. |
+| E-032 | `netsh int ipv4 set dynamicport tcp start=1024 num=64511` | The first non-elevated shell returned `The requested operation requires elevation (Run as administrator)`. The approved elevated invocation completed with exit code `0`; before: `Start Port: 49152`, `Number of Ports: 16384`; after: `Start Port: 1024`, `Number of Ports: 64511`. | Windows requires administrator elevation for this global TCP setting. | Resolved as an environment change; no ATM source workaround was added. The subsequent capacity rerun is recorded as E-033 and still failed. |
+| E-033 | Capacity rerun from branch `21c47109`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T194602Z.json` and `diagnostics/admission-capacity-57032-atm.log.jsonl` | The expanded-range run completed startup, Doctor, all 20 intervals, and teardown, but returned `16,768/20,000` HTTP 201 responses. All 20 intervals reported `response_read: response_headers: [WinError 10053]`. The daemon logged 16,768 successful `send`/`sent` and `peer_delivery/write_persisted` pairs, no handler/error records, stdout only `ATM_DAEMON_READY`, and empty stderr. Post-run inventory showed `16,939` loopback `TIME_WAIT` entries. | The failure is no longer explained by the old dynamic-port range or stale pre-run `TIME_WAIT`. Successful application records equal the accepted count, while failed clients never produce daemon handler/error records and abort while awaiting response headers. The remaining supported diagnosis is Windows loopback listener/accept backlog pressure during the runner's 1,000-client burst against the intentionally bounded 64-connection admission path. This is not evidence of a daemon crash or database failure. | Not fixed in source. No retries, worker/queue increases, timeout changes, or gate weakening were made. Requires a separately scoped Windows transport/backlog investigation or a benchmark contract decision. |
 
 ## Key Contract Clarification
 
@@ -70,14 +75,13 @@ elevation unavailable in this session.
 - `just lint`: passed all 23 checks after the final source change
   (`b1fa33c0` plus diagnostic runner `e1ce0fb8`).
 - `just test`: passed with 317 tests and 2 skipped on the final pushed tree.
-- Latest capacity evidence: `admission-capacity-20260730T192601Z.json`,
-  `18,585/20,000` accepted with response-header 10053 failures; this is not
+- Latest capacity evidence: `admission-capacity-20260730T194602Z.json`,
+  `16,768/20,000` accepted with response-header 10053 failures; this is not
   claimed as a capacity pass.
-- Windows port range remained unchanged at `49152-65535` because the
-  administrator-only `netsh` update could not be completed.
-- Final exact release daemon: PID `52480`; Doctor healthy with zero warnings
-  or errors; local HTTP `127.0.0.1:49489`; peer HTTPS
-  `10.10.100.98:43101`.
+- Windows port range was changed with the approved elevated command from
+  `49152-65535` to `1024-65534`; the change did not clear E-033.
+- The exact release daemon is restarted after report publication; its final
+  PID, listeners, and Doctor result are appended below after verification.
 
 ## Capacity Interval Evidence
 
@@ -108,6 +112,39 @@ HTTP 201 responses.
 | unavailable | 8 | 943 | 0.527 | 1000 | WinError 10053 |
 | unavailable | 9 | 897 | 0.526 | 1000 | WinError 10053 |
 | unavailable | 10 | 941 | 0.543 | 1000 | WinError 10053 |
+
+## Latest Capacity Interval Evidence
+
+The latest exact release pair (`21c47109`) ran after the approved Windows TCP
+range change. Each row has 1,000 responses; `accepted` counts HTTP 201
+responses. Every interval failed at response-header read with WinError 10053.
+
+| Case | Interval | Accepted | Elapsed (s) | Responses | First failure |
+| --- | ---: | ---: | ---: | ---: | --- |
+| accepting | 1 | 827 | 0.519 | 1000 | response headers / WinError 10053 |
+| accepting | 2 | 836 | 0.542 | 1000 | response headers / WinError 10053 |
+| accepting | 3 | 777 | 0.470 | 1000 | response headers / WinError 10053 |
+| accepting | 4 | 840 | 0.567 | 1000 | response headers / WinError 10053 |
+| accepting | 5 | 857 | 0.515 | 1000 | response headers / WinError 10053 |
+| accepting | 6 | 853 | 0.510 | 1000 | response headers / WinError 10053 |
+| accepting | 7 | 827 | 0.527 | 1000 | response headers / WinError 10053 |
+| accepting | 8 | 841 | 0.502 | 1000 | response headers / WinError 10053 |
+| accepting | 9 | 872 | 0.542 | 1000 | response headers / WinError 10053 |
+| accepting | 10 | 853 | 0.490 | 1000 | response headers / WinError 10053 |
+| unavailable | 1 | 820 | 0.484 | 1000 | response headers / WinError 10053 |
+| unavailable | 2 | 862 | 0.577 | 1000 | response headers / WinError 10053 |
+| unavailable | 3 | 821 | 0.554 | 1000 | response headers / WinError 10053 |
+| unavailable | 4 | 827 | 0.534 | 1000 | response headers / WinError 10053 |
+| unavailable | 5 | 854 | 0.583 | 1000 | response headers / WinError 10053 |
+| unavailable | 6 | 844 | 0.564 | 1000 | response headers / WinError 10053 |
+| unavailable | 7 | 854 | 0.503 | 1000 | response headers / WinError 10053 |
+| unavailable | 8 | 841 | 0.552 | 1000 | response headers / WinError 10053 |
+| unavailable | 9 | 825 | 0.549 | 1000 | response headers / WinError 10053 |
+| unavailable | 10 | 837 | 0.554 | 1000 | response headers / WinError 10053 |
+
+Aggregate: `16,768/20,000` accepted. The slowest runner stage was
+`unavailable_burst_ms` at `5467.4ms`. The runner-owned daemon was PID `57032`;
+the wrapper stopped it cleanly and restored the original `.atm` state.
 
 Aggregate: `18,374/20,000` accepted; slowest runner stage was
 `unavailable_burst_ms` at `5562.0ms`. The daemon process was PID `59148`, and

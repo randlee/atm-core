@@ -382,3 +382,31 @@ The current fastpc4 execution authority and baseline loop are in
 - Capacity remains unclaimed because the stock Windows port range could not
   be expanded without administrator elevation. The branch has no retry,
   timeout, worker, queue, or capacity-gate weakening.
+
+### 2026-07-30 - cwin - elevated port-range rerun and remaining blocker
+
+- Pulled `feature/pAI-s33-admission-capacity-smoke` at `21c47109`, rebuilt the
+  exact release CLI/daemon, and applied the approved elevated command
+  `netsh int ipv4 set dynamicport tcp start=1024 num=64511`. The range changed
+  from `49152/16384` to `1024/64511` successfully.
+- Reran the prescribed command with `ATM_CAPACITY_ISOLATED_OS_USER=1`, while
+  preserving and restoring the existing `.atm` state. The exact runner daemon
+  was PID `57032`; Doctor was healthy, `ATM_DAEMON_READY` was emitted, all 20
+  intervals ran, and teardown was clean. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T194602Z.json`.
+- The expanded range did not produce a pass: `16,768/20,000` HTTP 201
+  responses. All failures were `response_read: response_headers: [WinError
+  10053]`. The daemon log contains exactly 16,768 successful send records,
+  no handler/error records, stdout only `ATM_DAEMON_READY`, and empty stderr.
+  Post-run inventory contained `16,939` loopback `TIME_WAIT` entries.
+- E-033 is therefore no longer attributed solely to the former 16,384-port
+  range or stale `TIME_WAIT`. The remaining evidence points to Windows
+  loopback listener/accept backlog pressure under the runner's 1,000-client
+  burst and the intentionally bounded 64-connection admission path. No
+  retries, worker/queue increases, timeout changes, or gate weakening were
+  made. Full details and the 20-interval table are in
+  `artifacts/smoke/admission-capacity-fastpc4/windows-root-cause-report.md`.
+- Next action: keep the ATM source contract unchanged and have the Windows
+  transport owners decide whether to investigate listener/backlog behavior as
+  a separate scoped fix or classify this benchmark result as an environment/
+  benchmark-limit finding.
