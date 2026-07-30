@@ -20,7 +20,8 @@
   triage:triagedAt "2026-07-30T00:16:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-PHASE-END-QA-1 ;
   triage:foundAt "2026-07-30T00:14:52Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "2" ;
+  triage:progressNote "AI33-QA-1 (PR #695 @ 199111d3) verdict: FAIL, 3/7 deliverables (42.9%). The runner deliverable now exists (closing the original 'entirely absent' gap), but the ADR-026 deferred-execution question this record's closure depended on is now resolved by real evidence, not a waiver: arch-ctm's M5 isolated-OS-user live run (see AI33-M5-CAPACITY-THROUGHPUT-FAIL, blocking) shows the daemon admission path only sustains ~170 accepted/s vs the required >=1,000/s (97.9% HTTP 503 rejection rate under load). This is a genuine capacity/backpressure defect, not a missing-evidence gap — quality-mgr does not rule 'runner exists + unit-tested' as satisfying this record. Also independently blocking: RBQA-F002 (static placeholder per-stage timing data, not real instrumentation), a plan-sequencing violation (AI.33 marked complete in docs/project-plan.md while AI.32 was still in_progress), and a genuine Windows CI lint failure (hardcoded POSIX paths in the new test suite). This record stays open until the daemon admission-path bottleneck is root-caused and fixed, throughput evidence meets the >=1,000/s bar, and the independent findings above are resolved." .
 
 <urn:atm:triage:worktree/integrate-phase-ai-31-33/05cc0d91>
   a triage:WorktreeSnapshot ;
