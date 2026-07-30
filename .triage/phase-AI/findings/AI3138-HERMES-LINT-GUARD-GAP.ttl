@@ -15,12 +15,15 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope ".just/run_lint.py; .just/run_pytests.py; crates/atm-graft-python/tests/test_hermes_adapter.py; crates/atm-graft-python/python/*.py" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-30T00:15:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-PHASE-END-QA-1 ;
   triage:foundAt "2026-07-30T00:14:52Z"^^xsd:dateTime ;
-  triage:triageRecordVersion "1" .
+  triage:triageRecordVersion "1" ;
+  triage:closedAt "2026-07-30T01:05:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "Verified fixed via AI3138-LINTGUARD-QA-1 on PR #694 (fix/ai3138-lint-guard-gap @ 8c6f710d, base integrate/phase-ai-31-33). .just/lint_hermes_adapter.py adds a lightweight source scan for the retired ingress symbols across crates/atm-graft-python/python/*.py, registered in both PYTHON_LINT_ORDER and FAST_LINT_ORDER in .just/run_lint.py so it runs under just lint/just fast/just ci without a maturin build; .github/workflows/ci.yml:182-183's original CI-only guard is unchanged (additive, not a replacement). Confirmed directly (live regression-injection test: reintroduced a retired symbol, lint failed with 2 correctly-located violations, then cleanly reverted) and by req-qa (PASS, 6/6 deliverables, 100%), arch-qa (fixed, ARCH-001), and ruthless-boundary-qa (fixed, RBQA-F001, workspace-wide duplicate sweep clean). All 8 CI legs on PR #694 pass." .
 
 <urn:atm:triage:worktree/integrate/phase-ai-31-33/05cc0d91>
   a triage:WorktreeSnapshot ;
