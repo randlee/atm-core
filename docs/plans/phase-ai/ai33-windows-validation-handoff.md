@@ -410,3 +410,15 @@ The current fastpc4 execution authority and baseline loop are in
   transport owners decide whether to investigate listener/backlog behavior as
   a separate scoped fix or classify this benchmark result as an environment/
   benchmark-limit finding.
+
+### 2026-07-30 - cwin - final daemon verification
+
+- After publishing the report, started exactly one release daemon from branch
+  commit `b2808188`. The matching executable is
+  `F:\\github\\atm-core-worktrees\\feature\\pAI-s33-admission-capacity-smoke\\target\\release\\atm-daemon.exe`.
+- Final process/listener evidence: PID `20896`, local HTTP
+  `127.0.0.1:46455`, peer HTTPS `10.10.100.98:43101`. No other
+  `atm-daemon.exe` process is running on the host.
+- Direct branch CLI `atm doctor --json` exited `0` with `status=healthy`,
+  zero warnings, and zero errors. The daemon is left running in this healthy
+  state for the next operator.

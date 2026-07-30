@@ -71,7 +71,7 @@ no ATM transport contract or capacity gate was changed.
 
 ## Final Validation State
 
-- Branch tip: `36139c9e`.
+- Branch tip: `b2808188`.
 - `just lint`: passed all 23 checks after the final source change
   (`b1fa33c0` plus diagnostic runner `e1ce0fb8`).
 - `just test`: passed with 317 tests and 2 skipped on the final pushed tree.
@@ -80,8 +80,10 @@ no ATM transport contract or capacity gate was changed.
   claimed as a capacity pass.
 - Windows port range was changed with the approved elevated command from
   `49152-65535` to `1024-65534`; the change did not clear E-033.
-- The exact release daemon is restarted after report publication; its final
-  PID, listeners, and Doctor result are appended below after verification.
+- Final exact release daemon: PID `20896`; Doctor exited `0` with
+  `healthy`, zero warnings, and zero errors. Local HTTP is
+  `127.0.0.1:46455`; peer HTTPS is `10.10.100.98:43101`. No other
+  `atm-daemon.exe` process is running.
 
 ## Capacity Interval Evidence
 
