@@ -514,3 +514,28 @@ The current fastpc4 execution authority and baseline loop are in
   and rebuilt-release `just smoke localhost` all passed. The shared inbox was
   checked after pulling `feed41a4`; no unread or pending-ack arch-ctm messages
   were present.
+
+### 2026-07-30 - cwin - integrated AI.33 capacity rerun
+
+- The first post-Fix-2 official capacity invocation stopped at the clean-user
+  preflight because the normal account's host-owned `C:\Users\rand.lee\.atm`
+  existed. Evidence: `artifacts/smoke/admission-capacity/admission-capacity-20260730T213440Z.json`.
+  This is the expected ADR-026 isolation guard, not a capacity result.
+- Per the AI.33 plan, stopped the exact branch daemon, moved the existing
+  `.atm` runtime root to a temporary preserved location, ran the official
+  `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`
+  command, and restored the original runtime root afterward. No user runtime
+  state was discarded and no daemon remained after runner cleanup.
+- The clean-account run completed all 10 accepting-peer and 10
+  unavailable-peer intervals. It returned `18,302/20,000` successful
+  responses; every interval's first failure was
+  `response_read: response_headers: [WinError 10053]`. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T213536Z.json`.
+  The runner-owned daemon was healthy/ready, emitted only `ATM_DAEMON_READY`
+  on stdout, had empty stderr, and its retained application log showed sends
+  and peer-delivery records without handler/error records.
+- Fix 1 and Fix 2 therefore improve daemon liveness and the integrated result
+  is materially higher than the prior `16,768/20,000` baseline, but the
+  one-second 20,000-admission gate remains unmet due to the separate Windows
+  short-lived loopback TCP churn/10053 behavior. No retry, queue, worker,
+  timeout, or capacity target was changed.

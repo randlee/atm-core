@@ -314,6 +314,27 @@ peer interface, when configured, is a separate 43101 listener.
   release pair passed 10/10 localhost smoke repetitions. Evidence:
   `reports/smoke/20260730T213347Z/FastPC4-localhost.json`.
 
+## Integrated AI.33 Capacity Rerun
+
+- The first official post-Fix-2 capacity invocation stopped before workload
+  execution because the normal account's host-owned `C:\Users\rand.lee\.atm`
+  already existed. Artifact:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T213440Z.json`.
+  This is the runner's deliberate ADR-026 clean-account guard.
+- The existing `.atm` runtime was preserved, the official runner was executed
+  in the required clean host-runtime state, and the original runtime was
+  restored afterward. The clean run completed all 20 intervals but achieved
+  `18,302/20,000` successful responses. Every interval reported its first
+  failure at response-header read with Windows error 10053. Artifact:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T213536Z.json`.
+- The runner daemon published `ATM_DAEMON_READY`, Doctor was healthy/ready,
+  stderr was empty, and the retained daemon log showed application send and
+  peer-delivery records without handler/error records. The result improves on
+  the prior `16,768/20,000` baseline after the two liveness repairs, but does
+  not meet the 20,000-admission gate. The remaining issue is the separate
+  Windows short-lived loopback TCP churn/10053 behavior; no source-level
+  capacity, retry, queue, worker, or timeout workaround was added.
+
 ## Next Iteration
 
 Before the next smoke attempt, pull the branch and re-read the shared handoff.
