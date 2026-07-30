@@ -192,3 +192,17 @@ The executable procedure is
   warning-level peer-delivery outcome rows in the smoke window. Historical
   errors remain listed in the root-cause report; no runtime state was
   committed.
+
+### 2026-07-30 — cwin — isolated capacity account blocker
+
+- After stopping the one smoke daemon, the exact prescribed command
+  `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`
+  exited `1` before starting a benchmark daemon. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T171045Z.json`.
+- The runner rejected the existing `C:\Users\rand.lee\.atm` host runtime
+  root. This is the ordinary developer account, not a clean designated
+  capacity account; the environment variable cannot override that ADR-026
+  invariant. No capacity claim is made and no daemon leaked.
+- A clean Windows OS account is the only remaining prerequisite for AI.33
+  capacity acceptance. The 10/10 local smoke and repository gates are already
+  green on the exact branch binaries.

@@ -11,13 +11,15 @@
 - just: `1.51.0`
 - sc-compose: `1.2.0`, installed from sibling checkout `F:\github\sc-compose`
 - First-round report commit: `eec67b217d7a0f224475a61f01adc6ebeac28db8`
+- Source-fix commit: `641ed02b`
+- Latest report commit before capacity attempt: `c14f983a`
 
 ## Result
 
-`just test` passed. AI.33 acceptance is not complete because the required live
-smoke was not executed with a pre-started matched daemon pair, and the capacity
-step was not run. No production-code fix was justified by the first-round
-evidence.
+`just lint`, `just test`, and the required 10/10 live localhost smoke passed on
+the exact branch binaries. AI.33 capacity acceptance is not complete because
+the required clean Windows OS account is unavailable on this host; the runner
+rejected the ordinary account before starting a benchmark daemon.
 
 ## Error Log
 
@@ -43,6 +45,7 @@ evidence.
 | E-018 | `just lint`, `.just/logs/20260730170255-clippy.log` | Clippy rejected the new Windows-only preflight helper: `this if statement can be collapsed` at `crates/atm-daemon-client/src/compatibility.rs:148-149`. | The initial implementation used nested `if let` and predicate checks. This is a source-style error in the new fix, not a platform behavior failure. | Fixed in `641ed02b` with a let-chain; `just lint` subsequently passed all 23 checks. |
 | E-019 | First full `just test` with the smoke daemon running | Five `atm-daemon` tests failed with `DaemonServingStateRejected`: `a live ATM daemon already owns C:\Users\rand.lee\.atm\daemon\owner.lock`; one runtime-composition test also reported `daemon local ipc ready signal sender dropped before readiness`. | The full test suite uses the same user-scoped ATM home and host-wide daemon ownership lock as the live smoke daemon. Running both concurrently is intentionally rejected by the singleton contract; the readiness failure is the corresponding test startup consequence. This is test-environment contention, not a production regression. | Resolved as environment-only: stopped PID `13396`, reran `just test` with no daemon, and the full suite passed. The rebuilt daemon was then restarted once as PID `52228`. |
 | E-020 | Retained `.atm` log scan after clean smoke report `reports/smoke/20260730T170917Z/FastPC4-localhost.json` | The log contains 17 historical `Error` rows from E-001/E-015/E-016, but no `Error` row during the clean 10/10 smoke window. It contains 60 `Warn` rows in that window: expected `peer_delivery` outcomes `write_persisted` and `peer_recovery_attempt` for the self-target physical-interface lane. | The warning-level peer-delivery records are the daemon's retained outcome telemetry for the prescribed self-target lane; they are not failed sends. The historical errors predate the clean run and remain documented in earlier rows. | No new runtime error. Evidence retained in the host log; no `.atm` state or log files committed. |
+| E-021 | `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T171045Z.json` | Runner exited `1` before starting a daemon: `admission-capacity smoke requires a dedicated clean OS user whose host runtime root does not already exist: C:\Users\rand.lee\.atm`. | The current account is the normal developer account and already owns persistent ATM runtime/database state. The explicit environment variable acknowledges the required isolation; it cannot convert an existing account into a clean benchmark account. | Correctly blocked by the runner's ADR-026 guard. No Windows code fix is appropriate. Capacity remains unclaimed until a designated clean Windows OS account is provisioned; no daemon was leaked and the evidence artifact records zero benchmark runs. |
 
 ## Key Contract Clarification
 
