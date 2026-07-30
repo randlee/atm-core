@@ -15,23 +15,26 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI33-QA-1 ;
   triage:foundAt "2026-07-30T00:50:47Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-PLANDOC-OUTOFORDER/AI33-1> ;
-  triage:triageRecordVersion "1" .
+  triage:closedAt "2026-07-30T03:20:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:progressNote "AI33-M5-NINEFIX-QA-1: closed at a8d1e237. docs/project-plan.md:1011-1012 now show both AI.32 and AI.33 as `in_progress`, resolving the prior inconsistency. Confirmed by req-qa." ;
+  triage:triageRecordVersion "2" .
 
 <urn:atm:triage:occurrence/AI33-QA1-PLANDOC-OUTOFORDER/AI33-1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
   triage:line 1012 ;
   triage:snippet "| `AI.33` | `complete` | `feature/pAI-s33-admission-capacity-smoke` | admission capacity and smoke evidence |" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
-  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:headSha "a8d1e237" ;
   triage:occursIn <urn:atm:triage:worktree/pAI-s33/199111d> .
 
 <urn:atm:triage:worktree/pAI-s33/199111d>
