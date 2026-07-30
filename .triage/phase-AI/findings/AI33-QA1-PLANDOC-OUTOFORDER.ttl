@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI33-QA1-PLANDOC-OUTOFORDER>
+  a triage:Finding ;
+  triage:findingId "AI33-QA1-PLANDOC-OUTOFORDER" ;
+  triage:title "project-plan.md marks AI.33 complete while AI.32 (its own dependency) still shows in_progress" ;
+  triage:description "quality-mgr's AI33-QA-1 verdict (req-qa) found docs/project-plan.md:1012 marks AI.33 complete while :1011 shows AI.32 still in_progress; AI.33's own sprint-doc frontmatter declares depends_on AI.31,AI.32. This is an out-of-order completion state that needs reconciling before AI.33 can be legitimately marked complete." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI33-QA-1 ;
+  triage:foundAt "2026-07-30T00:50:47Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI33-QA1-PLANDOC-OUTOFORDER/AI33-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI33-QA1-PLANDOC-OUTOFORDER/AI33-1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1012 ;
+  triage:snippet "| `AI.33` | `complete` | `feature/pAI-s33-admission-capacity-smoke` | admission capacity and smoke evidence |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:occursIn <urn:atm:triage:worktree/pAI-s33/199111d> .
+
+<urn:atm:triage:worktree/pAI-s33/199111d>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s33" ;
+  triage:branch "feature/pAI-s33-admission-capacity-smoke" ;
+  triage:headSha "199111d35e06ae829c481505e9dfca5b4f6c613f" ;
+  triage:orderIndex 0 .

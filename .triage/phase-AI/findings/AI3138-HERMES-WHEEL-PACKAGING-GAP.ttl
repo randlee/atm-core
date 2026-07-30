@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI3138-HERMES-WHEEL-PACKAGING-GAP>
+  a triage:Finding ;
+  triage:findingId "AI3138-HERMES-WHEEL-PACKAGING-GAP" ;
+  triage:title "Installed atm-graft wheel omits both Hermes Python modules" ;
+  triage:description "arch-ctm's read-only AI3138-HERMES-HARNESS-REVIEW-1 (finding 1/4, CRITICAL) reports that crates/atm-graft-python/pyproject.toml:1-12 names only the native module atm_graft and has no Python source/package configuration. arch-ctm built the actual wheel and inspected it: only atm_graft/__init__.py plus the native .so are present. Clean-venv import probes: atm_graft=True, atm_graft_hermes_adapter=False, atm_graft_hermes_bridge=False. CI masks this by adding checked-in source to PYTHONPATH via .just/run_hermes_graft_bridge_tests.py:15-29; adapter tests also sys.path.insert that source in tests/test_hermes_adapter.py:12-19. So the shipped wheel cannot actually be imported/used by a real Hermes host — only CI's PYTHONPATH shim makes tests pass. Recommendation from arch-ctm: package the reference bridge/adapter deliberately and add a clean-wheel import/integration proof." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "packaging" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-graft-python/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-29T16:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI3138-HERMES-HARNESS-REVIEW-1 ;
+  triage:foundAt "2026-07-29T23:48:39Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-3> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/pyproject.toml" ;
+  triage:line 1 ;
+  triage:snippet "[tool.maturin] module-name=atm_graft" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-2>
+  a triage:Occurrence ;
+  triage:file ".just/run_hermes_graft_bridge_tests.py" ;
+  triage:line 28 ;
+  triage:snippet "PYTHONPATH: str(PYTHON_SOURCE)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+
+<urn:atm:triage:occurrence/AI3138-HERMES-WHEEL-PACKAGING-GAP/AI31-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
+  triage:line 12 ;
+  triage:snippet "sys.path.insert(0, str(ADAPTER_ROOT))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0> .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/6d1225a0>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "6d1225a0" ;
+  triage:orderIndex 0 .
