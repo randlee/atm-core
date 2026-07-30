@@ -71,3 +71,14 @@ The executable procedure is
 - Next iteration: initialize the local test certificate from the existing
   host-local PEM bundle, restart one exact branch daemon, and verify listener
   `10.10.100.98:43101` before running smoke.
+
+### 2026-07-30 — cwin — certificate fingerprint format blocker
+
+- The host-local PEM was recorded, but the exact daemon rejected the stored
+  certificate record: `configured TLS certificate fingerprint does not match
+  the PEM bundle` (exit `1`).
+- The failed doctor auto-start retry also left retained Warn outcomes for
+  launch-gate contention and auto-start timeout. No daemon/listener remained.
+- E-014 records that the operator supplied a `sha256:` label which this branch
+  does not strip during fingerprint normalization. The next iteration removes
+  only that label and retries the same single daemon.

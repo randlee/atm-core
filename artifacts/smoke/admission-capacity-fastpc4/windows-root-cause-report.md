@@ -36,6 +36,7 @@ evidence.
 | E-011 | Direct local curl probe | First request returned HTTP 400: `invalid doctor HTTP request body: key must be a string at line 1 column 2`. | PowerShell single-quoted JSON contained literal backslashes (`{\"...`) instead of valid JSON; this was a probe-command quoting error, not an ATM failure. | Corrected the request with `ConvertTo-Json -Compress`; curl exited 0 and returned healthy/ready doctor JSON from the exact branch daemon. |
 | E-012 | `atm peer interface list --json` | The exact branch CLI returned an empty list (`[]`); no enabled advertised interface was available for the physical-interface smoke lane. | This Windows host had no persisted peer interface in its user ATM state. The host's usable IPv4 address is `10.10.100.98` on `Ethernet 2`; this is a setup/configuration gap, not a transport failure. | Pending immediate operational fix: save one enabled interface bound to `10.10.100.98:43101` and advertise `10.10.100.98`, then verify the single daemon reloads it. |
 | E-013 | Exact daemon restart after E-012 | `atm-daemon.exe` exited immediately with code `70`: `daemon runtime assembly is unavailable; atm-daemon startup is blocked`. | The enabled mutual-TLS interface had no local certificate configured. The daemon startup composition requires a local certificate before binding any enabled mTLS HTTPS interface. The retained `.atm` log added no Error/Warn record; this is the daemon's sanitized startup error contract. | Pending operational fix: initialize the local test certificate from the existing host-local PEM bundle, restart one exact branch daemon, and verify the 43101 listener. No production code change indicated. |
+| E-014 | Exact daemon restart after E-013 | `configured TLS certificate fingerprint does not match the PEM bundle` (exit `1`). A doctor auto-start retry also logged `daemon_launch_gate` contended and `daemon_auto_start` timeout_exhausted. | The certificate record was initialized with a `sha256:` label. The branch daemon normalizes only hexadecimal/colon fingerprint material, so the label changed the compared value and could not match the PEM certificate. | Pending operational fix: replace the record with the same fingerprint bytes without the `sha256:` label, then restart one exact branch daemon. No production code change indicated. |
 
 ## Key Contract Clarification
 
@@ -87,6 +88,19 @@ peer interface, when configured, is a separate 43101 listener.
 - The restart failed before serving because no local mTLS certificate was
   configured. E-013 records the exact sanitized error and exit code. The
   stale loopback runtime file was not treated as proof of a live daemon.
+
+## Certificate Fingerprint Iteration
+
+- Initialized the host-local PEM bundle as the local certificate, then started
+  one exact branch daemon attempt. It exited before serving.
+- Direct execution exposed the exact error: `configured TLS certificate
+  fingerprint does not match the PEM bundle` (exit `1`).
+- The subsequent doctor auto-start retry generated retained Warn outcomes for
+  `daemon_launch_gate` contention and `daemon_auto_start` timeout exhaustion;
+  no daemon remained running and no 43101 listener was present.
+- E-014 records the operator-input root cause: the stored `sha256:` label is
+  not accepted by the branch fingerprint normalization. The next fix removes
+  that label while retaining the same certificate bytes.
 
 ## Next Iteration
 
