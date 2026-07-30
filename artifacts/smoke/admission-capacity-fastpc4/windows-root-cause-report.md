@@ -154,3 +154,17 @@ Before the next smoke attempt, pull the branch and re-read the shared handoff.
 Use the daemon-switch procedure to start exactly one matched release pair,
 verify doctor readiness, then run `just smoke localhost`. Commit and push this
 report after each update.
+
+## E-016 Follow-Up
+
+`641ed02b` adds only a classified retry for the preceding read-only
+compatibility preflight; it deliberately does not retry the side-effecting
+send that produced E-016. The clean 10/10 run had no reset, but does not prove
+the daemon connection-ownership defect is fully root-caused. Team follow-up
+remains required for a deterministic transport regression test.
+
+## Final Runtime State
+
+After the capacity attempt, exactly one rebuilt branch daemon is running as
+PID `54632`, with local HTTP `127.0.0.1:62336` and advertised peer HTTPS
+`10.10.100.98:43101` listeners. Doctor reports healthy and ready.

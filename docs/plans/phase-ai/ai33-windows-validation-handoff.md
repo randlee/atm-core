@@ -206,3 +206,7 @@ The executable procedure is
 - A clean Windows OS account is the only remaining prerequisite for AI.33
   capacity acceptance. The 10/10 local smoke and repository gates are already
   green on the exact branch binaries.
+- Final local runtime state after the capacity attempt: exactly one rebuilt
+  branch daemon is running as PID `54632`, with `127.0.0.1:62336` local HTTP
+  and `10.10.100.98:43101` advertised peer HTTPS listeners; doctor is healthy
+  and ready.
