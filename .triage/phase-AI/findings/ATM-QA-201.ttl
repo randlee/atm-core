@@ -1,0 +1,30 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-201>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-201" ;
+  triage:title "AI.33 admission-capacity smoke deliverable entirely absent" ;
+  triage:description "req-qa confirmed via direct `ls` that scripts/smoke/run_admission_capacity.py does not exist anywhere in the tree at integrate/phase-ai-31-33 @ 05cc0d91. No admission-capacity throughput/latency evidence exists. AI.33's acceptance criteria (10/10 one-second intervals >=1,000 admissions/s, per docs/plans/phase-ai/sprint-ai-33-admission-capacity-smoke.md) is entirely unverified — not partially done, not built at all. team-lead independently confirmed via task-ledger review that AI.33 was never dispatched as a dev sprint at all (no #task entry exists for it, unlike AI.31/32/34/35/36/37/38 which all have dev-dispatch tasks) — this is not a false-completion, it was simply skipped in sprint dispatch sequencing." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "requirements" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-30T00:16:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AICH-PHASE-END-QA-1 ;
+  triage:foundAt "2026-07-30T00:14:52Z"^^xsd:dateTime ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:worktree/integrate-phase-ai-31-33/05cc0d91>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/integrate-phase-ai-31-33" ;
+  triage:branch "integrate/phase-ai-31-33" ;
+  triage:headSha "05cc0d91" ;
+  triage:orderIndex 0 .
