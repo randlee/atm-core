@@ -116,3 +116,36 @@ The executable procedure is
   exact compile failure; production code compiled through that point.
 - The import will be corrected before full lint/test. The implementation still
   retries only the idempotent compatibility preflight, never a write.
+### 2026-07-30 — arch-ctm — reviewed next steps
+
+- Review of cwin's commits through `b8792a09`: they add only sanitized evidence
+  and handoff entries; no production or smoke-runner code changed.
+- **Do not remove the `sha256:` prefix as an operational workaround.** It is a
+  documented and already-stored certificate-fingerprint presentation. The
+  current TLS normalizer incorrectly retains the hexadecimal `a` from that
+  prefix, so a valid prefixed SHA-256 value cannot match the PEM digest. This
+  is a small cross-platform source defect: fix it separately by stripping one
+  case-insensitive `sha256:` presentation prefix before separator
+  normalization, with unit coverage for raw, colon-separated, and prefixed
+  64-hex fingerprints. It is startup-only and must not affect admission-path
+  performance.
+- The AI.33 capacity runner correctly rejects `RZ\\rand.lee`: its host-owned
+  `C:\\Users\\rand.lee\\.atm` state is not an isolated benchmark database.
+  Before capacity validation, provision the designated clean Windows account
+  (or another dedicated account), build/use only this worktree's release
+  `atm.exe` and `atm-daemon.exe`, and keep its `.atm` state test-owned. Setting
+  `ATM_CAPACITY_ISOLATED_OS_USER=1` does not make an ordinary account clean.
+- For the live localhost smoke, explicitly select the branch CLI with
+  `ATM_SMOKE_ATM`; pre-start exactly one matching branch daemon under the
+  test-owned account/configuration. `run_feature_smoke.py` intentionally does
+  not start, stop, or switch daemons, so it needs no modification for this.
+- After the fingerprint fix is available, configure one test-only local roster,
+  interface, and PEM/certificate record under that clean account. Verify one
+  branch daemon and both listeners before running `just smoke localhost`.
+- The `WSAECONNRESET` is now reproduced in two separately reported batches;
+  treat it as a Windows local-HTTP transport defect. Do not add a blind retry:
+  a reset during request write may follow partial delivery and duplicate a
+  non-idempotent send. Preserve the existing event/listener evidence and
+  investigate connection ownership and request-worker close paths with a
+  deterministic regression test. Only a clean 10/10 smoke batch unlocks the
+  isolated capacity runner.
