@@ -333,3 +333,15 @@ The current fastpc4 execution authority and baseline loop are in
   the accept loop reached 90 lines. The worker spawn and logging block were
   extracted into `spawn_connection`; the focused transport test and
   `just lint` now pass all 23 checks.
+
+### 2026-07-30 - cwin - Windows ephemeral-port exhaustion evidence
+
+- The `e1ce0fb8` rerun classified every failure as a response-header abort:
+  `18,490/20,000` HTTP 201 admissions, no connect/write failures, and no
+  daemon handler/error records. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T192334Z.json`.
+- Post-run Windows inventory showed `14,160` TCP `TIME_WAIT` entries against
+  the host's `16,384` dynamic TCP-port range. The runner opens 20,000
+  short-lived loopback connections per run, so this is a likely client-side
+  ephemeral-port exhaustion limit. The next step is a fresh/expired-port
+  rerun for confirmation; no ATM daemon behavior is being weakened.
