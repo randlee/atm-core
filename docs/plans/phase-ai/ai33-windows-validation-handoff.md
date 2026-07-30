@@ -284,3 +284,19 @@ The current fastpc4 execution authority and baseline loop are in
 - `just test` result after both fixes: 317 passed, 2 skipped. The readiness
   source change and test correction are staged for the next push; capacity
   must be rerun from the exact pushed commit.
+
+### 2026-07-30 - cwin - capacity burst saturation finding
+
+- The exact pushed release pair at `ec7ef7b6` started in `233.8ms`; Doctor was
+  healthy and teardown was clean. The runner completed all 20 required
+  intervals, but only `18,374/20,000` admissions returned HTTP 201. Every
+  interval returned 1,000 responses and reported Windows `WinError 10053`
+  (`WSAECONNABORTED`) for the failed connections. Evidence:
+  `artifacts/smoke/admission-capacity/admission-capacity-20260730T190807Z.json`.
+- Root cause is the Windows local TCP accept loop: it accepts a socket, then
+  silently drops it when the bounded 64-connection registry is full. The
+  documented saturation contract requires typed handling, and the capacity
+  burst should wait for the existing workers rather than lose accepted
+  admissions. The fix will apply bounded accept backpressure, preserve the
+  64-connection cap, and add a regression test; no worker, queue, retry, or
+  timeout increase is permitted.

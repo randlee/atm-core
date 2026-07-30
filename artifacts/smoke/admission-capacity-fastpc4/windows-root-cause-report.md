@@ -49,8 +49,43 @@ Windows-only readiness-marker defect before the benchmark intervals began.
 | E-021 | `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T171045Z.json` | Runner exited `1` before starting a daemon: `admission-capacity smoke requires a dedicated clean OS user whose host runtime root does not already exist: C:\Users\rand.lee\.atm`. | The current account is the normal developer account and already owns persistent ATM runtime/database state. The explicit environment variable acknowledges the required isolation; it cannot convert an existing account into a clean benchmark account. | Correctly blocked by the runner's ADR-026 guard. No Windows code fix is appropriate. Capacity remains unclaimed until a designated clean Windows OS account is provisioned; no daemon was leaked and the evidence artifact records zero benchmark runs. |
 | E-022 | `ATM_CAPACITY_ISOLATED_OS_USER=1 python scripts/smoke/run_admission_capacity.py`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T185648Z.json` | The capacity daemon logged `startup_completed`, but the runner timed out with `capacity daemon did not publish ATM_DAEMON_READY within 30 seconds`. Cleanup then failed with Windows `WinError 32` because the temporary ATM home was still held by leaked exact-branch PID `36828`; the generated report recorded `doctor` failure and zero capacity intervals. | The Unix local IPC startup path emits `ATM_DAEMON_READY` when requested. The Windows local TCP production path passed `publish_ready: || Ok(())` from `RuntimeComposition::start`, so the runner waited for a marker that Windows never emitted. The orphaned process kept its pipe/file handles open, producing the secondary cleanup error. | Fix in progress: emit the marker from the Windows production start hook through a shared writer helper, with deterministic unit coverage. The failed disposable state is preserved outside the live ATM root at `C:\Users\rand.lee\.atm-ai33-capacity-failed-20260730-185648`; the original ATM state was restored. |
 | E-023 | Full `just test` after the Windows readiness fix | The first full run failed only `tests::invalid_address_returns_a_python_error` in `atm-graft-python`: PyO3 reported `The Python interpreter is not initialized and the auto-initialize feature is not enabled` at `interpreter_lifecycle.rs:134:13`. | The test constructed a PyO3 value without initializing the interpreter, while the surrounding Python binding tests explicitly initialize it. This was a test-isolation defect exposed by the current PyO3 runtime contract, not a Windows production failure. | Fixed by calling `Python::initialize()` at the start of the test. The focused test passed and the subsequent full run passed: 317 tests, 2 skipped. |
+| E-024 | Authorized disposable capacity run `20260730T190807Z`, evidence `artifacts/smoke/admission-capacity/admission-capacity-20260730T190807Z.json` | The daemon became ready in `233.8ms`, Doctor was healthy, and all 20 intervals returned 1,000 responses. Every interval still had `WinError 10053` (`WSAECONNABORTED`) failures, with only 872-943 HTTP 201 admissions per interval; total was 18,374/20,000. | Windows `serve_with_runtime_hooks` accepts a socket before reserving a registry slot. When `try_register(64)` returns `None`, the loop silently drops that already-accepted socket. The client observes 10053 instead of the documented typed saturation response, and the burst loses admissions even though 64 workers can drain the work. This is a Windows local TCP transport admission/backpressure defect, not a capacity assertion problem. | Fix in progress: stop calling `accept` while the bounded registry is full, wait for a connection slot to be released, and add regression coverage. This preserves the 64-connection cap and does not add workers, queues, retries, or timeout changes. |
 
 ## Key Contract Clarification
+
+## Capacity Interval Evidence
+
+The exact pushed release pair (`ec7ef7b6`) completed startup, Doctor, peer
+configuration, and teardown. The runner's 20 required intervals produced the
+following sanitized evidence. Each row has 1,000 responses; `accepted` counts
+HTTP 201 responses.
+
+| Case | Interval | Accepted | Elapsed (s) | Responses | First failure |
+| --- | ---: | ---: | ---: | ---: | --- |
+| accepting | 1 | 915 | 0.549 | 1000 | WinError 10053 |
+| accepting | 2 | 908 | 0.535 | 1000 | WinError 10053 |
+| accepting | 3 | 937 | 0.566 | 1000 | WinError 10053 |
+| accepting | 4 | 872 | 0.509 | 1000 | WinError 10053 |
+| accepting | 5 | 917 | 0.536 | 1000 | WinError 10053 |
+| accepting | 6 | 895 | 0.528 | 1000 | WinError 10053 |
+| accepting | 7 | 921 | 0.603 | 1000 | WinError 10053 |
+| accepting | 8 | 938 | 0.501 | 1000 | WinError 10053 |
+| accepting | 9 | 929 | 0.535 | 1000 | WinError 10053 |
+| accepting | 10 | 928 | 0.534 | 1000 | WinError 10053 |
+| unavailable | 1 | 905 | 0.564 | 1000 | WinError 10053 |
+| unavailable | 2 | 912 | 0.588 | 1000 | WinError 10053 |
+| unavailable | 3 | 929 | 0.547 | 1000 | WinError 10053 |
+| unavailable | 4 | 916 | 0.546 | 1000 | WinError 10053 |
+| unavailable | 5 | 922 | 0.600 | 1000 | WinError 10053 |
+| unavailable | 6 | 924 | 0.589 | 1000 | WinError 10053 |
+| unavailable | 7 | 925 | 0.516 | 1000 | WinError 10053 |
+| unavailable | 8 | 943 | 0.527 | 1000 | WinError 10053 |
+| unavailable | 9 | 897 | 0.526 | 1000 | WinError 10053 |
+| unavailable | 10 | 941 | 0.543 | 1000 | WinError 10053 |
+
+Aggregate: `18,374/20,000` accepted; slowest runner stage was
+`unavailable_burst_ms` at `5562.0ms`. The daemon process was PID `59148`, and
+the runner terminated it cleanly; no exact-branch daemon or listener remained.
 
 `ATM_SMOKE_ATM` is read only by `scripts/smoke/run_feature_smoke.py` and
 selects the `atm` CLI command. It does not set `ATM_DAEMON_BIN`, configure a
