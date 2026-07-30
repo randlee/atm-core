@@ -539,3 +539,14 @@ The current fastpc4 execution authority and baseline loop are in
   one-second 20,000-admission gate remains unmet due to the separate Windows
   short-lived loopback TCP churn/10053 behavior. No retry, queue, worker,
   timeout, or capacity target was changed.
+
+### 2026-07-30 - cwin - final post-rerun daemon state
+
+- After restoring the preserved user runtime, started exactly one release
+  daemon from the Fix 2 source (`c2fee21c`; branch tip with evidence is
+  `c03f4242`). Final PID is `57952`, with local HTTP `127.0.0.1:34260` and
+  enabled advertised peer listener `10.10.100.98:43101`.
+- Direct release CLI Doctor reports `healthy`, `ready`, zero warnings, zero
+  errors, and matching CLI/daemon version `1.4.0-beta-ai.38`. The final
+  `atm read --json` check for `cwin/capacity-team` returned zero unread and
+  zero pending-ack messages. No other `atm-daemon.exe` process is running.

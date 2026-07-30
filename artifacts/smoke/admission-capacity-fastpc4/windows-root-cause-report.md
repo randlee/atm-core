@@ -370,3 +370,13 @@ The updated source uses one capability-authenticated Doctor HTTP exchange for
 local readiness and does not retry connection resets. The final exact-branch
 daemon is PID `51824`, with local HTTP `127.0.0.1:56083` and peer HTTPS
 `10.10.100.98:43101` listeners.
+
+## Final Post-Rerun Runtime State
+
+- After the capacity run, the preserved user runtime was restored and exactly
+  one release daemon from Fix 2 is running as PID `57952`. Doctor is healthy
+  and ready with zero warnings/errors; CLI and daemon both report
+  `1.4.0-beta-ai.38`.
+- Final listeners are local HTTP `127.0.0.1:34260` and enabled advertised peer
+  HTTPS `10.10.100.98:43101`. The final `atm read --json` check returned zero
+  unread and zero pending acknowledgements. No second daemon is running.
