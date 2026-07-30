@@ -85,6 +85,9 @@ class HermesSteerFixture:
     def __init__(self, *, profile: str = "agent@team", chat_id: str = "configured-host-session") -> None:
         self.profile = profile
         self.chat_id = chat_id
+        # Hermes assigns this opaque id when the host registers the profile.
+        # It is intentionally distinct from the platform chat identity.
+        self.runtime_session_id = "runtime-session-uuid"
         self.current_task = "active-tool-call"
         self.current_task_interrupted = False
         self.normal_message_handler_called = False

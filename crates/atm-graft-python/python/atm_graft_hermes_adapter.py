@@ -1,8 +1,11 @@
 """Hermes safe-boundary adapter for canonical ATM graft nudges.
 
 The supported Hermes seam is the ``session.steer`` RPC method.  It accepts
-``{"session_id": <configured chat id>, "text": <non-empty text>}`` and
-returns a result whose status is ``queued`` or ``rejected``.  A successful
+``{"session_id": <runtime Hermes session id>, "text": <non-empty text>}``
+and returns a result whose status is ``queued`` or ``rejected``.  The ATM
+``chat_id`` is a platform identity, not a Hermes runtime session id.  Hosts
+must provide a resolver that maps that identity to the live session returned
+by Hermes session registration/creation before a steer is sent.  A successful
 steer becomes visible after the running agent's next safe tool boundary; it is
 not a normal inbound user message and it does not interrupt the active task.
 
@@ -60,21 +63,63 @@ class HermesSteerFailure(RuntimeError):
 
 
 HermesRequest = Callable[[str, Mapping[str, str]], Awaitable[Mapping[str, Any]]]
+HermesSessionResolver = Callable[[str], Awaitable[str]]
 
 
 class HermesRpcSteerPort:
-    """Adapter for Hermes' documented ``session.steer`` RPC result contract."""
+    """Adapter for Hermes' documented ``session.steer`` RPC result contract.
 
-    def __init__(self, request: HermesRequest) -> None:
+    ``resolve_session_id`` is deliberately mandatory.  Hermes' gateway keeps
+    ``session.steer`` keyed by an in-memory runtime id; accepting the ATM
+    platform chat id as a fallback would turn every delivery into a 4001
+    ``session not found`` error.  The host owns registration/rebind and passes
+    the resolver backed by that lifecycle.
+    """
+
+    def __init__(
+        self,
+        request: HermesRequest,
+        resolve_session_id: HermesSessionResolver | None = None,
+    ) -> None:
         self._request = request
+        self._resolve_session_id = resolve_session_id
 
     async def steer(self, *, chat_id: str, text: str) -> None:
         if not chat_id.strip():
             raise HermesSteerFailure("invalid_chat_id", chat_id, "session_id is blank")
         if not text.strip():
             raise HermesSteerFailure("invalid_text", chat_id, "steer text is blank")
+        if self._resolve_session_id is None:
+            raise HermesSteerFailure(
+                "session_binding_required",
+                chat_id,
+                "Hermes runtime session resolver is not configured",
+            )
+        try:
+            resolved_session_id = await self._resolve_session_id(chat_id)
+        except Exception as exc:
+            raise HermesSteerFailure("session_resolution_failed", chat_id, str(exc)) from exc
+        if not isinstance(resolved_session_id, str):
+            raise HermesSteerFailure(
+                "session_not_bound",
+                chat_id,
+                "resolver returned a non-string Hermes runtime session id",
+            )
+        session_id = resolved_session_id.strip()
+        if not session_id:
+            raise HermesSteerFailure(
+                "session_not_bound",
+                chat_id,
+                "resolver returned no Hermes runtime session id",
+            )
+        if session_id == chat_id:
+            raise HermesSteerFailure(
+                "session_binding_invalid",
+                chat_id,
+                "resolver returned the platform chat id instead of a runtime session id",
+            )
         response = await self._request(
-            "session.steer", {"session_id": chat_id, "text": text}
+            "session.steer", {"session_id": session_id, "text": text}
         )
         error = response.get("error")
         if isinstance(error, Mapping):

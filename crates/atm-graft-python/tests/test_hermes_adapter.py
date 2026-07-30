@@ -191,25 +191,72 @@ class HermesAdapterContractTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_rpc_port_uses_documented_session_steer_request_and_rejects_nonqueued_result(self) -> None:
+    def test_rpc_port_resolves_chat_id_to_runtime_session_before_steer(self) -> None:
         async def scenario() -> None:
             requests: list[tuple[str, dict[str, str]]] = []
+            resolutions: list[str] = []
 
             async def request(method: str, params: dict[str, str]) -> dict[str, object]:
                 requests.append((method, params))
                 return {"result": {"status": "queued", "text": params["text"]}}
 
-            await HermesRpcSteerPort(request).steer(chat_id="host-session", text="wake")
-            self.assertEqual(requests, [("session.steer", {"session_id": "host-session", "text": "wake"})])
+            async def resolve(chat_id: str) -> str:
+                resolutions.append(chat_id)
+                return "runtime-session-uuid"
+
+            await HermesRpcSteerPort(request, resolve).steer(chat_id="telegram-8991600178", text="wake")
+            self.assertEqual(resolutions, ["telegram-8991600178"])
+            self.assertEqual(
+                requests,
+                [("session.steer", {"session_id": "runtime-session-uuid", "text": "wake"})],
+            )
 
             async def rejected(_method: str, _params: dict[str, str]) -> dict[str, object]:
                 return {"result": {"status": "rejected"}}
 
             with self.assertRaisesRegex(HermesSteerFailure, "rejected"):
-                await HermesRpcSteerPort(rejected).steer(chat_id="host-session", text="wake")
+                await HermesRpcSteerPort(rejected, resolve).steer(chat_id="telegram-8991600178", text="wake")
 
             with self.assertRaisesRegex(HermesSteerFailure, "invalid_text"):
-                await HermesRpcSteerPort(request).steer(chat_id="host-session", text=" ")
+                await HermesRpcSteerPort(request, resolve).steer(chat_id="telegram-8991600178", text=" ")
+
+        asyncio.run(scenario())
+
+    def test_rpc_port_fails_closed_without_runtime_session_binding(self) -> None:
+        async def scenario() -> None:
+            requests: list[tuple[str, dict[str, str]]] = []
+
+            async def request(method: str, params: dict[str, str]) -> dict[str, object]:
+                requests.append((method, params))
+                return {"result": {"status": "queued"}}
+
+            with self.assertRaisesRegex(HermesSteerFailure, "session_binding_required"):
+                await HermesRpcSteerPort(request).steer(chat_id="telegram-8991600178", text="wake")
+            self.assertEqual(requests, [])
+
+        asyncio.run(scenario())
+
+    def test_rpc_port_rejects_resolver_returning_raw_chat_id(self) -> None:
+        async def scenario() -> None:
+            async def resolve(chat_id: str) -> str:
+                return chat_id
+
+            with self.assertRaisesRegex(HermesSteerFailure, "session_binding_invalid"):
+                await HermesRpcSteerPort(lambda _method, _params: None, resolve).steer(
+                    chat_id="telegram-8991600178", text="wake"
+                )
+
+        asyncio.run(scenario())
+
+    def test_rpc_port_rejects_missing_or_non_string_runtime_binding(self) -> None:
+        async def scenario() -> None:
+            async def resolve(_chat_id: str) -> None:
+                return None
+
+            with self.assertRaisesRegex(HermesSteerFailure, "session_not_bound"):
+                await HermesRpcSteerPort(lambda _method, _params: None, resolve).steer(
+                    chat_id="telegram-8991600178", text="wake"
+                )
 
         asyncio.run(scenario())
 

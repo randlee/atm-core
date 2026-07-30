@@ -29,11 +29,16 @@ the active probe below verifies an already-started job and does not replace it.
 `@BRIDGE_COMMAND@` is the profile-owned Hermes runner that imports
 `atm_graft_hermes_bridge` and `atm_graft_hermes_adapter`; it is not a daemon
 command. It supplies the adapter's `HermesSteerPort` with a client for the
-documented Hermes `session.steer` RPC, passing configured `ATM_CHAT_ID` as
-`session_id`. The runner binds the bridge to that non-interrupting steer hook,
-not ordinary inbound-user-message ingress. A rejected/error response is
-logged as a visible delivery failure; it must not fall back to a normal message
-or create a retry queue.
+documented Hermes `session.steer` RPC and an injected async
+`resolve_session_id(chat_id)` callable. That resolver is backed by the Hermes
+host's registration/rebind lifecycle and returns the opaque live runtime
+session ID for the configured platform chat. The adapter fails closed with a
+typed error when the resolver is missing, fails, returns no session, or returns
+the raw chat ID; only the resolved runtime ID is sent as `session_id`. The
+runner binds the bridge to that non-interrupting steer hook, not ordinary
+inbound-user-message ingress. A rejected/error response is logged as a visible
+delivery failure; it must not fall back to a normal message or create a retry
+queue.
 
 The runner supplies `adapter.live_nudge_callback` as the bridge's live callback
 and `adapter.recovery_summary_callback` as its AI.37 recovery hook. Both only
