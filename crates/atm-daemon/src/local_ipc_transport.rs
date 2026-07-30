@@ -697,23 +697,11 @@ fn run_accept_loop<'scope>(
 fn prepare_accept_iteration(
     context: &mut AcceptLoopContext<'_>,
 ) -> Result<AcceptLoopOutcome, AtmError> {
-    let reap_summary = match context.registry.reap_finished_dispatches() {
-        Ok(summary) => summary,
-        Err(error) => {
-            return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
-                context.lifecycle_control,
-                context.shutdown_beacon,
-                error,
-            ))));
-        }
-    };
-    if reap_summary.recovered_panics > 0 {
-        context.observability.emit_or_warn(
-            "dispatch_worker",
-            "panic_recovered",
-            DISPATCH_PANIC_RECOVERED_MESSAGE,
-        );
-    }
+    // Completed dispatch handles are reaped by their connection worker after
+    // its response is written. Reaping the entire shared handle list before
+    // every accepted connection made a burst of unary admissions repeatedly
+    // scan and lock the same list (quadratic under load) without improving
+    // correctness or shutdown ownership.
     if let Some(error) = take_accept_error(
         context.signals,
         context.lifecycle_control,
