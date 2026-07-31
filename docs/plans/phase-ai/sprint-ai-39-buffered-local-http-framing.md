@@ -94,12 +94,6 @@ route, size limit, error contract, and local authentication rule.
   runtime-dispatched implementation and assert byte-for-byte identical parsed
   frames and error results. The scalar case is the compatibility gate; SIMD is
   never a substitute for it.
-- Add a `cargo-fuzz` framing target and a checked-in seed corpus for empty,
-  partial, oversized, malformed, and coalesced request frames. Its oracle is:
-  no panic, no unbounded allocation, no unbounded loop, and only a valid frame,
-  EOF, or a typed `AtmError`. Run the corpus deterministically in ordinary CI;
-  run a bounded fuzz campaign in the release/maintainer gate. Any minimized
-  crashing or timeout input becomes a regression seed and deterministic test.
 - Run `cargo fmt --all --check`,
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
   `cargo test --workspace --no-fail-fast`, `just lint`, and `just test`.
@@ -114,6 +108,7 @@ route, size limit, error contract, and local authentication rule.
 
 ## Non-goals
 
-No HTTP/2, request reordering, remote HTTPS framing redesign, or canonical
-write/storage change. AI.40 owns comparative throughput evidence and the
-1,000/s closure.
+No HTTP/2, request reordering, remote HTTPS framing redesign, adversarial fuzz
+campaign tooling, or canonical write/storage change. AI.40 owns comparative
+throughput evidence and the 1,000/s closure. AI.41 and AI.42 own fuzz campaign
+tooling and the first real HTTP-framing campaign respectively.

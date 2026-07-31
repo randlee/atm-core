@@ -1,0 +1,129 @@
+---
+title: AI.41 adversarial fuzz campaign workflow
+status: proposed
+branch: feature/pAI-s41-adversarial-fuzz-campaign-workflow
+target: integrate/phase-ai-31-33
+depends_on: AI.39
+---
+
+# AI.41 — Adversarial fuzz campaign workflow
+
+```yaml
+plan_type: sprint_plan
+phase: AI
+sprint: AI.41
+worktree: feature/pAI-s41-adversarial-fuzz-campaign-workflow
+branch: feature/pAI-s41-adversarial-fuzz-campaign-workflow
+status: proposed
+estimated_scope: campaign contracts, registered agents, and durable report artifacts
+```
+
+## Goal
+
+Create a reusable, bounded adversarial-fuzzing workflow for ATM. It follows
+the established sc-compose coordinator/worker pattern: a registered coordinator
+validates one campaign contract, launches at most four focused background
+workers, reproduces and minimizes candidate failures, and writes a complete
+human and machine-readable report package. This is tooling, not a product
+parser or a substitute for deterministic unit tests.
+
+## Governing requirements and ADRs
+
+- `REQ-CORE-TRANSPORT-005B`
+- ADR-033 — HTTP endpoint contract
+- ADR-035 — canonical write ingress
+- sc-compose `adversarial-fuzzing` campaign contract, used as the design
+  precedent (coordinator/worker bounds, classification, promotion, and report
+  shape—not as a runtime dependency)
+
+## Deliverables
+
+1. Add a versioned, discoverable `adversarial-fuzzing` skill, a registered
+   coordinator agent, and a single-responsibility probe agent. The coordinator
+   accepts exactly one fenced JSON campaign contract, validates that
+   `worktree_path` is an approved absolute ATM worktree, rejects path traversal
+   and unsafe limits, and fails closed when its registered workers are missing.
+
+   ```json
+   {
+     "worktree_path": "/absolute/path/to/atm-core-worktree",
+     "target": "local-http-framing | full",
+     "baseline_ref": "optional git ref",
+     "seed": 157,
+     "max_workers": 4,
+     "cases_per_worker": 100,
+     "per_worker_timeout_s": 120,
+     "promote_regressions": true
+   }
+   ```
+
+2. Define an ATM-specific worker portfolio for the local HTTP boundary. The
+   coordinator assigns only relevant workers; a `full` campaign uses all four:
+
+   | Correlation ID | Focus | Required probes |
+   | --- | --- | --- |
+   | `fragment-probe` | frame shape | delimiter/body splits, coalesced frames, EOF |
+   | `limit-probe` | negative boundary | caps, malformed start/header/length, bounded allocation |
+   | `transport-probe` | parity | UDS/TCP equivalence on Unix and TCP on Windows |
+   | `differential-probe` | regression oracle | baseline/head, deterministic and metamorphic relations, panic/hang/timeout |
+
+   Workers run in background, receive unique correlation IDs and deterministic
+   seeds, are capped at four concurrent workers, may retry a recoverable error
+   once, return one structured result, and never edit product code or commit.
+   This sprint deliberately does **not** add `just fuzz`, a standalone Python
+   fuzz runner, or a cargo-fuzz target merely to imitate benchmark tooling.
+
+3. Adopt sc-compose’s evidence and triage rules. A candidate is a confirmed
+   bug only for a repeatable panic/hang/timeout, accepted-input contract
+   violation, specified transport-parity failure, regression against baseline,
+   or violated stable error boundary. Every candidate carries command, seed,
+   minimal input, observed result, expected oracle, requirement/ADR trace, and
+   three-reproduction result. Intentional invalid-input rejections remain
+   visible as `intentional_boundary`; insufficient-oracle cases remain
+   `inconclusive`. Neither is silently counted as PASS.
+
+4. Implement the durable report contract and generic HTML package integration.
+   A campaign writes a top-level
+   `site/reports/YYYYMMDD-N-fuzz-report.html`, a JSON sidecar at
+   `site/reports/YYYYMMDD-N-fuzz-report/YYYYMMDD-N-fuzz-report.json`, and one
+   XHTML panel per worker in that same derived directory. The report summary is
+   a compact table of target, seed, case budget, completed/pass counts, and
+   PASS/FAIL; each worker panel holds its durable JSON envelope and context.
+   Reuse the stable generic html-report package convention; do not depend on
+   sc-compose’s currently unmerged fuzz-shell template.
+
+5. Add structural tests for campaign input validation, registered-worker
+   resolution, deterministic correlation ordering, worker timeout/partial
+   failure retention, result schema, artifact-path derivation, and report
+   rendering. Validate generated HTML and XHTML with the repository’s adopted
+   HTML/XHTML validators before reporting a completed campaign.
+
+## Required validation
+
+- A dry-run fixture campaign exercises all four worker result shapes,
+  including timeout and malformed worker output, without invoking product
+  fuzzing; assert no result is dropped and ordering is deterministic.
+- Validate safe worktree containment, traversal rejection, worker cap, timeout
+  validation, and rejection of unregistered agent paths.
+- Render one fixture report and validate its HTML, JSON sidecar, and every
+  XHTML panel; assert all links are relative and no absolute local path leaks.
+- Run the repository’s required formatting, unit, lint, and boundary gates for
+  the files introduced by this sprint.
+
+## Acceptance criteria
+
+- A campaign cannot start with an unsafe worktree, invalid limits, or an
+  unregistered worker.
+- The full worker portfolio is bounded, seeded, ordered, and non-lossy for
+  success, failure, timeout, and malformed-result states.
+- The report package is a self-contained, browsable record with machine
+  evidence and per-worker panels.
+- AI.41 adds no production HTTP framing/parser logic and makes no claim that a
+  real campaign has run.
+
+## Non-goals
+
+No production parser change, HTTP benchmark change, automatic production fix,
+or release claim. AI.39 owns framing behavior, AI.40 owns throughput evidence,
+and AI.42 owns the first real HTTP-framing campaign plus any promoted
+deterministic tests.
