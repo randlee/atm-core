@@ -1,4 +1,35 @@
+---
+recommended_agent: Cipher-311d
+recommended_model: fast
+execution_mode: after_merge
+execution_dependencies:
+  - AI.40
+dependencies_relation:
+  - sprint: AI.40
+    relation: must_follow
+    rationale: Both plans own the benchmark JSON/report artifact boundary.
+---
+
 # Benchmark HTML reporting plan
+
+## Recommended Agent / Model
+
+`Cipher-311d` / fast: the report-contract and rendering integration is
+well-scoped planning/tooling work with no daemon hot-path change. This is a
+planning-time recommendation, not a binding assignment.
+
+## Execution Dependencies
+
+Must begin after AI.40 merges into its integration target; before coding,
+merge-forward that updated target into this branch. The reporting integration
+cannot be qualified or merged independently first because both plans own the
+benchmark JSON/report artifact boundary.
+
+## Dependency Relations
+
+| Sprint | Relation | Rationale |
+| --- | --- | --- |
+| AI.40 | must_follow | Both plans own the benchmark JSON/report artifact boundary. |
 
 Status: planning-only proposal. This document defines the reporting layer for
 the separate benchmark-execution work; it does not add benchmark workloads,
