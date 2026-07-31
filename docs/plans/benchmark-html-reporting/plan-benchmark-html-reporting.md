@@ -20,10 +20,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-This work `must_follow`s AI.40: start after its development push, not QA; before
-every dev or fix round merge AI.40 into this branch. Its PR may provide
-evidence, but cannot be ready, complete, or merge until AI.40 merges into its
-integration target. Both plans own the benchmark JSON/report artifact boundary.
+This work `must_follow`s AI.40. Merge-forward trigger: AI.40 development is
+pushed, not QA; before every round merge AI.40 into this branch. PR-completion
+trigger: AI.40's PR merges into its integration target first. Both plans own
+the benchmark JSON/report artifact boundary.
 
 ## Dependency Relations
 
