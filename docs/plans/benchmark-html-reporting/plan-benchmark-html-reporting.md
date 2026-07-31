@@ -20,10 +20,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-Must begin after AI.40 merges into its integration target; before coding,
-merge-forward that updated target into this branch. The reporting integration
-cannot be qualified or merged independently first because both plans own the
-benchmark JSON/report artifact boundary.
+This work `must_follow`s AI.40: start after its development push, not QA; before
+every dev or fix round merge AI.40 into this branch. Its PR may provide
+evidence, but cannot be ready, complete, or merge until AI.40 merges into its
+integration target. Both plans own the benchmark JSON/report artifact boundary.
 
 ## Dependency Relations
 
