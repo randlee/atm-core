@@ -75,6 +75,9 @@ Each sprint extends and runs the following checks against its own merge base:
    may add entries only. A removal or rename hard-fails even under `--bless`;
    an intentional breaking change requires a separately human-reviewed,
    versioned baseline reset before its implementation PR.
+7. **Durable report index:** every producer PR runs `just reports-index
+   --check`. It fails on a stale index, malformed/public-unsafe envelope, or
+   missing report/evidence link; `site/` follows ADR-044 classification.
 
 Every sprint reports its gate output, changed symbols, required deletions, and
 net LOC. A deletion sprint cannot close with a retained target under another
@@ -222,6 +225,7 @@ not protocol admission.
 | Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
 | Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
 | Smoke | Unix UDS and loopback TCP; Windows loopback TCP; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows peer participation |
+| Durable reports | Producer PR runs `just reports-index --check`; report-index fixtures validate envelopes, newest-first ordering, links, and ADR-044 public-data classification |
 | Regression | `just lint`, `just test`, architecture checks, no retired local transport/custom-frame/peer-replay source remains |
 
 ## Explicit non-goals

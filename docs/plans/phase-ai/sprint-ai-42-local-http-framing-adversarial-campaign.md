@@ -39,6 +39,10 @@ branch. PR-completion trigger: all three PRs merge into
 `integrate/phase-ai-31-33` first. It runs AI.41's campaign against AI.39's
 reader and emits AI.46's report index.
 
+The softer merge-forward-only/backfill alternative is rejected: AI.42 must
+prove its real campaign artifacts against the generated index in its own PR;
+backfill after publication can leave an incomplete campaign report unlisted.
+
 ## Dependency Relations
 
 | Sprint | Relation | Rationale |
@@ -125,6 +129,7 @@ without silently changing production behavior.
   invalid envelope.
 - Validate every output HTML/XHTML/JSON artifact and run the promoted-test
   suite plus repository formatting, lint, test, and boundary gates.
+- Run `just reports-index --check` in the producer PR gate.
 - Review every promoted test for determinism, cross-platform validity, and
   direct connection to its minimized confirmed finding.
 

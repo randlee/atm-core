@@ -93,8 +93,10 @@ paths, and generate `site/index.html` plus `site/reports/index.html`. The
 generator owns report discovery: benchmark envelopes aggregate to one report;
 fuzz envelopes produce one report entry per campaign. Report producers invoke
 it after every artifact write, and `just reports-index --check` rejects stale
-or invalid report indexes. `.just/build_view_site.py` may expose links only;
-`artifacts/view` is transient and never a second report renderer.
+or invalid report indexes. Under ADR-044, `site/` is public data: envelopes
+carry only an opaque `host_label`, never raw host or endpoint data.
+`.just/build_view_site.py` may expose links only; `artifacts/view` is transient
+and never a second report renderer.
 
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from

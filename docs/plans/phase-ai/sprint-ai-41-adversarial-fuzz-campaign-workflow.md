@@ -119,9 +119,12 @@ parser or a substitute for deterministic unit tests.
    A campaign writes a top-level
    `site/reports/YYYYMMDD-N-fuzz-report.html`, a JSON sidecar at
    `site/reports/YYYYMMDD-N-fuzz-report/YYYYMMDD-N-fuzz-report.json`, and one
-   XHTML panel per worker in that same derived directory. The report summary is
-   a compact table of target, seed, case budget, completed/pass counts, and
-   PASS/FAIL; each worker panel holds its durable JSON envelope and context.
+   XHTML panel per worker in that same derived directory. Its JSON envelope
+   includes AI.46's `schema_version`, `report_type: fuzz`, `generated_at`,
+   relative `report_html`, and ADR-044-safe opaque `host_label`. The report
+   summary is a compact table of target, seed, case budget, completed/pass
+   counts, and PASS/FAIL; each worker panel holds its durable JSON envelope
+   and context.
    Reuse the stable generic html-report package convention; do not depend on
    sc-compose’s currently unmerged fuzz-shell template.
 
@@ -152,6 +155,7 @@ parser or a substitute for deterministic unit tests.
   validation, and rejection of unregistered agent paths.
 - Render one fixture report and validate its HTML, JSON sidecar, and every
   XHTML panel; assert all links are relative and no absolute local path leaks.
+- Run `just reports-index --check` in the producer PR gate.
 - Run the repository’s required formatting, unit, lint, and boundary gates for
   the files introduced by this sprint.
 

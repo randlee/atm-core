@@ -34,6 +34,10 @@ pushes, not QA; before every round merge both into this branch. PR-completion
 trigger: both PRs merge into `integrate/phase-ai-31-33` first. It measures
 AI.39's shared framing implementation.
 
+The softer merge-forward-only/backfill alternative is rejected: AI.40 cannot
+test its artifact writer or PR gate against the required index command before
+AI.46 merges, and a later backfill can leave published evidence unindexed.
+
 ## Dependency Relations
 
 | Sprint | Relation | Rationale |
@@ -88,7 +92,7 @@ durable JSON produced against a disposable SQLite database.
      "report_type": "benchmark",
      "generated_at": "2026-07-31T19:00:00Z",
      "report_html": "../send-message-benchmark.html",
-     "host": "example-host",
+     "host_label": "mac-arm64-01",
      "transport": "uds",
      "frames_per_connection": 16,
      "run_duration_s": 20
@@ -135,6 +139,7 @@ durable JSON produced against a disposable SQLite database.
 - Response parsing and application-wire byte accounting are identical between
   transports; no result body may be discarded to inflate throughput.
 - Run `just test`, `just lint`,
+  `just reports-index --check`,
   `ATM_CAPACITY_ISOLATED_OS_USER=1 just benchmark --transport uds`, and
   `ATM_CAPACITY_ISOLATED_OS_USER=1 just benchmark --transport tcp`. The last
   two require a dedicated clean OS account or explicitly backed-up/restored

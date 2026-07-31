@@ -4017,8 +4017,8 @@ mail correctness.
   - each recognized report has one HTML entry under `site/reports/` and a
     same-named directory containing its JSON/XHTML evidence
   - every report envelope declares `schema_version`, `report_type`,
-    `generated_at` (UTC), and its relative report HTML path; the initial
-    report types are `benchmark` and `fuzz`
+    `generated_at` (UTC), a relative report HTML path, and the ADR-044-safe
+    opaque `host_label`; the initial report types are `benchmark` and `fuzz`
   - the repository report-index command regenerates the reports index after
     every successful or failed report artifact write; a check mode fails when
     a recognized envelope, report link, or generated index is stale
@@ -4026,6 +4026,9 @@ mail correctness.
     benchmark run envelopes aggregate to their one benchmark HTML entry
   - transient development views under `artifacts/view` may link to reports but
     must not duplicate, copy, or become the source of durable evidence
+  - `site/` artifacts follow ADR-044's public-data classification; raw host,
+    endpoint, identity, path, secret, and message data are rejected before
+    publication
 
 - `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
   recent immutable outbound writes after connectivity loss without delivery

@@ -24,6 +24,7 @@ report producers must invoke it after every report artifact write.
 
 - `REQ-CORE-REPORT-001` — durable report publication and index contract
 - `docs/architecture.md` §1.3 — verification report-site ownership
+- ADR-044 — public report classification and Pages exposure decision
 - `.just/build_view_site.py` ToolPanel contract; it links to durable reports
   and does not render or copy them
 
@@ -45,8 +46,9 @@ appear without manual index edits.
 1. Generate `site/index.html` with a clear relative link to
    `site/reports/index.html`.
 2. Define the versioned report-envelope interface: `schema_version`,
-   `report_type` (`benchmark` or `fuzz`), `generated_at` (UTC), and a relative
-   `report_html` path. Generate `site/reports/index.html` from those envelopes.
+   `report_type` (`benchmark` or `fuzz`), `generated_at` (UTC), an ADR-044-safe
+   opaque `host_label`, and a relative `report_html` path. Generate
+   `site/reports/index.html` from those envelopes.
    It has one section per report type; entries are newest-first by UTC and link
    to the validated report HTML.
 3. Use the durable naming/envelope contract, not a hand-maintained list:
@@ -59,10 +61,11 @@ appear without manual index edits.
 5. Expose `just reports-index` and `just reports-index --check`, used by every
    report producer and the Pages workflow. The first regenerates
    `site/reports/index.html` after each successful or failed report artifact
-   write; check mode fails on a stale index, malformed envelope, missing HTML,
-   or missing same-named evidence directory. Producer tests must assert that
-   their write path invokes the command. No hand-maintained index or agent
-   reminder is permitted.
+   write; check mode fails on a stale index, malformed or public-unsafe
+   envelope, missing HTML, or missing same-named evidence directory. Producer
+   PR gates run check mode and producer tests assert that their write path
+   invokes the command. No hand-maintained index or agent reminder is
+   permitted.
 6. Add a GitHub Pages workflow that validates/generates `site/`, uploads that
    directory as the Pages artifact, and deploys from the configured default
    branch. Document the one repository Pages setting required to select the
@@ -74,6 +77,7 @@ appear without manual index edits.
   ordering, benchmark aggregation, malformed-envelope handling, missing
   linked artifacts, stale-index detection, and relative links.
 - Validate generated HTML and report links.
+- `just reports-index --check`
 - `just lint`
 - `just test`
 
