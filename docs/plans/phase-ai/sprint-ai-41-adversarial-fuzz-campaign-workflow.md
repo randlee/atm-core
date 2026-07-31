@@ -115,8 +115,21 @@ parser or a substitute for deterministic unit tests.
    visible as `intentional_boundary`; insufficient-oracle cases remain
    `inconclusive`. Neither is silently counted as PASS.
 
-4. Implement the durable report contract and generic HTML package integration.
-   A campaign writes a top-level
+4. Vendor the established sc-compose fuzz-report package; do not implement a
+   second renderer. Copy these files **verbatim** from
+   `randlee/sc-compose` branch `feature/fuzz-run-report-template`, PR #165
+   (open, head `f6ff57d`), directly into ATM even though that PR is unmerged:
+
+   - `.claude/skills/html-report/templates/fuzz-run-report.html.j2`
+   - `.claude/skills/html-report/templates/fuzz-run-agent.xhtml.j2`
+   - `.claude/skills/html-report/fuzz-run-agent-contract.md`
+   - `.claude/skills/adversarial-fuzzing/SKILL.md`
+   - `.claude/agents/sc-adversarial-fuzz-coordinator.md` and
+     `.claude/agents/sc-adversarial-fuzz-probe.md`
+
+   The coordinator/probe output conforms to
+   `fuzz-run-agent-contract.md` unchanged, so the copied templates render
+   without ATM-specific template edits. A campaign writes a top-level
    `site/reports/YYYYMMDD-N-fuzz-report.html`, a JSON sidecar at
    `site/reports/YYYYMMDD-N-fuzz-report/YYYYMMDD-N-fuzz-report.json`, and one
    XHTML panel per worker in that same derived directory. Its JSON envelope
@@ -124,9 +137,7 @@ parser or a substitute for deterministic unit tests.
    relative `report_html`, and ADR-044-safe opaque `host_label`. The report
    summary is a compact table of target, seed, case budget, completed/pass
    counts, and PASS/FAIL; each worker panel holds its durable JSON envelope
-   and context.
-   Reuse the stable generic html-report package convention; do not depend on
-   sc-compose’s currently unmerged fuzz-shell template.
+   and context. AI.46 links only to HTML rendered by these copied templates.
 
    `site/reports` is the durable report/evidence root; its same-named directory
    holds the JSON and XHTML supporting each HTML page. `artifacts/view` stays

@@ -40,6 +40,10 @@ appear without manual index edits.
 - `site/reports/index.html` and `.just/generate_report_index.py` with tests
 - `.github/workflows/pages.yml`
 - GitHub Pages deployment documentation/configuration
+- AI.41-vendored sc-compose fuzz templates:
+  `.claude/skills/html-report/templates/fuzz-run-report.html.j2` and
+  `fuzz-run-agent.xhtml.j2`, with
+  `.claude/skills/html-report/fuzz-run-agent-contract.md`
 
 ## Deliverables
 
@@ -57,7 +61,12 @@ appear without manual index edits.
    same-named directory containing JSON/XHTML evidence and an index entry.
 4. Keep report HTML in `site/reports/` and all supporting JSON/XHTML in its
    same-named directory. The generator links only; it neither copies evidence
-   nor re-renders individual reports.
+   nor re-renders individual reports. For `fuzz` entries, it links to HTML
+   rendered by AI.41's verbatim-vendored sc-compose templates:
+   `randlee/sc-compose` `feature/fuzz-run-report-template` (PR #165, head
+   `f6ff57d`) `.claude/skills/html-report/templates/fuzz-run-report.html.j2`
+   and `fuzz-run-agent.xhtml.j2`; it must not introduce a bespoke fuzz
+   renderer.
 5. Expose `just reports-index` and `just reports-index --check`, used by every
    report producer and the Pages workflow. The first regenerates
    `site/reports/index.html` after each successful or failed report artifact
