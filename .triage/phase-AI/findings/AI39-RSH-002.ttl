@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI39-RSH-002>
+  a triage:Finding ;
+  triage:findingId "AI39-RSH-002" ;
+  triage:title "Duplicate Content-Length headers not rejected" ;
+  triage:description "content_length uses find_map to take the first header matching content-length case-insensitively and ignores any subsequent occurrences. Duplicate or conflicting Content-Length headers are not rejected as malformed, a classic HTTP request-smuggling/framing-ambiguity primitive." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "input_limits" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T16:45:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-RSH-002/s39-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI39-RSH-002/s39-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/api/http_frame_reader.rs" ;
+  triage:line 164 ;
+  triage:snippet "fn content_length(headers: &[String]) -> Result<usize, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/s39/9e60c0ff> .
+
+<urn:atm:triage:worktree/s39/9e60c0ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/feature/pAI-s39-buffered-local-http-framing" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI39-QA-101>
+  a triage:Finding ;
+  triage:findingId "AI39-QA-101" ;
+  triage:title "Sprint doc missing worktree: in top-level YAML frontmatter" ;
+  triage:description "AI.39 sprint doc lacks worktree: key in top-level YAML frontmatter (lines 1-8), which the codex-orchestration qa-template.xml.j2:55 treats as a required acceptance-gate item. A worktree: value exists only in the embedded YAML codeblock (lines 23-31) containing a branch name string, unlike sibling sprint doc AI.38 which sets worktree: in both the top-level frontmatter (line 5) and the embedded block (line 16)." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "acceptance-gap" ;
+  triage:severity "Blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI39-QA-101/AI39-QA-101-1> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI39-QA-101/AI39-QA-101-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-39-buffered-local-http-framing.md" ;
+  triage:line 1 ;
+  triage:snippet "YAML frontmatter: title, status, branch, recommended_agent, recommended_model, target fields present; worktree: key MISSING" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/s39_9e60c0ff> .
+
+<urn:atm:triage:worktree/s39_9e60c0ff>
+  a triage:WorktreeSnapshot ;
+  triage:path "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 39 .
