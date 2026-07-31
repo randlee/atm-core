@@ -777,6 +777,36 @@ mod tests {
     }
 
     #[test]
+    fn loopback_tcp_connection_closes_after_its_single_response() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("set close-read deadline");
+        let mut trailing = [0_u8; 1];
+        assert_eq!(
+            stream.read(&mut trailing).expect("read socket closure"),
+            0,
+            "the current one-request local TCP contract must close after its response"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
     fn invalid_capability_is_rejected_before_router() {
         let capability = LocalCapability::generate().expect("capability");
         let (address, server) = serve_one(capability);

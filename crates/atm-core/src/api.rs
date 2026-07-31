@@ -783,6 +783,8 @@ pub trait DaemonApiClient: crate::boundary::sealed::Sealed + Send + Sync {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{self, Read};
+
     use super::{
         ApiRequest, MAX_HTTP_REQUEST_BODY_BYTES, decode_request, read_http_request,
         read_http_response, write_http_request, write_http_response,
@@ -796,6 +798,40 @@ mod tests {
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::CommandAction;
+
+    /// A reader that presents a valid HTTP stream in deliberately small reads.
+    ///
+    /// TCP may split one HTTP frame at any byte boundary; adapters must rely on
+    /// HTTP framing rather than a single socket read.
+    struct FragmentedReader {
+        bytes: Vec<u8>,
+        position: usize,
+        maximum_chunk: usize,
+    }
+
+    impl FragmentedReader {
+        fn new(bytes: Vec<u8>, maximum_chunk: usize) -> Self {
+            Self {
+                bytes,
+                position: 0,
+                maximum_chunk,
+            }
+        }
+    }
+
+    impl Read for FragmentedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if self.position == self.bytes.len() {
+                return Ok(0);
+            }
+            let count = (self.bytes.len() - self.position)
+                .min(self.maximum_chunk)
+                .min(buffer.len());
+            buffer[..count].copy_from_slice(&self.bytes[self.position..self.position + count]);
+            self.position += count;
+            Ok(count)
+        }
+    }
 
     #[test]
     fn http_uds_request_round_trip_preserves_the_canonical_envelope() {
@@ -811,6 +847,53 @@ mod tests {
         .expect("decode HTTP request");
 
         assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn http_request_parser_accepts_a_request_fragmented_at_every_transport_read() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        write_http_request(&mut wire, &request).expect("write HTTP request");
+        let mut fragmented = FragmentedReader::new(wire, 1);
+
+        let decoded = decode_request(
+            read_http_request(&mut fragmented)
+                .expect("read fragmented HTTP request")
+                .expect("request"),
+        )
+        .expect("decode fragmented HTTP request");
+
+        assert!(matches!(decoded, ApiRequest::Doctor(_)));
+    }
+
+    #[test]
+    fn http_request_parser_leaves_a_coalesced_following_request_for_the_next_read() {
+        let first = RequestEnvelope::Doctor(DoctorQuery::default());
+        let second = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut wire = Vec::new();
+        write_http_request(&mut wire, &first).expect("write first HTTP request");
+        write_http_request(&mut wire, &second).expect("write second HTTP request");
+        let mut coalesced = wire.as_slice();
+
+        let first = decode_request(
+            read_http_request(&mut coalesced)
+                .expect("read first coalesced HTTP request")
+                .expect("first request"),
+        )
+        .expect("decode first request");
+        let second = decode_request(
+            read_http_request(&mut coalesced)
+                .expect("read second coalesced HTTP request")
+                .expect("second request"),
+        )
+        .expect("decode second request");
+
+        assert!(matches!(first, ApiRequest::Doctor(_)));
+        assert!(matches!(second, ApiRequest::Doctor(_)));
+        assert!(
+            coalesced.is_empty(),
+            "both complete HTTP frames were consumed"
+        );
     }
 
     #[test]
@@ -842,6 +925,28 @@ mod tests {
         assert!(!text.contains("Error\":{") && !text.contains("Error\""));
         let response = read_http_response(&mut bytes.as_slice(), &request).expect("read error");
         assert!(matches!(response, ResponseEnvelope::Error(error) if error.is_validation()));
+    }
+
+    #[test]
+    fn http_response_remains_explicitly_connection_close_until_keep_alive_is_introduced() {
+        let mut bytes = Vec::new();
+
+        write_http_response(
+            &mut bytes,
+            &ResponseEnvelope::Error(AtmError::validation("bad")),
+        )
+        .expect("write HTTP error");
+
+        let headers = std::str::from_utf8(&bytes)
+            .expect("HTTP response is UTF-8")
+            .split("\r\n\r\n")
+            .next()
+            .expect("response headers");
+        assert!(
+            headers
+                .lines()
+                .any(|line| line.eq_ignore_ascii_case("Connection: close"))
+        );
     }
 
     #[test]
