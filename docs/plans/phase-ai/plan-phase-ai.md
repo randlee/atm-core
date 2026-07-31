@@ -225,7 +225,7 @@ not protocol admission.
 | Unit | error serialization; chat-address parsing/rendering; host normalization; mTLS/allowlist rejection; duplicate ULID write; ack transition |
 | Integration | chat-separated inbox/mutation/reply; UDS HTTP read/write/ack; HTTPS router ingress; no local mutation for rejected remote request |
 | Smoke | Unix UDS and loopback TCP; Windows loopback TCP; own advertised IP through HTTPS; second Mac bidirectional send/ack; Windows peer participation |
-| Durable reports | Producer PR runs `just reports-index --check`; report-index fixtures validate envelopes, newest-first ordering, links, and ADR-044 public-data classification |
+| Durable reports | Producer PR runs `just reports-index --check`; report-index fixtures validate malformed envelopes, stale-index detection, newest-first ordering, links, and ADR-044 public-data classification |
 | Regression | `just lint`, `just test`, architecture checks, no retired local transport/custom-frame/peer-replay source remains |
 
 ## Explicit non-goals

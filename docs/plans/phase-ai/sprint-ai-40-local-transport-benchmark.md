@@ -83,8 +83,9 @@ durable JSON produced against a disposable SQLite database.
 
 2. Persist one schema-versioned JSON artifact for each approximately 20-second
    run below
-   `site/reports/send-message-benchmark/<utc>-<host>-<transport>-<frames>.json`.
-   One run has one host, transport, and frames-per-connection profile:
+   `site/reports/send-message-benchmark/<utc>-<host_label>-<transport>-<frames>.json`.
+   One run has one safe host label, transport, and frames-per-connection
+   profile:
 
    ```json
    {
