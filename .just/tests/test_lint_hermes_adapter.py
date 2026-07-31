@@ -15,9 +15,9 @@ from lint_hermes_adapter import collect_violations
 
 class HermesAdapterLintTests(unittest.TestCase):
     def write_adapter_source(self, root: Path, text: str) -> None:
-        source_dir = root / "crates/atm-graft-python/python"
+        source_dir = root / "crates/atm-graft-python/python/atm_graft_hermes_adapter"
         source_dir.mkdir(parents=True)
-        (source_dir / "atm_graft_hermes_adapter.py").write_text(text, encoding="utf-8")
+        (source_dir / "__init__.py").write_text(text, encoding="utf-8")
 
     def test_clean_steer_adapter_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -40,7 +40,7 @@ class HermesAdapterLintTests(unittest.TestCase):
                 [(item.symbol, item.line_number) for item in violations],
                 [("MessageEvent", 1), ("MessageEvent", 3), ("internal=False", 3)],
             )
-            self.assertIn("crates/atm-graft-python/python/atm_graft_hermes_adapter.py:3", violations[-1].render())
+            self.assertIn("crates/atm-graft-python/python/atm_graft_hermes_adapter/__init__.py:3", violations[-1].render())
 
 
 if __name__ == "__main__":

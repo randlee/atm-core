@@ -5,12 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 import threading
 import unittest
 
-ADAPTER_ROOT = Path(__file__).resolve().parents[1] / "python"
-sys.path.insert(0, str(ADAPTER_ROOT))
+ADAPTER_ROOT = Path(__file__).resolve().parents[1] / "python" / "atm_graft_hermes_adapter"
 
 from atm_graft_hermes_adapter import (  # noqa: E402
     AtmGraftAdapter,
@@ -59,7 +57,7 @@ class NoNormalMessageFallbackPort(RecordingSteerPort):
 
 class HermesAdapterContractTests(unittest.TestCase):
     def test_adapter_source_forbids_retired_normal_ingress_symbols(self) -> None:
-        source = (ADAPTER_ROOT / "atm_graft_hermes_adapter.py").read_text(encoding="utf-8")
+        source = (ADAPTER_ROOT / "__init__.py").read_text(encoding="utf-8")
 
         for retired_symbol in (
             "MessageEvent",

@@ -15,9 +15,6 @@ FIXTURE_ROOT = ROOT / "crates" / "atm-graft-python" / "tests"
 if str(FIXTURE_ROOT) not in sys.path:
     sys.path.insert(0, str(FIXTURE_ROOT))
 
-from hermes_steer_fixture import fixture_evidence  # noqa: E402
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -28,11 +25,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def load_fixture_evidence():
+    """Load the checked-in fixture while leaving installed wheel imports intact."""
+
+    if str(FIXTURE_ROOT) not in sys.path:
+        sys.path.insert(0, str(FIXTURE_ROOT))
+    from hermes_steer_fixture import fixture_evidence
+
+    return fixture_evidence
+
+
 def main() -> None:
     args = parse_args()
     if not args.fixture:
         raise SystemExit("--fixture is required; downstream Hermes is operational evidence only")
-    evidence = asyncio.run(fixture_evidence())
+    evidence = asyncio.run(load_fixture_evidence()())
     required = {
         "profile",
         "chat_id",
