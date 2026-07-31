@@ -116,9 +116,8 @@ parser or a substitute for deterministic unit tests.
    `inconclusive`. Neither is silently counted as PASS.
 
 4. Vendor the established sc-compose fuzz-report package; do not implement a
-   second renderer. Copy these files **verbatim** from
-   `randlee/sc-compose` branch `feature/fuzz-run-report-template`, PR #165
-   (open, head `f6ff57d`), directly into ATM even though that PR is unmerged:
+   second renderer. Copy these files **verbatim** from `randlee/sc-compose`
+   PR #165 source:
 
    - `.claude/skills/html-report/templates/fuzz-run-report.html.j2`
    - `.claude/skills/html-report/templates/fuzz-run-agent.xhtml.j2`
