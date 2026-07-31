@@ -64,10 +64,15 @@ the public report artifact.
 
 ## Deliverables
 
-1. Extend AI.33's `scripts/smoke/run_admission_capacity.py`; do not create a
-   second admission gate. `just benchmark` selects its profiles and reports,
-   accepts explicit `--transport uds|tcp` on Unix and `--transport tcp` on
-   Windows. The same public authenticated
+1. AI.33 (`feature/pAI-s33-admission-capacity-smoke`, PR #695) is
+   abandoned/superseded and never merged; `scripts/smoke/run_admission_capacity.py`
+   does not exist on `integrate/phase-ai-31-33`. AI.40 owns a clean, minimal
+   `scripts/smoke/run_admission_capacity.py` benchmark runner from scratch —
+   selective salvage of AI.33's closed-branch logic is allowed where it is
+   directly useful, but AI.40 does not depend on or extend any unmerged AI.33
+   artifact. `just benchmark` selects its profiles and reports, accepts
+   explicit `--transport uds|tcp` on Unix and `--transport tcp` on Windows. The
+   same public authenticated
    `POST /v1/atm/messages` request, response handling, message count, worker
    limit, timeout policy, and disposable daemon/database lifecycle apply to
    every selected transport.
