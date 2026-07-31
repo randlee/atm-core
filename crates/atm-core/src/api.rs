@@ -867,33 +867,35 @@ mod tests {
     }
 
     #[test]
-    fn http_request_parser_leaves_a_coalesced_following_request_for_the_next_read() {
-        let first = RequestEnvelope::Doctor(DoctorQuery::default());
-        let second = RequestEnvelope::Doctor(DoctorQuery::default());
-        let mut wire = Vec::new();
-        write_http_request(&mut wire, &first).expect("write first HTTP request");
-        write_http_request(&mut wire, &second).expect("write second HTTP request");
-        let mut coalesced = wire.as_slice();
+    fn http_request_parser_handles_coalesced_runs_of_consecutive_frames() {
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
 
-        let first = decode_request(
-            read_http_request(&mut coalesced)
-                .expect("read first coalesced HTTP request")
-                .expect("first request"),
-        )
-        .expect("decode first request");
-        let second = decode_request(
-            read_http_request(&mut coalesced)
-                .expect("read second coalesced HTTP request")
-                .expect("second request"),
-        )
-        .expect("decode second request");
+        for frame_count in [1_usize, 2, 4, 8, 16, 32, 64] {
+            let mut wire = Vec::new();
+            for _ in 0..frame_count {
+                write_http_request(&mut wire, &request).expect("write coalesced HTTP request");
+            }
+            let mut coalesced = wire.as_slice();
 
-        assert!(matches!(first, ApiRequest::Doctor(_)));
-        assert!(matches!(second, ApiRequest::Doctor(_)));
-        assert!(
-            coalesced.is_empty(),
-            "both complete HTTP frames were consumed"
-        );
+            for frame_index in 0..frame_count {
+                let decoded = decode_request(
+                    read_http_request(&mut coalesced)
+                        .expect("read coalesced HTTP request")
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "coalesced run of {frame_count} frames ended before frame {}",
+                                frame_index + 1
+                            )
+                        }),
+                )
+                .expect("decode coalesced request");
+                assert!(matches!(decoded, ApiRequest::Doctor(_)));
+            }
+            assert!(
+                coalesced.is_empty(),
+                "coalesced run of {frame_count} complete frames left trailing bytes"
+            );
+        }
     }
 
     #[test]
