@@ -14,6 +14,10 @@ required_variables:
   - deliverables
   - acceptance_criteria
   - references
+optional_variables:
+  - dependency_relations
+defaults:
+  dependency_relations: "- See authoritative sprint doc."
 ---
 <atm-task id="{{ task_id }}" sprint="{{ sprint }}" assignee="arch-ctm">
   <description>{{ description }}</description>
@@ -22,6 +26,10 @@ required_variables:
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
   <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <dependency-relations>
+{{ dependency_relations }}
+  </dependency-relations>
 
   <deliverables>
 {{ deliverables }}
@@ -47,6 +55,7 @@ required_variables:
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Read `{{ sprint_doc }}` before coding. Treat it as the authoritative source for scope, deliverables, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="d">Before coding, update the worktree from the sprint target branch and include prior fixes already merged to that target.</step>
+    <step id="d1">Honor `<dependency-relations>`: must-follow merge-forward trigger is parent dev push, not QA; merge parent → child before every round. PR-completion trigger is parent PR merge first. Stop if a parallel-safe relation intersects.</step>
     <step id="e">As soon as the development changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so PR work and QA preparation can begin in parallel.</step>
     <step id="f">After the push report, run the required validation and tests. Do not wait for PR creation before starting validation.</step>
     <step id="g">After validation, fix findings and re-run checks until clean. Then send a brief completion report with the deliverable inventory. For deletion or cleanup sprints, include before/after targeted symbol or code-path inventory; net LOC is secondary evidence. Report blockers only if completion is not possible.</step>

@@ -86,6 +86,9 @@ For the current plan state, verify:
 - repeated narrative does not create multiple scope sources
 - important traits, enums, protocol types, interfaces, and boundary contracts
   have explicit code samples or signatures when needed
+- related sprints are `must_follow` (parent dev push → merge-forward before
+  every round; parent PR merge → child PR completion; no QA wait) or
+  `parallel_safe` with non-intersecting modules/crates and boundaries
 - the doc is direct-consumption friendly for dev, `req-qa`, `arch-qa`, and
   `quality-mgr`
 
