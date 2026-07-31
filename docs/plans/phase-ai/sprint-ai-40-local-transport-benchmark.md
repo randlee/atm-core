@@ -106,6 +106,12 @@ the public report artifact.
    host state after a failed sample. It may not use a mock router, direct
    dispatcher, or disabled storage write.
 
+6. Run the release-built benchmark through SSH on M5 using its isolated ATM
+   home/database. Collect both UDS and loopback TCP for one frame and every
+   multi-frame profile. Before AI.39 merges, record the M5 one-frame UDS
+   median as the comparison baseline using the same command, duration, and
+   sample count.
+
 ## Required validation
 
 - Unit tests cover transport validation, schema fields, profile partitioning,
@@ -116,6 +122,8 @@ the public report artifact.
   and produces TCP evidence.
 - Response parsing and application-wire byte accounting are identical between
   transports; no result body may be discarded to inflate throughput.
+- On M5 over SSH, run the isolated release-built UDS and TCP profiles and
+  retain all ten-sample results plus the pre-AI.39 one-frame UDS baseline.
 - Run `just test`, `just lint`,
   `ATM_CAPACITY_ISOLATED_OS_USER=1 just benchmark --transport uds`, and
   `ATM_CAPACITY_ISOLATED_OS_USER=1 just benchmark --transport tcp`. The last
@@ -127,6 +135,11 @@ the public report artifact.
 - Every supported transport has ten consecutive 1K-message intervals at or
   above 1,000 accepted admissions/responses per second on a release-built
   daemon and disposable SQLite database.
+- On M5, median UDS one-frame throughput is at least the recorded pre-AI.39
+  median; each UDS multi-frame profile exceeds M5 UDS one-frame throughput.
+  TCP throughput for each corresponding M5 profile is at least 90% of UDS.
+- Missing M5 evidence, a missing baseline, or any threshold miss fails this
+  sprint; retained diagnostics do not qualify it as complete.
 - Sparse and sustained results state their transport and do not conflate TCP
   frames with kernel packet counts.
 - Timeout, partial acceptance, dirty host, or failed cleanup is FAIL with
