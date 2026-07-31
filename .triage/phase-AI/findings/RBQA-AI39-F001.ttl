@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI39-F001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI39-F001" ;
+  triage:title "Duplicate MAX_KEEP_ALIVE_REQUESTS constant across UDS and TCP local transports" ;
+  triage:description "MAX_KEEP_ALIVE_REQUESTS = 64 is declared as two independent private constants instead of one owned value, violating the sprint deliverable requiring the same bounded maximum request count shared across UDS and loopback TCP." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "boundary_violation" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T16:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI39 ;
+  triage:foundAt "2026-07-31T16:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI39-F001/S39-TCP-48> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI39-F001/S39-IPC-33> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI39-F001/S39-TCP-48>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_tcp_transport.rs" ;
+  triage:line 48 ;
+  triage:snippet "const MAX_KEEP_ALIVE_REQUESTS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/S39-1/9e60c0ff> .
+
+<urn:atm:triage:occurrence/RBQA-AI39-F001/S39-IPC-33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport/request_worker.rs" ;
+  triage:line 33 ;
+  triage:snippet "const MAX_KEEP_ALIVE_REQUESTS: usize = 64;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:occursIn <urn:atm:triage:worktree/S39-1/9e60c0ff> .
+
+<urn:atm:triage:worktree/S39-1/9e60c0ff>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/pAI-s39" ;
+  triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
+  triage:headSha "9e60c0ff" ;
+  triage:orderIndex 1 .
