@@ -4000,6 +4000,13 @@ mail correctness.
     against a shared or production ATM store. Each interval has at least 1,000
     accepted requests and responses. Mock routers, direct dispatcher calls,
     and disabled peer delivery do not satisfy this evidence
+  - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
+    Windows records loopback TCP. Every record names its transport and uses
+    identical public request/response semantics rather than omitting response
+    handling on one transport
+  - local HTTP framing reads bounded chunks and retains over-read bytes for the
+    next frame. It must not implement header delimiter discovery as one system
+    read per byte
 
 - `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
   recent immutable outbound writes after connectivity loss without delivery

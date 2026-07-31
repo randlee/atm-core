@@ -101,3 +101,13 @@ revocation and syncs it before removing the endpoint publication.
 Windows CI proves local loopback-TCP HTTP; Unix CI proves both UDS and
 loopback-TCP HTTP. Windows has no alternate local transport or address-derived
 fallback.
+
+Local HTTP framing is stream-stateful: an adapter may receive part of a frame
+or multiple frames in one system read. It uses one bounded buffer, detects the
+header delimiter within received chunks, and retains bytes after a completed
+frame for the next request. A delimiter implementation may be optimized, but
+it must not regress to one system read per byte or discard a coalesced frame.
+The portable scalar delimiter search is the required behavior on every target.
+Any library-provided runtime SIMD dispatch is optional and must produce the
+same frames and errors as scalar parsing; no ATM build or supported CPU depends
+on SIMD support.
