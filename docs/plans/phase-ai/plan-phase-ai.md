@@ -197,6 +197,11 @@ integration; they do not alter it.
 | AI.36 | `feature/pAI-s36-graft-receiver-ownership` | One lease-safe receiver owner per canonical graft root/team/agent; crash reclaim and generation-safe endpoint removal |
 | AI.37 | `feature/pAI-s37-hermes-recovery-summary` | One ten-second durable-mail-derived recovery summary; no graft mail queue or mailbox mutation |
 | AI.38 | `feature/pAI-s38-hermes-steer-nudge-delivery` | Live and recovery graft wake-ups enter the configured Hermes profile through non-interrupting steer, never normal user-message ingress |
+| AI.39 | `feature/pAI-s39-buffered-local-http-framing` | Bounded buffered local HTTP request framing for UDS and loopback TCP |
+| AI.40 | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner profiles and durable local transport throughput evidence |
+| AI.41 | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | Bounded adversarial-fuzz campaign workflow and evidence package |
+| AI.42 | `feature/pAI-s42-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
+| AI.43 | `feature/pAI-s43-remote-https-response-framing` | Buffered remote HTTPS response framing |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).

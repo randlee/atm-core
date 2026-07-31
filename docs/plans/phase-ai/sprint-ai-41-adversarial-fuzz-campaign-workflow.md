@@ -57,6 +57,8 @@ parser or a substitute for deterministic unit tests.
 - `REQ-CORE-TRANSPORT-005B`
 - ADR-033 — HTTP endpoint contract
 - ADR-035 — canonical write ingress
+- `.just/build_view_site.py` / `artifacts/view` ToolPanel contract; extend it,
+  do not add a second generic report renderer.
 - sc-compose `adversarial-fuzzing` campaign contract, used as the design
   precedent (coordinator/worker bounds, classification, promotion, and report
   shape—not as a runtime dependency)
@@ -122,6 +124,10 @@ parser or a substitute for deterministic unit tests.
    failure retention, result schema, artifact-path derivation, and report
    rendering. Validate generated HTML and XHTML with the repository’s adopted
    HTML/XHTML validators before reporting a completed campaign.
+
+6. Keep this a separate campaign skill: `codex-orchestration` and
+   `graph-orchestration` own planning/dispatch and graph queries, not bounded
+   fuzz input validation, worker lifecycle, minimization, or evidence.
 
 ## Required validation
 

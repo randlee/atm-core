@@ -61,12 +61,14 @@ without silently changing production behavior.
 
 ## Governing requirements and ADRs
 
-- `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002B`, and `REQ-CORE-TRANSPORT-005B`
+- `REQ-CORE-TRANSPORT-001` and `REQ-CORE-TRANSPORT-005B`
 - ADR-032 — unified error contract
 - ADR-033 — HTTP endpoint contract
 - ADR-035 — canonical write ingress
 - AI.39 shared bounded frame-reader contract
 - AI.41 adversarial campaign workflow and report contract
+- `.just/build_view_site.py` / `artifacts/view` ToolPanel contract; extend it,
+  do not add a second generic report renderer.
 
 ## Deliverables
 

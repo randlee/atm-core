@@ -55,15 +55,16 @@ route, size limit, error contract, and local authentication rule.
 
 ## Governing requirements and ADRs
 
-- `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002B`, and `REQ-CORE-TRANSPORT-005B`
+- `REQ-CORE-TRANSPORT-001` and `REQ-CORE-TRANSPORT-005B`
 - ADR-032 — unified error contract
 - ADR-033 — HTTP endpoint contract
 - ADR-035 — canonical write ingress
 
 ## Deliverables
 
-1. Introduce one private, bounded `HttpFrameReader` in `atm-core::api` for a
-   stream of HTTP request or response frames. Its explicit state owns unread
+1. Introduce one private, bounded `HttpFrameReader` in
+   `crates/atm-core/src/api/http_frame_reader.rs`; keep `api.rs` as the stable
+   API/model facade. It reads a stream of local request frames; its state owns unread
    bytes; a read operation may consume a chunk larger than one frame and must
    retain the exact surplus for the next read.
 
@@ -120,6 +121,9 @@ route, size limit, error contract, and local authentication rule.
 - Prove default close remains one request per connection; an explicit
   keep-alive serves 1, 2, 8, 16, and 64 writes and closes at the bound.
 - Prove a reset/broken-pipe client does not terminate the Unix TCP listener.
+- Extend `crates/atm-architecture/tests/boundary_enforcement.rs:1399-1409` in
+  the same change so both local adapters remain bound to the shared framing
+  entry point; update that guard if the entry-point names move.
 - Run all framing correctness cases once with the scalar implementation forced
   (the test-only library capability/feature hook) before any SIMD-enabled run.
   On supported x86_64 and aarch64 runners, run the same corpus with the normal
@@ -132,7 +136,7 @@ route, size limit, error contract, and local authentication rule.
 
 ## Acceptance criteria
 
-- No production HTTP parser discovers headers with a one-byte system-read loop.
+- No local transport HTTP parser discovers headers with a one-byte system-read loop.
 - The shared reader preserves over-read bytes exactly across coalesced frames.
 - UDS and TCP have equivalent local framing and bounded keep-alive behavior;
   existing close-per-request clients remain compatible.

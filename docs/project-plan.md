@@ -1007,6 +1007,11 @@ Implementation Branches:
 | `AI.28` | `complete` | `feature/pAI-s28-bounded-peer-recovery` | bounded recovery after connectivity loss |
 | `AI.29` | `complete` | `feature/pAI-s29-crosshost-smoke-rerun` | receiver-proven physical smoke implementation; live evidence remains blocked |
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
+| `AI.39` | `planned` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
+| `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner throughput evidence |
+| `AI.41` | `planned` | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | bounded adversarial-fuzz campaign workflow |
+| `AI.42` | `planned` | `feature/pAI-s42-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
+| `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

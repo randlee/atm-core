@@ -59,6 +59,8 @@ durable JSON produced against a disposable SQLite database.
 - ADR-026 — host-owned daemon state
 - ADR-033 — HTTP endpoint contract
 - ADR-035 — canonical write ingress
+- `.just/build_view_site.py` / `artifacts/view` ToolPanel contract; extend it,
+  do not add a second generic report renderer.
 
 ## Deliverables
 
