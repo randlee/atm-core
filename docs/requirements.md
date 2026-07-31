@@ -4000,6 +4000,35 @@ mail correctness.
     against a shared or production ATM store. Each interval has at least 1,000
     accepted requests and responses. Mock routers, direct dispatcher calls,
     and disabled peer delivery do not satisfy this evidence
+  - Unix release evidence records HTTP/UDS and loopback-TCP results separately;
+    Windows records loopback TCP. Every record names its transport and uses
+    identical public request/response semantics rather than omitting response
+    handling on one transport
+  - local HTTP framing reads bounded chunks and retains over-read bytes for the
+    next frame. It must not implement header delimiter discovery as one system
+    read per byte
+
+- `REQ-CORE-REPORT-001` Durable verification evidence must be published as a
+  deterministic static report site.
+
+  Required behavior:
+  - `site/` is the publish root; `site/index.html` links to the generated
+    `site/reports/index.html`
+  - each recognized report has one HTML entry under `site/reports/` and a
+    same-named directory containing its JSON/XHTML evidence
+  - every report envelope declares `schema_version`, `report_type`,
+    `generated_at` (UTC), a relative report HTML path, and the ADR-044-safe
+    opaque `host_label`; the initial report types are `benchmark` and `fuzz`
+  - the repository report-index command regenerates the reports index after
+    every successful or failed report artifact write; a check mode fails when
+    a recognized envelope, report link, or generated index is stale
+  - the index groups report types and lists entries newest-first by UTC;
+    benchmark run envelopes aggregate to their one benchmark HTML entry
+  - transient development views under `artifacts/view` may link to reports but
+    must not duplicate, copy, or become the source of durable evidence
+  - `site/` artifacts follow ADR-044's public-data classification; raw host,
+    endpoint, identity, path, secret, and message data are rejected before
+    publication
 
 - `REQ-CORE-TRANSPORT-003B` An enabled peer reconciliation policy may recover
   recent immutable outbound writes after connectivity loss without delivery
