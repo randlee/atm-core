@@ -25,10 +25,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.39 `must_follow`s AI.33: start after its development push, not QA; before
-every dev or fix round merge AI.33 into this branch. Its PR may provide
-evidence, but cannot be ready, complete, or merge until AI.33 merges into
-`integrate/phase-ai-31-33`. Both touch the local admission/framing path.
+AI.39 `must_follow`s AI.33. Merge-forward trigger: AI.33 development is
+pushed, not QA; before every round merge AI.33 into this branch. PR-completion
+trigger: AI.33's PR merges into `integrate/phase-ai-31-33` first. Both touch
+the local admission/framing path.
 
 ## Dependency Relations
 

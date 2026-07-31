@@ -25,10 +25,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.40 `must_follow`s AI.39: start after its development push, not QA; before
-every dev or fix round merge AI.39 into this branch. Its PR may provide
-evidence, but cannot be ready, complete, or merge until AI.39 merges into
-`integrate/phase-ai-31-33`. It measures AI.39's shared framing implementation.
+AI.40 `must_follow`s AI.39. Merge-forward trigger: AI.39 development is
+pushed, not QA; before every round merge AI.39 into this branch. PR-completion
+trigger: AI.39's PR merges into `integrate/phase-ai-31-33` first. It measures
+AI.39's shared framing implementation.
 
 ## Dependency Relations
 

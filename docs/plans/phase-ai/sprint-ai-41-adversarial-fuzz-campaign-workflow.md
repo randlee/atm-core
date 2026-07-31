@@ -23,9 +23,9 @@ recommendation, not a binding assignment.
 ## Execution Dependencies
 
 AI.41 is `parallel_safe` with AI.39: it owns `.claude` campaign/report tooling;
-AI.39 owns Rust framing adapters. It has no QA or merge-forward gate. AI.42
-must-follow merges both parents before every round and waits for their merges
-before PR completion.
+AI.39 owns Rust framing adapters. It has no dependency gate. AI.42's
+merge-forward trigger is both parent development pushes; its PR-completion
+trigger is both parent PR merges.
 
 ## Dependency Relations
 

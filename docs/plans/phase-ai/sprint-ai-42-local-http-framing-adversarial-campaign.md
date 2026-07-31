@@ -29,10 +29,10 @@ is a planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.42 `must_follow`s AI.39 and AI.41: start after both development pushes, not
-QA; before every dev or fix round merge both into this branch. Its PR may
-provide evidence, but cannot be ready, complete, or merge until both merge into
-`integrate/phase-ai-31-33`. It runs AI.41's campaign against AI.39's reader.
+AI.42 `must_follow`s AI.39 and AI.41. Merge-forward trigger: both development
+pushes, not QA; before every round merge both into this branch. PR-completion
+trigger: both PRs merge into `integrate/phase-ai-31-33` first. It runs AI.41's
+campaign against AI.39's reader.
 
 ## Dependency Relations
 
