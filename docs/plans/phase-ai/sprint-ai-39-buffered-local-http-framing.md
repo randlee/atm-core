@@ -94,6 +94,12 @@ route, size limit, error contract, and local authentication rule.
   runtime-dispatched implementation and assert byte-for-byte identical parsed
   frames and error results. The scalar case is the compatibility gate; SIMD is
   never a substitute for it.
+- Add a `cargo-fuzz` framing target and a checked-in seed corpus for empty,
+  partial, oversized, malformed, and coalesced request frames. Its oracle is:
+  no panic, no unbounded allocation, no unbounded loop, and only a valid frame,
+  EOF, or a typed `AtmError`. Run the corpus deterministically in ordinary CI;
+  run a bounded fuzz campaign in the release/maintainer gate. Any minimized
+  crashing or timeout input becomes a regression seed and deterministic test.
 - Run `cargo fmt --all --check`,
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
   `cargo test --workspace --no-fail-fast`, `just lint`, and `just test`.
