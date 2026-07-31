@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/RBQA-AI52-001>
+  a triage:Finding ;
+  triage:findingId "RBQA-AI52-001" ;
+  triage:title "AI.52 missing 'Governing requirements and ADRs' section present in sibling sprint docs AI.40/AI.43" ;
+  triage:description "ruthless-boundary-qa found that sprint-ai-52-windows-transport-benchmark-confirmation.md lacks a 'Governing requirements and ADRs' section present in AI.40 (line 56) and AI.43 (line 37). Should cite REQ-CORE-TRANSPORT-005B and cross-platform-guidelines.md per sibling convention." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-consistency" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T21:32:56Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI52 ;
+  triage:foundAt "2026-07-31T21:31:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI52-001/AI52-missing> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/RBQA-AI52-001/AI52-missing>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 22 ;
+  triage:snippet "Missing 'Governing requirements and ADRs' section (present in AI.40 line 56, AI.43 line 37)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/9dc54dbd> .
+
+<urn:atm:triage:worktree/plan-http-framing-performance/9dc54dbd>
+  a triage:WorktreeSnapshot ;
+  triage:path "plan/http-framing-performance" ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:orderIndex 0 .

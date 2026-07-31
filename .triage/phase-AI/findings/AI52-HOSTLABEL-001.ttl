@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-HOSTLABEL-001>
+  a triage:Finding ;
+  triage:findingId "AI52-HOSTLABEL-001" ;
+  triage:title "AI.52 host label embeds literal real hostname, violating ADR-044 opaque-host_label requirement" ;
+  triage:description "arch-qa (via quality-mgr's AI52-PLAN-QA-1 report) found that Deliverable 3's 'windows-fastpc4' host label in sprint-ai-52-windows-transport-benchmark-confirmation.md (lines 27/44) and project-plan.md:1019 embeds the literal real hostname, violating ADR-044's opaque host_label requirement (docs/architecture.md:96-97) and diverging from AI.40's own precedent label 'mac-arm64-01' (platform/arch-derived, not literal). Fix: rename to an opaque label such as windows-x64-01 or windows-arm64-01, consistently across all occurrences." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-consistency" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T21:35:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI52 ;
+  triage:foundAt "2026-07-31T21:31:22Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line44> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line49> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line56> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/plan-line1019> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/plan-phase-ai-line212> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line27>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 27 ;
+  triage:snippet "fastpc4 after AI.40's M5 gate is accepted" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line44>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 44 ;
+  triage:snippet "On `fastpc4` under the dedicated `atm` OS account" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line49>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 49 ;
+  triage:snippet "cwin may reset the fastpc4 test daemon/database" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/s52-d3-line56>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 56 ;
+  triage:snippet "with a safe `windows-fastpc4` host label" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/plan-line1019>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1019 ;
+  triage:snippet "cwin fastpc4 TCP confirmation after accepted M5 performance evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/plan-phase-ai-line212>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/plan-phase-ai.md" ;
+  triage:line 212 ;
+  triage:snippet "cwin fastpc4 TCP confirmation after accepted M5 performance evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/planning/9dc54dbd> .
+
+<urn:atm:triage:worktree/planning/9dc54dbd>
+  a triage:WorktreeSnapshot ;
+  triage:path "plan/http-framing-performance" ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:orderIndex 0 .

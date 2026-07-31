@@ -1,0 +1,54 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/ATM-QA-210>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-210" ;
+  triage:title "sc-compose fuzz-report vendored-source pointer dropped from AI.48/AI.50 split" ;
+  triage:description "AI.46's plan-doc restructure split the fuzz-report work into AI.48 (fuzz tooling port) and AI.50 (fuzz report), and the previously-baked-in sc-compose vendored-template pointer (exact file paths: .claude/skills/html-report/templates/fuzz-run-report.html.j2, fuzz-run-agent.xhtml.j2, .claude/skills/html-report/fuzz-run-agent-contract.md, .claude/skills/adversarial-fuzzing/SKILL.md, copied verbatim from randlee/sc-compose develop) is missing from both new docs. Both AI.48 and AI.50 lack explicit 'from randlee/sc-compose' source attribution; additionally, AI.48 omits the HTML report template file paths entirely. This re-breaks the previously-resolved AI46-SCC directive that these exact paths must be named in sprint-doc text, not just tracked in memory/ATM messages." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-consistency" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI48 ;
+  triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-210/ai48-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-210/ai50-1> ;
+  triage:triageRecordVersion "2" .
+
+<urn:atm:triage:occurrence/ATM-QA-210/ai48-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-48-fuzz-tooling-port.md" ;
+  triage:line 34 ;
+  triage:snippet "Copy the named sc-compose skill and coordinator/probe agents verbatim. [Missing: .claude/skills/html-report/templates/*, from randlee/sc-compose]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-perf/9dc54dbd> .
+
+<urn:atm:triage:occurrence/ATM-QA-210/ai50-1>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-50-fuzz-report.md" ;
+  triage:line 37 ;
+  triage:snippet "Copy the three named sc-compose files verbatim; AI.48 worker JSON conforms [Missing: from randlee/sc-compose]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-perf/9dc54dbd> .
+
+<urn:atm:triage:worktree/plan-http-perf/9dc54dbd>
+  a triage:WorktreeSnapshot ;
+  triage:path ".worktrees/plan/http-framing-performance" ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "9dc54dbd" ;
+  triage:orderIndex 0 .
