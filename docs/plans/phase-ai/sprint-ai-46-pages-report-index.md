@@ -20,6 +20,13 @@ generation; no daemon/runtime change.
 AI.46 has no parent merge gate. It defines the generic report-index contract;
 report producers must invoke it after every report artifact write.
 
+## Governing requirements and ADRs
+
+- `REQ-CORE-REPORT-001` — durable report publication and index contract
+- `docs/architecture.md` §1.3 — verification report-site ownership
+- `.just/build_view_site.py` ToolPanel contract; it links to durable reports
+  and does not render or copy them
+
 ## Goal
 
 Publish `site/` through GitHub Pages. Generate `site/index.html` and
@@ -29,7 +36,7 @@ appear without manual index edits.
 ## Exact Targets
 
 - `site/index.html`
-- `site/reports/index.html` and report-index generator/tests
+- `site/reports/index.html` and `.just/generate_report_index.py` with tests
 - `.github/workflows/pages.yml`
 - GitHub Pages deployment documentation/configuration
 
@@ -37,9 +44,11 @@ appear without manual index edits.
 
 1. Generate `site/index.html` with a clear relative link to
    `site/reports/index.html`.
-2. Generate `site/reports/index.html` from `site/reports/` artifacts. It has
-   one section per `report_type`; entries are newest-first by their UTC
-   timestamp and link to the report HTML.
+2. Define the versioned report-envelope interface: `schema_version`,
+   `report_type` (`benchmark` or `fuzz`), `generated_at` (UTC), and a relative
+   `report_html` path. Generate `site/reports/index.html` from those envelopes.
+   It has one section per report type; entries are newest-first by UTC and link
+   to the validated report HTML.
 3. Use the durable naming/envelope contract, not a hand-maintained list:
    benchmark run artifacts below `send-message-benchmark/` aggregate to the
    one `send-message-benchmark.html` entry; each fuzz report HTML has its own
@@ -47,10 +56,13 @@ appear without manual index edits.
 4. Keep report HTML in `site/reports/` and all supporting JSON/XHTML in its
    same-named directory. The generator links only; it neither copies evidence
    nor re-renders individual reports.
-5. Expose one repository command used by every report producer and the Pages
-   workflow. It regenerates `site/reports/index.html` after each successful or
-   failed report artifact write; no hand-maintained index or agent reminder is
-   permitted.
+5. Expose `just reports-index` and `just reports-index --check`, used by every
+   report producer and the Pages workflow. The first regenerates
+   `site/reports/index.html` after each successful or failed report artifact
+   write; check mode fails on a stale index, malformed envelope, missing HTML,
+   or missing same-named evidence directory. Producer tests must assert that
+   their write path invokes the command. No hand-maintained index or agent
+   reminder is permitted.
 6. Add a GitHub Pages workflow that validates/generates `site/`, uploads that
    directory as the Pages artifact, and deploys from the configured default
    branch. Document the one repository Pages setting required to select the
@@ -58,9 +70,9 @@ appear without manual index edits.
 
 ## Required Validation
 
-- Fixture tests cover empty reports, multiple report types, newest-first UTC
-  ordering, benchmark aggregation, malformed envelope handling, and relative
-  links.
+- Fixture tests cover empty reports, both report types, newest-first UTC
+  ordering, benchmark aggregation, malformed-envelope handling, missing
+  linked artifacts, stale-index detection, and relative links.
 - Validate generated HTML and report links.
 - `just lint`
 - `just test`

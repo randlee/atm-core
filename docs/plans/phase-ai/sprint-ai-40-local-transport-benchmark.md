@@ -16,7 +16,7 @@ dependencies_relation:
     relation: must_follow
     rationale: Emits AI.46's generated report-index contract after every run.
 target: integrate/phase-ai-31-33
-depends_on: AI.39
+depends_on: AI.39, AI.46
 ---
 
 # AI.40 — Local transport throughput evidence
@@ -85,6 +85,9 @@ durable JSON produced against a disposable SQLite database.
    ```json
    {
      "schema_version": 2,
+     "report_type": "benchmark",
+     "generated_at": "2026-07-31T19:00:00Z",
+     "report_html": "../send-message-benchmark.html",
      "host": "example-host",
      "transport": "uds",
      "frames_per_connection": 16,
@@ -112,8 +115,9 @@ durable JSON produced against a disposable SQLite database.
    the report there. Migrate existing evidence with `transport: tcp` rather
    than leaving schema-ambiguous rows.
 
-   Invoke AI.46's report-index command after every artifact write, including a
-   failed run, so `site/reports/index.html` never needs manual maintenance.
+   Invoke `just reports-index` after every artifact write, including a failed
+   run, so `site/reports/index.html` never needs manual maintenance; producer
+   tests prove this invocation.
 
 5. The runner rejects an ambient/shared daemon and production database. It
    records release paths, doctor result, and endpoint; cleanup restores prior

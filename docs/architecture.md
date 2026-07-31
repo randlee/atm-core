@@ -84,6 +84,18 @@ moved into:
 - [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
+### 1.3 Verification Report Site
+
+`site/` is the repository's durable static verification-report publish root.
+`just reports-index` runs `.just/generate_report_index.py` to discover
+schema-versioned report envelopes, validate their relative HTML/evidence
+paths, and generate `site/index.html` plus `site/reports/index.html`. The
+generator owns report discovery: benchmark envelopes aggregate to one report;
+fuzz envelopes produce one report entry per campaign. Report producers invoke
+it after every artifact write, and `just reports-index --check` rejects stale
+or invalid report indexes. `.just/build_view_site.py` may expose links only;
+`artifacts/view` is transient and never a second report renderer.
+
 Phase-Q supersession note:
 - earlier daemon-free architecture statements in this file are historical from
   the prior rewrite line

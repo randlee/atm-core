@@ -8,6 +8,7 @@ execution_mode: after_merge
 execution_dependencies:
   - AI.39
   - AI.41
+  - AI.46
 dependencies_relation:
   - sprint: AI.39
     relation: must_follow
@@ -15,8 +16,11 @@ dependencies_relation:
   - sprint: AI.41
     relation: must_follow
     rationale: Campaign execution and reports use AI.41's merged workflow.
+  - sprint: AI.46
+    relation: must_follow
+    rationale: Emits AI.46's generated report-index contract after every report.
 target: integrate/phase-ai-31-33
-depends_on: AI.39, AI.41
+depends_on: AI.39, AI.41, AI.46
 ---
 
 # AI.42 — Local HTTP framing adversarial campaign
@@ -29,10 +33,11 @@ is a planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.42 `must_follow`s AI.39 and AI.41. Merge-forward trigger: both development
-pushes, not QA; before every round merge both into this branch. PR-completion
-trigger: both PRs merge into `integrate/phase-ai-31-33` first. It runs AI.41's
-campaign against AI.39's reader.
+AI.42 `must_follow`s AI.39, AI.41, and AI.46. Merge-forward trigger: all
+development pushes, not QA; before every round merge all three into this
+branch. PR-completion trigger: all three PRs merge into
+`integrate/phase-ai-31-33` first. It runs AI.41's campaign against AI.39's
+reader and emits AI.46's report index.
 
 ## Dependency Relations
 
@@ -40,6 +45,7 @@ campaign against AI.39's reader.
 | --- | --- | --- |
 | AI.39 | must_follow | The real shared frame reader is the campaign target. |
 | AI.41 | must_follow | The bounded coordinator/worker workflow and report package are required. |
+| AI.46 | must_follow | It owns the generated report-index command invoked after every report. |
 
 ```yaml
 plan_type: sprint_plan
@@ -94,12 +100,15 @@ without silently changing production behavior.
    timeout, or worker failure stays visible in the report with a next owner;
    it cannot be described as a passing no-finding run.
 
-4. Produce the AI.41 report package in `site/reports/`. The top-level report
+4. Produce the AI.41 report package in `site/reports/`, with `report_type:
+   fuzz` and AI.46's versioned envelope fields. The top-level report
    distinguishes complete/no-finding, complete/confirmed-finding, and
    incomplete campaign states. It includes a compact summary table and one
    XHTML panel per worker; the JSON sidecar remains the source of truth. Its
    same-named directory holds all JSON/XHTML evidence. `artifacts/view`
    registers a ToolPanel link only and never copies or re-renders this report.
+   Invoke `just reports-index` after every artifact write, including an
+   incomplete or failed campaign; producer tests prove this invocation.
 
 5. Run targeted promoted tests and then the repository’s required formatting,
    test, lint, and boundary gates. If campaign evidence identifies a production
