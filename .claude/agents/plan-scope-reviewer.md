@@ -86,21 +86,9 @@ For the current plan state, verify:
 - repeated narrative does not create multiple scope sources
 - important traits, enums, protocol types, interfaces, and boundary contracts
   have explicit code samples or signatures when needed
-- every sprint states an execution mode and is direct about its dependency
-  ordering: `after_merge` names each prerequisite and requires target
-  merge-forward before coding; `parallel` identifies its non-intersecting
-  module/crate ownership relative to concurrent sprints
-- each claimed `parallel` relationship is credible from the exact targets and
-  touched module/crate boundaries; fail it when concurrent sprints can edit the
-  same runtime path, public contract, generated artifact, or ownership seam
-- plans prefer non-intersecting sprint ownership where practical so parallel
-  sprints can be completed, qualified, and merged separately; an `after_merge`
-  sprint explicitly states that it cannot be qualified or merged into its
-  integration target until every listed dependency has merged
-- every related sprint has a `dependencies_relation` entry of `must_follow` or
-  `parallel_safe`; every `must_follow` entry is also an execution dependency,
-  and every `parallel_safe` entry names evidence of non-intersecting
-  module/crate or boundary ownership
+- related sprints are `must_follow` (parent push → merge-forward before every
+  round → parent merge before child PR completion; no QA wait) or
+  `parallel_safe` with non-intersecting modules/crates and boundaries
 - the doc is direct-consumption friendly for dev, `req-qa`, `arch-qa`, and
   `quality-mgr`
 
@@ -114,7 +102,6 @@ For the current plan state, verify:
 - `OVERLONG`
 - `QA-UNFRIENDLY`
 - `MISSING-CODE-SAMPLE`
-- `EXECUTION-DEPENDENCY`
 - `VAGUE`
 - `GAP`
 
@@ -129,7 +116,6 @@ They may never be downgraded to `Minor`:
 - `MULTI-SOURCE`
 - `QA-UNFRIENDLY`
 - `MISSING-CODE-SAMPLE`
-- `EXECUTION-DEPENDENCY`
 
 ## Output Contract
 
@@ -165,7 +151,7 @@ Return fenced JSON only.
     {
       "id": "PLAN-SCOPE-001",
       "severity": "Blocking | Important | Minor",
-      "category": "SPLIT-RISK | DROP-RISK | NON-PROD | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | EXECUTION-DEPENDENCY | VAGUE | GAP",
+      "category": "SPLIT-RISK | DROP-RISK | NON-PROD | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | VAGUE | GAP",
       "classification": "structural | wording",
       "affects_ac": false,
       "target_refs": [

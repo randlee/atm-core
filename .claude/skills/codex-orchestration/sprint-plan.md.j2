@@ -13,8 +13,6 @@ optional_variables:
   - worktree
   - recommended_agent
   - recommended_model
-  - execution_mode
-  - execution_dependencies
   - dependencies_relation
   - goal
   - dependencies
@@ -30,8 +28,6 @@ defaults:
   worktree: ""
   recommended_agent: ""
   recommended_model: ""
-  execution_mode: parallel
-  execution_dependencies: []
   dependencies_relation: []
   goal: []
   dependencies: []
@@ -55,11 +51,7 @@ branch: {{ branch }}
 {% if worktree %}worktree: {{ worktree }}
 {% endif %}{% if recommended_agent %}recommended_agent: {{ recommended_agent }}
 {% endif %}{% if recommended_model %}recommended_model: {{ recommended_model }}
-{% endif %}execution_mode: {{ execution_mode }}
-{% if execution_dependencies %}execution_dependencies:
-{% for dep in execution_dependencies %}  - {{ dep }}
-{% endfor %}{% endif %}
-target: {{ target }}
+{% endif %}target: {{ target }}
 ---
 
 # Sprint {{ id }} — {{ title }}
@@ -68,32 +60,23 @@ target: {{ target }}
 
 {% if recommended_agent %}Recommended agent: {{ recommended_agent }}.
 {% endif %}{% if recommended_model %}Recommended model: {{ recommended_model }}.
-{% endif %}This is a planning-time recommendation, not a binding assignment;
-team-lead makes the final dispatch decision based on current availability.
+{% endif %}Planning advice; team-lead assigns from the active pool.
 
 {% endif %}## Goal
 
 {% for item in goal %}- {{ item }}
 {% endfor %}
-## Execution Dependencies
+## Hard Dependencies
 
-{% if execution_dependencies %}This sprint must not begin until every
-listed dependency has merged into `{{ target }}`. Before coding, merge-forward
-the updated target into this sprint branch and verify each dependency is an
-ancestor of the branch head. This sprint may not be qualified or merged into
-`{{ target }}` before every listed dependency is merged there.
+{% for dep in dependencies %}- {{ dep }}
+{% endfor %}
+{% if dependencies_relation %}## Dependency Relations
 
-{% for dep in execution_dependencies %}- {{ dep }}
-{% endfor %}{% else %}This sprint may execute in parallel from its declared
-target. It has no required prior-sprint merge-forward; use this mode only when
-its ownership does not intersect a concurrent sprint's modules, crates, public
-contract, generated artifact, or ownership seam.
-{% endif %}
+`must_follow`: start after parent development is pushed, not QA; merge parent
+→ child before every dev/fix round; child PR cannot be ready or complete until
+parent merges. `parallel_safe`: no gate; state non-intersecting ownership.
 
-## Dependency Relations
-
-{% if dependencies_relation %}{% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
-{% endfor %}{% else %}{% for dep in dependencies %}- {{ dep }} (must follow; relation rationale not supplied)
+{% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
 {% endfor %}{% endif %}
 ## Exact Targets
 
