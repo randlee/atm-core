@@ -4,15 +4,8 @@ status: proposed
 branch: feature/pAI-s39-buffered-local-http-framing
 recommended_agent: arch-ctm
 recommended_model: deep-reasoning
-execution_mode: after_merge
-execution_dependencies:
-  - AI.33
-dependencies_relation:
-  - sprint: AI.33
-    relation: must_follow
-    rationale: Shares the local admission/framing path that AI.33 establishes.
+execution_mode: standard
 target: integrate/phase-ai-31-33
-depends_on: AI.33
 ---
 
 # AI.39 — Buffered local HTTP framing
@@ -25,16 +18,16 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.39 `must_follow`s AI.33. Merge-forward trigger: AI.33 development is
-pushed, not QA; before every round merge AI.33 into this branch. PR-completion
-trigger: AI.33's PR merges into `integrate/phase-ai-31-33` first. Both touch
-the local admission/framing path.
+None. AI.33 (admission capacity and smoke evidence) is abandoned/superseded —
+PR #695 closed, not merged, after real M5 evidence retained a blocking HTTP
+503 throughput failure. AI.39 no longer depends on AI.33; AI.40 (local
+transport benchmark) is the active owner of a clean benchmark runner/evidence
+path in this line.
 
 ## Dependency Relations
 
-| Sprint | Relation | Rationale |
-| --- | --- | --- |
-| AI.33 | must_follow | It owns the local admission baseline in the same framing path. |
+None. Previously `must_follow`d AI.33; that dependency is removed because
+AI.33 is abandoned/superseded (see sprint-ai-33-admission-capacity-smoke.md).
 
 ```yaml
 plan_type: sprint_plan

@@ -198,7 +198,7 @@ integration; they do not alter it.
 | AI.30 | `feature/pAI-s30-semver-http-compatibility` | Schema/HTTP compatibility admission and opt-in SemVer prerelease distribution |
 | AI.31 | `feature/pAI-s31-async-local-admission` | SQLite-only local admission response; host-qualified peer work is signalled after response |
 | AI.32 | `feature/pAI-s32-independent-peer-jobs` | Bounded non-durable per-ULID peer jobs; no cross-command delivery-order promise or stream abstraction |
-| AI.33 | `feature/pAI-s33-admission-capacity-smoke` | Isolated 1,000/s admission proof and ten-run, endpoint-explicit local/cross-host smoke report |
+| AI.33 | `feature/pAI-s33-admission-capacity-smoke` | **Abandoned/superseded.** Isolated 1,000/s admission proof and ten-run, endpoint-explicit local/cross-host smoke report; PR #695 closed after real M5 evidence retained a blocking HTTP 503 throughput failure. AI.40 is the active owner of the benchmark runner/evidence path. |
 | AI.34 | `fix/hermes-nudge-endpoint-mismatch` | Canonical roster workspace-root resolution for Python-graft post-send nudge endpoint delivery |
 | AI.35 | `feature/pAI-s35-graft-root-fallback-observability` | Graft-root fallback observability and operator runbook closure |
 | AI.36 | `feature/pAI-s36-graft-receiver-ownership` | One lease-safe receiver owner per canonical graft root/team/agent; crash reclaim and generation-safe endpoint removal |
