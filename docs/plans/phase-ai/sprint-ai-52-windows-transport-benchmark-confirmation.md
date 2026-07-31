@@ -42,19 +42,22 @@ not a substitute for M5 UDS/TCP evidence.
 ## Deliverables
 
 1. On `fastpc4` under the dedicated `atm` OS account, build the branch's
-   release CLI/daemon pair and run `just test`, normal local smoke, and
-   `atm doctor --json`. Fix local-smoke failures before beginning capacity
-   work. Use an isolated ATM home and disposable test database; cwin may reset
-   the fastpc4 test daemon/database. Never use a shared or production database.
+   release CLI/daemon pair and run the standard local smoke ladder: `just
+   smoke`, `just smoke localhost`, and `just smoke local-ip`, plus `just test`
+   and `atm doctor --json`. Retain its canonical smoke artifacts. Fix a
+   local-smoke failure before beginning capacity work. Use an isolated ATM home
+   and disposable test database; cwin may reset the fastpc4 test
+   daemon/database. Never use a shared or production database.
 2. Run `just benchmark --transport tcp` through the real release daemon with
    1, 2, 8, 16, and 64 frames per connection. For each profile, retain ten
    independent 1K-message samples using the AI.40 public authenticated
    `POST /v1/atm/messages` path and full response parsing.
 3. Persist every result, including failed runs, through AI.49's public-safe
-   schema and report path with a safe `windows-fastpc4` host label. Record
-   transport, frames, requested/accepted messages, elapsed time, request
-   frames/sec, connections/sec, bytes/sec, latency, first failure, cleanup,
-   and final doctor health.
+   schema and aggregate benchmark-report path with a safe `windows-fastpc4`
+   host label. These are the plotted artifacts in Cipher's report, not a
+   second Windows report. Record transport, frames, requested/accepted
+   messages, elapsed time, request frames/sec, connections/sec, bytes/sec,
+   latency, first failure, cleanup, and final doctor health.
 4. Treat an error-bearing run as diagnostics, not evidence: root-cause and fix
    request/response, daemon, database, resource, or runner errors, then rerun
    local smoke and the affected profile. For an error-free profile below
@@ -64,8 +67,9 @@ not a substitute for M5 UDS/TCP evidence.
 
 ## Required Validation
 
-- `just test` and normal local smoke pass before the benchmark; any discovered
-  smoke defect is fixed and revalidated before capacity work continues.
+- The complete standard smoke ladder, `just test`, and `atm doctor --json`
+  pass before the benchmark; any discovered smoke defect is fixed and
+  revalidated before capacity work continues.
 - The benchmark uses the branch release daemon and isolated database; no mock,
   direct dispatcher, installed production daemon, or response-body discard.
 - Validate the ten JSON artifacts and `just reports-index --check`.
