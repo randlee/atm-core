@@ -155,6 +155,30 @@ class GenerateReportIndexTests(unittest.TestCase):
             with self.assertRaisesRegex(ReportIndexError, "stale"):
                 write_or_check(root, check=True)
 
+    def test_rejects_report_symlink_that_escapes_public_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir, tempfile.TemporaryDirectory() as outside:
+            root = Path(tempdir)
+            reports = root / "site/reports"
+            reports.mkdir(parents=True)
+            outside_path = Path(outside) / "private.html"
+            outside_path.write_text("private\n", encoding="utf-8")
+            (reports / "leak.html").symlink_to(outside_path)
+            (reports / "leak").mkdir()
+            (reports / "leak.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "report_type": "benchmark",
+                        "generated_at": "2026-07-01T00:00:00Z",
+                        "host_label": "mac-arm64",
+                        "report_html": "leak.html",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ReportIndexError, "escapes"):
+                build_index(reports)
+
 
 if __name__ == "__main__":
     unittest.main()

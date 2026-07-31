@@ -56,6 +56,14 @@ class ReportEntry:
     run_count: int
 
 
+def _ensure_inside(path: Path, root: Path, description: str) -> None:
+    try:
+        resolved = path.resolve()
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise ReportIndexError(f"{description} escapes the reports root: {path}") from exc
+
+
 def _utc_timestamp(value: Any, source: Path) -> tuple[datetime, str]:
     if not isinstance(value, str) or not value:
         raise ReportIndexError(f"{source}: generated_at must be a non-empty string")
@@ -95,6 +103,7 @@ def _safe_host_label(value: Any, source: Path) -> str:
 
 
 def parse_envelope(source: Path, reports_root: Path) -> Envelope:
+    _ensure_inside(source, reports_root, "envelope")
     try:
         payload = json.loads(source.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -124,6 +133,8 @@ def parse_envelope(source: Path, reports_root: Path) -> Envelope:
     report_html = _safe_relative_html(payload["report_html"], source)
     html_path = reports_root / report_html
     evidence_dir = reports_root / Path(report_html).stem
+    _ensure_inside(html_path, reports_root, "report HTML")
+    _ensure_inside(evidence_dir, reports_root, "evidence directory")
     if not html_path.is_file():
         raise ReportIndexError(f"{source}: missing report HTML: {report_html}")
     if not evidence_dir.is_dir():
