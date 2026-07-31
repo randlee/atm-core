@@ -18,8 +18,14 @@ required_variables:
   - references
 optional_variables:
   - validation_requirements
+  - execution_mode
+  - execution_dependencies
+  - dependency_relations
 defaults:
   validation_requirements: ""
+  execution_mode: parallel
+  execution_dependencies: "- See the authoritative sprint doc; no additional dependency was supplied."
+  dependency_relations: "- See the authoritative sprint doc; no related sprint detail was supplied."
 ---
 <atm-task id="{{ task_id }}" phase="{{ phase }}" assignee="arch-ctm" mode="fix">
   <description>{{ description }}</description>
@@ -28,6 +34,14 @@ defaults:
   <worktree>{{ worktree_path }}</worktree>
   <pr-target>{{ pr_target }}</pr-target>
   <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <execution-dependencies mode="{{ execution_mode }}">
+{{ execution_dependencies }}
+  </execution-dependencies>
+
+  <dependency-relations>
+{{ dependency_relations }}
+  </dependency-relations>
 
   <finding-ids>
 {{ finding_ids }}
@@ -57,6 +71,8 @@ defaults:
     <step id="a">ACK this message immediately. Begin work in the same session unless blocked.</step>
     <step id="b">Read `{{ sprint_doc }}` before editing. Treat it as the authoritative source for sprint scope, retained requirements, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
     <step id="c">Update the assigned worktree from the target branch before editing. Include all earlier-sprint fixes already merged forward to that branch.</step>
+    <step id="c1">Honor `<execution-dependencies>` before editing. For `after_merge`, verify every listed dependency has merged into the target, then merge-forward that target into this branch; do not claim QA or target-branch merge readiness before that gate. For `parallel`, do not invent a wait dependency. If the assignment and sprint doc disagree, stop and report the mismatch.</step>
+    <step id="c2">Read `<dependency-relations>` with the sprint doc. Preserve the stated non-intersection for every `parallel-safe` relation; if implementation requires a shared module, crate, public contract, generated artifact, or ownership seam, stop and report that the sprint is no longer parallel-safe.</step>
     <step id="d">Read the referenced triage records first. Treat the listed occurrences as the minimum required scope on this branch.</step>
     <step id="d2">Before fixing each finding, verify the defect it describes is still actually present at the cited file:line in this worktree's current state. If a finding does not reproduce — already fixed, superseded by other work, or the described code path no longer exists — refuse to perform speculative or invented work to "address" it. Do not edit unrelated code in its name. Note it in your push/validation report as `not-reproducible` with the file:line you checked instead, and skip it. This applies per-finding, not to the whole task — fix every finding that does reproduce as normal.</step>
     <step id="e">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>

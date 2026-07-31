@@ -11,6 +11,11 @@ required_variables:
 optional_variables:
   - status
   - worktree
+  - recommended_agent
+  - recommended_model
+  - execution_mode
+  - execution_dependencies
+  - dependencies_relation
   - goal
   - dependencies
   - exact_targets
@@ -23,6 +28,11 @@ optional_variables:
 defaults:
   status: planned
   worktree: ""
+  recommended_agent: ""
+  recommended_model: ""
+  execution_mode: parallel
+  execution_dependencies: []
+  dependencies_relation: []
   goal: []
   dependencies: []
   exact_targets: []
@@ -43,19 +53,48 @@ title: {{ title }}
 status: {{ status }}
 branch: {{ branch }}
 {% if worktree %}worktree: {{ worktree }}
-{% endif %}target: {{ target }}
+{% endif %}{% if recommended_agent %}recommended_agent: {{ recommended_agent }}
+{% endif %}{% if recommended_model %}recommended_model: {{ recommended_model }}
+{% endif %}execution_mode: {{ execution_mode }}
+{% if execution_dependencies %}execution_dependencies:
+{% for dep in execution_dependencies %}  - {{ dep }}
+{% endfor %}{% endif %}
+target: {{ target }}
 ---
 
 # Sprint {{ id }} — {{ title }}
 
-## Goal
+{% if recommended_agent or recommended_model %}## Recommended Agent / Model
+
+{% if recommended_agent %}Recommended agent: {{ recommended_agent }}.
+{% endif %}{% if recommended_model %}Recommended model: {{ recommended_model }}.
+{% endif %}This is a planning-time recommendation, not a binding assignment;
+team-lead makes the final dispatch decision based on current availability.
+
+{% endif %}## Goal
 
 {% for item in goal %}- {{ item }}
 {% endfor %}
-## Hard Dependencies
+## Execution Dependencies
 
-{% for dep in dependencies %}- {{ dep }}
-{% endfor %}
+{% if execution_dependencies %}This sprint must not begin until every
+listed dependency has merged into `{{ target }}`. Before coding, merge-forward
+the updated target into this sprint branch and verify each dependency is an
+ancestor of the branch head. This sprint may not be qualified or merged into
+`{{ target }}` before every listed dependency is merged there.
+
+{% for dep in execution_dependencies %}- {{ dep }}
+{% endfor %}{% else %}This sprint may execute in parallel from its declared
+target. It has no required prior-sprint merge-forward; use this mode only when
+its ownership does not intersect a concurrent sprint's modules, crates, public
+contract, generated artifact, or ownership seam.
+{% endif %}
+
+## Dependency Relations
+
+{% if dependencies_relation %}{% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
+{% endfor %}{% else %}{% for dep in dependencies %}- {{ dep }} (must follow; relation rationale not supplied)
+{% endfor %}{% endif %}
 ## Exact Targets
 
 {% for file in exact_targets %}- `{{ file }}`

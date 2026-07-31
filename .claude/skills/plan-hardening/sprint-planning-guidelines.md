@@ -58,6 +58,45 @@ Important traits, enums, protocol types, interfaces, and boundary contracts
 must have explicit code samples or signatures in the sprint doc when prose
 alone would leave implementation choices open.
 
+## Recommended Agent / Model
+
+Plans may include optional `recommended_agent` and `recommended_model`
+frontmatter plus a one-line rationale. They must select from the current
+repository developer pool, not an arbitrary free-text assignee: currently
+`Cipher-311d` with the fast model tier, or `arch-ctm` with the deep-reasoning
+model tier. Recommend `arch-ctm` for difficult algorithmic, architectural,
+concurrency, or performance-critical work; recommend `Cipher-311d` for
+lighter, well-bounded implementation, documentation, or investigation work.
+The values are planning-time advice, not a binding assignment; team-lead makes
+the final dispatch choice from the active pool and current availability.
+
+## Execution Dependencies
+
+Every sprint must state `execution_mode` as either `parallel` or
+`after_merge`. A `parallel` sprint begins from its declared target without a
+prior-sprint wait. An `after_merge` sprint names every prerequisite in
+`execution_dependencies`; it may not start until those sprints merge into its
+target, and its first development step must merge-forward the updated target
+into the sprint branch. A dependent sprint cannot be qualified or merged into
+its integration target before every listed dependency has merged there. Project
+the same mode and dependency list into the rendered developer or fix
+assignment. Prefer a `parallel` split when ownership can be made
+non-intersecting so each sprint can be completed, qualified, and merged
+separately. A logical reference is not an execution dependency unless the work
+truly cannot close in parallel. The plan-scope-reviewer must reject a
+`parallel` claim unless the concurrent sprints have non-intersecting
+modules/crates and no shared public contract, generated artifact, or ownership
+seam.
+
+Use `dependencies_relation` as the authoritative relation list for every
+other sprint that touches related files or boundaries. Each entry names the
+other sprint, a relation of `must_follow` or `parallel_safe`, and a concise
+rationale. Every `must_follow` entry must also appear in
+`execution_dependencies`; every `parallel_safe` entry must name the distinct
+modules/crates or boundaries that make independent qualification and merge
+credible. Do not mark work parallel-safe merely because the branches happen to
+apply without a text conflict.
+
 ## QA Consumption
 
 Sprint docs must be short and structured enough that:
