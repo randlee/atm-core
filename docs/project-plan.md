@@ -1012,6 +1012,7 @@ Implementation Branches:
 | `AI.41` | `planned` | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | bounded adversarial-fuzz campaign workflow |
 | `AI.42` | `planned` | `feature/pAI-s42-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 | `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
+| `AI.46` | `planned` | `feature/pAI-s46-pages-report-index` | GitHub Pages site and generated durable report index |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

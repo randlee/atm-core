@@ -202,6 +202,7 @@ integration; they do not alter it.
 | AI.41 | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | Bounded adversarial-fuzz campaign workflow and evidence package |
 | AI.42 | `feature/pAI-s42-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
 | AI.43 | `feature/pAI-s43-remote-https-response-framing` | Buffered remote HTTPS response framing |
+| AI.46 | `feature/pAI-s46-pages-report-index` | GitHub Pages site and generated durable report index |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).

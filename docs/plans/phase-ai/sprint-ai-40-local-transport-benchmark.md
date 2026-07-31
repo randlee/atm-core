@@ -7,10 +7,14 @@ recommended_model: deep-reasoning
 execution_mode: after_merge
 execution_dependencies:
   - AI.39
+  - AI.46
 dependencies_relation:
   - sprint: AI.39
     relation: must_follow
     rationale: Measures the shared framing path AI.39 changes.
+  - sprint: AI.46
+    relation: must_follow
+    rationale: Emits AI.46's generated report-index contract after every run.
 target: integrate/phase-ai-31-33
 depends_on: AI.39
 ---
@@ -25,9 +29,9 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-AI.40 `must_follow`s AI.39. Merge-forward trigger: AI.39 development is
-pushed, not QA; before every round merge AI.39 into this branch. PR-completion
-trigger: AI.39's PR merges into `integrate/phase-ai-31-33` first. It measures
+AI.40 `must_follow`s AI.39 and AI.46. Merge-forward trigger: both development
+pushes, not QA; before every round merge both into this branch. PR-completion
+trigger: both PRs merge into `integrate/phase-ai-31-33` first. It measures
 AI.39's shared framing implementation.
 
 ## Dependency Relations
@@ -35,6 +39,7 @@ AI.39's shared framing implementation.
 | Sprint | Relation | Rationale |
 | --- | --- | --- |
 | AI.39 | must_follow | Its completed shared frame reader is the benchmark subject. |
+| AI.46 | must_follow | It owns the generated report-index command invoked after every run. |
 
 ```yaml
 plan_type: sprint_plan
@@ -106,6 +111,9 @@ durable JSON produced against a disposable SQLite database.
    ToolPanel link in `.just/build_view_site.py`, without copying or re-rendering
    the report there. Migrate existing evidence with `transport: tcp` rather
    than leaving schema-ambiguous rows.
+
+   Invoke AI.46's report-index command after every artifact write, including a
+   failed run, so `site/reports/index.html` never needs manual maintenance.
 
 5. The runner rejects an ambient/shared daemon and production database. It
    records release paths, doctor result, and endpoint; cleanup restores prior

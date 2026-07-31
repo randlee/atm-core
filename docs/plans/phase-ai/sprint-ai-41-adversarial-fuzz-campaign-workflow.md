@@ -4,11 +4,16 @@ status: proposed
 branch: feature/pAI-s41-adversarial-fuzz-campaign-workflow
 recommended_agent: Cipher-311d
 recommended_model: fast
-execution_mode: parallel
+execution_mode: after_merge
+execution_dependencies:
+  - AI.46
 dependencies_relation:
   - sprint: AI.39
     relation: parallel_safe
     rationale: AI.41 owns campaign tooling and report contracts; AI.39 owns Rust framing adapters.
+  - sprint: AI.46
+    relation: must_follow
+    rationale: Emits AI.46's generated report-index contract after every report.
 target: integrate/phase-ai-31-33
 ---
 
@@ -23,15 +28,16 @@ recommendation, not a binding assignment.
 ## Execution Dependencies
 
 AI.41 is `parallel_safe` with AI.39: it owns `.claude` campaign/report tooling;
-AI.39 owns Rust framing adapters. It has no dependency gate. AI.42's
-merge-forward trigger is both parent development pushes; its PR-completion
-trigger is both parent PR merges.
+AI.39 owns Rust framing adapters. It `must_follow`s AI.46: merge-forward after
+AI.46's development push, not QA; its PR completes only after AI.46's PR
+merges. AI.42 then follows both parents.
 
 ## Dependency Relations
 
 | Sprint | Relation | Rationale |
 | --- | --- | --- |
 | AI.39 | parallel_safe | AI.41 owns `.claude` campaign/report tooling; AI.39 owns `atm-core` framing and local transport adapters. |
+| AI.46 | must_follow | It owns the generated report-index command invoked after every report. |
 
 ```yaml
 plan_type: sprint_plan
@@ -123,6 +129,9 @@ parser or a substitute for deterministic unit tests.
    holds the JSON and XHTML supporting each HTML page. `artifacts/view` stays
    transient and registers one ToolPanel link only; it does not copy or render
    a second report.
+
+   Invoke AI.46's report-index command after every report artifact write,
+   including incomplete/failed campaigns.
 
 5. Add structural tests for campaign input validation, registered-worker
    resolution, deterministic correlation ordering, worker timeout/partial
