@@ -49,6 +49,10 @@ not a Phase AI target. AI.1 may retain only its singleton/local-IPC baseline
 and deletion work; its Phase AG plans, generated gate material, and unrelated
 triage changes are not a Phase AI baseline.
 
+`integrate/phase-ai-31-33` branches from `integrate/phase-AI` for AI.31–AI.33
+and their AI.39+ follow-up line; completed work merges forward into
+`integrate/phase-AI`.
+
 The reset branch is an input, not an authority: every AI.1 deletion must be
 validated against fresh `integrate/phase-AI` source and documented here.
 
