@@ -18,6 +18,8 @@ triage:AICH-S11 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order
 
 triage:AICH-Legacy a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12 ; triage:criteria "docs/plans/phase-ai/legacy-pre-aich-findings.md" .
 
+triage:AICH-PHASE-END-QA-1 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 12.5 ; triage:criteria "docs/plans/phase-ai/findings-closeout.md" .
+
 triage:AI-REPLAN a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 13 ; triage:criteria "docs/plans/phase-ai/plan-phase-ai.md" .
 triage:AI39 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 14 ; triage:criteria "docs/plans/phase-ai/sprint-ai-39-buffered-local-http-framing.md" .
 triage:AI40 a triage:Sprint ; triage:inPhase triage:PhaseAICH ; triage:order 15 ; triage:criteria "docs/plans/phase-ai/sprint-ai-40-local-transport-benchmark.md" .
