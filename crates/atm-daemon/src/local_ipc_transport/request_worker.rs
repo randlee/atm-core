@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use atm_core::api::{
-    ApiRequest, ApiRouter, AuthenticatedIngress, RequestDeadline, decode_request,
-    read_http_request, write_http_response,
+    ApiRequest, ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline, decode_request,
+    write_local_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
@@ -30,6 +30,7 @@ type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmEr
 type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
 type DispatchWorkerHandle = std::thread::JoinHandle<()>;
 type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHandle);
+const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RequestExecutionRisk {
@@ -44,53 +45,67 @@ pub(super) fn handle_connection(
     registry: Arc<ActiveConnectionRegistry>,
     observability: &SubsystemObservability,
 ) -> Result<(), AtmError> {
-    // The deadline starts at local HTTP admission, not when a later dispatch
-    // worker happens to run. It is propagated unchanged through peer delivery.
-    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     apply_primary_request_deadline(&mut stream);
-    if force_shutdown.load(Ordering::SeqCst) {
-        return write_shutdown_response(&mut stream).map(|_| ());
-    }
-    let request = match read_bounded_http_request(&mut stream)? {
-        Some(request) => decode_request(request)?,
-        None => return Ok(()),
-    };
-    tracing::debug!(
-        max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
-        "daemon HTTP request accepted under configured size cap"
-    );
-    let request_id = atm_core::protocol::next_request_id();
-    let response = dispatch_request(
-        request_id,
-        request,
-        deadline,
-        dispatcher,
-        &registry,
-        observability,
-    )?;
-    if let Err(error) = write_http_response(&mut stream, &response) {
-        let classification = classify_connection_failure(&error);
-        if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
-            observability.emit_event_or_warn(
-                observability
-                    .event(
-                        "connection_worker",
-                        classification.as_str(),
-                        "same-host peer disconnected before the daemon HTTP response completed",
-                    )
-                    .with_connection_failure(DaemonConnectionFailureFields {
-                        code: error.code(),
-                        request_id: Some(request_id),
-                        classification,
-                    })
-                    .with_transport_context("response_write"),
+    let mut frames = HttpFrameReader::new();
+    for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
+        if force_shutdown.load(Ordering::SeqCst) {
+            return write_shutdown_response(&mut stream).map(|_| ());
+        }
+        let Some(raw_request) = read_bounded_http_request(&mut frames, &mut stream)? else {
+            return Ok(());
+        };
+        let keep_alive = raw_request
+            .header("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+            && request_count < MAX_KEEP_ALIVE_REQUESTS;
+        let request = decode_request(raw_request)?;
+        tracing::debug!(
+            max_http_request_body_bytes = atm_core::MAX_HTTP_REQUEST_BODY_BYTES,
+            "daemon HTTP request accepted under configured size cap"
+        );
+        let request_id = atm_core::protocol::next_request_id();
+        // The deadline starts at local HTTP admission, not when a later dispatch
+        // worker happens to run. It is propagated unchanged through peer delivery.
+        let response = dispatch_request(
+            request_id,
+            request,
+            RequestDeadline::after(REQUEST_DEADLINE),
+            dispatcher.clone(),
+            &registry,
+            observability,
+        )?;
+        if let Err(error) = write_local_http_response(&mut stream, &response, keep_alive) {
+            let classification = classify_connection_failure(&error);
+            if classification == ConnectionFailureClassification::ExpectedPeerDisconnect {
+                observability.emit_event_or_warn(
+                    observability
+                        .event(
+                            "connection_worker",
+                            classification.as_str(),
+                            "same-host peer disconnected before the daemon HTTP response completed",
+                        )
+                        .with_connection_failure(DaemonConnectionFailureFields {
+                            code: error.code(),
+                            request_id: Some(request_id),
+                            classification,
+                        })
+                        .with_transport_context("response_write"),
+                );
+                return Ok(());
+            }
+            emit_connection_failure_event(
+                observability,
+                &error,
+                Some(request_id),
+                "response_write",
             );
+            return Err(error);
+        }
+        emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
+        if !keep_alive {
             return Ok(());
         }
-        emit_connection_failure_event(observability, &error, Some(request_id), "response_write");
-        return Err(error);
     }
-    emit_dispatch_panic_recovery(observability, registry.reap_finished_dispatches()?);
     Ok(())
 }
 
@@ -223,22 +238,28 @@ fn apply_primary_request_deadline(stream: &mut LocalSocketStream) {
 }
 
 fn read_bounded_http_request(
+    frames: &mut HttpFrameReader,
     stream: &mut LocalSocketStream,
 ) -> Result<Option<atm_core::api::HttpRequest>, AtmError> {
     let mut read_stream = stream.try_clone().map_err(|_source| {
         AtmError::daemon_unavailable("failed to clone daemon local IPC stream for bounded read")
     })?;
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let mut reader = std::mem::take(frames);
     std::thread::Builder::new()
         .name("local-ipc-request-read".to_string())
         .spawn(move || {
-            let _ = result_tx.send(read_http_request(&mut read_stream));
+            let request = reader.read_request(&mut read_stream);
+            let _ = result_tx.send((reader, request));
         })
         .map_err(|_source| {
             AtmError::daemon_unavailable("failed to spawn daemon local IPC request read worker")
         })?;
     match result_rx.recv_timeout(REQUEST_DEADLINE) {
-        Ok(result) => result,
+        Ok((reader, result)) => {
+            *frames = reader;
+            result
+        }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             "daemon local IPC request read exceeded the 3s deadline",
         )),

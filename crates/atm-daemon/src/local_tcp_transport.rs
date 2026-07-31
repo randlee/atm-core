@@ -25,7 +25,7 @@ use std::os::windows::ffi::OsStrExt as _;
 use std::os::unix::fs::PermissionsExt as _;
 
 use atm_core::api::{
-    ApiRouter, AuthenticatedIngress, RequestDeadline, read_http_request, write_http_response,
+    ApiRouter, AuthenticatedIngress, HttpFrameReader, RequestDeadline, write_local_http_response,
 };
 use atm_core::error::AtmError;
 use atm_core::local_http::{LOCAL_CAPABILITY_HEADER, LocalCapability, LocalHttpEndpointRecord};
@@ -45,6 +45,7 @@ use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+const MAX_KEEP_ALIVE_REQUESTS: usize = 64;
 #[cfg(windows)]
 pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 
@@ -315,7 +316,6 @@ fn handle_connection(
     capability: &LocalCapability,
     force_shutdown: &AtomicBool,
 ) -> Result<(), AtmError> {
-    let deadline = RequestDeadline::after(REQUEST_DEADLINE);
     stream
         .set_read_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -330,30 +330,45 @@ fn handle_connection(
                 "failed to set local HTTP write deadline: {source}"
             ))
         })?;
-    let Some(request) = read_http_request(&mut stream)? else {
-        return Ok(());
-    };
-    let response = if force_shutdown.load(Ordering::SeqCst) {
-        atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
-            "daemon is shutting down and not accepting new requests",
-        ))
-    } else if !request
-        .header(LOCAL_CAPABILITY_HEADER)
-        .is_some_and(|value| capability.matches_header(value))
-    {
-        atm_core::ResponseEnvelope::Error(AtmError::validation(
-            "local HTTP capability is missing, invalid, stale, or revoked",
-        ))
-    } else {
-        match atm_core::api::decode_request(request) {
-            Ok(request) => router
-                .route(request, AuthenticatedIngress::Local, deadline)
-                .map(|response| response.into_inner())
-                .unwrap_or_else(atm_core::ResponseEnvelope::Error),
-            Err(error) => atm_core::ResponseEnvelope::Error(error),
+    let mut frames = HttpFrameReader::new();
+    for request_count in 1..=MAX_KEEP_ALIVE_REQUESTS {
+        let Some(request) = frames.read_request(&mut stream)? else {
+            return Ok(());
+        };
+        let keep_alive = request
+            .header("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("keep-alive"))
+            && request_count < MAX_KEEP_ALIVE_REQUESTS;
+        let response = if force_shutdown.load(Ordering::SeqCst) {
+            atm_core::ResponseEnvelope::Error(AtmError::daemon_unavailable(
+                "daemon is shutting down and not accepting new requests",
+            ))
+        } else if !request
+            .header(LOCAL_CAPABILITY_HEADER)
+            .is_some_and(|value| capability.matches_header(value))
+        {
+            atm_core::ResponseEnvelope::Error(AtmError::validation(
+                "local HTTP capability is missing, invalid, stale, or revoked",
+            ))
+        } else {
+            match atm_core::api::decode_request(request) {
+                Ok(request) => router
+                    .route(
+                        request,
+                        AuthenticatedIngress::Local,
+                        RequestDeadline::after(REQUEST_DEADLINE),
+                    )
+                    .map(|response| response.into_inner())
+                    .unwrap_or_else(atm_core::ResponseEnvelope::Error),
+                Err(error) => atm_core::ResponseEnvelope::Error(error),
+            }
+        };
+        write_local_http_response(&mut stream, &response, keep_alive)?;
+        if !keep_alive {
+            return Ok(());
         }
-    };
-    write_http_response(&mut stream, &response)
+    }
+    Ok(())
 }
 
 fn publish_record(
@@ -568,7 +583,7 @@ impl LocalIpcServerTransportAdapter {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write as _;
+    use std::io::{Read as _, Write as _};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::Arc;
     use std::thread;
@@ -617,6 +632,66 @@ mod tests {
         let response = read_http_response(&mut stream, &request).expect("read response");
 
         assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_connection_closes_after_its_single_response() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        write_http_request_with_headers(
+            &mut stream,
+            &request,
+            &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+        )
+        .expect("write request");
+        stream.flush().expect("flush request");
+        let response = read_http_response(&mut stream, &request).expect("read response");
+
+        assert!(matches!(response, ResponseEnvelope::Doctor(_)));
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .expect("set close-read deadline");
+        let mut trailing = [0_u8; 1];
+        assert_eq!(
+            stream.read(&mut trailing).expect("read socket closure"),
+            0,
+            "the current one-request local TCP contract must close after its response"
+        );
+        server.join().expect("server join");
+    }
+
+    #[test]
+    fn loopback_tcp_keep_alive_serves_multiple_requests_before_client_close() {
+        let capability = LocalCapability::generate().expect("capability");
+        let header = capability.to_base64url();
+        let (address, server) = serve_one(capability);
+        let request = RequestEnvelope::Doctor(DoctorQuery::default());
+        let mut stream = TcpStream::connect(address).expect("connect");
+
+        for connection in ["keep-alive", "close"] {
+            let mut wire = Vec::new();
+            write_http_request_with_headers(
+                &mut wire,
+                &request,
+                &[(LOCAL_CAPABILITY_HEADER, header.as_str())],
+            )
+            .expect("write request");
+            let wire = String::from_utf8(wire)
+                .expect("request is UTF-8")
+                .replace("Connection: close", &format!("Connection: {connection}"));
+            stream.write_all(wire.as_bytes()).expect("write request");
+            stream.flush().expect("flush request");
+            let response = read_http_response(&mut stream, &request).expect("read response");
+            assert!(
+                matches!(response, ResponseEnvelope::Doctor(_)),
+                "keep-alive request returned {response:?}"
+            );
+        }
         server.join().expect("server join");
     }
 
