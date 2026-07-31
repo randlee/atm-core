@@ -249,7 +249,28 @@ pub fn write_http_request_with_headers(
 }
 
 pub fn read_http_request(reader: &mut impl Read) -> Result<Option<HttpRequest>, AtmError> {
-    HttpFrameReader::new().read_request(reader)
+    let Some((start_line, headers)) = read_http_headers(reader)? else {
+        return Ok(None);
+    };
+    let mut parts = start_line.split_whitespace();
+    let method = parts
+        .next()
+        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request method"))?;
+    let path = parts
+        .next()
+        .ok_or_else(|| AtmError::validation("malformed daemon HTTP request path"))?;
+    if parts.next().is_none() {
+        return Err(AtmError::validation(
+            "malformed daemon HTTP request version",
+        ));
+    }
+    let body = read_http_body(reader, &headers)?;
+    Ok(Some(HttpRequest {
+        method: method.to_string(),
+        path: path.to_string(),
+        headers,
+        body,
+    }))
 }
 
 /// Writes an HTTP response with the supplied local connection policy.
@@ -871,16 +892,19 @@ mod tests {
         let request = RequestEnvelope::Doctor(DoctorQuery::default());
         let mut wire = Vec::new();
         write_http_request(&mut wire, &request).expect("write HTTP request");
-        let mut fragmented = FragmentedReader::new(wire, 1);
 
-        let decoded = decode_request(
-            read_http_request(&mut fragmented)
-                .expect("read fragmented HTTP request")
-                .expect("request"),
-        )
-        .expect("decode fragmented HTTP request");
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut fragmented = FragmentedReader::new(wire.clone(), 1);
+            let decoded = decode_request(
+                frames
+                    .read_request(&mut fragmented)
+                    .expect("read fragmented HTTP request")
+                    .expect("request"),
+            )
+            .expect("decode fragmented HTTP request");
 
-        assert!(matches!(decoded, ApiRequest::Doctor(_)));
+            assert!(matches!(decoded, ApiRequest::Doctor(_)));
+        }
     }
 
     #[test]
@@ -892,49 +916,49 @@ mod tests {
             for _ in 0..frame_count {
                 write_http_request(&mut wire, &request).expect("write coalesced HTTP request");
             }
-            let mut coalesced = wire.as_slice();
-            let mut frames = HttpFrameReader::new();
-
-            for frame_index in 0..frame_count {
-                let decoded = decode_request(
-                    frames
-                        .read_request(&mut coalesced)
-                        .expect("read coalesced HTTP request")
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "coalesced run of {frame_count} frames ended before frame {}",
-                                frame_index + 1
-                            )
-                        }),
-                )
-                .expect("decode coalesced request");
-                assert!(matches!(decoded, ApiRequest::Doctor(_)));
+            for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+                let mut coalesced = wire.as_slice();
+                for frame_index in 0..frame_count {
+                    let decoded = decode_request(
+                        frames
+                            .read_request(&mut coalesced)
+                            .expect("read coalesced HTTP request")
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "coalesced run of {frame_count} frames ended before frame {}",
+                                    frame_index + 1
+                                )
+                            }),
+                    )
+                    .expect("decode coalesced request");
+                    assert!(matches!(decoded, ApiRequest::Doctor(_)));
+                }
+                assert!(
+                    coalesced.is_empty(),
+                    "coalesced run of {frame_count} complete frames left trailing bytes"
+                );
             }
-            assert!(
-                coalesced.is_empty(),
-                "coalesced run of {frame_count} complete frames left trailing bytes"
-            );
         }
     }
 
     #[test]
     fn http_frame_reader_retains_bytes_after_a_body_boundary() {
         let wire = b"POST /v1/atm/messages HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}GET /v1/atm/doctor HTTP/1.1\r\nContent-Length: 0\r\n\r\n";
-        let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
-        let mut frames = HttpFrameReader::new();
+        for mut frames in [HttpFrameReader::new(), HttpFrameReader::scalar_for_test()] {
+            let mut source = FragmentedReader::new(wire.to_vec(), wire.len());
+            let first = frames
+                .read_request(&mut source)
+                .expect("read first frame")
+                .expect("first frame");
+            let second = frames
+                .read_request(&mut source)
+                .expect("read second frame")
+                .expect("second frame");
 
-        let first = frames
-            .read_request(&mut source)
-            .expect("read first frame")
-            .expect("first frame");
-        let second = frames
-            .read_request(&mut source)
-            .expect("read second frame")
-            .expect("second frame");
-
-        assert_eq!(first.body, b"{}");
-        assert_eq!(second.method, "GET");
-        assert_eq!(second.path, "/v1/atm/doctor");
+            assert_eq!(first.body, b"{}");
+            assert_eq!(second.method, "GET");
+            assert_eq!(second.path, "/v1/atm/doctor");
+        }
     }
 
     #[test]

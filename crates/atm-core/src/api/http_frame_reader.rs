@@ -15,7 +15,26 @@ const READ_CHUNK_BYTES: usize = 8 * 1024;
 #[derive(Debug)]
 pub struct HttpFrameReader {
     unread: Vec<u8>,
-    delimiter: Finder<'static>,
+    delimiter: DelimiterFinder,
+}
+
+#[derive(Debug)]
+enum DelimiterFinder {
+    Optimized(Finder<'static>),
+    #[cfg(test)]
+    Scalar,
+}
+
+impl DelimiterFinder {
+    fn find(&self, haystack: &[u8]) -> Option<usize> {
+        match self {
+            Self::Optimized(finder) => finder.find(haystack),
+            #[cfg(test)]
+            Self::Scalar => haystack
+                .windows(HEADER_DELIMITER.len())
+                .position(|window| window == HEADER_DELIMITER),
+        }
+    }
 }
 
 impl Default for HttpFrameReader {
@@ -29,7 +48,15 @@ impl HttpFrameReader {
     pub fn new() -> Self {
         Self {
             unread: Vec::with_capacity(READ_CHUNK_BYTES),
-            delimiter: Finder::new(HEADER_DELIMITER),
+            delimiter: DelimiterFinder::Optimized(Finder::new(HEADER_DELIMITER)),
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn scalar_for_test() -> Self {
+        Self {
+            unread: Vec::with_capacity(READ_CHUNK_BYTES),
+            delimiter: DelimiterFinder::Scalar,
         }
     }
 
