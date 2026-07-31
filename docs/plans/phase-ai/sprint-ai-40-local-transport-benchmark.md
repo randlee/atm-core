@@ -25,10 +25,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-Must begin after AI.39 merges into `integrate/phase-ai-31-33`; before coding,
-merge-forward that updated target into this sprint branch and verify AI.39 is
-an ancestor. It cannot close in parallel because it measures the completed
-shared framing implementation.
+AI.40 `must_follow`s AI.39: start after its development push, not QA; before
+every dev or fix round merge AI.39 into this branch. Its PR may provide
+evidence, but cannot be ready, complete, or merge until AI.39 merges into
+`integrate/phase-ai-31-33`. It measures AI.39's shared framing implementation.
 
 ## Dependency Relations
 
@@ -62,8 +62,10 @@ durable JSON produced against a disposable SQLite database.
 
 ## Deliverables
 
-1. `just benchmark` accepts explicit `--transport uds|tcp` selection on Unix
-   and `--transport tcp` on Windows. The same public authenticated
+1. Extend AI.33's `scripts/smoke/run_admission_capacity.py`; do not create a
+   second admission gate. `just benchmark` selects its profiles and reports,
+   accepts explicit `--transport uds|tcp` on Unix and `--transport tcp` on
+   Windows. The same public authenticated
    `POST /v1/atm/messages` request, response handling, message count, worker
    limit, timeout policy, and disposable daemon/database lifecycle apply to
    every selected transport.

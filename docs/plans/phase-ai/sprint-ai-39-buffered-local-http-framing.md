@@ -25,10 +25,10 @@ planning-time recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-Must begin after AI.33 merges into `integrate/phase-ai-31-33`; before coding,
-merge-forward that updated target into this sprint branch and verify AI.33 is
-an ancestor. It cannot close in parallel because it changes the same local
-admission/framing path whose AI.33 behavior is the baseline.
+AI.39 `must_follow`s AI.33: start after its development push, not QA; before
+every dev or fix round merge AI.33 into this branch. Its PR may provide
+evidence, but cannot be ready, complete, or merge until AI.33 merges into
+`integrate/phase-ai-31-33`. Both touch the local admission/framing path.
 
 ## Dependency Relations
 
@@ -102,6 +102,10 @@ route, size limit, error contract, and local authentication rule.
 4. A failed or disconnected local TCP client is contained to that connection;
    it must not stop the loopback listener or turn later independent requests
    into connection-refused failures.
+
+5. This sprint migrates local request framing only. `read_http_response` and
+   HTTPS call sites remain unchanged; AI.43 — remote HTTPS response framing
+   owns their buffered-reader migration.
 
 ## Required validation
 

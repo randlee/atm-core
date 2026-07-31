@@ -22,9 +22,10 @@ recommendation, not a binding assignment.
 
 ## Execution Dependencies
 
-May execute in parallel from `integrate/phase-ai-31-33`; it produces campaign
-tooling and report contracts only, not a parser-dependent campaign or product
-framing change. AI.42, not AI.41, waits for AI.39 and AI.41 to merge.
+AI.41 is `parallel_safe` with AI.39: it owns `.claude` campaign/report tooling;
+AI.39 owns Rust framing adapters. It has no QA or merge-forward gate. AI.42
+must-follow merges both parents before every round and waits for their merges
+before PR completion.
 
 ## Dependency Relations
 
