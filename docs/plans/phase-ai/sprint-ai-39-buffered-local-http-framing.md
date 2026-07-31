@@ -2,11 +2,39 @@
 title: AI.39 buffered local HTTP framing
 status: proposed
 branch: feature/pAI-s39-buffered-local-http-framing
+recommended_agent: arch-ctm
+recommended_model: deep-reasoning
+execution_mode: after_merge
+execution_dependencies:
+  - AI.33
+dependencies_relation:
+  - sprint: AI.33
+    relation: must_follow
+    rationale: Shares the local admission/framing path that AI.33 establishes.
 target: integrate/phase-ai-31-33
 depends_on: AI.33
 ---
 
 # AI.39 — Buffered local HTTP framing
+
+## Recommended Agent / Model
+
+`arch-ctm` / deep-reasoning: the shared parser, transport parity, and
+performance-sensitive buffering design require architectural review. This is a
+planning-time recommendation, not a binding assignment.
+
+## Execution Dependencies
+
+Must begin after AI.33 merges into `integrate/phase-ai-31-33`; before coding,
+merge-forward that updated target into this sprint branch and verify AI.33 is
+an ancestor. It cannot close in parallel because it changes the same local
+admission/framing path whose AI.33 behavior is the baseline.
+
+## Dependency Relations
+
+| Sprint | Relation | Rationale |
+| --- | --- | --- |
+| AI.33 | must_follow | It owns the local admission baseline in the same framing path. |
 
 ```yaml
 plan_type: sprint_plan

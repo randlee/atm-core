@@ -2,11 +2,44 @@
 title: AI.42 local HTTP framing adversarial campaign
 status: proposed
 branch: feature/pAI-s42-local-http-framing-adversarial-campaign
+recommended_agent: arch-ctm
+recommended_model: deep-reasoning
+execution_mode: after_merge
+execution_dependencies:
+  - AI.39
+  - AI.41
+dependencies_relation:
+  - sprint: AI.39
+    relation: must_follow
+    rationale: Campaign targets AI.39's merged shared frame reader.
+  - sprint: AI.41
+    relation: must_follow
+    rationale: Campaign execution and reports use AI.41's merged workflow.
 target: integrate/phase-ai-31-33
 depends_on: AI.39, AI.41
 ---
 
 # AI.42 — Local HTTP framing adversarial campaign
+
+## Recommended Agent / Model
+
+`arch-ctm` / deep-reasoning: classifying parser failures and promoting only
+deterministic cross-platform regressions requires deep boundary analysis. This
+is a planning-time recommendation, not a binding assignment.
+
+## Execution Dependencies
+
+Must begin after AI.39 and AI.41 merge into `integrate/phase-ai-31-33`; before
+coding, merge-forward that updated target into this sprint branch and verify
+both are ancestors. It cannot close in parallel because it runs the AI.41
+campaign against the actual AI.39 frame reader.
+
+## Dependency Relations
+
+| Sprint | Relation | Rationale |
+| --- | --- | --- |
+| AI.39 | must_follow | The real shared frame reader is the campaign target. |
+| AI.41 | must_follow | The bounded coordinator/worker workflow and report package are required. |
 
 ```yaml
 plan_type: sprint_plan

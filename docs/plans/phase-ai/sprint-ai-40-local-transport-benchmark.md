@@ -2,11 +2,39 @@
 title: AI.40 local transport throughput evidence
 status: proposed
 branch: feature/pAI-s40-local-transport-benchmark
+recommended_agent: arch-ctm
+recommended_model: deep-reasoning
+execution_mode: after_merge
+execution_dependencies:
+  - AI.39
+dependencies_relation:
+  - sprint: AI.39
+    relation: must_follow
+    rationale: Measures the shared framing path AI.39 changes.
 target: integrate/phase-ai-31-33
 depends_on: AI.39
 ---
 
 # AI.40 — Local transport throughput evidence
+
+## Recommended Agent / Model
+
+`arch-ctm` / deep-reasoning: this is performance-critical real-daemon
+measurement with platform-parity and evidence-integrity constraints. This is a
+planning-time recommendation, not a binding assignment.
+
+## Execution Dependencies
+
+Must begin after AI.39 merges into `integrate/phase-ai-31-33`; before coding,
+merge-forward that updated target into this sprint branch and verify AI.39 is
+an ancestor. It cannot close in parallel because it measures the completed
+shared framing implementation.
+
+## Dependency Relations
+
+| Sprint | Relation | Rationale |
+| --- | --- | --- |
+| AI.39 | must_follow | Its completed shared frame reader is the benchmark subject. |
 
 ```yaml
 plan_type: sprint_plan

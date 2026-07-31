@@ -2,11 +2,35 @@
 title: AI.41 adversarial fuzz campaign workflow
 status: proposed
 branch: feature/pAI-s41-adversarial-fuzz-campaign-workflow
+recommended_agent: Cipher-311d
+recommended_model: fast
+execution_mode: parallel
+dependencies_relation:
+  - sprint: AI.39
+    relation: parallel_safe
+    rationale: AI.41 owns campaign tooling and report contracts; AI.39 owns Rust framing adapters.
 target: integrate/phase-ai-31-33
-depends_on: AI.39
 ---
 
 # AI.41 — Adversarial fuzz campaign workflow
+
+## Recommended Agent / Model
+
+`Cipher-311d` / fast: this bounded tooling, agent-contract, and reporting work
+is well-scoped without a production parser change. This is a planning-time
+recommendation, not a binding assignment.
+
+## Execution Dependencies
+
+May execute in parallel from `integrate/phase-ai-31-33`; it produces campaign
+tooling and report contracts only, not a parser-dependent campaign or product
+framing change. AI.42, not AI.41, waits for AI.39 and AI.41 to merge.
+
+## Dependency Relations
+
+| Sprint | Relation | Rationale |
+| --- | --- | --- |
+| AI.39 | parallel_safe | AI.41 owns `.claude` campaign/report tooling; AI.39 owns `atm-core` framing and local transport adapters. |
 
 ```yaml
 plan_type: sprint_plan
