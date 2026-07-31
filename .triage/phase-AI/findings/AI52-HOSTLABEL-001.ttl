@@ -1,0 +1,105 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Persisted file/path values are repository-relative. Runtime checkout paths
+# belong in the agent input only and must not be copied into this record.
+
+<urn:atm:triage:finding/AI52-HOSTLABEL-001>
+  a triage:Finding ;
+  triage:findingId "AI52-HOSTLABEL-001" ;
+  triage:title "Literal hostname 'windows-fastpc4' violates ADR-044 opaque host_label requirement" ;
+  triage:description "AI.52's Windows transport benchmark confirmation sprint doc and project-plan.md embed the literal real hostname 'windows-fastpc4' in host_label fields, violating ADR-044's requirement (docs/architecture.md:96-97) that host_label be an opaque, platform/arch-derived identifier (per AI.40 precedent 'mac-arm64-01'), not a literal machine hostname." ;
+  triage:phaseId "phase-AI" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs-consistency" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "phase-AI docs" ;
+  triage:status "fixed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-07-31T20:30:00Z"^^xsd:dateTime ;
+  triage:foundIn triage:AI52 ;
+  triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AI-REPLAN-AI52-QA-2: sprint-ai-52-windows-transport-benchmark-confirmation.md now uses the opaque `windows-x64-01` host label at 332c2f7c; no literal hostname remains. Confirmed by quality-mgr plus req-qa, arch-qa, ruthless-boundary-qa." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L44> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L49> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L56> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/PP-L1019> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/AI52-HOSTLABEL-001/PPA-L212> ;
+  triage:triageRecordVersion "1" .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L27>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 27 ;
+  triage:snippet "host_label: windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L44>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 44 ;
+  triage:snippet "host_label: windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L49>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 49 ;
+  triage:snippet "host_label: windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/S52-L56>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/sprint-ai-52-windows-transport-benchmark-confirmation.md" ;
+  triage:line 56 ;
+  triage:snippet "host_label: windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/PP-L1019>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 1019 ;
+  triage:snippet "windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:occurrence/AI52-HOSTLABEL-001/PPA-L212>
+  a triage:Occurrence ;
+  triage:file "docs/plans/phase-ai/plan-phase-ai.md" ;
+  triage:line 212 ;
+  triage:snippet "windows-fastpc4" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:occursIn <urn:atm:triage:worktree/plan-http-framing-performance/b45e538a> .
+
+<urn:atm:triage:worktree/plan-http-framing-performance/b45e538a>
+  a triage:WorktreeSnapshot ;
+  triage:path "plan/http-framing-performance" ;
+  triage:branch "plan/http-framing-performance" ;
+  triage:headSha "b45e538a" ;
+  triage:orderIndex 0 .

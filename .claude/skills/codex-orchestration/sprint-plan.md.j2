@@ -11,6 +11,9 @@ required_variables:
 optional_variables:
   - status
   - worktree
+  - recommended_agent
+  - recommended_model
+  - dependencies_relation
   - goal
   - dependencies
   - exact_targets
@@ -23,6 +26,9 @@ optional_variables:
 defaults:
   status: planned
   worktree: ""
+  recommended_agent: ""
+  recommended_model: ""
+  dependencies_relation: []
   goal: []
   dependencies: []
   exact_targets: []
@@ -43,12 +49,20 @@ title: {{ title }}
 status: {{ status }}
 branch: {{ branch }}
 {% if worktree %}worktree: {{ worktree }}
+{% endif %}{% if recommended_agent %}recommended_agent: {{ recommended_agent }}
+{% endif %}{% if recommended_model %}recommended_model: {{ recommended_model }}
 {% endif %}target: {{ target }}
 ---
 
 # Sprint {{ id }} — {{ title }}
 
-## Goal
+{% if recommended_agent or recommended_model %}## Recommended Agent / Model
+
+{% if recommended_agent %}Recommended agent: {{ recommended_agent }}.
+{% endif %}{% if recommended_model %}Recommended model: {{ recommended_model }}.
+{% endif %}Planning advice; team-lead assigns from the active pool.
+
+{% endif %}## Goal
 
 {% for item in goal %}- {{ item }}
 {% endfor %}
@@ -56,6 +70,14 @@ branch: {{ branch }}
 
 {% for dep in dependencies %}- {{ dep }}
 {% endfor %}
+{% if dependencies_relation %}## Dependency Relations
+
+`must_follow` merge-forward trigger: parent development is pushed, not QA;
+merge parent → child before every dev/fix round. PR-completion trigger: parent
+PR merges first. `parallel_safe`: no gate; state non-intersecting ownership.
+
+{% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
+{% endfor %}{% endif %}
 ## Exact Targets
 
 {% for file in exact_targets %}- `{{ file }}`

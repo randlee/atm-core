@@ -15,10 +15,13 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:dispatchReady true ;
-  triage:blockingCurrentMerge true ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:dispatchReady false ;
+  triage:blockingCurrentMerge false ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "team-lead" ;
+  triage:closureNote "Fixed by commit 82b1fafb (\"fix(graft): close AI.37 QA findings\"), which introduced TEST_TEAM = \"test-team\" and replaced all three raw 'atm-dev' literals at lines 58, 62, 80. Verified during develop merge-conflict resolution on integrate/phase-ai-31-33: grep of current test_hermes_adapter.py for 'atm-dev'/'TEST_TEAM' confirms zero raw literals remain; 82b1fafb is an ancestor of this branch." ;
   triage:note "RULE-008 violation: raw 'atm-dev' literal at lines 58, 62, 80. Remediation: define TEST_TEAM = \"test-team\" module-level constant and replace all three call sites." ;
   triage:foundIn triage:AI37-QA-1 ;
   triage:foundAt "2026-07-29T06:10:00Z"^^xsd:dateTime ;
@@ -35,8 +38,8 @@
   triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
   triage:line 58 ;
   triage:snippet "FakeGraft, \"atm:team-lead:chat-42@atm-dev\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
@@ -46,8 +49,8 @@
   triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
   triage:line 62 ;
   triage:snippet "(\"team-lead\", \"atm-dev\", \"chat-42\")," ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
@@ -57,8 +60,8 @@
   triage:file "crates/atm-graft-python/tests/test_hermes_adapter.py" ;
   triage:line 80 ;
   triage:snippet "chat_key = \"atm:Cipher-311d:8991600178@atm-dev\"" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s37-hermes-recovery-summary" ;
   triage:headSha "5e122cf7f7ab8575b111aa0b6d3fcbf598d1a801" ;
   triage:occursIn <urn:atm:triage:worktree/phase-AI/feature-pAI-s37-hermes-recovery-summary> .
