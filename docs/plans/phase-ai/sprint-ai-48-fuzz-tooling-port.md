@@ -6,7 +6,6 @@ recommended_agent: Cipher-311d
 recommended_model: fast
 execution_mode: parallel
 target: integrate/phase-ai-31-33
-depends_on: AI.47
 ---
 
 # AI.48 — Fuzz tooling port
