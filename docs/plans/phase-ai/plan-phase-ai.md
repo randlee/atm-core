@@ -209,6 +209,7 @@ integration; they do not alter it.
 | AI.49 | `feature/pAI-s49-benchmark-report` | Durable benchmark JSON and aggregate HTML report |
 | AI.50 | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
 | AI.51 | `feature/pAI-s51-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
+| AI.52 | `feature/pAI-s52-windows-transport-benchmark` | cwin fastpc4 TCP confirmation after accepted M5 performance evidence |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).
