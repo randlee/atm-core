@@ -24,7 +24,7 @@ depends_on: AI.40, AI.49
 ## Recommended Agent / Model
 
 `cwin` / fast: run the same real-daemon admission benchmark on the dedicated
-`atm` account on `fastpc4` after AI.40's M5 gate is accepted.
+`atm` account on the designated Windows host after AI.40's M5 gate is accepted.
 
 ## Execution Dependencies
 
@@ -39,21 +39,27 @@ Confirm Windows loopback-TCP admission throughput with AI.40's exact public
 request and result contract. This is a separate Windows confirmation sprint,
 not a substitute for M5 UDS/TCP evidence.
 
+## Governing requirements and ADRs
+
+- `REQ-CORE-TRANSPORT-005B`
+- [Cross-platform guidelines](../../cross-platform-guidelines.md)
+- ADR-044 — public verification-report classification
+
 ## Deliverables
 
-1. On `fastpc4` under the dedicated `atm` OS account, build the branch's
+1. On the designated Windows host under the dedicated `atm` OS account, build the branch's
    release CLI/daemon pair and run the standard local smoke ladder: `just
    smoke`, `just smoke localhost`, and `just smoke local-ip`, plus `just test`
    and `atm doctor --json`. Retain its canonical smoke artifacts. Fix a
    local-smoke failure before beginning capacity work. Use an isolated ATM home
-   and disposable test database; cwin may reset the fastpc4 test
+   and disposable test database; cwin may reset the designated Windows test
    daemon/database. Never use a shared or production database.
 2. Run `just benchmark --transport tcp` through the real release daemon with
    1, 2, 8, 16, and 64 frames per connection. For each profile, retain ten
    independent 1K-message samples using the AI.40 public authenticated
    `POST /v1/atm/messages` path and full response parsing.
 3. Persist every result, including failed runs, through AI.49's public-safe
-   schema and aggregate benchmark-report path with a safe `windows-fastpc4`
+   schema and aggregate benchmark-report path with the safe `windows-x64-01`
    host label. These are the plotted artifacts in Cipher's report, not a
    second Windows report. Record transport, frames, requested/accepted
    messages, elapsed time, request frames/sec, connections/sec, bytes/sec,

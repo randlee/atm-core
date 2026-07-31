@@ -89,12 +89,13 @@ moved into:
 `site/` is the repository's durable static verification-report publish root.
 `just reports-index` runs `.just/generate_report_index.py` to discover
 schema-versioned report envelopes, validate their relative HTML/evidence
-paths, and generate `site/index.html` plus `site/reports/index.html`. The
-generator owns report discovery: benchmark envelopes aggregate to one report;
-fuzz envelopes produce one report entry per campaign. Report producers invoke
-it after every artifact write, and `just reports-index --check` rejects stale
-or invalid report indexes. Under ADR-044, `site/` is public data: envelopes
-carry only an opaque `host_label`, never raw host or endpoint data.
+paths, and generate `site/reports/index.html`. AI.47 owns generation of
+`site/index.html`, which links to that reports index. The generator owns report
+discovery: benchmark envelopes aggregate to one report; fuzz envelopes produce
+one report entry per campaign. Report producers invoke it after every artifact
+write, and `just reports-index --check` rejects stale or invalid report
+indexes. Under ADR-044, `site/` is public data: envelopes carry only an opaque
+`host_label`, never raw host or endpoint data.
 `.just/build_view_site.py` may expose links only; `artifacts/view` is transient
 and never a second report renderer.
 

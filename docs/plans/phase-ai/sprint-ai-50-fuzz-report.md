@@ -25,6 +25,8 @@ depends_on: AI.49, AI.48
 
 Render AI.48 fuzz results using the established sc-compose HTML-report package.
 
+Source: `randlee/sc-compose`.
+
 ## Exact Targets
 
 - `.claude/skills/html-report/templates/fuzz-run-report.html.j2`

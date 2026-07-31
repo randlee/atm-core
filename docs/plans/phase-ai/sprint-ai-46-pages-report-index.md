@@ -14,7 +14,7 @@ target: integrate/phase-ai-31-33
 
 Create the durable report envelope and generated `site/reports/index.html`.
 This is report discovery only; Pages publication and individual renderers are
-separate sprints.
+separate sprints. AI.47 owns `site/index.html`.
 
 ## Governing requirements and ADRs
 

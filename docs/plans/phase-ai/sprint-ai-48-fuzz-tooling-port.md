@@ -4,13 +4,7 @@ status: planned
 branch: feature/pAI-s48-fuzz-tooling-port
 recommended_agent: Cipher-311d
 recommended_model: fast
-execution_mode: after_merge
-execution_dependencies:
-  - AI.47
-dependencies_relation:
-  - sprint: AI.47
-    relation: must_follow
-    rationale: Uses the completed durable report-site contract.
+execution_mode: parallel
 target: integrate/phase-ai-31-33
 depends_on: AI.47
 ---
@@ -21,6 +15,19 @@ depends_on: AI.47
 
 Port the bounded sc-compose fuzz coordinator/probe workflow and expose it as
 `just fuzz`; it produces validated machine results but no HTML report.
+
+## Source Material
+
+Source: `randlee/sc-compose`.
+
+- `.claude/skills/adversarial-fuzzing/SKILL.md`
+- `.claude/agents/sc-adversarial-fuzz-coordinator.md`
+- `.claude/agents/sc-adversarial-fuzz-probe.md`
+- `.claude/skills/html-report/templates/fuzz-run-report.html.j2`
+- `.claude/skills/html-report/templates/fuzz-run-agent.xhtml.j2`
+- `.claude/skills/html-report/fuzz-run-agent-contract.md`
+
+AI.48 copies the skill and agents; AI.50 owns the listed report templates.
 
 ## Exact Targets
 
