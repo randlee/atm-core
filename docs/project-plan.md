@@ -1009,10 +1009,13 @@ Implementation Branches:
 | `AI.30` | `complete` | `feature/pAI-s30-semver-http-compatibility` | schema/HTTP compatibility admission and SemVer prerelease distribution |
 | `AI.39` | `planned` | `feature/pAI-s39-buffered-local-http-framing` | bounded buffered local HTTP request framing |
 | `AI.40` | `planned` | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner throughput evidence |
-| `AI.41` | `planned` | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | bounded adversarial-fuzz campaign workflow |
-| `AI.42` | `planned` | `feature/pAI-s42-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 | `AI.43` | `planned` | `feature/pAI-s43-remote-https-response-framing` | buffered remote HTTPS response framing |
-| `AI.46` | `planned` | `feature/pAI-s46-pages-report-index` | GitHub Pages site and generated durable report index |
+| `AI.46` | `planned` | `feature/pAI-s46-reports-index` | generated durable reports index |
+| `AI.47` | `planned` | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| `AI.48` | `planned` | `feature/pAI-s48-fuzz-tooling-port` | ported `just fuzz` coordinator/probe tooling |
+| `AI.49` | `planned` | `feature/pAI-s49-benchmark-report` | durable benchmark JSON and aggregate HTML report |
+| `AI.50` | `planned` | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| `AI.51` | `planned` | `feature/pAI-s51-local-http-framing-adversarial-campaign` | bounded local HTTP framing campaign |
 
 Authoritative plan: [Phase AI plan](./plans/phase-ai/plan-phase-ai.md).
 

@@ -202,10 +202,13 @@ integration; they do not alter it.
 | AI.38 | `feature/pAI-s38-hermes-steer-nudge-delivery` | Live and recovery graft wake-ups enter the configured Hermes profile through non-interrupting steer, never normal user-message ingress |
 | AI.39 | `feature/pAI-s39-buffered-local-http-framing` | Bounded buffered local HTTP request framing for UDS and loopback TCP |
 | AI.40 | `feature/pAI-s40-local-transport-benchmark` | AI.33 admission-runner profiles and durable local transport throughput evidence |
-| AI.41 | `feature/pAI-s41-adversarial-fuzz-campaign-workflow` | Bounded adversarial-fuzz campaign workflow and evidence package |
-| AI.42 | `feature/pAI-s42-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
 | AI.43 | `feature/pAI-s43-remote-https-response-framing` | Buffered remote HTTPS response framing |
-| AI.46 | `feature/pAI-s46-pages-report-index` | GitHub Pages site and generated durable report index |
+| AI.46 | `feature/pAI-s46-reports-index` | Generated durable reports index |
+| AI.47 | `feature/pAI-s47-pages-site-home` | GitHub Pages site home and deployment |
+| AI.48 | `feature/pAI-s48-fuzz-tooling-port` | Ported `just fuzz` coordinator/probe tooling |
+| AI.49 | `feature/pAI-s49-benchmark-report` | Durable benchmark JSON and aggregate HTML report |
+| AI.50 | `feature/pAI-s50-fuzz-report` | sc-compose-template fuzz report renderer |
+| AI.51 | `feature/pAI-s51-local-http-framing-adversarial-campaign` | First bounded local HTTP framing campaign |
 
 AI.17–AI.21 scope, dependencies, and parallel-execution rules are
 authoritative in [plan-ai17-21-hermes-graft.md](plan-ai17-21-hermes-graft.md).

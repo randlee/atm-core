@@ -146,5 +146,5 @@ route, size limit, error contract, and local authentication rule.
 
 No HTTP/2, request reordering, remote HTTPS framing redesign, adversarial fuzz
 campaign tooling, or canonical write/storage change. AI.40 owns comparative
-throughput evidence and the 1,000/s closure. AI.41 and AI.42 own fuzz campaign
-tooling and the first real HTTP-framing campaign respectively.
+throughput evidence and the 1,000/s closure. AI.48/AI.50 own fuzz
+tooling/reporting and AI.51 owns the first real campaign.
