@@ -97,7 +97,9 @@ without silently changing production behavior.
 4. Produce the AI.41 report package in `site/reports/`. The top-level report
    distinguishes complete/no-finding, complete/confirmed-finding, and
    incomplete campaign states. It includes a compact summary table and one
-   XHTML panel per worker; the JSON sidecar remains the source of truth.
+   XHTML panel per worker; the JSON sidecar remains the source of truth. Its
+   same-named directory holds all JSON/XHTML evidence. `artifacts/view`
+   registers a ToolPanel link only and never copies or re-renders this report.
 
 5. Run targeted promoted tests and then the repository’s required formatting,
    test, lint, and boundary gates. If campaign evidence identifies a production

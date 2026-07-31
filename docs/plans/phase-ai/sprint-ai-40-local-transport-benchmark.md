@@ -72,22 +72,22 @@ durable JSON produced against a disposable SQLite database.
    limit, timeout policy, and disposable daemon/database lifecycle apply to
    every selected transport.
 
-2. Persist schema-versioned JSON below
-   `site/reports/send-message-benchmark/<utc>-<host>.json`, with this minimum
-   identity record:
+2. Persist one schema-versioned JSON artifact for each approximately 20-second
+   run below
+   `site/reports/send-message-benchmark/<utc>-<host>-<transport>-<frames>.json`.
+   One run has one host, transport, and frames-per-connection profile:
 
    ```json
    {
      "schema_version": 2,
      "host": "example-host",
      "transport": "uds",
-     "messages_per_sample": 1000,
-     "samples_per_profile": 10,
-     "profiles": []
+     "frames_per_connection": 16,
+     "run_duration_s": 20
    }
    ```
 
-   Each profile records messages per connection, connection count, accepted and
+   The artifact records messages per connection, connection count, accepted and
    requested messages, elapsed time, normalized time-to-send-1K, HTTP request
    frames/sec, connections/sec, application-wire request/response/total bytes
    and bytes/sec, p50/p95/max latency, first failure, and PASS/FAIL. It calls
@@ -99,10 +99,13 @@ durable JSON produced against a disposable SQLite database.
    and 100K sustained modes after the sparse baseline; retain queue growth,
    failure cause, and final cleanup/daemon health instead of truncating a run.
 
-4. Regenerate `site/reports/send-message-benchmark.md` from JSON. One compact
-   row per host/transport/profile includes sample count, median frames/sec,
-   median bytes/sec, median time-to-send-1K, and PASS/FAIL. Migrate existing
-   evidence with `transport: tcp` rather than leaving schema-ambiguous rows.
+4. Generate `site/reports/send-message-benchmark.html` from the immutable JSON
+   directory. Its same-named directory holds JSON and per-run XHTML panels; it
+   aggregates records by UTC timestamp for regression trends. `site/reports`
+   is durable evidence, unlike transient `artifacts/view`; register one
+   ToolPanel link in `.just/build_view_site.py`, without copying or re-rendering
+   the report there. Migrate existing evidence with `transport: tcp` rather
+   than leaving schema-ambiguous rows.
 
 5. The runner rejects an ambient/shared daemon and production database. It
    records release paths, doctor result, and endpoint; cleanup restores prior

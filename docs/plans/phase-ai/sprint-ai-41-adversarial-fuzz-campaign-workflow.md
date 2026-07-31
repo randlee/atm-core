@@ -119,6 +119,11 @@ parser or a substitute for deterministic unit tests.
    Reuse the stable generic html-report package convention; do not depend on
    sc-compose’s currently unmerged fuzz-shell template.
 
+   `site/reports` is the durable report/evidence root; its same-named directory
+   holds the JSON and XHTML supporting each HTML page. `artifacts/view` stays
+   transient and registers one ToolPanel link only; it does not copy or render
+   a second report.
+
 5. Add structural tests for campaign input validation, registered-worker
    resolution, deterministic correlation ordering, worker timeout/partial
    failure retention, result schema, artifact-path derivation, and report
