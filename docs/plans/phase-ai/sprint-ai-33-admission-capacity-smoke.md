@@ -1,6 +1,6 @@
 ---
 title: AI.33 admission capacity and smoke evidence
-status: proposed
+status: abandoned/superseded
 branch: feature/pAI-s33-admission-capacity-smoke
 target: integrate/phase-ai-31-33
 depends_on: AI.31, AI.32
@@ -8,6 +8,16 @@ requires_merged_pr: PR #675 (keeper smoke runner on develop)
 ---
 
 # AI.33 — admission capacity and smoke evidence
+
+## Status: abandoned/superseded
+
+PR #695 (`feature/pAI-s33-admission-capacity-smoke`) is closed, not merged.
+Real M5 admission-capacity evidence retained a blocking HTTP 503 throughput
+failure despite green CI; arch-ctm recommended abandonment rather than
+continued repair. Branch and artifacts remain available for selective
+salvage. AI.40 (local transport benchmark) is the next active owner of a
+clean benchmark runner/evidence path. AI.39's `must_follow` dependency on
+AI.33 has been removed (see sprint-ai-39-buffered-local-http-framing.md).
 
 ## Closure
 
