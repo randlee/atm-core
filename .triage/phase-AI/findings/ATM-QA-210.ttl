@@ -15,11 +15,14 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "docs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T21:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI48 ;
   triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AI-REPLAN-AI52-QA-2: both sprint-ai-48-fuzz-tooling-port.md and sprint-ai-50-fuzz-report.md now state 'Source: `randlee/sc-compose`.' at 332c2f7c; confirmed by quality-mgr plus req-qa, arch-qa, ruthless-boundary-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-210/ai48-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-210/ai50-1> ;
   triage:triageRecordVersion "2" .
@@ -29,8 +32,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-48-fuzz-tooling-port.md" ;
   triage:line 34 ;
   triage:snippet "Copy the named sc-compose skill and coordinator/probe agents verbatim. [Missing: .claude/skills/html-report/templates/*, from randlee/sc-compose]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "9dc54dbd" ;
   triage:occursIn <urn:atm:triage:worktree/plan-http-perf/9dc54dbd> .
@@ -40,8 +43,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-50-fuzz-report.md" ;
   triage:line 37 ;
   triage:snippet "Copy the three named sc-compose files verbatim; AI.48 worker JSON conforms [Missing: from randlee/sc-compose]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "9dc54dbd" ;
   triage:occursIn <urn:atm:triage:worktree/plan-http-perf/9dc54dbd> .

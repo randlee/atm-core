@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T22:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AICH-Legacy ;
   triage:foundAt "2026-07-31T21:22:56Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AI-REPLAN-AI52-QA-2: docs/project-plan.md Section 40 header now reads 'implementation through AI.38' (line 951) and rows for AI.31-AI.38 now appear complete in the Implementation Branches table (lines ~1010-1017) at 332c2f7c; confirmed by quality-mgr plus req-qa, arch-qa, ruthless-boundary-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-212/ATM-QA-212-1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-212/ATM-QA-212-2> ;
   triage:triageRecordVersion "1" .
@@ -29,8 +32,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 951 ;
   triage:snippet "## 40. Phase AI — HTTP daemon and minimal cross-host transport [ACTIVE — implementation through AI.30; readiness blocked]" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "b45e538a" ;
   triage:occursIn <urn:atm:triage:worktree/plan/http-framing-performance/b45e538a> .
@@ -40,8 +43,8 @@
   triage:file "docs/project-plan.md" ;
   triage:line 977 ;
   triage:snippet "| `AI.30` | `complete` | ... | then jumps to `AI.39` with no AI.31-38 rows" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "b45e538a" ;
   triage:occursIn <urn:atm:triage:worktree/plan/http-framing-performance/b45e538a> .

@@ -15,11 +15,14 @@
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "docs" ;
-  triage:status "open" ;
+  triage:status "fixed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-07-31T20:30:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI46 ;
   triage:foundAt "2026-07-31T20:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-07-31T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "AI-REPLAN-AI52-QA-2: docs/architecture.md now states 'AI.47 owns generation of site/index.html'; sprint-ai-46-pages-report-index.md states 'AI.47 owns site/index.html' and scopes itself to site/reports/index.html only; sprint-ai-47-pages-site-home.md generates site/index.html linking to AI.46's reports index. All three sources now agree, at 332c2f7c; confirmed by quality-mgr plus req-qa, arch-qa, ruthless-boundary-qa." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s16/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s17/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-F002/s18/1> ;
@@ -114,8 +117,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-46-pages-report-index.md" ;
   triage:line 15 ;
   triage:snippet "Create the durable report envelope and generated `site/reports/index.html`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "b45e538a" ;
   triage:occursIn <urn:atm:triage:worktree/planning/b45e538a> .
@@ -125,8 +128,8 @@
   triage:file "docs/plans/phase-ai/sprint-ai-47-pages-site-home.md" ;
   triage:line 42 ;
   triage:snippet "Generate `site/index.html` with a relative link to AI.46's" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "b45e538a" ;
   triage:occursIn <urn:atm:triage:worktree/planning/b45e538a> .
@@ -136,8 +139,8 @@
   triage:file "docs/architecture.md" ;
   triage:line 92 ;
   triage:snippet "just reports-index` runs ... to generate `site/index.html` plus `site/reports/index.html`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "plan/http-framing-performance" ;
   triage:headSha "b45e538a" ;
   triage:occursIn <urn:atm:triage:worktree/planning/b45e538a> .
