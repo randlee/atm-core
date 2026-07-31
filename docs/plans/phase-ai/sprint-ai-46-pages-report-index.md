@@ -62,8 +62,7 @@ appear without manual index edits.
 4. Keep report HTML in `site/reports/` and all supporting JSON/XHTML in its
    same-named directory. The generator links only; it neither copies evidence
    nor re-renders individual reports. For `fuzz` entries, it links to HTML
-   rendered by AI.41's verbatim-vendored `randlee/sc-compose@c19b743`
-   templates:
+   rendered by AI.41's verbatim-vendored sc-compose templates:
    `.claude/skills/html-report/templates/fuzz-run-report.html.j2` and
    `fuzz-run-agent.xhtml.j2`; it must not introduce a bespoke fuzz renderer.
 5. Expose `just reports-index` and `just reports-index --check`, used by every
