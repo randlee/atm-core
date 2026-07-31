@@ -72,9 +72,9 @@ branch: {{ branch }}
 {% endfor %}
 {% if dependencies_relation %}## Dependency Relations
 
-`must_follow`: start after parent development is pushed, not QA; merge parent
-→ child before every dev/fix round; child PR cannot be ready or complete until
-parent merges. `parallel_safe`: no gate; state non-intersecting ownership.
+`must_follow` merge-forward trigger: parent development is pushed, not QA;
+merge parent → child before every dev/fix round. PR-completion trigger: parent
+PR merges first. `parallel_safe`: no gate; state non-intersecting ownership.
 
 {% for relation in dependencies_relation %}- {{ relation.sprint }} ({{ relation.relation }} — {{ relation.rationale }})
 {% endfor %}{% endif %}

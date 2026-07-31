@@ -68,9 +68,9 @@ They are advice, not an assignment.
 ## Dependency Relations
 
 List each related sprint as `must_follow` or `parallel_safe` with a rationale.
-`must_follow`: start after parent development is pushed, merge parent → child
-before every dev/fix round, and do not make the child PR ready or complete
-until the parent merges; do not wait for parent QA. `parallel_safe` requires
+`must_follow` merge-forward trigger: parent development is pushed, not QA;
+merge parent → child before every dev/fix round. PR-completion trigger: parent
+PR merges first. `parallel_safe` requires
 non-intersecting modules/crates, public contracts, artifacts, and ownership.
 Prefer parallel-safe splits where credible. Plan-scope-reviewer verifies this.
 
