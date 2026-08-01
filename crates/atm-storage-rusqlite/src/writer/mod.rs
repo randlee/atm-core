@@ -7,7 +7,8 @@ use crate::observability::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
 };
 use crate::shared_db::{
-    SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
+    SharedDbTarget, SqliteConnection, ensure_schema, open_writer_connection_for_target,
+    sqlite_error,
 };
 use atm_storage::{AtmError, AtmErrorCode};
 use rusqlite::TransactionBehavior;
@@ -84,7 +85,7 @@ impl SqliteWriter {
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
-        let mut connection = open_connection_for_target(target.as_ref())?;
+        let mut connection = open_writer_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = mpsc::sync_channel(channel_capacity);

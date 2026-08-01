@@ -453,6 +453,16 @@ pub(crate) fn configure_connection(
     connection
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|error| sqlite_error(target, "failed to enable sqlite foreign keys", error))?;
+    Ok(())
+}
+
+/// WAL is durable database state, not per-connection request setup. Configure
+/// it once when the sole writer owns startup; readers only need their local
+/// timeout and foreign-key settings.
+fn enable_write_ahead_log(
+    connection: &mut Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     #[cfg(test)]
     let enable_wal = !matches!(target, SharedDbTarget::InMemory { .. });
     #[cfg(not(test))]
@@ -483,6 +493,14 @@ pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Conn
         .map_err(|error| sqlite_open_error(target, error))?,
     };
     configure_connection(&mut connection, target)?;
+    Ok(connection)
+}
+
+pub(crate) fn open_writer_connection_for_target(
+    target: &SharedDbTarget,
+) -> Result<Connection, AtmError> {
+    let mut connection = open_connection_for_target(target)?;
+    enable_write_ahead_log(&mut connection, target)?;
     Ok(connection)
 }
 
@@ -873,6 +891,32 @@ mod tests {
     use super::*;
     use std::sync::Barrier;
     use std::thread;
+
+    #[test]
+    fn writer_initialization_persists_wal_for_later_reader_connections() {
+        let path = std::env::temp_dir().join(format!(
+            "atm-storage-rusqlite-wal-{}.db",
+            NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        let target = SharedDbTarget::Path(path.clone());
+        {
+            let writer =
+                open_writer_connection_for_target(&target).expect("open writer connection");
+            let writer_mode: String = writer
+                .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+                .expect("read writer journal mode");
+            assert_eq!(writer_mode.to_ascii_lowercase(), "wal");
+
+            let reader = open_connection_for_target(&target).expect("open reader connection");
+            let reader_mode: String = reader
+                .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+                .expect("read persisted journal mode");
+            assert_eq!(reader_mode.to_ascii_lowercase(), "wal");
+        }
+        std::fs::remove_file(&path).expect("remove temporary database");
+        let _ = std::fs::remove_file(path.with_extension("db-shm"));
+        let _ = std::fs::remove_file(path.with_extension("db-wal"));
+    }
 
     #[test]
     fn concurrent_read_handles_do_not_fail_fast_at_an_arbitrary_reader_cap() {
