@@ -104,8 +104,10 @@ the public report artifact.
 
 5. The runner rejects an ambient/shared daemon and production database. It
    records release paths, doctor result, and endpoint; cleanup restores prior
-   host state after a failed sample. It may not use a mock router, direct
-   dispatcher, or disabled storage write.
+   host state after a failed sample. Every admission uses the public API; after
+   restart, it proves the exact durable row count with a read-only query of the
+   isolated test database. It may not use a mock router, direct dispatcher, or
+   disabled storage write.
 
 6. Run the release-built benchmark through SSH on M5 using its isolated ATM
    home/database. Collect both UDS and loopback TCP for one frame and every
