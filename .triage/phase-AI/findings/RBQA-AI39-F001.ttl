@@ -15,28 +15,32 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "workspace" ;
-  triage:status "regressed" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:closedAt "2026-08-01T02:10:00Z"^^xsd:dateTime ;
+  triage:closedBy "quality-mgr" ;
+  triage:closureNote "2026-08-01 (quality-mgr, AI39-QA-3): independently re-verified at feature/pAI-s39-buffered-local-http-framing@966617ff -- crates/atm-daemon/src/lib.rs:75 declares `pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;` once, with no #[cfg] gate. crates/atm-daemon/src/local_tcp_transport.rs:34 and crates/atm-daemon/src/local_ipc_transport/request_worker.rs:28 both import it unconditionally via `use crate::MAX_KEEP_ALIVE_REQUESTS;`, with real usage (loop bound + keep-alive comparisons) and test coverage in both files. All 8 CI legs green on PR #703 run 30678738761, including both previously-red windows-latest legs. Confirmed via direct file read, not self-report; corroborated by ruthless-boundary-qa scoped re-verification. Original occurrence snippet (lib.rs:68, afbea292) is superseded -- the fix relocated the constant rather than editing that line." ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-08-01T02:00:00Z"^^xsd:dateTime ;
   triage:foundIn triage:AI39 ;
   triage:foundAt "2026-07-31T16:30:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBQA-AI39-F001/S39-LIB-68-REGRESSED> ;
-  triage:triageRecordVersion "3" .
+  triage:triageRecordVersion "4" .
 
 <urn:atm:triage:occurrence/RBQA-AI39-F001/S39-LIB-68-REGRESSED>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 68 ;
-  triage:snippet "pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 75 ;
+  triage:snippet "pub(crate) const MAX_KEEP_ALIVE_REQUESTS: usize = 64;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
-  triage:headSha "afbea292" ;
-  triage:occursIn <urn:atm:triage:worktree/S39-REGRESSED/afbea292> .
+  triage:headSha "966617ff" ;
+  triage:occursIn <urn:atm:triage:worktree/S39-REGRESSED/966617ff> .
 
-<urn:atm:triage:worktree/S39-REGRESSED/afbea292>
+<urn:atm:triage:worktree/S39-REGRESSED/966617ff>
   a triage:WorktreeSnapshot ;
   triage:path ".worktrees/pAI-s39" ;
   triage:branch "feature/pAI-s39-buffered-local-http-framing" ;
-  triage:headSha "afbea292" ;
+  triage:headSha "966617ff" ;
   triage:orderIndex 39 .
