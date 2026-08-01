@@ -1,0 +1,11 @@
+{
+  "worktree_path": "/tmp/not-an-approved-worktree",
+  "target": "full",
+  "baseline_ref": null,
+  "seed": 157,
+  "max_workers": 4,
+  "cases_per_worker": 100,
+  "per_worker_timeout_s": 120,
+  "promote_regressions": true,
+  "notes": "unsafe fixture"
+}
