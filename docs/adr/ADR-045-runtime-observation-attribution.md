@@ -34,6 +34,9 @@ heartbeat maps its explicit activity to `Active`, `Idle`, or `Offline`.
 External hooks emit startup/active, idle, and stop through that existing
 heartbeat contract; hook-side implementation is outside this repository.
 
+Identity conflict and malformed/suppressed observation are retained anomaly
+events, not lifecycle states. A future doctor phase may diagnose them.
+
 An exception requires an explicit requirement, ADR, boundary record, and test.
 
 The existing roster view may render a defined observation for its matching

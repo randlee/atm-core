@@ -64,6 +64,9 @@ used by the local dispatch path.
 - Contract test fixtures represent hook emission exactly: startup/active uses
   `ActiveToolUse`, idle uses `Idle`, and stop uses `SessionEnded`. This sprint
   does not modify hook-side code.
+- Conflicting identity evidence emits a structured anomaly event without
+  changing the member's lifecycle state. Doctor diagnosis is explicitly future
+  scope.
 - The heartbeat response carries the post-update cached `session_id`
 - A local dispatch (UDS or TCP) carrying `Some` followed by a heartbeat
   carrying `None` leaves the dispatch-supplied value visible in

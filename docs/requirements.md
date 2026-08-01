@@ -3542,6 +3542,9 @@ mail correctness.
   - external hook heartbeat mapping is startup/active → `ActiveToolUse`, idle
     → `Idle`, and stop → `SessionEnded`; ATM consumes, but does not install or
     emit, those hooks
+  - identity conflict and malformed/suppressed observation are retained
+    anomalies, not roster lifecycle state. A future doctor phase may diagnose
+    them; they must not alter routing, notification, or delivery behavior
   - local observation requires matching, parseable `ATM_IDENTITY` and
     `ATM_TEAM`; args-only or mismatched invocation leaves normal command
     behavior unchanged and suppresses observation

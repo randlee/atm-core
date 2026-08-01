@@ -135,6 +135,11 @@ These rules bind every AJ sprint:
   heartbeat path explicitly received `SessionEnded`. They are never aliases:
   a normal update cannot convert either one into the other, and roster output
   must preserve the distinction.
+- **Anomalies are not states.** AJ's roster lifecycle is only `Unknown`,
+  `Active`, `Idle`, and `Offline`. Identity conflicts and malformed/suppressed
+  observation are structured retained anomalies, not lifecycle values. AJ does
+  not expose conflict as roster state or make a decision from it. A future
+  doctor phase may diagnose retained anomaly events.
 - **Known-state transitions.** A successful environment-attested CLI or graft
   `send`, `read`, or `ack` transitions the member to `Active`. Heartbeat maps
   explicit activity to `Active`, `Idle`, or `Offline` (`SessionEnded`). These
